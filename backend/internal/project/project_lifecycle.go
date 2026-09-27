@@ -658,9 +658,6 @@ func (s *ProjectService) RedeployProject(ctx context.Context, projectID string, 
 		slog.WarnContext(ctx, "failed to pull project images", "error", err)
 	}
 
-	metadata := database.JSON{"action": "redeploy", "projectID": projectID, "projectName": proj.Name}
-	s.logProjectEventInternal(ctx, event.EventTypeProjectDeploy, projectID, proj.Name, user, metadata, "could not log project redeploy action")
-
 	return s.DeployProject(ctx, projectID, user, options)
 }
 
