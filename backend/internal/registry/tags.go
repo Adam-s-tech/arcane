@@ -21,11 +21,7 @@ func (s *ContainerRegistryService) ListImageTags(ctx context.Context, imageRef s
 	if err != nil {
 		return nil, err
 	}
-	timeoutSeconds := 0
-	if s.settingsService != nil {
-		timeoutSeconds = s.settingsService.GetSettingsConfig().RegistryTagTimeout.AsInt()
-	}
-	lookupCtx, cancel := context.WithTimeout(ctx, timeouts.GetDuration(timeoutSeconds, timeouts.DefaultRegistryTags))
+	lookupCtx, cancel := s.tagLookupContextInternal(ctx)
 	defer cancel()
 
 	tags, _, err := registryOperationWithCredentialsInternal(lookupCtx, s, parts.RegistryHost, "registry tag listing of "+parts.NormalizedRef, externalCreds,
@@ -37,4 +33,13 @@ func (s *ContainerRegistryService) ListImageTags(ctx context.Context, imageRef s
 			return updaterregistry.FetchTags(ctx, parts.RegistryHost, parts.Repository, auth, s.distributionHTTPClient)
 		})
 	return tags, err
+}
+
+// tagLookupContextInternal bounds tag and manifest walks by the configured registry tag timeout.
+func (s *ContainerRegistryService) tagLookupContextInternal(ctx context.Context) (context.Context, context.CancelFunc) {
+	timeoutSeconds := 0
+	if s.settingsService != nil {
+		timeoutSeconds = s.settingsService.GetSettingsConfig().RegistryTagTimeout.AsInt()
+	}
+	return context.WithTimeout(ctx, timeouts.GetDuration(timeoutSeconds, timeouts.DefaultRegistryTags))
 }

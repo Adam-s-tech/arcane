@@ -38,34 +38,38 @@ func ExtractRegistryHost(imageRef string) string {
 	return hostCandidate
 }
 
-func NormalizeRegistryForComparison(url string) string {
-	url = strings.TrimSpace(strings.ToLower(url))
+// SplitRegistryURL separates a registry URL into its comparison host and an
+// optional repository namespace: "https://ghcr.io/acme/" yields ("ghcr.io", "acme").
+func SplitRegistryURL(url string) (host, namespace string) {
+	url = strings.TrimSpace(url)
 	url = strings.TrimPrefix(url, "https://")
 	url = strings.TrimPrefix(url, "http://")
-	url = strings.TrimSuffix(url, "/")
-
-	if slash := strings.Index(url, "/"); slash != -1 {
-		url = url[:slash]
+	host, namespace, _ = strings.Cut(strings.Trim(url, "/"), "/")
+	host = strings.ToLower(host)
+	if host == "registry-1.docker.io" || host == "index.docker.io" {
+		host = "docker.io"
 	}
-
-	if url == "docker.io" || url == "registry-1.docker.io" || url == "index.docker.io" {
-		return "docker.io"
+	// "https://index.docker.io/v1/" is Docker Hub's API path, not a namespace.
+	if host == "docker.io" && (namespace == "v1" || strings.HasPrefix(namespace, "v1/")) {
+		namespace = strings.TrimPrefix(namespace[2:], "/")
 	}
-	return url
+	return host, namespace
+}
+
+func NormalizeRegistryForComparison(url string) string {
+	host, _ := SplitRegistryURL(url)
+	return host
 }
 
 func NormalizeRegistryURL(url string) string {
-	normalized := NormalizeRegistryForComparison(url)
-	if normalized == "docker.io" {
+	host, namespace := SplitRegistryURL(url)
+	if host == "docker.io" {
 		return "https://index.docker.io/v1/"
 	}
-
-	result := strings.TrimSpace(url)
-	result = strings.TrimPrefix(result, "https://")
-	result = strings.TrimPrefix(result, "http://")
-	result = strings.TrimSuffix(result, "/")
-
-	return result
+	if namespace != "" {
+		return host + "/" + namespace
+	}
+	return host
 }
 
 func IsRegistryMatch(left, right string) bool {

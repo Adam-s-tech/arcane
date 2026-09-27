@@ -46,6 +46,16 @@ function normalizeRegistryHost(url: string): string {
 }
 
 /**
+ * Splits a registry URL into its host and the repository namespace in its path.
+ * Docker Hub's `/v1/` API path is not a namespace.
+ */
+export function splitRegistryUrl(url: string): { host: string; namespace: string } {
+	const [host = '', ...path] = normalizeRegistryHost(url || 'docker.io').split('/');
+	if (/^(index\.|registry-1\.)?docker\.io$/i.test(host) && path[0] === 'v1') path.shift();
+	return { host, namespace: path.join('/') };
+}
+
+/**
  * Builds a `host/repository:tag` reference, or an empty string when the
  * repository name or tag is missing.
  */

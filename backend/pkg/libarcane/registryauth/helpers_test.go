@@ -41,6 +41,24 @@ func TestNormalizeRegistryForComparison(t *testing.T) {
 	}
 }
 
+func TestSplitRegistryURL(t *testing.T) {
+	tests := []struct{ in, host, namespace string }{
+		{"ghcr.io", "ghcr.io", ""},
+		{"https://ghcr.io/acme/", "ghcr.io", "acme"},
+		{"http://localhost:5000/team/sub", "localhost:5000", "team/sub"},
+		{"registry-1.docker.io", "docker.io", ""},
+		{"https://index.docker.io/v1/", "docker.io", ""},
+		{"https://index.docker.io/v1/acme", "docker.io", "acme"},
+		{"docker.io/acme", "docker.io", "acme"},
+		{"docker.io/v1team", "docker.io", "v1team"},
+	}
+	for _, tt := range tests {
+		host, namespace := SplitRegistryURL(tt.in)
+		assert.Equal(t, tt.host, host, tt.in)
+		assert.Equal(t, tt.namespace, namespace, tt.in)
+	}
+}
+
 func TestNormalizeRegistryURL(t *testing.T) {
 	assert.Equal(t, "https://index.docker.io/v1/", NormalizeRegistryURL("docker.io"))
 	assert.Equal(t, "ghcr.io", NormalizeRegistryURL("https://ghcr.io/"))
