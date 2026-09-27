@@ -4,7 +4,9 @@ package di
 import (
 	"emperror.dev/emperror"
 
+	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/actors"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/apikey"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/apns"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/appimages"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/auth"
@@ -12,10 +14,13 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/build"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/diagnostics"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/environment"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/event"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/gitops"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/gitrepo"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/image"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/imagepatch"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/imageupdate"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/job"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/kv"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/network"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/notification"
@@ -23,13 +28,18 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/passkey"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/port"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/project"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/registry"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/role"
+	s3domain "github.com/getarcaneapp/arcane/backend/v2/internal/s3"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/search"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/session"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/swarm"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/system"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/systembackup"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/template"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/upload"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/variable"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/volume"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/vulnerability"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/logging"
@@ -53,18 +63,18 @@ var ServiceOptions = fx.Options(
 
 		// Services constructed directly through their public constructors.
 		provideEventModuleInternal,
-		provideEventServiceInternal,
+		(*event.Module).Service,
 		provideActivityModuleInternal,
-		provideActivityServiceInternal,
+		(*activity.Module).Service,
 		provideSettingsServiceInternal,
 		kv.NewKVService,
 		provideJobModuleInternal,
-		provideJobServiceInternal,
+		(*job.Module).Service,
 		search.New,
 		appimages.NewApplicationImagesService,
 		provideDockerClientServiceInternal,
 		provideRoleModuleInternal,
-		provideRoleServiceInternal,
+		(*role.Module).Service,
 		session.NewSessionService,
 		passkey.NewPasskeyService,
 		environment.NewEnvironmentService,
@@ -94,7 +104,7 @@ var ServiceOptions = fx.Options(
 		swarm.NewSwarmService,
 		provideSwarmModuleInternal,
 		provideTemplateModuleInternal,
-		provideTemplateServiceInternal,
+		(*template.Module).Service,
 		oidc.NewOidcService,
 		provideSystemModuleInternal,
 		system.NewSystemUpgradeService,
@@ -105,7 +115,7 @@ var ServiceOptions = fx.Options(
 		variable.NewVariableService,
 		variable.New,
 		provideS3ModuleInternal,
-		provideS3ServiceInternal,
+		(*s3domain.Module).Service,
 		provideBackupEngineInternal,
 		backup.NewRecoveryKeyStore,
 		upload.NewUploadService,
@@ -114,20 +124,20 @@ var ServiceOptions = fx.Options(
 		// Adapters for scalar config fields, unexported parameters, builders, and lifecycle hooks.
 		provideVersionServiceInternal,
 		provideGitRepositoryModuleInternal,
-		provideGitRepositoryServiceInternal,
+		(*gitrepo.Module).Service,
 		provideVolumeModuleInternal,
-		provideVolumeServiceInternal,
-		provideSystemBackupServiceInternal,
+		(*volume.Module).Service,
+		systembackup.NewSystemBackupService,
 		systembackup.New,
 		auth.NewAuthService,
 		provideAuthModuleInternal,
 		provideContainerRegistryModuleInternal,
-		provideContainerRegistryServiceInternal,
+		(*registry.Module).Service,
 		provideUpdaterModuleInternal,
 		provideUserServiceInternal,
 		provideUserModuleInternal,
 		provideApiKeyModuleInternal,
-		provideApiKeyServiceInternal,
+		(*apikey.Module).Service,
 		provideFederatedCredentialServiceInternal,
 		provideAuthMiddlewareInternal,
 	),

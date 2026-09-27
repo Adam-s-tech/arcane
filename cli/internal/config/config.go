@@ -50,13 +50,9 @@ const (
 var customConfigPath string
 
 var configCache = hot.NewHotCache[string, *types.Config](hot.LRU, 4).
-	WithCopyOnRead(cloneConfig).
-	WithCopyOnWrite(cloneConfig).
+	WithCopyOnRead((*types.Config).Clone).
+	WithCopyOnWrite((*types.Config).Clone).
 	Build()
-
-func cloneConfig(cfg *types.Config) *types.Config {
-	return cfg.Clone()
-}
 
 func normalizeConfig(cfg *types.Config) *types.Config {
 	if cfg == nil {

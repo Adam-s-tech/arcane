@@ -4,4 +4,4 @@ destination: ./.bin
 
 plugins:
   - module: go.ofkm.dev/shimbad
-    version: v0.1.2
+    version: v0.2.0

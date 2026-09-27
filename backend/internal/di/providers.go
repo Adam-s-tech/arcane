@@ -31,7 +31,6 @@ import (
 	s3domain "github.com/getarcaneapp/arcane/backend/v2/internal/s3"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/swarm"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/systembackup"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/template"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/user"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/version"
@@ -65,10 +64,6 @@ func provideEventModuleInternal(db *database.DB, cfg *config.Config, httpClient 
 	return event.New(event.Dependencies{DB: db, Config: cfg, HTTPClient: httpClient})
 }
 
-func provideEventServiceInternal(module *event.Module) *event.EventService {
-	return module.Service()
-}
-
 func provideActivityModuleInternal(db *database.DB, settingsService *settings.SettingsService, environment *environment.EnvironmentService) *activity.Module {
 	return activity.New(activity.Dependencies{
 		DB:       db,
@@ -81,10 +76,6 @@ func provideActivityModuleInternal(db *database.DB, settingsService *settings.Se
 			ResolveEnvironmentName:         environment.ResolveEnvironmentName,
 		},
 	})
-}
-
-func provideActivityServiceInternal(module *activity.Module) *activity.ActivityService {
-	return module.Service()
 }
 
 func provideEnvironmentModuleInternal(service *environment.EnvironmentService, settingsService *settings.SettingsService, apiKey *apikey.ApiKeyService, eventService *event.EventService, cfg *config.Config, activityService *activity.ActivityService) *environment.Module {
@@ -124,10 +115,6 @@ func provideImageModuleInternal(service *image.ImageService, dockerService *dock
 
 func provideRoleModuleInternal(db *database.DB) *role.Module {
 	return role.New(role.Dependencies{DB: db})
-}
-
-func provideRoleServiceInternal(module *role.Module) *role.RoleService {
-	return module.Service()
 }
 
 func provideSettingsServiceInternal(ctx context.Context, lc fx.Lifecycle, db *database.DB, runtime *actors.Runtime) (*settings.SettingsService, error) {
@@ -236,20 +223,12 @@ func provideGitRepositoryModuleInternal(db *database.DB, cfg *config.Config, eve
 	return gitrepo.New(gitrepo.Dependencies{DB: db, WorkDir: cfg.GitWorkDir, Event: eventService, Settings: settingsService})
 }
 
-func provideGitRepositoryServiceInternal(module *gitrepo.Module) *gitrepo.GitRepositoryService {
-	return module.Service()
-}
-
 func provideS3ModuleInternal(db *database.DB, environmentService *environment.EnvironmentService) *s3domain.Module {
 	return s3domain.New(s3domain.Dependencies{
 		DB:                     db,
 		SyncRemoteDestinations: environmentService.SyncS3DestinationsToRemoteEnvironments,
 		CheckRemoteReferences:  environmentService.CheckS3DestinationReferences,
 	})
-}
-
-func provideS3ServiceInternal(module *s3domain.Module) *s3domain.S3DestinationService {
-	return module.Service()
 }
 
 func provideVolumeModuleInternal(lc fx.Lifecycle, db *database.DB, dockerService *docker.DockerClientService, eventService *event.EventService, settingsService *settings.SettingsService, imageService *image.ImageService, activityService *activity.ActivityService, containerModule *container.Module, engine *backup.Engine, s3Service *s3domain.S3DestinationService, environmentService *environment.EnvironmentService, cfg *config.Config, uploadService *upload.UploadService, recoveryKeys *backup.RecoveryKeyStore) *volume.Module {
@@ -277,14 +256,6 @@ func provideVolumeModuleInternal(lc fx.Lifecycle, db *database.DB, dockerService
 	return module
 }
 
-func provideVolumeServiceInternal(module *volume.Module) *volume.VolumeService {
-	return module.Service()
-}
-
-func provideSystemBackupServiceInternal(db *database.DB, dockerService *docker.DockerClientService, volumeModule *volume.Module, engine *backup.Engine, s3Service *s3domain.S3DestinationService, activityService *activity.ActivityService, settingsService *settings.SettingsService, cfg *config.Config, recoveryKeys *backup.RecoveryKeyStore) *systembackup.SystemBackupService {
-	return systembackup.NewSystemBackupService(db, dockerService, volumeModule.Service(), engine, s3Service, activityService, settingsService, cfg, recoveryKeys)
-}
-
 func provideContainerModuleInternal(event *event.EventService, docker *docker.DockerClientService, image *image.ImageService, settings *settings.SettingsService, project *project.ProjectService, activity *activity.ActivityService) *container.Module {
 	return container.New(container.Dependencies{
 		Event:    event,
@@ -307,10 +278,6 @@ func provideAuthModuleInternal(service *auth.AuthService, userService *user.User
 
 func provideContainerRegistryModuleInternal(db *database.DB, dockerService *docker.DockerClientService, kvService *kv.KVService, settingsService *settings.SettingsService, environment *environment.EnvironmentService) *registry.Module {
 	return registry.New(registry.Dependencies{DB: db, Docker: dockerService, KV: kvService, Settings: settingsService, SyncRemoteRegistries: environment.SyncRegistriesToRemoteEnvironments})
-}
-
-func provideContainerRegistryServiceInternal(module *registry.Module) *registry.ContainerRegistryService {
-	return module.Service()
 }
 
 func provideProjectServiceInternal(db *database.DB, settings *settings.SettingsService, event *event.EventService, image *image.ImageService, docker *docker.DockerClientService, build *build.BuildService, lifecycleService *project.LifecycleService, kv *kv.KVService, registry *registry.ContainerRegistryService, environment *environment.EnvironmentService, cfg *config.Config) *project.ProjectService {
@@ -380,24 +347,12 @@ func provideJobModuleInternal(db *database.DB, settingsService *settings.Setting
 	return job.New(job.Dependencies{DB: db, Settings: settingsService, Config: cfg, Environment: environment, Roles: roles, Activity: activityService})
 }
 
-func provideJobServiceInternal(module *job.Module) *job.JobService {
-	return module.Service()
-}
-
 func provideTemplateModuleInternal(ctx context.Context, db *database.DB, httpClient *http.Client, settingsService *settings.SettingsService) *template.Module {
 	return template.New(template.Dependencies{Context: ctx, DB: db, HTTPClient: httpClient, Settings: settingsService})
 }
 
-func provideTemplateServiceInternal(module *template.Module) *template.TemplateService {
-	return module.Service()
-}
-
 func provideApiKeyModuleInternal(db *database.DB, userService *user.UserService, roleService *role.RoleService) *apikey.Module {
 	return apikey.New(apikey.Dependencies{DB: db, User: userService, Role: roleService})
-}
-
-func provideApiKeyServiceInternal(module *apikey.Module) *apikey.ApiKeyService {
-	return module.Service()
 }
 
 func provideJWKSetManagerInternal(ctx context.Context, lc fx.Lifecycle) *oidcjwk.KeySetManager {
