@@ -725,8 +725,7 @@ func (m *EnvironmentMiddleware) proxyHTTP(c *echo.Context, target string, access
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	m.writeProxyResponse(c, resp)
-	return nil
+	return m.writeProxyResponse(c, resp)
 }
 
 // createProxyRequest builds the HTTP request to forward to the remote environment.
@@ -781,8 +780,17 @@ func (m *EnvironmentMiddleware) createProxyRequest(c *echo.Context, target strin
 	return req, nil
 }
 
-// writeProxyResponse copies the proxy response back to the client.
-func (m *EnvironmentMiddleware) writeProxyResponse(c *echo.Context, resp *http.Response) {
+// writeProxyResponse copies the proxy response back to the client. An upstream
+// 401 means the agent rejected the manager's credentials; passing it through
+// makes browser clients treat it as a lost session, so it becomes a 502.
+func (m *EnvironmentMiddleware) writeProxyResponse(c *echo.Context, resp *http.Response) error {
+	if resp.StatusCode == http.StatusUnauthorized {
+		slog.WarnContext(c.Request().Context(), "Remote environment rejected the manager's credentials", "target", resp.Request.URL.Host)
+		return c.JSON(http.StatusBadGateway, map[string]any{
+			"success": false,
+			"data":    map[string]any{"error": "Remote environment rejected the manager's credentials"},
+		})
+	}
 	w := c.Response()
 	hopByHop := edge.BuildHopByHopHeaders(resp.Header)
 	edge.CopyResponseHeaders(resp.Header, w.Header(), hopByHop)
@@ -791,4 +799,5 @@ func (m *EnvironmentMiddleware) writeProxyResponse(c *echo.Context, resp *http.R
 	if c.Request().Method != http.MethodHead {
 		edge.CopyBodyWithFlush(w, resp.Body)
 	}
+	return nil
 }

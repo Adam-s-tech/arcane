@@ -15,6 +15,8 @@ export default defineConfig({
 	failOnFlakyTests: !!process.env.CI,
 	retries: process.env.CI ? 2 : 0,
 	retryStrategy: 'isolated',
+	globalTimeout: process.env.CI ? 35 * 60 * 1000 : 0,
+	maxFailures: process.env.CI ? 20 : 0,
 	workers,
 	globalSetup: ['./setup/docker-browser', './setup/global-setup'],
 	globalTeardown: './setup/global-teardown',

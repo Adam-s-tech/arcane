@@ -148,6 +148,8 @@ jobs:
     runs-on:
       size: 4x16
       image: g7r5wqb57k.registry.depot.dev/ci:latest
+    # Passing runs finish in about 17 minutes; a broken stack must not grind through retries for hours.
+    timeout-minutes: 45
     permissions:
       contents: read
       actions: write
@@ -227,6 +229,7 @@ jobs:
     runs-on:
       size: 4x16
       image: g7r5wqb57k.registry.depot.dev/ci:latest
+    timeout-minutes: 20
     permissions:
       contents: read
       actions: write

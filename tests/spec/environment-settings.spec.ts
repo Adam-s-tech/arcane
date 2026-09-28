@@ -61,6 +61,20 @@ async function createDirectEnvironmentViaUI(
 	return { id: created.data.id, apiKey: created.data.apiKey };
 }
 
+async function removeCreatedEnvironments(
+	page: Page,
+	environmentIds: Set<string>,
+	environmentName: string
+) {
+	// A login redirect can swallow the create response, so also match by name.
+	const response = await page.request.get('/api/environments?start=0&limit=1000');
+	if (response.ok()) {
+		const { data }: { data: Array<{ id: string; name: string }> } = await response.json();
+		for (const env of data) if (env.name.startsWith(environmentName)) environmentIds.add(env.id);
+	}
+	for (const id of environmentIds) await removeApiResource(page, `/api/environments/${id}`);
+}
+
 async function openLocalEnvironment(page: Page) {
 	await openEnvironment(page, LOCAL_ENV_ID);
 }
@@ -292,7 +306,7 @@ test.describe('Environment Settings UI', () => {
 			const secondNameRequest = await saveAndWaitForPut(page, environmentPath);
 			expect(secondNameRequest.postDataJSON()).not.toHaveProperty('accessToken');
 		} finally {
-			for (const id of environmentIds) await removeApiResource(page, `/api/environments/${id}`);
+			await removeCreatedEnvironments(page, environmentIds, envName);
 		}
 	});
 
@@ -434,7 +448,7 @@ test.describe('Environment Settings UI', () => {
 			await page.locator('#api-url').press('Tab');
 			await expect(tokenInput).toHaveValue('');
 		} finally {
-			for (const id of environmentIds) await removeApiResource(page, `/api/environments/${id}`);
+			await removeCreatedEnvironments(page, environmentIds, envName);
 		}
 	});
 

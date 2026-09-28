@@ -11,7 +11,7 @@ export function captureComposeDiagnostics(composeFile: string) {
 	fs.mkdirSync(directory, { recursive: true });
 	for (const [name, args] of [
 		['services', ['ps', '--all', '--format', 'json']],
-		['logs', ['logs', '--no-color', '--timestamps']]
+		['logs', ['logs', '--no-color', '--timestamps', '--tail', '20000']]
 	] as const) {
 		try {
 			const output = execFileSync('docker', ['compose', '-f', composeFile, ...args], {

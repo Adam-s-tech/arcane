@@ -239,6 +239,8 @@ jobs:
     name: E2E Tests (${{ matrix.database.name }})
     if: ${{ github.head_ref != 'l10n_crowdin' }}
     runs-on: depot-ubuntu-24.04-4
+    # Passing runs finish in about 17 minutes; a broken stack must not grind through retries for hours.
+    timeout-minutes: 45
     env:
       PLAYWRIGHT_DOCKER_IMAGE_REPOSITORY: g7r5wqb57k.registry.depot.dev/mirrors/playwright
     permissions:
@@ -311,6 +313,7 @@ jobs:
     name: CLI E2E Tests (proxy)
     if: ${{ github.head_ref != 'l10n_crowdin' }}
     runs-on: depot-ubuntu-24.04-4
+    timeout-minutes: 20
     permissions:
       contents: read
       actions: write
