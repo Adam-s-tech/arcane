@@ -15,6 +15,8 @@ export type ApplicationTheme =
 	| 'rosepine';
 export type IconCatalog = 'selfhst' | 'dashboard-icons';
 
+export type UpdateCheckRegistry = 'auto' | 'ghcr.io' | 'docker.io' | 'public.ecr.aws';
+
 export type Settings = {
 	projectsDirectory: string;
 	templatesDirectory: string;
@@ -80,7 +82,7 @@ export type Settings = {
 	authSessionTimeout: number;
 	authPasswordPolicy: 'basic' | 'standard' | 'strong';
 	toolsImageRegistry: 'ghcr.io' | 'docker.io';
-	updateCheckRegistry: 'auto' | 'ghcr.io' | 'docker.io';
+	updateCheckRegistry: UpdateCheckRegistry;
 	trivyDbRegistry: 'ghcr.io' | 'docker.io';
 	trivyNetwork: string;
 	trivySecurityOpts: string;

@@ -286,9 +286,10 @@ func (s *VersionService) updateCheckImageRefInternal(currentImageRef string) str
 		return currentImageRef
 	}
 
-	host := libarcane.ArcaneRegistryHost(target)
+	host := libarcane.ArcaneImageRegistryHost(target)
 	repoPath := ref.Path(named)
-	if host == libarcane.DockerHubRegistryHost {
+	// Docker Hub and ECR Public publish the images under the manager and agent names only
+	if host == libarcane.DockerHubRegistryHost || host == libarcane.ECRPublicRegistryHost {
 		switch repoPath {
 		case "getarcaneapp/arcane":
 			repoPath = "getarcaneapp/manager"

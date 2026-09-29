@@ -22,6 +22,15 @@ export function arcaneImageRegistryOptions() {
 	];
 }
 
+/** Select options for the update check; ECR Public only mirrors the manager and agent images. */
+export function arcaneUpdateCheckRegistryOptions() {
+	return [
+		{ value: 'auto', label: m.auto() },
+		...arcaneImageRegistryOptions(),
+		{ value: 'public.ecr.aws', label: m.registry_amazon_ecr_public() }
+	];
+}
+
 function arcaneRegistryHost(registry: string): string {
 	return registry === 'docker.io' ? 'docker.io' : 'ghcr.io';
 }
@@ -37,7 +46,8 @@ export function arcaneTrivyDbImages(registry: string): string[] {
 
 export function arcaneUpdateCheckImage(registry: string, isLocalEnvironment: boolean): string | null {
 	if (registry === 'auto') return null;
-	return `${arcaneRegistryHost(registry)}/getarcaneapp/${isLocalEnvironment ? 'manager' : 'agent'}`;
+	const host = registry === 'public.ecr.aws' ? registry : arcaneRegistryHost(registry);
+	return `${host}/getarcaneapp/${isLocalEnvironment ? 'manager' : 'agent'}`;
 }
 
 /** Strips the scheme and trailing slashes so a registry URL can be used as an image host. */

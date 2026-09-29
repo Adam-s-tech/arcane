@@ -8,7 +8,13 @@
 	import { m } from '#lib/paraglide/messages.js';
 	import { DockerBrandIcon } from '#lib/icons/index.js';
 	import type { DockerTabProps } from './tab-props';
-	import { arcaneImageRegistryOptions, arcaneToolsImage, arcaneUpdateCheckImage } from '#lib/utils/registry.js';
+	import {
+		arcaneImageRegistryOptions,
+		arcaneToolsImage,
+		arcaneUpdateCheckImage,
+		arcaneUpdateCheckRegistryOptions
+	} from '#lib/utils/registry.js';
+	import type { UpdateCheckRegistry } from '#lib/types/settings.js';
 
 	let {
 		formInputs = $bindable(),
@@ -25,6 +31,7 @@
 	];
 
 	const registryOptions = arcaneImageRegistryOptions();
+	const updateCheckRegistryOptions = arcaneUpdateCheckRegistryOptions();
 	const updateCheckImage = $derived(arcaneUpdateCheckImage(formInputs.updateCheckRegistry.value, environmentId === '0'));
 
 	const pruneContainerModes = [
@@ -126,8 +133,8 @@
 						bind:value={formInputs.updateCheckRegistry.value}
 						label={m.update_check_registry_label()}
 						description={m.update_check_registry_description()}
-						options={[{ value: 'auto', label: m.auto() }, ...registryOptions]}
-						onValueChange={(v) => (formInputs.updateCheckRegistry.value = v as 'auto' | 'ghcr.io' | 'docker.io')}
+						options={updateCheckRegistryOptions}
+						onValueChange={(v) => (formInputs.updateCheckRegistry.value = v as UpdateCheckRegistry)}
 					/>
 					<p class="text-xs text-muted-foreground {updateCheckImage ? 'font-mono' : ''}">
 						{updateCheckImage ?? m.follows_running_image()}

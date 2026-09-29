@@ -44,7 +44,7 @@ export const environmentFormSchema = environmentUpdateSchema
 		featureVulnerabilityManagementEnabled: z.boolean(),
 		vulnerabilityScanEnabled: z.boolean(),
 		toolsImageRegistry: z.enum(['ghcr.io', 'docker.io']),
-		updateCheckRegistry: z.enum(['auto', 'ghcr.io', 'docker.io']),
+		updateCheckRegistry: z.enum(['auto', 'ghcr.io', 'docker.io', 'public.ecr.aws']),
 		trivyDbRegistry: z.enum(['ghcr.io', 'docker.io']),
 		trivyNetwork: z.string(),
 		trivySecurityOpts: z.string(),
