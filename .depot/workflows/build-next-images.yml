@@ -124,6 +124,9 @@ jobs:
           - registry: quay.io
             username-secret: QUAY_USERNAME
             password-secret: QUAY_TOKEN
+          - registry: public.ecr.aws
+            username-secret: ECR_PUBLIC_ACCESS_KEY_ID
+            password-secret: ECR_PUBLIC_SECRET_ACCESS_KEY
 
     steps:
       - name: Checkout code

@@ -37,12 +37,14 @@ runs:
         registry: ${{ inputs.registry }}
         username: ${{ inputs.username }}
         password: ${{ inputs.password }}
+      env:
+        AWS_REGION: us-east-1
 
     - name: Validate destination registry
       shell: bash
       run: |
         case '${{ inputs.registry }}' in
-          ghcr.io|docker.io|quay.io) ;;
+          ghcr.io|docker.io|quay.io|public.ecr.aws) ;;
           *) echo 'Unsupported image registry' >&2; exit 1 ;;
         esac
 

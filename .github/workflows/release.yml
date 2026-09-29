@@ -179,6 +179,11 @@ jobs:
             - registry: docker.io
               username: ${{ secrets.DOCKER_USER }}
               password: ${{ secrets.DOCKER_PAT }}
+            - registry: public.ecr.aws
+              username: ${{ secrets.ECR_PUBLIC_ACCESS_KEY_ID }}
+              password: ${{ secrets.ECR_PUBLIC_SECRET_ACCESS_KEY }}
+        env:
+          AWS_REGION: us-east-1
 
       - name: Install Frontend Dependencies
         run: just deps install frontend

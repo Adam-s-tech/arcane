@@ -284,9 +284,11 @@ dockers_v2:
       - '{{ if or (not (index .Env "IMAGE_REGISTRY")) (eq (index .Env "IMAGE_REGISTRY") "ghcr.io") }}ghcr.io/getarcaneapp/manager{{ end }}'
       - '{{ if or (not (index .Env "IMAGE_REGISTRY")) (eq (index .Env "IMAGE_REGISTRY") "docker.io") }}getarcaneapp/manager{{ end }}'
       - '{{ if or (not (index .Env "IMAGE_REGISTRY")) (eq (index .Env "IMAGE_REGISTRY") "quay.io") }}quay.io/getarcaneapp/manager{{ end }}'
+      - '{{ if or (not (index .Env "IMAGE_REGISTRY")) (eq (index .Env "IMAGE_REGISTRY") "public.ecr.aws") }}public.ecr.aws/getarcaneapp/manager{{ end }}'
     tags:
       - '{{ if index .Env "BUILD_NEXT" }}next{{ end }}'
-      - 'v{{ .Version }}'
+      # ECR Public next builds publish only the moving next tag so nothing accumulates there
+      - '{{ if not (and (index .Env "BUILD_NEXT") (eq (index .Env "IMAGE_REGISTRY") "public.ecr.aws")) }}v{{ .Version }}{{ end }}'
       - '{{ if not (index .Env "BUILD_NEXT") }}v{{ .Major }}.{{ .Minor }}{{ end }}'
       - '{{ if not (index .Env "BUILD_NEXT") }}v{{ .Major }}{{ end }}'
       - '{{ if not (index .Env "BUILD_NEXT") }}latest{{ end }}'
@@ -317,9 +319,11 @@ dockers_v2:
       - '{{ if or (not (index .Env "IMAGE_REGISTRY")) (eq (index .Env "IMAGE_REGISTRY") "ghcr.io") }}ghcr.io/getarcaneapp/agent{{ end }}'
       - '{{ if or (not (index .Env "IMAGE_REGISTRY")) (eq (index .Env "IMAGE_REGISTRY") "docker.io") }}getarcaneapp/agent{{ end }}'
       - '{{ if or (not (index .Env "IMAGE_REGISTRY")) (eq (index .Env "IMAGE_REGISTRY") "quay.io") }}quay.io/getarcaneapp/agent{{ end }}'
+      - '{{ if or (not (index .Env "IMAGE_REGISTRY")) (eq (index .Env "IMAGE_REGISTRY") "public.ecr.aws") }}public.ecr.aws/getarcaneapp/agent{{ end }}'
     tags:
       - '{{ if index .Env "BUILD_NEXT" }}next{{ end }}'
-      - 'v{{ .Version }}'
+      # ECR Public next builds publish only the moving next tag so nothing accumulates there
+      - '{{ if not (and (index .Env "BUILD_NEXT") (eq (index .Env "IMAGE_REGISTRY") "public.ecr.aws")) }}v{{ .Version }}{{ end }}'
       - '{{ if not (index .Env "BUILD_NEXT") }}v{{ .Major }}.{{ .Minor }}{{ end }}'
       - '{{ if not (index .Env "BUILD_NEXT") }}v{{ .Major }}{{ end }}'
       - '{{ if not (index .Env "BUILD_NEXT") }}latest{{ end }}'
