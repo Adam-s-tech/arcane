@@ -1,5 +1,5 @@
 > [!IMPORTANT]
-> Feature requests have moved to [Discussions](https://github.com/getarcaneapp/arcane/discussions/categories/feature-requests). Open new requests and upvote existing ones there; issues are only used for Bug reports now to help maintain priority on those issues. 
+> Feature requests have moved to [Discussions](https://github.com/getarcaneapp/arcane/discussions/categories/feature-requests). Open new requests and upvote existing ones there; issues are only used for Bug reports now to help maintain priority on those issues.
 
 <div align="center">
 

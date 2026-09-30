@@ -1021,7 +1021,7 @@ next-image-version mode="":
         NEXT_BASE="${MAJOR}.${MINOR}.$((PATCH + 1))"
     fi
 
-    GHCR_IMAGE="${GHCR_IMAGE:-getarcaneapp/arcane}"
+    GHCR_IMAGE="${GHCR_IMAGE:-getarcaneapp/manager}"
     if [ -n "${GHCR_TAGS+x}" ]; then
         TAGS="$GHCR_TAGS"
     else

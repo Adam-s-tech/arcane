@@ -6,10 +6,11 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: prune-ecr-public-next-images
+  group: build-next-images
   cancel-in-progress: false
 
-permissions: {}
+permissions:
+  contents: read
 
 jobs:
   prune:
@@ -30,25 +31,13 @@ jobs:
           username: ${{ secrets.ECR_PUBLIC_ACCESS_KEY_ID }}
           password: ${{ secrets.ECR_PUBLIC_SECRET_ACCESS_KEY }}
 
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup ORAS
+        uses: oras-project/setup-oras@005458ad77f1c8facd38a094e4af2e69e5607ff4 # v2.0.2
+        with:
+          version: 1.3.1
+
       - name: Delete stale next images
-        run: |
-          # Release and next tags stay, along with the manifests they reference and cosign referrers that point at them.
-          # ECR Public has no lifecycle policies, so this keeps overwritten next images from eating the free tier.
-          cutoff=$(date -u -d '1 hour ago' +%FT%T)
-          for repo in manager agent; do
-            image="public.ecr.aws/getarcaneapp/$repo"
-            aws ecr-public describe-images --repository-name "$repo" --output json > "$RUNNER_TEMP/images.json"
-            jq -r '.imageDetails[] | select(.imageTags) | .imageDigest' "$RUNNER_TEMP/images.json" > "$RUNNER_TEMP/tagged.txt"
-            while read -r digest; do
-              docker buildx imagetools inspect "$image@$digest" --raw | jq -r '.manifests[]?.digest'
-            done < "$RUNNER_TEMP/tagged.txt" | cat - "$RUNNER_TEMP/tagged.txt" | sort -u > "$RUNNER_TEMP/keep.txt"
-            : > "$RUNNER_TEMP/delete.txt"
-            while read -r digest; do
-              subject=$(docker buildx imagetools inspect "$image@$digest" --raw | jq -r '.subject.digest // empty')
-              if [[ -z "$subject" ]] || ! grep -qxF "$subject" "$RUNNER_TEMP/keep.txt"; then
-                echo "$digest" >> "$RUNNER_TEMP/delete.txt"
-              fi
-            done < <(jq -r --arg cutoff "$cutoff" '.imageDetails[] | select((.imageTags | not) and .imagePushedAt < $cutoff) | .imageDigest' "$RUNNER_TEMP/images.json" | sort -u | comm -23 - "$RUNNER_TEMP/keep.txt")
-            sed 's/^/imageDigest=/' "$RUNNER_TEMP/delete.txt" | xargs -r -n 100 aws ecr-public batch-delete-image --repository-name "$repo" --image-ids > /dev/null
-            echo "$repo: deleted $(wc -l < "$RUNNER_TEMP/delete.txt" | tr -d ' ') stale manifests" >> "$GITHUB_STEP_SUMMARY"
-          done
+        run: bash scripts/ci/prune-ecr-images.sh

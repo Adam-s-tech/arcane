@@ -1,5 +1,5 @@
-name: Publish next registry images
-description: Build and sign manager and agent images for one registry
+name: Publish registry images
+description: Copy and sign canonical manager and agent images
 inputs:
   registry:
     description: Destination registry
@@ -10,26 +10,38 @@ inputs:
   password:
     description: Registry password
     required: true
+  manager-digest:
+    description: Canonical manager image index digest
+    required: true
+  agent-digest:
+    description: Canonical agent image index digest
+    required: true
+  version:
+    description: Image version without a leading v
+    required: true
+  channel:
+    description: next or release
+    required: true
 runs:
   using: composite
   steps:
-    - name: Setup Vite+
-      uses: voidzero-dev/setup-vp@3754dd7dbdb32bd8f6d28b6043de13ad3a75f21f # v1.21.1
+    - name: Setup ORAS
+      uses: oras-project/setup-oras@005458ad77f1c8facd38a094e4af2e69e5607ff4 # v2.0.2
       with:
-        node-version: 26
-        cache: true
-        run-install: true
+        version: 1.3.1
 
-    - name: Setup Go
-      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-      with:
-        go-version-file: backend/go.mod
-        cache-dependency-path: backend/go.sum
+    - name: Ensure envsubst is installed
+      shell: bash
+      run: |
+        if ! command -v envsubst >/dev/null; then
+          sudo apt-get update
+          sudo apt-get install -y gettext-base
+        fi
 
-    - name: Set up Depot CLI
-      uses: depot/setup-action@91bc8495a33ebfc504ffc89e5674379ccf23c29c # v1.7.2
+    - name: Install Cosign
+      uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
       with:
-        configure-docker: true
+        cosign-release: v3.0.6
 
     - name: Login to destination registry
       uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -40,28 +52,12 @@ runs:
       env:
         AWS_REGION: us-east-1
 
-    - name: Validate destination registry
+    - name: Copy and sign registry images
       shell: bash
-      run: |
-        case '${{ inputs.registry }}' in
-          ghcr.io|docker.io|quay.io|public.ecr.aws) ;;
-          *) echo 'Unsupported image registry' >&2; exit 1 ;;
-        esac
-
-    - name: Capture frontend build versions
-      id: frontend-versions
-      shell: bash
-      run: |
-        echo "node_version=$(node --version)" >> "$GITHUB_OUTPUT"
-        echo "sveltekit_version=$(vp -C frontend node -p 'require("@sveltejs/kit/package.json").version')" >> "$GITHUB_OUTPUT"
-
-    - name: Run GoReleaser
-      uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
-      with:
-        distribution: goreleaser-pro
-        version: '~> 2'
-        args: release --clean --nightly --skip=announce,validate,archive,nfpm,notarize,homebrew
       env:
         IMAGE_REGISTRY: ${{ inputs.registry }}
-        NODE_VERSION: ${{ steps.frontend-versions.outputs.node_version }}
-        SVELTEKIT_VERSION: ${{ steps.frontend-versions.outputs.sveltekit_version }}
+        MANAGER_DIGEST: ${{ inputs.manager-digest }}
+        AGENT_DIGEST: ${{ inputs.agent-digest }}
+        IMAGE_VERSION: ${{ inputs.version }}
+        IMAGE_CHANNEL: ${{ inputs.channel }}
+      run: bash "${{ github.workspace }}/scripts/ci/publish-images.sh"

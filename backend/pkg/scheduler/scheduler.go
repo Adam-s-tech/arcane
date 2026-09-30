@@ -375,7 +375,11 @@ func (js *jobSchedulerInternal) upsertJobInternal(ctx context.Context, state *sc
 	if previousSchedule == "" && shouldSchedule {
 		slog.InfoContext(ctx, "Starting Job", "name", jobName, "schedule", schedule)
 	} else if previousSchedule != schedule || hadPreviousEntry != shouldSchedule {
-		slog.InfoContext(ctx, "Job rescheduled", "name", jobName, "previousSchedule", previousSchedule, "newSchedule", schedule, "nextRun", nextRun)
+		var nextRunValue any
+		if nextRun != nil {
+			nextRunValue = *nextRun
+		}
+		slog.InfoContext(ctx, "Job rescheduled", "name", jobName, "previousSchedule", previousSchedule, "newSchedule", schedule, "nextRun", nextRunValue)
 	}
 	slog.DebugContext(ctx, "Job scheduled", "name", jobName, "scheduled", shouldSchedule, "contextCanceled", ctx.Err() != nil)
 	return nil
