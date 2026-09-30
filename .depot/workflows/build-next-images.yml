@@ -37,7 +37,7 @@ jobs:
     outputs:
       manager-digest: ${{ steps.digests.outputs.manager }}
       agent-digest: ${{ steps.digests.outputs.agent }}
-      version: ${{ needs.next-version.outputs.version }}
+      version: ${{ steps.digests.outputs.version }}
     runs-on:
       size: 32x128
       image: g7r5wqb57k.registry.depot.dev/ci:latest
@@ -144,6 +144,7 @@ jobs:
             fi
             echo "$image=$digest" >> "$GITHUB_OUTPUT"
           done
+          echo "version=$IMAGE_VERSION" >> "$GITHUB_OUTPUT"
 
   publish-images:
     name: Publish ${{ matrix.registry }}

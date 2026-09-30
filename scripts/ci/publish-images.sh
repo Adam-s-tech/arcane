@@ -17,7 +17,10 @@ done
 
 case "$IMAGE_CHANNEL" in
     next)
-        [[ "$IMAGE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-next\.[0-9]+$ ]]
+        if [[ ! "$IMAGE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-next\.[0-9]+$ ]]; then
+            echo "Invalid next image version: '$IMAGE_VERSION' (expected X.Y.Z-next.N)" >&2
+            exit 1
+        fi
         moving_tag=next
         tags=("v$IMAGE_VERSION" next)
         if [[ "$IMAGE_REGISTRY" == public.ecr.aws ]]; then
@@ -25,7 +28,10 @@ case "$IMAGE_CHANNEL" in
         fi
         ;;
     release)
-        [[ "$IMAGE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+        if [[ ! "$IMAGE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release image version: '$IMAGE_VERSION' (expected X.Y.Z)" >&2
+            exit 1
+        fi
         IFS=. read -r major minor _ <<<"$IMAGE_VERSION"
         moving_tag=latest
         tags=("v$IMAGE_VERSION" "v$major.$minor" "v$major" latest)
