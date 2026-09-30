@@ -13,13 +13,13 @@ replace (
 require (
 	emperror.dev/emperror v0.33.0
 	emperror.dev/errors v0.8.1
-	github.com/ProtonMail/go-crypto v1.5.1
+	github.com/ProtonMail/go-crypto v1.5.2
 	github.com/anthdm/hollywood v1.0.5
 	github.com/aws/aws-sdk-go-v2 v1.47.1
 	github.com/aws/aws-sdk-go-v2/config v1.33.6
 	github.com/aws/aws-sdk-go-v2/credentials v1.20.6
 	github.com/aws/aws-sdk-go-v2/service/ecr v1.66.1
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.113.4
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.0
 	github.com/aws/smithy-go v1.28.2
 	github.com/cenkalti/backoff/v5 v5.0.3
 	github.com/coder/websocket v1.8.15
@@ -29,12 +29,12 @@ require (
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/danielgtaylor/huma/v2 v2.39.1
 	github.com/distribution/reference v0.6.0
-	github.com/docker/cli v29.8.1+incompatible
+	github.com/docker/cli v29.8.2+incompatible
 	github.com/docker/compose/v5 v5.5.1
 	github.com/docker/go-units v0.5.0
 	github.com/fsnotify/fsnotify v1.10.1
-	github.com/getarcaneapp/arcane/cli/v2 v2.13.1
-	github.com/getarcaneapp/arcane/types/v2 v2.13.1
+	github.com/getarcaneapp/arcane/cli/v2 v2.14.0
+	github.com/getarcaneapp/arcane/types/v2 v2.14.0
 	github.com/go-git/go-billy/v5 v5.9.1
 	github.com/go-git/go-git/v5 v5.19.2
 	github.com/go-webauthn/webauthn v0.18.2
@@ -43,12 +43,12 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jwx-go/jwkfetch/v4 v4.0.4
 	github.com/klauspost/compress v1.20.1
-	github.com/labstack/echo/v5 v5.3.1
+	github.com/labstack/echo/v5 v5.4.0
 	github.com/lestrrat-go/httprc/v3 v3.0.6
 	github.com/lestrrat-go/jwx/v4 v4.5.0
 	github.com/libtnb/sqlite v1.2.2
 	github.com/lmittmann/tint v1.2.0
-	github.com/moby/buildkit v0.33.0
+	github.com/moby/buildkit v0.33.1
 	github.com/moby/moby/api v1.56.0
 	github.com/moby/moby/client v0.6.0
 	github.com/nicholas-fedor/shoutrrr v0.21.1
@@ -61,7 +61,7 @@ require (
 	github.com/samber/hot v0.13.1
 	github.com/samber/lo v1.53.0
 	github.com/samber/mo v1.17.0
-	github.com/samber/slog-echo/v2 v2.1.0
+	github.com/samber/slog-echo/v2 v2.2.0
 	github.com/shirou/gopsutil/v4 v4.26.8
 	github.com/sirupsen/logrus v1.10.2
 	github.com/spf13/cobra v1.10.2
@@ -92,7 +92,7 @@ require (
 	google.golang.org/protobuf v1.36.12
 	gorm.io/driver/postgres v1.6.3
 	gorm.io/gorm v1.31.2
-	modernc.org/sqlite v1.59.0
+	modernc.org/sqlite v1.60.1
 )
 
 require (
@@ -312,7 +312,7 @@ require (
 	mellium.im/sasl v0.3.2 // indirect
 	mellium.im/xmlstream v0.15.4 // indirect
 	mellium.im/xmpp v0.23.0 // indirect
-	modernc.org/libc v1.75.7 // indirect
+	modernc.org/libc v1.77.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 	tags.cncf.io/container-device-interface v1.1.0 // indirect
