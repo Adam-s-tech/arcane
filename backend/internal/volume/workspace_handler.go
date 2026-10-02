@@ -9,6 +9,12 @@ import (
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
+	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
+	"github.com/getarcaneapp/arcane/types/v2/base"
+	volumetypes "github.com/getarcaneapp/arcane/types/v2/volume"
+	workspacetypes "github.com/getarcaneapp/arcane/types/v2/workspace"
+	"github.com/samber/mo"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
@@ -17,11 +23,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
 	workspacepkg "github.com/getarcaneapp/arcane/backend/v2/pkg/workspace"
-	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
-	"github.com/getarcaneapp/arcane/types/v2/base"
-	volumetypes "github.com/getarcaneapp/arcane/types/v2/volume"
-	workspacetypes "github.com/getarcaneapp/arcane/types/v2/workspace"
-	"github.com/samber/mo"
 )
 
 type GetVolumeWorkspaceInput struct {

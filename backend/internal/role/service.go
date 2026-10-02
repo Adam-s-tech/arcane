@@ -13,12 +13,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/kv"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/dbutil"
 	roletypes "github.com/getarcaneapp/arcane/types/v2/role"
 	"github.com/samber/hot"
 	"github.com/samber/mo"
@@ -26,6 +20,13 @@ import (
 	kit "go.getarcane.app/kit/pkg"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/kv"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/dbutil"
 )
 
 const (

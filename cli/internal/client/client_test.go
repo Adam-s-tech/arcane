@@ -7,8 +7,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/getarcaneapp/arcane/cli/v2/internal/types"
 	"github.com/stretchr/testify/require"
+
+	"github.com/getarcaneapp/arcane/cli/v2/internal/types"
 )
 
 func TestClient_UsesAPIKeyHeader(t *testing.T) {

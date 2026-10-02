@@ -11,9 +11,6 @@ import (
 	"strings"
 	"time"
 
-	docker "github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
@@ -22,6 +19,10 @@ import (
 	kit "go.getarcane.app/kit/pkg"
 	"go.getarcane.app/sys/cgroup"
 	"go.getarcane.app/updater/labels"
+
+	docker "github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 )
 
 var (

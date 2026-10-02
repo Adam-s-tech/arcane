@@ -13,12 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/docker"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/event"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/imageupdate"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/project"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/registry"
 	"github.com/google/go-containerregistry/pkg/name"
 	ggcrregistry "github.com/google/go-containerregistry/pkg/registry"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
@@ -33,6 +27,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.getarcane.app/updater/labels"
 	"gorm.io/gorm"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/docker"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/event"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/imageupdate"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/project"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/registry"
 )
 
 func TestVersionService_GetAppVersionInfoDoesNotUseStoredDigestUpdateForSemverBuildInternal(t *testing.T) {

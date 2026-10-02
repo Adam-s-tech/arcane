@@ -5,13 +5,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/kv"
-	francistest "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/francis/testing"
 	st "github.com/getarcaneapp/arcane/types/v2/scheduler"
 	"github.com/libtnb/sqlite"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/kv"
+	francistest "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/francis/testing"
 )
 
 func newResolutionQueueInternal(t *testing.T) *Coordinator {

@@ -15,11 +15,12 @@ import (
 	"github.com/docker/compose/v5/cmd/display"
 	"github.com/docker/compose/v5/pkg/api"
 	"github.com/docker/compose/v5/pkg/compose"
-	dockerutils "github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
 	"github.com/moby/moby/api/types/registry"
 	"github.com/moby/moby/client"
 	"go.getarcane.app/docker/compat"
 	kit "go.getarcane.app/kit/pkg"
+
+	dockerutils "github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
 )
 
 type Client struct {

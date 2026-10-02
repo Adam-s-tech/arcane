@@ -4,8 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	gen "github.com/getarcaneapp/arcane/cli/v2/pkg/generate"
 	"github.com/stretchr/testify/require"
+
+	gen "github.com/getarcaneapp/arcane/cli/v2/pkg/generate"
 )
 
 func TestAPIKeyDefaultOutput(t *testing.T) {

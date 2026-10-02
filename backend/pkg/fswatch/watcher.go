@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 )
 

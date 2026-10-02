@@ -17,12 +17,13 @@ import (
 
 	"github.com/cenkalti/backoff/v5"
 	"github.com/coder/websocket"
+	"github.com/samber/mo"
+	kit "go.getarcane.app/kit/pkg"
+
 	wshub "github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/ws"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/concurrency"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
-	"github.com/samber/mo"
-	kit "go.getarcane.app/kit/pkg"
 )
 
 const (

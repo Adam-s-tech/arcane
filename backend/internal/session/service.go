@@ -10,13 +10,14 @@ import (
 	"time"
 	"uuid"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/dbutil"
 	"github.com/getarcaneapp/arcane/types/v2/auth"
 	"github.com/samber/mo"
 	kit "go.getarcane.app/kit/pkg"
 	"gorm.io/gorm"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/dbutil"
 )
 
 type SessionService struct {

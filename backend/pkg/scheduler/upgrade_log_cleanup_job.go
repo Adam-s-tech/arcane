@@ -5,9 +5,10 @@ import (
 	"log/slog"
 	"time"
 
+	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/system"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
-	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
 )
 
 const UpgradeLogCleanupJobName = "upgrade-log-cleanup"

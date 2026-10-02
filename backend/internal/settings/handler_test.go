@@ -10,12 +10,13 @@ import (
 	"testing"
 
 	"github.com/danielgtaylor/huma/v2"
+	settingstypes "github.com/getarcaneapp/arcane/types/v2/settings"
+	"github.com/stretchr/testify/require"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/edge"
-	settingstypes "github.com/getarcaneapp/arcane/types/v2/settings"
-	"github.com/stretchr/testify/require"
 )
 
 func TestSettingsHandlerAppendRuntimeSettingsInternal(t *testing.T) {

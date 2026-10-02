@@ -8,13 +8,14 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/auth"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	federatedtypes "github.com/getarcaneapp/arcane/types/v2/federated"
 	"github.com/samber/mo"
 	"go.getarcane.app/kit/normalization"
 	kit "go.getarcane.app/kit/pkg"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/auth"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 )
 
 func normalizeCreateFederatedCredentialInternal(req federatedtypes.CreateFederatedCredential) (federatedtypes.CreateFederatedCredential, error) {

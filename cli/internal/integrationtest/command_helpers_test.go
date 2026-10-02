@@ -9,10 +9,11 @@ import (
 	"sync"
 	"testing"
 
-	clipkg "github.com/getarcaneapp/arcane/cli/v2/pkg"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
+
+	clipkg "github.com/getarcaneapp/arcane/cli/v2/pkg"
 )
 
 var stdoutCaptureMuInternal sync.Mutex

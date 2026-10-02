@@ -9,11 +9,12 @@ import (
 	"strings"
 
 	composegotypes "github.com/compose-spec/compose-go/v2/types"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 	projecttypes "github.com/getarcaneapp/arcane/types/v2/project"
 	swarmtypes "github.com/getarcaneapp/arcane/types/v2/swarm"
 	"github.com/moby/moby/api/types/swarm"
 	dockerclient "github.com/moby/moby/client"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 )
 
 // StackDeployOptions controls how a swarm stack is deployed.

@@ -9,10 +9,11 @@ import (
 	"sort"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/notifications"
-	"github.com/getarcaneapp/arcane/backend/v2/resources"
 	"github.com/getarcaneapp/arcane/types/v2/imageupdate"
 	"github.com/getarcaneapp/arcane/types/v2/system"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/notifications"
+	"github.com/getarcaneapp/arcane/backend/v2/resources"
 )
 
 func (s *NotificationService) renderBatchContainerUpdateEmailTemplateInternal(environmentName string, entries []notifications.ContainerUpdateBatchEntry) (string, string, error) {

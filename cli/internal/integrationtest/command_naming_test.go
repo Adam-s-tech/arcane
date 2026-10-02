@@ -4,8 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	clipkg "github.com/getarcaneapp/arcane/cli/v2/pkg"
 	"github.com/spf13/cobra"
+
+	clipkg "github.com/getarcaneapp/arcane/cli/v2/pkg"
 )
 
 // Command names must never contain hyphens; multi-word actions are flags or

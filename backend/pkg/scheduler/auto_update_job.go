@@ -7,13 +7,14 @@ import (
 	"log/slog"
 	"strings"
 
+	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
+	updatertypes "github.com/getarcaneapp/arcane/types/v2/updater"
+	kit "go.getarcane.app/kit/pkg"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/updater"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/jobcontext"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/runs"
-	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
-	updatertypes "github.com/getarcaneapp/arcane/types/v2/updater"
-	kit "go.getarcane.app/kit/pkg"
 )
 
 const autoUpdateAdmissionScopeInternal = "auto-update"

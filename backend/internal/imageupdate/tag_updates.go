@@ -9,12 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/docker"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/registry"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/timeouts"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/imageref"
 	"github.com/getarcaneapp/arcane/types/v2/containerregistry"
 	imageupdatetypes "github.com/getarcaneapp/arcane/types/v2/imageupdate"
 	"github.com/moby/moby/api/types/container"
@@ -25,6 +19,13 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/singleflight"
 	"gorm.io/gorm"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/docker"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/registry"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/timeouts"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/imageref"
 )
 
 const (

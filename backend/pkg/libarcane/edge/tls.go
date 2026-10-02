@@ -29,8 +29,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
 	certgen "github.com/getarcaneapp/arcane/cli/v2/pkg/generate"
 	"go.getarcane.app/acfs"
 	"go.getarcane.app/acfs/atomic"
@@ -38,6 +36,9 @@ import (
 	libcrypto "go.getarcane.app/sys/crypto"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
 )
 
 const (

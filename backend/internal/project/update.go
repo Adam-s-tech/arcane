@@ -16,11 +16,6 @@ import (
 	"unicode/utf8"
 
 	composetypes "github.com/compose-spec/compose-go/v2/types"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/event"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/volumehelper"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 	projecttypes "github.com/getarcaneapp/arcane/types/v2/project"
 	volumetypes "github.com/getarcaneapp/arcane/types/v2/volume"
 	"github.com/moby/moby/client"
@@ -32,6 +27,12 @@ import (
 	updatertypes "go.getarcane.app/updater/types"
 	"go.yaml.in/yaml/v4"
 	"gorm.io/gorm"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/event"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/volumehelper"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 )
 
 func (s *ProjectService) UpdateProject(ctx context.Context, projectID string, name, composeContent, envContent, overrideContent *string, user common.User) (*Project, error) {

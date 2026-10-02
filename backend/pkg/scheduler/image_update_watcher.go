@@ -9,6 +9,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/getarcaneapp/arcane/types/v2/containerregistry"
+	imageupdatetypes "github.com/getarcaneapp/arcane/types/v2/imageupdate"
+	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
+	"github.com/moby/moby/api/types/events"
+	"go.getarcane.app/streams/bus"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/docker"
@@ -19,11 +25,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/jobcontext"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/runs"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
-	"github.com/getarcaneapp/arcane/types/v2/containerregistry"
-	imageupdatetypes "github.com/getarcaneapp/arcane/types/v2/imageupdate"
-	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
-	"github.com/moby/moby/api/types/events"
-	"go.getarcane.app/streams/bus"
 )
 
 const (

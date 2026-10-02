@@ -39,12 +39,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/getarcaneapp/arcane/types/v2/auth"
+	"github.com/getarcaneapp/arcane/types/v2/base"
+
 	"github.com/getarcaneapp/arcane/cli/v2/internal/config"
 	"github.com/getarcaneapp/arcane/cli/v2/internal/logger"
 	"github.com/getarcaneapp/arcane/cli/v2/internal/runstate"
 	"github.com/getarcaneapp/arcane/cli/v2/internal/types"
-	"github.com/getarcaneapp/arcane/types/v2/auth"
-	"github.com/getarcaneapp/arcane/types/v2/base"
 )
 
 const (

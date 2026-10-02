@@ -9,8 +9,9 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/concurrency"
 	"google.golang.org/grpc"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/concurrency"
 )
 
 // activeWSStream tracks an active WebSocket stream on the agent side.

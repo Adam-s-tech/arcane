@@ -10,9 +10,10 @@ import (
 	"strings"
 
 	composegotypes "github.com/compose-spec/compose-go/v2/types"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/api/types/swarm"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 )
 
 func convertServiceMountsInternal(

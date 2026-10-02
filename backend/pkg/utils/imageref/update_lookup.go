@@ -7,11 +7,12 @@ import (
 	"strings"
 
 	ref "github.com/distribution/reference"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/registryauth"
 	kit "go.getarcane.app/kit/pkg"
 	"go.getarcane.app/updater"
 	"go.getarcane.app/updater/pkg/utils/tagpolicy"
 	"go.getarcane.app/updater/refs"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/registryauth"
 )
 
 const (

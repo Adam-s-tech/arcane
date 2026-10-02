@@ -9,9 +9,10 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/getarcaneapp/arcane/types/v2/base"
+
 	"github.com/getarcaneapp/arcane/cli/v2/internal/client"
 	"github.com/getarcaneapp/arcane/cli/v2/internal/prompt"
-	"github.com/getarcaneapp/arcane/types/v2/base"
 )
 
 // MaxPromptOptions caps how many search matches the resolver offers

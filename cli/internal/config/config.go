@@ -27,10 +27,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/getarcaneapp/arcane/cli/v2/internal/types"
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/samber/hot"
 	"github.com/spf13/viper"
+
+	"github.com/getarcaneapp/arcane/cli/v2/internal/types"
 )
 
 // Version and build information - set via ldflags at build time

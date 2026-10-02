@@ -15,6 +15,17 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	backuptypes "github.com/getarcaneapp/arcane/types/v2/backup"
+	"github.com/getarcaneapp/arcane/types/v2/containerregistry"
+	"github.com/getarcaneapp/arcane/types/v2/environment"
+	"github.com/getarcaneapp/arcane/types/v2/gitops"
+	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
+	"github.com/libtnb/sqlite"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.getarcane.app/sys/crypto"
+	"gorm.io/gorm"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/apikey"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
@@ -29,16 +40,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/entityjobs"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/runs"
 	francistest "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/francis/testing"
-	backuptypes "github.com/getarcaneapp/arcane/types/v2/backup"
-	"github.com/getarcaneapp/arcane/types/v2/containerregistry"
-	"github.com/getarcaneapp/arcane/types/v2/environment"
-	"github.com/getarcaneapp/arcane/types/v2/gitops"
-	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
-	"github.com/libtnb/sqlite"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"go.getarcane.app/sys/crypto"
-	"gorm.io/gorm"
 )
 
 func TestEnvironmentService_OverlappingHealthCheckIsSkippedInternal(t *testing.T) {

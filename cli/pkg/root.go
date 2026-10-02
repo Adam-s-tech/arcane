@@ -43,6 +43,8 @@ import (
 
 	"charm.land/fang/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/spf13/cobra"
+
 	"github.com/getarcaneapp/arcane/cli/v2/internal/config"
 	"github.com/getarcaneapp/arcane/cli/v2/internal/logger"
 	"github.com/getarcaneapp/arcane/cli/v2/internal/output"
@@ -75,7 +77,6 @@ import (
 	"github.com/getarcaneapp/arcane/cli/v2/pkg/volumes"
 	"github.com/getarcaneapp/arcane/cli/v2/pkg/vulnerabilities"
 	"github.com/getarcaneapp/arcane/cli/v2/pkg/webhooks"
-	"github.com/spf13/cobra"
 )
 
 var (

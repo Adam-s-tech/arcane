@@ -5,11 +5,12 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
 	"github.com/getarcaneapp/arcane/types/v2/features"
 	settingstypes "github.com/getarcaneapp/arcane/types/v2/settings"
 	"github.com/stretchr/testify/require"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
 )
 
 func TestSettingsService_FeatureDefaultsAndUnknownFeature(t *testing.T) {

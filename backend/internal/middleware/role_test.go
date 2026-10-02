@@ -8,9 +8,10 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humaecho"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/require"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 )
 
 func TestRequirePermission_RejectsCallerMissingPermission(t *testing.T) {

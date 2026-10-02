@@ -11,13 +11,14 @@ import (
 	composetypes "github.com/compose-spec/compose-go/v2/types"
 	"github.com/docker/compose/v5/pkg/api"
 	"github.com/docker/compose/v5/pkg/compose"
-	docker "github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/timeouts"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/registry"
 	"github.com/moby/moby/client"
 	kit "go.getarcane.app/kit/pkg"
+
+	docker "github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/timeouts"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 )
 
 // defaultComposeTimeout is applied to compose operations that have been

@@ -12,9 +12,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
 	"github.com/getarcaneapp/arcane/types/v2"
 	"github.com/labstack/echo/v5"
 	"github.com/libtnb/sqlite"
@@ -23,6 +20,10 @@ import (
 	kit "go.getarcane.app/kit/pkg"
 	libcrypto "go.getarcane.app/sys/crypto"
 	"gorm.io/gorm"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
 )
 
 // setupWebhookServiceTestDB creates an isolated in-memory SQLite DB for each test.

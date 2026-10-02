@@ -14,7 +14,6 @@ import (
 	"strings"
 
 	"github.com/containerd/platforms"
-	utilsregistry "github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/registryauth"
 	imagetypes "github.com/getarcaneapp/arcane/types/v2/image"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -24,6 +23,8 @@ import (
 	"github.com/klauspost/compress/zstd"
 	attestationTypes "github.com/moby/buildkit/util/attestation"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+
+	utilsregistry "github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/registryauth"
 )
 
 const (

@@ -11,6 +11,13 @@ import (
 	"sync/atomic"
 	"testing"
 
+	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
+	"github.com/getarcaneapp/arcane/types/v2/gitops"
+	"github.com/libtnb/sqlite"
+	"github.com/stretchr/testify/require"
+	"go.getarcane.app/sys/crypto"
+	"gorm.io/gorm"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
@@ -18,12 +25,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/gitrepo"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/registry"
 	s3domain "github.com/getarcaneapp/arcane/backend/v2/internal/s3"
-	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
-	"github.com/getarcaneapp/arcane/types/v2/gitops"
-	"github.com/libtnb/sqlite"
-	"github.com/stretchr/testify/require"
-	"go.getarcane.app/sys/crypto"
-	"gorm.io/gorm"
 )
 
 func setupSyncDBInternal(t *testing.T) *database.DB {

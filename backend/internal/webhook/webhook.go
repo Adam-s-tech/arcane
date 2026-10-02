@@ -15,6 +15,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/getarcaneapp/arcane/types/v2"
+	"github.com/getarcaneapp/arcane/types/v2/base"
+	updatertypes "github.com/getarcaneapp/arcane/types/v2/updater"
+	webhooktypes "github.com/getarcaneapp/arcane/types/v2/webhook"
+	"go.getarcane.app/kit/normalization"
+	kit "go.getarcane.app/kit/pkg"
+	libcrypto "go.getarcane.app/sys/crypto"
+	"gorm.io/gorm"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/container"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
@@ -24,14 +33,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/project"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/updater"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
-	"github.com/getarcaneapp/arcane/types/v2"
-	"github.com/getarcaneapp/arcane/types/v2/base"
-	updatertypes "github.com/getarcaneapp/arcane/types/v2/updater"
-	webhooktypes "github.com/getarcaneapp/arcane/types/v2/webhook"
-	"go.getarcane.app/kit/normalization"
-	kit "go.getarcane.app/kit/pkg"
-	libcrypto "go.getarcane.app/sys/crypto"
-	"gorm.io/gorm"
 )
 
 const (

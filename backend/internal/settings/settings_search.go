@@ -1,9 +1,10 @@
 package settings
 
 import (
-	"github.com/getarcaneapp/arcane/backend/v2/internal/search"
 	"github.com/getarcaneapp/arcane/types/v2/category"
 	searchtypes "github.com/getarcaneapp/arcane/types/v2/search"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/search"
 )
 
 type SettingsSearchService struct {

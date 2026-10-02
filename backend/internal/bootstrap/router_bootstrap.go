@@ -9,6 +9,12 @@ import (
 	"path"
 	"strings"
 
+	"github.com/getarcaneapp/arcane/types/v2"
+	"github.com/labstack/echo/v5"
+	echomiddleware "github.com/labstack/echo/v5/middleware"
+	slogecho "github.com/samber/slog-echo/v2"
+	"go.uber.org/fx"
+
 	"github.com/getarcaneapp/arcane/backend/v2/api"
 	"github.com/getarcaneapp/arcane/backend/v2/api/ws"
 	"github.com/getarcaneapp/arcane/backend/v2/frontend"
@@ -23,11 +29,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/cookie"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
-	"github.com/getarcaneapp/arcane/types/v2"
-	"github.com/labstack/echo/v5"
-	echomiddleware "github.com/labstack/echo/v5/middleware"
-	slogecho "github.com/samber/slog-echo/v2"
-	"go.uber.org/fx"
 )
 
 var (

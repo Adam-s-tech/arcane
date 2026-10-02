@@ -11,14 +11,15 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	federatedtypes "github.com/getarcaneapp/arcane/types/v2/federated"
+	"github.com/samber/mo"
+	kit "go.getarcane.app/kit/pkg"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/event"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/jwtclaims"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/oidcjwk"
-	federatedtypes "github.com/getarcaneapp/arcane/types/v2/federated"
-	"github.com/samber/mo"
-	kit "go.getarcane.app/kit/pkg"
 )
 
 func (s *FederatedCredentialService) ExchangeToken(ctx context.Context, req federatedtypes.TokenExchangeRequest) (*federatedtypes.FederatedTokenResponse, error) {

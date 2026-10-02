@@ -11,9 +11,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	"github.com/samber/mo"
 	kit "go.getarcane.app/kit/pkg"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 )
 
 const (

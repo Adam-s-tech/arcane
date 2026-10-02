@@ -9,10 +9,11 @@ import (
 	"strings"
 	"uuid"
 
+	"gorm.io/gorm"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/role"
-	"gorm.io/gorm"
 )
 
 // CreatePlaywrightCredential creates the service identity, credential, and role

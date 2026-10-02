@@ -11,6 +11,17 @@ import (
 	"testing"
 	"time"
 
+	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
+	"github.com/labstack/echo/v5"
+	"github.com/libtnb/sqlite"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	libcrypto "go.getarcane.app/sys/crypto"
+	"go.uber.org/fx"
+	"go.uber.org/fx/fxtest"
+	"golang.org/x/net/http2"
+	"gorm.io/gorm"
+
 	"github.com/getarcaneapp/arcane/backend/v2/api"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/auth"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
@@ -28,16 +39,6 @@ import (
 	francistest "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/francis/testing"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
 	tunnelpb "github.com/getarcaneapp/arcane/backend/v2/proto/tunnel/v1"
-	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
-	"github.com/labstack/echo/v5"
-	"github.com/libtnb/sqlite"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	libcrypto "go.getarcane.app/sys/crypto"
-	"go.uber.org/fx"
-	"go.uber.org/fx/fxtest"
-	"golang.org/x/net/http2"
-	"gorm.io/gorm"
 )
 
 type blockingBusWatcherInternal struct {

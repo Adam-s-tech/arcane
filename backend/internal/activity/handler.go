@@ -13,6 +13,13 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
+	"github.com/getarcaneapp/arcane/types/v2/base"
+	"github.com/samber/mo"
+	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/streams/agg"
+	"gorm.io/gorm"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/environment"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
@@ -20,12 +27,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/remenv"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
-	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
-	"github.com/getarcaneapp/arcane/types/v2/base"
-	"github.com/samber/mo"
-	kit "go.getarcane.app/kit/pkg"
-	"go.getarcane.app/streams/agg"
-	"gorm.io/gorm"
 )
 
 type ActivityHandler struct {

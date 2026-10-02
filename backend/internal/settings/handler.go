@@ -10,6 +10,14 @@ import (
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/getarcaneapp/arcane/types/v2/base"
+	"github.com/getarcaneapp/arcane/types/v2/category"
+	searchtypes "github.com/getarcaneapp/arcane/types/v2/search"
+	settingstypes "github.com/getarcaneapp/arcane/types/v2/settings"
+	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/kit/pkg/mapping"
+	"go.yaml.in/yaml/v4"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
@@ -19,13 +27,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
 	workspacepkg "github.com/getarcaneapp/arcane/backend/v2/pkg/workspace"
-	"github.com/getarcaneapp/arcane/types/v2/base"
-	"github.com/getarcaneapp/arcane/types/v2/category"
-	searchtypes "github.com/getarcaneapp/arcane/types/v2/search"
-	settingstypes "github.com/getarcaneapp/arcane/types/v2/settings"
-	kit "go.getarcane.app/kit/pkg"
-	"go.getarcane.app/kit/pkg/mapping"
-	"go.yaml.in/yaml/v4"
 )
 
 const (

@@ -22,6 +22,17 @@ import (
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
+	swarmtypes "github.com/getarcaneapp/arcane/types/v2/swarm"
+	networktypes "github.com/moby/moby/api/types/network"
+	"github.com/moby/moby/api/types/swarm"
+	"github.com/moby/moby/api/types/system"
+	dockerclient "github.com/moby/moby/client"
+	"github.com/samber/hot"
+	"go.getarcane.app/acfs"
+	acfstypes "go.getarcane.app/acfs/types"
+	kit "go.getarcane.app/kit/pkg"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/docker"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/environment"
@@ -35,16 +46,6 @@ import (
 	appfs "github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/remenv"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
-	swarmtypes "github.com/getarcaneapp/arcane/types/v2/swarm"
-	networktypes "github.com/moby/moby/api/types/network"
-	"github.com/moby/moby/api/types/swarm"
-	"github.com/moby/moby/api/types/system"
-	dockerclient "github.com/moby/moby/client"
-	"github.com/samber/hot"
-	"go.getarcane.app/acfs"
-	acfstypes "go.getarcane.app/acfs/types"
-	kit "go.getarcane.app/kit/pkg"
-	"golang.org/x/sync/errgroup"
 )
 
 const (

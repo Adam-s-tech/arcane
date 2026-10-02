@@ -12,6 +12,9 @@ import (
 
 	"github.com/containerd/errdefs"
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/getarcaneapp/arcane/types/v2/base"
+	swarmtypes "github.com/getarcaneapp/arcane/types/v2/swarm"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
@@ -22,8 +25,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/edge"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/remenv"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
-	"github.com/getarcaneapp/arcane/types/v2/base"
-	swarmtypes "github.com/getarcaneapp/arcane/types/v2/swarm"
 )
 
 type SwarmHandler struct {

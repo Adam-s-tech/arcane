@@ -12,6 +12,15 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
+	"github.com/getarcaneapp/arcane/types/v2/base"
+	projecttypes "github.com/getarcaneapp/arcane/types/v2/project"
+	volumetypes "github.com/getarcaneapp/arcane/types/v2/volume"
+	workspacetypes "github.com/getarcaneapp/arcane/types/v2/workspace"
+	"github.com/samber/mo"
+	"go.getarcane.app/kit/pkg/mapping"
+	"gorm.io/gorm"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
@@ -23,14 +32,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
 	workspacepkg "github.com/getarcaneapp/arcane/backend/v2/pkg/workspace"
-	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
-	"github.com/getarcaneapp/arcane/types/v2/base"
-	projecttypes "github.com/getarcaneapp/arcane/types/v2/project"
-	volumetypes "github.com/getarcaneapp/arcane/types/v2/volume"
-	workspacetypes "github.com/getarcaneapp/arcane/types/v2/workspace"
-	"github.com/samber/mo"
-	"go.getarcane.app/kit/pkg/mapping"
-	"gorm.io/gorm"
 )
 
 // ProjectHandler provides Huma-based project management endpoints.

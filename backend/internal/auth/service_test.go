@@ -9,6 +9,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/getarcaneapp/arcane/types/v2/auth"
+	"github.com/lestrrat-go/jwx/v4/jwa"
+	"github.com/lestrrat-go/jwx/v4/jwt"
+	"github.com/libtnb/sqlite"
+	"github.com/samber/hot"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/apikey"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
@@ -18,14 +27,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/session"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/user"
-	"github.com/getarcaneapp/arcane/types/v2/auth"
-	"github.com/lestrrat-go/jwx/v4/jwa"
-	"github.com/lestrrat-go/jwx/v4/jwt"
-	"github.com/libtnb/sqlite"
-	"github.com/samber/hot"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
 )
 
 func setupAuthServiceTestDB(t *testing.T) *database.DB {

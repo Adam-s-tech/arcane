@@ -7,11 +7,12 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	"github.com/getarcaneapp/arcane/types/v2/category"
 	"github.com/getarcaneapp/arcane/types/v2/meta"
 	searchtypes "github.com/getarcaneapp/arcane/types/v2/search"
 	kit "go.getarcane.app/kit/pkg"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 )
 
 // BuildCategories extracts searchable metadata in model field order.

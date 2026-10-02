@@ -14,11 +14,12 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
-	tunnelpb "github.com/getarcaneapp/arcane/backend/v2/proto/tunnel/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+
+	tunnelpb "github.com/getarcaneapp/arcane/backend/v2/proto/tunnel/v1"
 )
 
 func TestNormalizeEdgeTransport(t *testing.T) {

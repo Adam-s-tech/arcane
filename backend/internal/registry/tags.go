@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/timeouts"
 	"github.com/getarcaneapp/arcane/types/v2/containerregistry"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"go.getarcane.app/updater/refs"
 	updaterregistry "go.getarcane.app/updater/registry"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/timeouts"
 )
 
 // ListImageTags discovers repository tags with the same credential precedence as

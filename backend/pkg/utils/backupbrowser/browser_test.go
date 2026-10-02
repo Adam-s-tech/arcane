@@ -3,9 +3,10 @@ package backupbrowser
 import (
 	"testing"
 
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
 	backuptypes "github.com/getarcaneapp/arcane/types/v2/backup"
 	"github.com/stretchr/testify/require"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
 )
 
 func TestBuildEntriesSynthesizesAndSortsDirectoriesInternal(t *testing.T) {

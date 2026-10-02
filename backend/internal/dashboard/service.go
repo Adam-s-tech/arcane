@@ -9,6 +9,19 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/getarcaneapp/arcane/types/v2/base"
+	containertypes "github.com/getarcaneapp/arcane/types/v2/container"
+	dashboardtypes "github.com/getarcaneapp/arcane/types/v2/dashboard"
+	imagetypes "github.com/getarcaneapp/arcane/types/v2/image"
+	versiontypes "github.com/getarcaneapp/arcane/types/v2/version"
+	volumetypes "github.com/getarcaneapp/arcane/types/v2/volume"
+	dockercontainer "github.com/moby/moby/api/types/container"
+	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/sys/cgroup"
+	"go.getarcane.app/updater/labels"
+	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/singleflight"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/apikey"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/container"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
@@ -23,18 +36,6 @@ import (
 	dockerutils "github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/iconcatalog"
-	"github.com/getarcaneapp/arcane/types/v2/base"
-	containertypes "github.com/getarcaneapp/arcane/types/v2/container"
-	dashboardtypes "github.com/getarcaneapp/arcane/types/v2/dashboard"
-	imagetypes "github.com/getarcaneapp/arcane/types/v2/image"
-	versiontypes "github.com/getarcaneapp/arcane/types/v2/version"
-	volumetypes "github.com/getarcaneapp/arcane/types/v2/volume"
-	dockercontainer "github.com/moby/moby/api/types/container"
-	kit "go.getarcane.app/kit/pkg"
-	"go.getarcane.app/sys/cgroup"
-	"go.getarcane.app/updater/labels"
-	"golang.org/x/sync/errgroup"
-	"golang.org/x/sync/singleflight"
 )
 
 const (

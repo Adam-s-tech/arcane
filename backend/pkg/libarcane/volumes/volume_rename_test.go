@@ -7,13 +7,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/volumehelper"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/volume"
 	"github.com/moby/moby/client"
 	"github.com/stretchr/testify/require"
 	kit "go.getarcane.app/kit/pkg"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/volumehelper"
 )
 
 func newTestDockerClientInternal(t *testing.T, server *httptest.Server) *client.Client {

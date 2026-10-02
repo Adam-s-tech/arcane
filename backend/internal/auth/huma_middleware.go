@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
+	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/apikey"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
@@ -16,7 +18,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/cookie"
-	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
 )
 
 // securityRequirements holds parsed security requirements from an operation.

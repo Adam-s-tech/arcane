@@ -11,14 +11,15 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/jobcontext"
 	"github.com/getarcaneapp/arcane/types/v2/containerregistry"
 	"github.com/getarcaneapp/arcane/types/v2/imageupdate"
 	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
 	"github.com/moby/moby/api/types/events"
 	"github.com/stretchr/testify/require"
 	"go.getarcane.app/streams/bus"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/jobcontext"
 )
 
 type imageUpdateScannerFakeInternal struct {

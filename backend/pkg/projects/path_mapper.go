@@ -10,12 +10,13 @@ import (
 	"strings"
 
 	composetypes "github.com/compose-spec/compose-go/v2/types"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
 	projecttypes "github.com/getarcaneapp/arcane/types/v2/project"
 	mounttypes "github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/client"
 	"github.com/samber/mo"
 	kit "go.getarcane.app/kit/pkg"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
 )
 
 // HostMount is one container→host mount (bind or named volume) from Arcane's own

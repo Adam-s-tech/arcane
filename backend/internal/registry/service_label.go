@@ -8,10 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/timeouts"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/timeouts"
 )
 
 const (

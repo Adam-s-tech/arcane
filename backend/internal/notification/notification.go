@@ -16,6 +16,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/getarcaneapp/arcane/types/v2/imageupdate"
+	notificationdto "github.com/getarcaneapp/arcane/types/v2/notification"
+	"github.com/getarcaneapp/arcane/types/v2/system"
+	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/sys/crypto"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/apns"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
@@ -28,12 +35,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/notifications"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/validation"
-	"github.com/getarcaneapp/arcane/types/v2/imageupdate"
-	notificationdto "github.com/getarcaneapp/arcane/types/v2/notification"
-	"github.com/getarcaneapp/arcane/types/v2/system"
-	kit "go.getarcane.app/kit/pkg"
-	"go.getarcane.app/sys/crypto"
-	"golang.org/x/sync/errgroup"
 )
 
 var notificationCredentialFieldsByProviderInternal = map[notifications.NotificationProvider][]string{

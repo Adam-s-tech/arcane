@@ -6,10 +6,11 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/getarcaneapp/arcane/cli/v2/internal/client"
-	"github.com/getarcaneapp/arcane/cli/v2/internal/output"
 	"github.com/getarcaneapp/arcane/types/v2/base"
 	"github.com/spf13/cobra"
+
+	"github.com/getarcaneapp/arcane/cli/v2/internal/client"
+	"github.com/getarcaneapp/arcane/cli/v2/internal/output"
 )
 
 // ListSpec describes one standard list command: fetch a paginated endpoint,

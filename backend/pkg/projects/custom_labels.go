@@ -16,12 +16,13 @@ import (
 
 	"github.com/compose-spec/compose-go/v2/loader"
 	composetypes "github.com/compose-spec/compose-go/v2/types"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/iconcatalog"
 	projecttypes "github.com/getarcaneapp/arcane/types/v2/project"
 	kit "go.getarcane.app/kit/pkg"
 	updaterlabels "go.getarcane.app/updater/labels"
 	"go.yaml.in/yaml/v4"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/iconcatalog"
 )
 
 const (

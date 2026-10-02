@@ -6,9 +6,10 @@ import (
 	"io"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/getarcaneapp/arcane/cli/v2/internal/client"
 	runtimectx "github.com/getarcaneapp/arcane/cli/v2/internal/runtime"
-	"github.com/spf13/cobra"
 )
 
 // ClientFromCommand returns a configured authenticated client for the command.

@@ -5,9 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/stretchr/testify/require"
 	kit "go.getarcane.app/kit/pkg"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 )
 
 func TestDockerExpectationIdentityAndExpiry(t *testing.T) {

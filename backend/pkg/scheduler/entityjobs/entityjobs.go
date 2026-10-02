@@ -9,8 +9,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/runs"
 	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/runs"
 )
 
 // GitOpsSyncJobPrefix is shared by the GitOps registry and environment cleanup.

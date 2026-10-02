@@ -7,10 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	kit "go.getarcane.app/kit/pkg"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 )
 
 func TestGenerate_EnvConfigIncludesTaggedFields(t *testing.T) {

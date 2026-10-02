@@ -10,15 +10,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
 	settingstypes "github.com/getarcaneapp/arcane/types/v2/settings"
 	"github.com/libtnb/sqlite"
 	"github.com/stretchr/testify/require"
 	libcrypto "go.getarcane.app/sys/crypto"
 	"gorm.io/gorm"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
 )
 
 func setupSettingsTestDB(t *testing.T) *database.DB {

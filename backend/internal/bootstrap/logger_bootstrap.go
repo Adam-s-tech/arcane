@@ -9,11 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/lmittmann/tint"
 	slogGorm "github.com/orandin/slog-gorm"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 )
 
 type requestLogHandler struct {

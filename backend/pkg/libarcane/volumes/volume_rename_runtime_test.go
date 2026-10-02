@@ -8,9 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/volumehelper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/volumehelper"
 )
 
 func TestGetProjectVolumeCopyRuntimeInternal_UsesToolsImageWhenAvailable(t *testing.T) {

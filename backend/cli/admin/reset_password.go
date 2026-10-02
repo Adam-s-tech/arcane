@@ -9,6 +9,10 @@ import (
 	"os"
 	"strings"
 
+	"github.com/spf13/cobra"
+	kit "go.getarcane.app/kit/pkg"
+	"golang.org/x/term"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
@@ -16,9 +20,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/user"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/validation"
-	"github.com/spf13/cobra"
-	kit "go.getarcane.app/kit/pkg"
-	"golang.org/x/term"
 )
 
 const defaultAdminUsername = "arcane"

@@ -10,8 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
-	tunnelpb "github.com/getarcaneapp/arcane/backend/v2/proto/tunnel/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/connectivity"
@@ -19,6 +17,9 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
+	tunnelpb "github.com/getarcaneapp/arcane/backend/v2/proto/tunnel/v1"
 )
 
 func (c *TunnelClient) connectAndServeGRPC(ctx context.Context) error {

@@ -7,11 +7,12 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/spf13/cobra"
+	kit "go.getarcane.app/kit/pkg"
+
 	"github.com/getarcaneapp/arcane/cli/v2/internal/config"
 	runtimectx "github.com/getarcaneapp/arcane/cli/v2/internal/runtime"
 	clitypes "github.com/getarcaneapp/arcane/cli/v2/internal/types"
-	"github.com/spf13/cobra"
-	kit "go.getarcane.app/kit/pkg"
 )
 
 const (

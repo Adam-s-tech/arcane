@@ -13,14 +13,6 @@ import (
 	"time"
 
 	composeapi "github.com/docker/compose/v5/pkg/api"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/image"
-	dockerutil "github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/iconcatalog"
 	imagetypes "github.com/getarcaneapp/arcane/types/v2/image"
 	"github.com/getarcaneapp/arcane/types/v2/project"
 	"github.com/moby/moby/api/types/container"
@@ -32,6 +24,15 @@ import (
 	"go.getarcane.app/updater/labels"
 	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/image"
+	dockerutil "github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/iconcatalog"
 )
 
 // listGlobalComposeContainersInternal routes the global compose-container

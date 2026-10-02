@@ -14,15 +14,6 @@ import (
 	"time"
 
 	"github.com/containerd/errdefs"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/docker"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/event"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/imageupdate"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/project"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 	containertypes "github.com/getarcaneapp/arcane/types/v2/container"
 	imagetypes "github.com/getarcaneapp/arcane/types/v2/image"
 	"github.com/libtnb/sqlite"
@@ -32,6 +23,16 @@ import (
 	"github.com/moby/moby/client"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/docker"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/event"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/imageupdate"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/project"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 )
 
 func TestPaginateContainerProjectGroupsKeepsProjectWhole(t *testing.T) {

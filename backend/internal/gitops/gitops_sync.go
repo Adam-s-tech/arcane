@@ -17,6 +17,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/getarcaneapp/arcane/types/v2/base"
+	"github.com/getarcaneapp/arcane/types/v2/gitops"
+	projecttypes "github.com/getarcaneapp/arcane/types/v2/project"
+	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
+	swarmtypes "github.com/getarcaneapp/arcane/types/v2/swarm"
+	gogit "github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
+	"go.getarcane.app/acfs"
+	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/kit/pkg/mapping"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/event"
@@ -30,18 +43,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/jobcontext"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/runs"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
-	"github.com/getarcaneapp/arcane/types/v2/base"
-	"github.com/getarcaneapp/arcane/types/v2/gitops"
-	projecttypes "github.com/getarcaneapp/arcane/types/v2/project"
-	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
-	swarmtypes "github.com/getarcaneapp/arcane/types/v2/swarm"
-	gogit "github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing"
-	"go.getarcane.app/acfs"
-	kit "go.getarcane.app/kit/pkg"
-	"go.getarcane.app/kit/pkg/mapping"
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 type GitOpsSyncService struct {

@@ -5,9 +5,10 @@ import (
 	"context"
 	"strings"
 
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
 	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
 	kit "go.getarcane.app/kit/pkg"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
 )
 
 // remoteActivityPageCeiling mirrors the agent's page clamp in PaginateAndSortDB.

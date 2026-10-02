@@ -15,8 +15,6 @@ import (
 	"strings"
 	"time"
 
-	sqliteutil "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/sqlite"
-	"github.com/getarcaneapp/arcane/backend/v2/resources"
 	dbtypes "github.com/getarcaneapp/arcane/types/v2/database"
 	"github.com/libtnb/sqlite"
 	"github.com/pressly/goose/v3"
@@ -25,6 +23,9 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+
+	sqliteutil "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/sqlite"
+	"github.com/getarcaneapp/arcane/backend/v2/resources"
 )
 
 type DB struct {

@@ -9,11 +9,12 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	projectpkg "github.com/getarcaneapp/arcane/backend/v2/internal/project"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // TestGitOpsSyncService_SyncProjectDirectory_PreservesUnreadableBindMountData verifies

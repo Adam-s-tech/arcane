@@ -9,8 +9,6 @@ import (
 	"strings"
 	"sync"
 
-	activitylib "github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/activity"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/jobcontext"
 	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
 	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
 	arcaneupdater "github.com/getarcaneapp/arcane/types/v2/updater"
@@ -18,6 +16,9 @@ import (
 	"go.getarcane.app/docker/compat"
 	"go.getarcane.app/updater"
 	"go.getarcane.app/updater/refs"
+
+	activitylib "github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/activity"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/jobcontext"
 )
 
 type (

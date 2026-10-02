@@ -12,6 +12,11 @@ import (
 	"strings"
 	"time"
 
+	backuptypes "github.com/getarcaneapp/arcane/types/v2/backup"
+	"github.com/getarcaneapp/arcane/types/v2/containerregistry"
+	"github.com/getarcaneapp/arcane/types/v2/gitops"
+	"go.getarcane.app/sys/crypto"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/gitrepo"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/registry"
@@ -21,10 +26,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/remenv"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	httputils "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
-	backuptypes "github.com/getarcaneapp/arcane/types/v2/backup"
-	"github.com/getarcaneapp/arcane/types/v2/containerregistry"
-	"github.com/getarcaneapp/arcane/types/v2/gitops"
-	"go.getarcane.app/sys/crypto"
 )
 
 // SyncRegistriesToRemoteEnvironments syncs container registries to all eligible remote environments.

@@ -20,14 +20,15 @@ import (
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
-	dockerutils "github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/timeouts"
 	"github.com/getarcaneapp/arcane/types/v2/vulnerability"
 	"github.com/moby/moby/api/pkg/stdcopy"
 	containertypes "github.com/moby/moby/api/types/container"
 	mounttypes "github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/client"
 	kit "go.getarcane.app/kit/pkg"
+
+	dockerutils "github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/timeouts"
 )
 
 const (

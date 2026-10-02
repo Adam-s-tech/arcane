@@ -9,10 +9,11 @@ import (
 	"net"
 
 	"github.com/coder/websocket"
-	wshub "github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/ws"
-	tunnelpb "github.com/getarcaneapp/arcane/backend/v2/proto/tunnel/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	wshub "github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/ws"
+	tunnelpb "github.com/getarcaneapp/arcane/backend/v2/proto/tunnel/v1"
 )
 
 // TunnelMessageType represents the type of message sent over the tunnel.

@@ -12,6 +12,14 @@ import (
 
 	"github.com/containerd/errdefs"
 	"github.com/danielgtaylor/huma/v2"
+	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
+	"github.com/getarcaneapp/arcane/types/v2/base"
+	containertypes "github.com/getarcaneapp/arcane/types/v2/container"
+	dockercontainer "github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/network"
+	"github.com/samber/mo"
+	kit "go.getarcane.app/kit/pkg"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
@@ -24,13 +32,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
-	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
-	"github.com/getarcaneapp/arcane/types/v2/base"
-	containertypes "github.com/getarcaneapp/arcane/types/v2/container"
-	dockercontainer "github.com/moby/moby/api/types/container"
-	"github.com/moby/moby/api/types/network"
-	"github.com/samber/mo"
-	kit "go.getarcane.app/kit/pkg"
 )
 
 type ContainerHandler struct {

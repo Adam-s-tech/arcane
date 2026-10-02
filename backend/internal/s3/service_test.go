@@ -10,16 +10,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
-	s3config "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/s3"
 	backuptypes "github.com/getarcaneapp/arcane/types/v2/backup"
 	"github.com/libtnb/sqlite"
 	"github.com/stretchr/testify/require"
 	kit "go.getarcane.app/kit/pkg"
 	"go.getarcane.app/sys/crypto"
 	"gorm.io/gorm"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
+	s3config "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/s3"
 )
 
 func setupS3DestinationServiceTestInternal(t *testing.T) (*S3DestinationService, *gorm.DB) {

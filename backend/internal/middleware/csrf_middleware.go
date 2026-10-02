@@ -5,9 +5,10 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/labstack/echo/v5"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
-	"github.com/labstack/echo/v5"
 )
 
 // publicCrossOriginBypassPaths are endpoints intentionally reachable cross-origin

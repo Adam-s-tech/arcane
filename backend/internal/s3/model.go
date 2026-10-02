@@ -3,8 +3,9 @@ package s3
 import (
 	"strings"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	backuptypes "github.com/getarcaneapp/arcane/types/v2/backup"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 )
 
 type S3Destination struct {

@@ -22,10 +22,11 @@ import (
 	composetypes "github.com/compose-spec/compose-go/v2/types"
 	"github.com/docker/compose/v5/pkg/api"
 	"github.com/docker/go-units"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	projecttypes "github.com/getarcaneapp/arcane/types/v2/project"
 	"github.com/samber/mo"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 )
 
 // ProjectFileCandidates enumerates known project files: base compose names,

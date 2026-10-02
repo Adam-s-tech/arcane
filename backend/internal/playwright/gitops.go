@@ -8,11 +8,12 @@ import (
 	"fmt"
 	"time"
 
+	gitopstypes "github.com/getarcaneapp/arcane/types/v2/gitops"
+	projecttypes "github.com/getarcaneapp/arcane/types/v2/project"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/project"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
-	gitopstypes "github.com/getarcaneapp/arcane/types/v2/gitops"
-	projecttypes "github.com/getarcaneapp/arcane/types/v2/project"
 )
 
 const (

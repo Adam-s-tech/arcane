@@ -11,11 +11,12 @@ import (
 
 	composetypes "github.com/compose-spec/compose-go/v2/types"
 	"github.com/docker/compose/v5/pkg/api"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 )
 
 func TestDetachFromHTTPContextInternal(t *testing.T) {

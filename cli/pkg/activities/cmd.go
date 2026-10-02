@@ -8,11 +8,12 @@ import (
 	"strconv"
 	"time"
 
+	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
+	"github.com/spf13/cobra"
+
 	"github.com/getarcaneapp/arcane/cli/v2/internal/cmdutil"
 	"github.com/getarcaneapp/arcane/cli/v2/internal/output"
 	"github.com/getarcaneapp/arcane/cli/v2/internal/types"
-	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
-	"github.com/spf13/cobra"
 )
 
 var (

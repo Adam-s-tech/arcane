@@ -6,10 +6,11 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/getarcaneapp/arcane/types/v2/backup"
+
 	"github.com/getarcaneapp/arcane/cli/v2/internal/client"
 	"github.com/getarcaneapp/arcane/cli/v2/internal/cmdutil"
 	"github.com/getarcaneapp/arcane/cli/v2/internal/types"
-	"github.com/getarcaneapp/arcane/types/v2/backup"
 )
 
 // s3DestinationRef resolves an S3 destination by ID or name: exact ID via the

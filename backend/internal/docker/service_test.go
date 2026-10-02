@@ -10,8 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/concurrency"
 	imagetypes "github.com/getarcaneapp/arcane/types/v2/image"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/events"
@@ -19,6 +17,9 @@ import (
 	"github.com/moby/moby/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/concurrency"
 )
 
 func TestNewDockerClient_PinsEffectiveAPIVersion(t *testing.T) {

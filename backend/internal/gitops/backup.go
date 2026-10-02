@@ -15,12 +15,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/event"
-	projectpkg "github.com/getarcaneapp/arcane/backend/v2/internal/project"
-	git "github.com/getarcaneapp/arcane/backend/v2/pkg/gitutil"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 	"github.com/getarcaneapp/arcane/types/v2/base"
 	"github.com/getarcaneapp/arcane/types/v2/gitops"
 	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
@@ -28,6 +22,13 @@ import (
 	kit "go.getarcane.app/kit/pkg"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/event"
+	projectpkg "github.com/getarcaneapp/arcane/backend/v2/internal/project"
+	git "github.com/getarcaneapp/arcane/backend/v2/pkg/gitutil"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 )
 
 const (

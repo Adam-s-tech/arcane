@@ -7,6 +7,14 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/getarcaneapp/arcane/types/v2/base"
+	"github.com/getarcaneapp/arcane/types/v2/gitops"
+	"github.com/samber/mo"
+	"go.getarcane.app/builds/pkg/contextsource"
+	"go.getarcane.app/kit/normalization"
+	"go.getarcane.app/sys/crypto"
+	"gorm.io/gorm"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/event"
@@ -16,13 +24,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/validation"
-	"github.com/getarcaneapp/arcane/types/v2/base"
-	"github.com/getarcaneapp/arcane/types/v2/gitops"
-	"github.com/samber/mo"
-	"go.getarcane.app/builds/pkg/contextsource"
-	"go.getarcane.app/kit/normalization"
-	"go.getarcane.app/sys/crypto"
-	"gorm.io/gorm"
 )
 
 type GitRepositoryService struct {

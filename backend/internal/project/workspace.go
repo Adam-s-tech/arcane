@@ -11,17 +11,18 @@ import (
 	"path/filepath"
 	"strings"
 
+	projecttypes "github.com/getarcaneapp/arcane/types/v2/project"
+	workspacetypes "github.com/getarcaneapp/arcane/types/v2/workspace"
+	"go.getarcane.app/acfs"
+	acfstypes "go.getarcane.app/acfs/types"
+	kit "go.getarcane.app/kit/pkg"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/event"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 	acfsutils "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/acfs"
 	workspacepkg "github.com/getarcaneapp/arcane/backend/v2/pkg/workspace"
-	projecttypes "github.com/getarcaneapp/arcane/types/v2/project"
-	workspacetypes "github.com/getarcaneapp/arcane/types/v2/workspace"
-	"go.getarcane.app/acfs"
-	acfstypes "go.getarcane.app/acfs/types"
-	kit "go.getarcane.app/kit/pkg"
 )
 
 func (s *ProjectService) GetProjectWorkspace(ctx context.Context, projectID string) (*workspacetypes.Workspace, error) {

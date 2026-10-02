@@ -7,14 +7,15 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/buildables"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/auth"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/cookie"
 	authtypes "github.com/getarcaneapp/arcane/types/v2/auth"
 	"github.com/getarcaneapp/arcane/types/v2/base"
 	"github.com/getarcaneapp/arcane/types/v2/user"
 	"github.com/labstack/echo/v5"
 	"go.getarcane.app/kit/pkg/mapping"
+
+	"github.com/getarcaneapp/arcane/backend/v2/buildables"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/auth"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/cookie"
 )
 
 // SetupBuildablesRoutes registers buildable feature routes based on EnabledFeatures.

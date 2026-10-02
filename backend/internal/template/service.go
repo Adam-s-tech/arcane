@@ -17,13 +17,6 @@ import (
 	"time"
 	"uuid"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
-	httputils "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
 	"github.com/getarcaneapp/arcane/types/v2/env"
 	tmpl "github.com/getarcaneapp/arcane/types/v2/template"
 	"github.com/samber/hot"
@@ -34,6 +27,14 @@ import (
 	"go.getarcane.app/kit/pkg/mapping"
 	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
+	httputils "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
 )
 
 type registryFetchMeta struct {

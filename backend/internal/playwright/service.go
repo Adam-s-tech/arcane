@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log/slog"
 
+	apikeytypes "github.com/getarcaneapp/arcane/types/v2/apikey"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/apikey"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/gitops"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/gitrepo"
@@ -14,7 +16,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/user"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
-	apikeytypes "github.com/getarcaneapp/arcane/types/v2/apikey"
 )
 
 type PlaywrightService struct {

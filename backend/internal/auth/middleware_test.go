@@ -7,6 +7,10 @@ import (
 	"testing"
 	"time"
 
+	authtypes "github.com/getarcaneapp/arcane/types/v2/auth"
+	"github.com/labstack/echo/v5"
+	"github.com/stretchr/testify/require"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/apikey"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
@@ -15,9 +19,6 @@ import (
 	usersvc "github.com/getarcaneapp/arcane/backend/v2/internal/user"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/cookie"
-	authtypes "github.com/getarcaneapp/arcane/types/v2/auth"
-	"github.com/labstack/echo/v5"
-	"github.com/stretchr/testify/require"
 )
 
 type testEnvironmentTokenResolver struct {

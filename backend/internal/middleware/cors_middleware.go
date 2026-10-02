@@ -5,10 +5,11 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/labstack/echo/v5"
 	echomiddleware "github.com/labstack/echo/v5/middleware"
 	kit "go.getarcane.app/kit/pkg"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 )
 
 type CORSMiddleware struct {

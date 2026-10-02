@@ -5,9 +5,10 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/labstack/echo/v5"
+
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/remenv"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/cookie"
-	"github.com/labstack/echo/v5"
 )
 
 const (

@@ -17,15 +17,16 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	authtypes "github.com/getarcaneapp/arcane/types/v2/auth"
+	"github.com/samber/hot"
+	kit "go.getarcane.app/kit/pkg"
+	"golang.org/x/oauth2"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/auth"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/jwtclaims"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/oidcjwk"
-	authtypes "github.com/getarcaneapp/arcane/types/v2/auth"
-	"github.com/samber/hot"
-	kit "go.getarcane.app/kit/pkg"
-	"golang.org/x/oauth2"
 )
 
 type OidcService struct {

@@ -9,6 +9,9 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	authtypes "github.com/getarcaneapp/arcane/types/v2/auth"
+	"github.com/getarcaneapp/arcane/types/v2/base"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/auth"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
@@ -16,8 +19,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/user"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/cookie"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
-	authtypes "github.com/getarcaneapp/arcane/types/v2/auth"
-	"github.com/getarcaneapp/arcane/types/v2/base"
 )
 
 type PasskeyHandler struct {

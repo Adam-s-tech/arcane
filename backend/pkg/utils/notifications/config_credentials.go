@@ -7,8 +7,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"go.getarcane.app/sys/crypto"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 )
 
 // DecodeConfig round-trips a provider config (database.JSON) into a typed struct T.

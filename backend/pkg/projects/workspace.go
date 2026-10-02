@@ -16,12 +16,13 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
-	workspacepkg "github.com/getarcaneapp/arcane/backend/v2/pkg/workspace"
 	"github.com/getarcaneapp/arcane/types/v2/project"
 	workspacetypes "github.com/getarcaneapp/arcane/types/v2/workspace"
 	kit "go.getarcane.app/kit/pkg"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
+	workspacepkg "github.com/getarcaneapp/arcane/backend/v2/pkg/workspace"
 )
 
 const (

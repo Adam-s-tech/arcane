@@ -5,10 +5,11 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/session"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
 	kit "go.getarcane.app/kit/pkg"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/session"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 )
 
 const ExpiredSessionsCleanupJobName = "expired-sessions-cleanup"

@@ -7,6 +7,11 @@ import (
 	"fmt"
 	"log/slog"
 
+	notificationdto "github.com/getarcaneapp/arcane/types/v2/notification"
+	"github.com/labstack/echo/v5"
+	kit "go.getarcane.app/kit/pkg"
+	"go.uber.org/fx"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/environment"
@@ -15,10 +20,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/notification"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/edge"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/concurrency"
-	notificationdto "github.com/getarcaneapp/arcane/types/v2/notification"
-	"github.com/labstack/echo/v5"
-	kit "go.getarcane.app/kit/pkg"
-	"go.uber.org/fx"
 )
 
 // registerEdgeTunnelRoutes configures the manager-side edge tunnel server.

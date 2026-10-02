@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
+
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/remenv"
 )
 

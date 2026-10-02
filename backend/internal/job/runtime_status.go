@@ -7,9 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/types/v2/jobschedule"
 	st "github.com/getarcaneapp/arcane/types/v2/scheduler"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 )
 
 func (s *JobService) addRuntimeStatusInternal(ctx context.Context, environmentID string, jobs *[]jobschedule.JobStatus) error {

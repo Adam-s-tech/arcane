@@ -4,9 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 	projecttypes "github.com/getarcaneapp/arcane/types/v2/project"
 	"github.com/stretchr/testify/require"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 )
 
 func TestLoadComposeProjectMergesOverrideContent(t *testing.T) {

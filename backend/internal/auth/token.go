@@ -6,11 +6,12 @@ import (
 	"errors"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/lestrrat-go/jwx/v4/jwa"
 	"github.com/lestrrat-go/jwx/v4/jws"
 	"github.com/lestrrat-go/jwx/v4/jwt"
 	kit "go.getarcane.app/kit/pkg"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 )
 
 const (

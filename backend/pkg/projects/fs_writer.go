@@ -14,10 +14,11 @@ import (
 	"time"
 
 	"github.com/compose-spec/compose-go/v2/cli"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	"go.getarcane.app/acfs"
 	"go.getarcane.app/acfs/atomic"
 	kit "go.getarcane.app/kit/pkg"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 )
 
 const (

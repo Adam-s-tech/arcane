@@ -7,12 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
 	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
 	st "github.com/getarcaneapp/arcane/types/v2/scheduler"
 	"github.com/stretchr/testify/require"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
 )
 
 func TestJobSummaryReopensAndRejectsStaleSnapshots(t *testing.T) {

@@ -11,9 +11,6 @@ import (
 	"time"
 
 	humav2 "github.com/danielgtaylor/huma/v2"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
 	basetypes "github.com/getarcaneapp/arcane/types/v2/base"
 	containertypes "github.com/getarcaneapp/arcane/types/v2/container"
 	envtypes "github.com/getarcaneapp/arcane/types/v2/env"
@@ -26,6 +23,10 @@ import (
 	dockernetwork "github.com/moby/moby/api/types/network"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
 )
 
 func TestWorkspaceRoutesReplaceProjectAndVolumeLegacyRoutes(t *testing.T) {

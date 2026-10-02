@@ -7,12 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/jobcontext"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/runs"
-	francistest "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/francis/testing"
 	bt "github.com/getarcaneapp/arcane/types/v2/backup"
 	st "github.com/getarcaneapp/arcane/types/v2/scheduler"
 	"github.com/stretchr/testify/require"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/jobcontext"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/runs"
+	francistest "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/francis/testing"
 )
 
 func TestDurableBackupRestartKeepsCompletionInternal(t *testing.T) {

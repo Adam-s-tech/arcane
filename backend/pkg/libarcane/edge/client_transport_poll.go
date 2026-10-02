@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v5"
+
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
 )
 

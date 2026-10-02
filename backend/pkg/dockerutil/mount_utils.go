@@ -8,10 +8,11 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/client"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
 )
 
 // MountForCurrentContainerSubpath inspects the current container, finds the

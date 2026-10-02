@@ -14,13 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/edge"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/concurrency"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
 	eventtypes "github.com/getarcaneapp/arcane/types/v2/event"
 	"github.com/samber/mo"
 	"github.com/samber/mo/option"
@@ -30,6 +23,14 @@ import (
 	"golang.org/x/text/language"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/edge"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/concurrency"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
 )
 
 type EventService struct {

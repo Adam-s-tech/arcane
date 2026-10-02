@@ -19,6 +19,14 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/getarcaneapp/arcane/types/v2/base"
+	"github.com/getarcaneapp/arcane/types/v2/environment"
+	"github.com/getarcaneapp/arcane/types/v2/version"
+	"github.com/samber/mo"
+	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/kit/pkg/mapping"
+	"go.getarcane.app/streams/agg"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/apikey"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
@@ -32,13 +40,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
-	"github.com/getarcaneapp/arcane/types/v2/base"
-	"github.com/getarcaneapp/arcane/types/v2/environment"
-	"github.com/getarcaneapp/arcane/types/v2/version"
-	"github.com/samber/mo"
-	kit "go.getarcane.app/kit/pkg"
-	"go.getarcane.app/kit/pkg/mapping"
-	"go.getarcane.app/streams/agg"
 )
 
 const (

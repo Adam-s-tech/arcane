@@ -5,12 +5,13 @@ import (
 	"testing"
 	"time"
 
+	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
+	"github.com/stretchr/testify/require"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
-	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
-	"github.com/stretchr/testify/require"
 )
 
 func TestJobActivityVisibilityFiltersBeforePagination(t *testing.T) {

@@ -8,14 +8,15 @@ import (
 	"strings"
 
 	cerrdefs "github.com/containerd/errdefs"
+	volumetypes "github.com/getarcaneapp/arcane/types/v2/volume"
+	"github.com/moby/moby/client"
+	"gorm.io/gorm"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/event"
 	dockerutil "github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
 	volumeops "github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/volumes"
-	volumetypes "github.com/getarcaneapp/arcane/types/v2/volume"
-	"github.com/moby/moby/client"
-	"gorm.io/gorm"
 )
 
 // RenameVolume copies an unused volume to a new name and removes the source.

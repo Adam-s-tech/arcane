@@ -7,6 +7,11 @@ import (
 	"strings"
 	"sync"
 
+	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
+	volumetypes "github.com/getarcaneapp/arcane/types/v2/volume"
+	"github.com/moby/moby/client"
+	"golang.org/x/sync/singleflight"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/backup"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
@@ -25,10 +30,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/runs"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	workspacepkg "github.com/getarcaneapp/arcane/backend/v2/pkg/workspace"
-	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
-	volumetypes "github.com/getarcaneapp/arcane/types/v2/volume"
-	"github.com/moby/moby/client"
-	"golang.org/x/sync/singleflight"
 )
 
 type VolumeService struct {

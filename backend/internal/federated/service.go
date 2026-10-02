@@ -11,6 +11,12 @@ import (
 	"uuid"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	federatedtypes "github.com/getarcaneapp/arcane/types/v2/federated"
+	httpxtypes "github.com/getarcaneapp/arcane/types/v2/httpx"
+	"github.com/samber/mo"
+	"golang.org/x/sync/singleflight"
+	"gorm.io/gorm"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/auth"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
@@ -23,11 +29,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/dbutil"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/oidcjwk"
-	federatedtypes "github.com/getarcaneapp/arcane/types/v2/federated"
-	httpxtypes "github.com/getarcaneapp/arcane/types/v2/httpx"
-	"github.com/samber/mo"
-	"golang.org/x/sync/singleflight"
-	"gorm.io/gorm"
 )
 
 const (

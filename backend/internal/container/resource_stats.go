@@ -11,9 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/timeouts"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
 	containertypes "github.com/getarcaneapp/arcane/types/v2/container"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
@@ -21,6 +18,10 @@ import (
 	kit "go.getarcane.app/kit/pkg"
 	containerstats "go.getarcane.app/streams/stats"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/timeouts"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
 )
 
 const (

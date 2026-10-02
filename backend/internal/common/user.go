@@ -4,8 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/types/v2/user"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 )
 
 type User struct {

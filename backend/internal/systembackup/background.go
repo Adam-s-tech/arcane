@@ -7,6 +7,12 @@ import (
 	"fmt"
 	"log/slog"
 
+	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
+	backuptypes "github.com/getarcaneapp/arcane/types/v2/backup"
+	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
+	"github.com/moby/moby/client"
+	"go.getarcane.app/sys/crypto"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/backup"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
@@ -15,11 +21,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	activitylib "github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/jobcontext"
-	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
-	backuptypes "github.com/getarcaneapp/arcane/types/v2/backup"
-	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
-	"github.com/moby/moby/client"
-	"go.getarcane.app/sys/crypto"
 )
 
 // StartBackup prepares a manual backup before submitting its snapshot work.

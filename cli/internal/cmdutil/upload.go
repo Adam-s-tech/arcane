@@ -10,12 +10,13 @@ import (
 	"path/filepath"
 	"strings"
 
+	uploadtypes "github.com/getarcaneapp/arcane/types/v2/upload"
+	kit "go.getarcane.app/kit/pkg"
+
 	"github.com/getarcaneapp/arcane/cli/v2/internal/client"
 	"github.com/getarcaneapp/arcane/cli/v2/internal/logger"
 	"github.com/getarcaneapp/arcane/cli/v2/internal/output"
 	"github.com/getarcaneapp/arcane/cli/v2/internal/types"
-	uploadtypes "github.com/getarcaneapp/arcane/types/v2/upload"
-	kit "go.getarcane.app/kit/pkg"
 )
 
 const uploadChunkAttempts = 3

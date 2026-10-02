@@ -11,6 +11,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/getarcaneapp/arcane/types/v2/features"
+	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
+	"go.uber.org/fx"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/apns"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/backup"
@@ -26,9 +30,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/runs"
-	"github.com/getarcaneapp/arcane/types/v2/features"
-	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
-	"go.uber.org/fx"
 )
 
 func newJobScheduler(appCtx context.Context, lc fx.Lifecycle, cfg *config.Config, runtime *runs.Coordinator, _ *runs.Admission, imageUpdateWatcher *scheduler.ImageUpdateWatcher, analytics *scheduler.AnalyticsJob, systemUpgrade *system.SystemUpgradeService, jobService *job.JobService, backupEngine *backup.Engine, updaterService *updater.UpdaterService, volumes *volume.VolumeService, systemBackups *systembackup.SystemBackupService, gitopsSync *gitops.GitOpsSyncService) (schedulertypes.JobScheduler, error) {

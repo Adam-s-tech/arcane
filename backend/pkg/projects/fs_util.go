@@ -13,13 +13,14 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	"github.com/samber/mo"
 	"go.getarcane.app/acfs"
 	kit "go.getarcane.app/kit/pkg"
 	"go.yaml.in/yaml/v4"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 )
 
 func ResolveConfiguredContainerDirectory(configuredPath, defaultPath string) string {

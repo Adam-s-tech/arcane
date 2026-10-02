@@ -5,6 +5,8 @@ import (
 	"context"
 	"log/slog"
 
+	"go.uber.org/fx"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/apikey"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/apns"
@@ -49,7 +51,6 @@ import (
 	activitylib "github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler"
 	"github.com/getarcaneapp/arcane/backend/v2/resources"
-	"go.uber.org/fx"
 )
 
 // ActorOptions provides the durable Francis runtime and admission.

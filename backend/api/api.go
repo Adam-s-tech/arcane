@@ -11,6 +11,10 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humaecho"
+	"github.com/labstack/echo/v5"
+	kit "go.getarcane.app/kit/pkg"
+	"go.uber.org/fx"
+
 	"github.com/getarcaneapp/arcane/backend/v2/api/handlers"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/apikey"
@@ -58,9 +62,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/vulnerability"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/webhook"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
-	"github.com/labstack/echo/v5"
-	kit "go.getarcane.app/kit/pkg"
-	"go.uber.org/fx"
 )
 
 const (

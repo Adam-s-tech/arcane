@@ -7,15 +7,16 @@ import (
 	"testing"
 
 	"github.com/danielgtaylor/huma/v2"
+	uploadtypes "github.com/getarcaneapp/arcane/types/v2/upload"
+	volumetypes "github.com/getarcaneapp/arcane/types/v2/volume"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/upload"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
-	uploadtypes "github.com/getarcaneapp/arcane/types/v2/upload"
-	volumetypes "github.com/getarcaneapp/arcane/types/v2/volume"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func volumeWorkspacePermissionContextInternal(environmentID string, permissions ...string) context.Context {

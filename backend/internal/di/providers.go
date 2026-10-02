@@ -8,6 +8,11 @@ import (
 	"time"
 	"uuid"
 
+	backuptypes "github.com/getarcaneapp/arcane/types/v2/backup"
+	"github.com/moby/moby/api/types/events"
+	"go.getarcane.app/streams/bus"
+	"go.uber.org/fx"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/apikey"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/auth"
@@ -41,10 +46,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/concurrency"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/francis"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/oidcjwk"
-	backuptypes "github.com/getarcaneapp/arcane/types/v2/backup"
-	"github.com/moby/moby/api/types/events"
-	"go.getarcane.app/streams/bus"
-	"go.uber.org/fx"
 )
 
 func provideActivityModuleInternal(service *activity.ActivityService, environment *environment.EnvironmentService) *activity.Module {

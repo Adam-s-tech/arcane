@@ -5,9 +5,10 @@ package bootstrap
 import (
 	"log/slog"
 
+	"github.com/labstack/echo/v5"
+
 	"github.com/getarcaneapp/arcane/backend/v2/api"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/playwright"
-	"github.com/labstack/echo/v5"
 )
 
 func init() {

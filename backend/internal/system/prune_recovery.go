@@ -12,13 +12,14 @@ import (
 	"time"
 
 	"github.com/containerd/errdefs"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/jobcontext"
 	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
 	systemtypes "github.com/getarcaneapp/arcane/types/v2/system"
 	"github.com/moby/moby/client"
 	"go.getarcane.app/docker/compat"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/jobcontext"
 )
 
 type pruneResourceInternal struct {

@@ -3,12 +3,13 @@ package backup
 import (
 	"testing"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/libtnb/sqlite"
 	"github.com/moby/moby/api/types/mount"
 	"github.com/stretchr/testify/require"
 	"go.getarcane.app/sys/crypto"
 	"gorm.io/gorm"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 )
 
 func TestMarkSnapshotDirectoriesInternal(t *testing.T) {

@@ -3,6 +3,7 @@ package project
 
 import (
 	"github.com/danielgtaylor/huma/v2"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
 )

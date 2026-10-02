@@ -12,6 +12,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/libtnb/sqlite"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	buildtypes "go.getarcane.app/builds/types"
+	"go.getarcane.app/sys/crypto"
+	"gorm.io/gorm"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
@@ -19,12 +26,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/gitrepo"
 	buildgit "github.com/getarcaneapp/arcane/backend/v2/pkg/gitutil"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
-	"github.com/libtnb/sqlite"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	buildtypes "go.getarcane.app/builds/types"
-	"go.getarcane.app/sys/crypto"
-	"gorm.io/gorm"
 )
 
 func TestBuildService_ResolveBuildRequest_PassesThroughLocalContext(t *testing.T) {

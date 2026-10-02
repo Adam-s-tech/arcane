@@ -13,6 +13,14 @@ import (
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
+	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
+	backuptypes "github.com/getarcaneapp/arcane/types/v2/backup"
+	"github.com/getarcaneapp/arcane/types/v2/base"
+	uploadtypes "github.com/getarcaneapp/arcane/types/v2/upload"
+	volumetypes "github.com/getarcaneapp/arcane/types/v2/volume"
+	"github.com/moby/moby/client"
+	"github.com/samber/mo"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
@@ -25,13 +33,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
-	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
-	backuptypes "github.com/getarcaneapp/arcane/types/v2/backup"
-	"github.com/getarcaneapp/arcane/types/v2/base"
-	uploadtypes "github.com/getarcaneapp/arcane/types/v2/upload"
-	volumetypes "github.com/getarcaneapp/arcane/types/v2/volume"
-	"github.com/moby/moby/client"
-	"github.com/samber/mo"
 )
 
 // VolumeHandler provides Huma-based volume management endpoints.

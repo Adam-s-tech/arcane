@@ -10,6 +10,17 @@ import (
 	"sync"
 	"time"
 
+	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
+	containertypes "github.com/getarcaneapp/arcane/types/v2/container"
+	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
+	"github.com/getarcaneapp/arcane/types/v2/system"
+	mobycontainer "github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/client"
+	"github.com/samber/hot"
+	"github.com/samber/mo"
+	"go.getarcane.app/updater/labels"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
@@ -24,16 +35,6 @@ import (
 	activitylib "github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/jobcontext"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
-	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
-	containertypes "github.com/getarcaneapp/arcane/types/v2/container"
-	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
-	"github.com/getarcaneapp/arcane/types/v2/system"
-	mobycontainer "github.com/moby/moby/api/types/container"
-	"github.com/moby/moby/client"
-	"github.com/samber/hot"
-	"github.com/samber/mo"
-	"go.getarcane.app/updater/labels"
-	"golang.org/x/sync/errgroup"
 )
 
 type SystemService struct {

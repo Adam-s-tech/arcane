@@ -5,9 +5,10 @@ import (
 	"log/slog"
 	"time"
 
+	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/gitrepo"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
-	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
 )
 
 const (

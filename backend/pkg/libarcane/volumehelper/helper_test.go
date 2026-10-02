@@ -9,11 +9,12 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
 )
 
 func TestLabels(t *testing.T) {

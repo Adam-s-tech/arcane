@@ -14,11 +14,12 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v5"
+	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
+	kit "go.getarcane.app/kit/pkg"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/kv"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
-	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
-	kit "go.getarcane.app/kit/pkg"
 )
 
 const (

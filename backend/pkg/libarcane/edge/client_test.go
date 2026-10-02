@@ -20,8 +20,6 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-	httputil "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
-	tunnelpb "github.com/getarcaneapp/arcane/backend/v2/proto/tunnel/v1"
 	"github.com/labstack/echo/v5"
 	slogecho "github.com/samber/slog-echo/v2"
 	"github.com/stretchr/testify/assert"
@@ -29,6 +27,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	httputil "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
+	tunnelpb "github.com/getarcaneapp/arcane/backend/v2/proto/tunnel/v1"
 )
 
 func TestTunnelClient_HandleRequest(t *testing.T) {

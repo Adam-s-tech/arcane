@@ -20,13 +20,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	certgen "github.com/getarcaneapp/arcane/cli/v2/pkg/generate"
 	"github.com/stretchr/testify/require"
 	kit "go.getarcane.app/kit/pkg"
 	libcrypto "go.getarcane.app/sys/crypto"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 )
 
 type testAuthInfo struct{}

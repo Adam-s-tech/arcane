@@ -9,6 +9,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/getarcaneapp/arcane/types/v2/apikey"
+	"github.com/libtnb/sqlite"
+	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/role"
@@ -17,10 +22,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/user"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
-	"github.com/getarcaneapp/arcane/types/v2/apikey"
-	"github.com/libtnb/sqlite"
-	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
 )
 
 func setupAPIKeyServiceTestDB(t *testing.T) *database.DB {

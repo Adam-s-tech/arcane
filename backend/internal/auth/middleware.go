@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/labstack/echo/v5"
+	"github.com/samber/mo"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/apikey"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
@@ -15,8 +18,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/cookie"
-	"github.com/labstack/echo/v5"
-	"github.com/samber/mo"
 )
 
 type AuthOptions struct {

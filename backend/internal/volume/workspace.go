@@ -21,14 +21,6 @@ import (
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/event"
-	dockerutil "github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/timeouts"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/volumehelper"
-	acfsutils "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/acfs"
-	workspacepkg "github.com/getarcaneapp/arcane/backend/v2/pkg/workspace"
 	volumetypes "github.com/getarcaneapp/arcane/types/v2/volume"
 	workspacetypes "github.com/getarcaneapp/arcane/types/v2/workspace"
 	"github.com/moby/moby/api/types/container"
@@ -38,6 +30,15 @@ import (
 	acfstypes "go.getarcane.app/acfs/types"
 	"go.getarcane.app/docker/compat"
 	kit "go.getarcane.app/kit/pkg"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/event"
+	dockerutil "github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/timeouts"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/volumehelper"
+	acfsutils "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/acfs"
+	workspacepkg "github.com/getarcaneapp/arcane/backend/v2/pkg/workspace"
 )
 
 func (s *VolumeService) GetVolumeWorkspace(ctx context.Context, volumeName string) (*workspacetypes.Workspace, error) {

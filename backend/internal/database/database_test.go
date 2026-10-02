@@ -13,10 +13,11 @@ import (
 	"testing"
 	"time"
 
-	sqliteutil "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/sqlite"
 	dbtypes "github.com/getarcaneapp/arcane/types/v2/database"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	sqliteutil "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/sqlite"
 )
 
 func TestGetEmbeddedMigrationVersions_ProvidersMatch(t *testing.T) {

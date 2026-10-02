@@ -6,6 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/getarcaneapp/arcane/types/v2/jobschedule"
+	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
+	"github.com/libtnb/sqlite"
+	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
@@ -15,11 +21,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/runs"
 	francistest "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/francis/testing"
-	"github.com/getarcaneapp/arcane/types/v2/jobschedule"
-	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
-	"github.com/libtnb/sqlite"
-	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
 )
 
 func setupSettingsTestDBInternal(t *testing.T) *database.DB {

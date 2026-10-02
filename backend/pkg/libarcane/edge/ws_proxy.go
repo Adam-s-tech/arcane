@@ -8,8 +8,9 @@ import (
 	"uuid"
 
 	"github.com/coder/websocket"
-	wshub "github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/ws"
 	"github.com/labstack/echo/v5"
+
+	wshub "github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/ws"
 )
 
 const (

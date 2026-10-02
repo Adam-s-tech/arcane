@@ -9,6 +9,14 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
+	dashboardtypes "github.com/getarcaneapp/arcane/types/v2/dashboard"
+	environmenttypes "github.com/getarcaneapp/arcane/types/v2/environment"
+	eventtypes "github.com/getarcaneapp/arcane/types/v2/event"
+	streamtypes "github.com/getarcaneapp/arcane/types/v2/stream"
+	versiontypes "github.com/getarcaneapp/arcane/types/v2/version"
+	"go.getarcane.app/streams/agg"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/dashboard"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/environment"
@@ -18,13 +26,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
-	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
-	dashboardtypes "github.com/getarcaneapp/arcane/types/v2/dashboard"
-	environmenttypes "github.com/getarcaneapp/arcane/types/v2/environment"
-	eventtypes "github.com/getarcaneapp/arcane/types/v2/event"
-	streamtypes "github.com/getarcaneapp/arcane/types/v2/stream"
-	versiontypes "github.com/getarcaneapp/arcane/types/v2/version"
-	"go.getarcane.app/streams/agg"
 )
 
 const (

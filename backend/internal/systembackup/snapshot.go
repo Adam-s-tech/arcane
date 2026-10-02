@@ -11,8 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/backup"
 	"github.com/moby/moby/client"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/backup"
 )
 
 // snapshotWithStagedDatabaseInternal archives a consistent database without blocking actor leases during the upload.

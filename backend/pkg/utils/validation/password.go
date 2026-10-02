@@ -8,8 +8,9 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/types/v2/base"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 )
 
 const (

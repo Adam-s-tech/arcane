@@ -8,9 +8,10 @@ import (
 	"sort"
 	"strconv"
 
+	st "github.com/getarcaneapp/arcane/types/v2/scheduler"
+
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/remenv"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/runs"
-	st "github.com/getarcaneapp/arcane/types/v2/scheduler"
 )
 
 // ListRuns merges agent history with requests accepted by this manager.

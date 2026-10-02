@@ -17,6 +17,12 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	authtypes "github.com/getarcaneapp/arcane/types/v2/auth"
+	"github.com/getarcaneapp/arcane/types/v2/base"
+	settingstypes "github.com/getarcaneapp/arcane/types/v2/settings"
+	usertypes "github.com/getarcaneapp/arcane/types/v2/user"
+	kit "go.getarcane.app/kit/pkg"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/session"
@@ -25,11 +31,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/cookie"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/validation"
-	authtypes "github.com/getarcaneapp/arcane/types/v2/auth"
-	"github.com/getarcaneapp/arcane/types/v2/base"
-	settingstypes "github.com/getarcaneapp/arcane/types/v2/settings"
-	usertypes "github.com/getarcaneapp/arcane/types/v2/user"
-	kit "go.getarcane.app/kit/pkg"
 )
 
 type AuthHandler struct {

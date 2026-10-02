@@ -12,6 +12,13 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/getarcaneapp/arcane/types/v2/user"
+	"go.getarcane.app/kit/normalization"
+	kit "go.getarcane.app/kit/pkg"
+	"golang.org/x/crypto/argon2"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/role"
@@ -19,12 +26,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/dbutil"
-	"github.com/getarcaneapp/arcane/types/v2/user"
-	"go.getarcane.app/kit/normalization"
-	kit "go.getarcane.app/kit/pkg"
-	"golang.org/x/crypto/argon2"
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 type Argon2Params struct {

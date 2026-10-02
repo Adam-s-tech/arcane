@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/remenv"
 	versiontypes "github.com/getarcaneapp/arcane/types/v2/version"
 	containertypes "github.com/moby/moby/api/types/container"
 	mounttypes "github.com/moby/moby/api/types/mount"
 	networktypes "github.com/moby/moby/api/types/network"
 	"github.com/stretchr/testify/require"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/remenv"
 )
 
 // TestSystemUpgradeService_UpgradeFlag tests the upgrading flag behavior

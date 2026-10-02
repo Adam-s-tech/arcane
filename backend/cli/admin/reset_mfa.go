@@ -8,12 +8,13 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/passkey"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/user"
-	"github.com/spf13/cobra"
 )
 
 var resetMFAUsername string

@@ -10,10 +10,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
 	"github.com/samber/mo"
 	kit "go.getarcane.app/kit/pkg"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 )
 
 type Writer struct {

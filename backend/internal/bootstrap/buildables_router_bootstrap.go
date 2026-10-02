@@ -3,8 +3,9 @@
 package bootstrap
 
 import (
-	"github.com/getarcaneapp/arcane/backend/v2/api"
 	"github.com/labstack/echo/v5"
+
+	"github.com/getarcaneapp/arcane/backend/v2/api"
 )
 
 func init() {

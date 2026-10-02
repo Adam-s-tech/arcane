@@ -10,9 +10,6 @@ import (
 
 	composetypes "github.com/compose-spec/compose-go/v2/types"
 	cerrdefs "github.com/containerd/errdefs"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/imageupdate"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/project"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/imageref"
 	"github.com/getarcaneapp/arcane/types/v2/containerregistry"
 	projecttypes "github.com/getarcaneapp/arcane/types/v2/project"
 	"github.com/moby/moby/client"
@@ -21,6 +18,10 @@ import (
 	"go.getarcane.app/updater/refs"
 	updatertypes "go.getarcane.app/updater/types"
 	"gorm.io/gorm"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/imageupdate"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/project"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/imageref"
 )
 
 // ListTags supplies Arcane's registry credentials to the updater's tag checker.

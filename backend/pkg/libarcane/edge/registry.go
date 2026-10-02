@@ -7,8 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/concurrency"
 	"github.com/samber/mo"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/concurrency"
 )
 
 // NewAgentTunnelWithConn creates a new agent tunnel from a transport-agnostic connection.

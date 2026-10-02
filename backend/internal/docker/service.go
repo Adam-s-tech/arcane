@@ -11,12 +11,6 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v5"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
-	docker "github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/timeouts"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	dashboardtypes "github.com/getarcaneapp/arcane/types/v2/dashboard"
 	imagetypes "github.com/getarcaneapp/arcane/types/v2/image"
 	"github.com/moby/moby/api/types/container"
@@ -31,6 +25,13 @@ import (
 	"go.getarcane.app/streams/bus"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/singleflight"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
+	docker "github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/timeouts"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 )
 
 const (

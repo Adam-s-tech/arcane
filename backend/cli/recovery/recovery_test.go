@@ -6,16 +6,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/systembackup"
 	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
 	dbtypes "github.com/getarcaneapp/arcane/types/v2/database"
 	recoverytypes "github.com/getarcaneapp/arcane/types/v2/recovery"
 	"github.com/libtnb/sqlite"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/systembackup"
 )
 
 func newRestoredDatabaseForTestInternal(t *testing.T, runIDs ...string) (string, string) {

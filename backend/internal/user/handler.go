@@ -7,14 +7,15 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/getarcaneapp/arcane/types/v2/base"
+	usertypes "github.com/getarcaneapp/arcane/types/v2/user"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/validation"
-	"github.com/getarcaneapp/arcane/types/v2/base"
-	usertypes "github.com/getarcaneapp/arcane/types/v2/user"
 )
 
 // UserHandler handles user management endpoints.

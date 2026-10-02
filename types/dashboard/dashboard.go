@@ -3,15 +3,16 @@ package dashboard
 import (
 	"time"
 
+	dockercontainer "github.com/moby/moby/api/types/container"
+	dockerimage "github.com/moby/moby/api/types/image"
+	dockernetwork "github.com/moby/moby/api/types/network"
+	"github.com/moby/moby/client"
+
 	"github.com/getarcaneapp/arcane/types/v2/base"
 	containertypes "github.com/getarcaneapp/arcane/types/v2/container"
 	imagetypes "github.com/getarcaneapp/arcane/types/v2/image"
 	versiontypes "github.com/getarcaneapp/arcane/types/v2/version"
 	volumetypes "github.com/getarcaneapp/arcane/types/v2/volume"
-	dockercontainer "github.com/moby/moby/api/types/container"
-	dockerimage "github.com/moby/moby/api/types/image"
-	dockernetwork "github.com/moby/moby/api/types/network"
-	"github.com/moby/moby/client"
 )
 
 type ActionItemKind string

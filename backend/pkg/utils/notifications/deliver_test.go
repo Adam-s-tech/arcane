@@ -4,8 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/stretchr/testify/require"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 )
 
 func TestDeliver_UnknownProviderIsNotHandled(t *testing.T) {

@@ -11,6 +11,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/getarcaneapp/arcane/types/v2/base"
+	"github.com/getarcaneapp/arcane/types/v2/gitops"
+	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
+	swarmtypes "github.com/getarcaneapp/arcane/types/v2/swarm"
+	"github.com/libtnb/sqlite"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
@@ -25,14 +34,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/entityjobs"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/runs"
 	francistest "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/francis/testing"
-	"github.com/getarcaneapp/arcane/types/v2/base"
-	"github.com/getarcaneapp/arcane/types/v2/gitops"
-	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
-	swarmtypes "github.com/getarcaneapp/arcane/types/v2/swarm"
-	"github.com/libtnb/sqlite"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
 )
 
 func setupGitOpsProjectTestDBInternal(t *testing.T) *database.DB {

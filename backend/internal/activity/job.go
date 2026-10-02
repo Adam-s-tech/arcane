@@ -7,11 +7,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
 	st "github.com/getarcaneapp/arcane/types/v2/scheduler"
 	"gorm.io/gorm"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 )
 
 // SyncJobRun updates a durable job summary without taking an execution slot.

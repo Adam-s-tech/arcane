@@ -11,10 +11,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/docker"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/event"
 	"github.com/stretchr/testify/require"
 	kit "go.getarcane.app/kit/pkg"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/docker"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/event"
 )
 
 func newLogsTestServiceInternal(t *testing.T, tty bool, logsBody []byte, gotQuery *url.Values) *ContainerService {

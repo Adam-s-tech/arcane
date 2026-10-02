@@ -17,17 +17,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/edge"
-	wsutil "github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/ws"
-	httputils "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
 	containertypes "github.com/getarcaneapp/arcane/types/v2/container"
 	"github.com/getarcaneapp/arcane/types/v2/gitops"
 	volumetypes "github.com/getarcaneapp/arcane/types/v2/volume"
 	"github.com/labstack/echo/v5"
 	"github.com/samber/mo"
 	kit "go.getarcane.app/kit/pkg"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/edge"
+	wsutil "github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/ws"
+	httputils "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
 )
 
 const (

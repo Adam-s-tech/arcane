@@ -6,6 +6,11 @@ import (
 	"testing"
 	"time"
 
+	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
+	"github.com/libtnb/sqlite"
+	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/kv"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
@@ -13,10 +18,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/runs"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/francis"
 	francistest "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/francis/testing"
-	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
-	"github.com/libtnb/sqlite"
-	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
 )
 
 var schedulerTestRuntimesInternal sync.Map

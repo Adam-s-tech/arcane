@@ -4,8 +4,9 @@ import (
 	"context"
 	"time"
 
-	volumetypes "github.com/getarcaneapp/arcane/types/v2/volume"
 	"github.com/moby/moby/client"
+
+	volumetypes "github.com/getarcaneapp/arcane/types/v2/volume"
 )
 
 const (

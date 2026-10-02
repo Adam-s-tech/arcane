@@ -16,6 +16,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/getarcaneapp/arcane/types/v2/apikey"
+	"github.com/samber/hot"
+	"go.getarcane.app/kit/normalization"
+	"gorm.io/gorm"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/role"
@@ -23,10 +28,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/dbutil"
-	"github.com/getarcaneapp/arcane/types/v2/apikey"
-	"github.com/samber/hot"
-	"go.getarcane.app/kit/normalization"
-	"gorm.io/gorm"
 )
 
 const (

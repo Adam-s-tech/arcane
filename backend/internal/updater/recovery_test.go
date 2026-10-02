@@ -9,17 +9,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/docker"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/imageupdate"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/jobcontext"
-	francistest "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/francis/testing"
 	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
 	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
 	arcaneupdater "github.com/getarcaneapp/arcane/types/v2/updater"
 	"github.com/moby/moby/api/types/container"
 	image "github.com/moby/moby/api/types/image"
 	"github.com/stretchr/testify/require"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/docker"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/imageupdate"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/jobcontext"
+	francistest "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/francis/testing"
 )
 
 func TestFrozenTargetsPreserveAllSelectedContainers(t *testing.T) {

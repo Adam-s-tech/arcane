@@ -5,14 +5,15 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/spf13/cobra"
+	"go.getarcane.app/kit/pkg/signals"
+
 	"github.com/getarcaneapp/arcane/backend/v2/cli/admin"
 	"github.com/getarcaneapp/arcane/backend/v2/cli/generate"
 	"github.com/getarcaneapp/arcane/backend/v2/cli/recovery"
 	"github.com/getarcaneapp/arcane/backend/v2/cli/upgrade"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/bootstrap"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
-	"github.com/spf13/cobra"
-	"go.getarcane.app/kit/pkg/signals"
 )
 
 var rootCmd = &cobra.Command{

@@ -13,6 +13,10 @@ import (
 	"sync"
 	"time"
 
+	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
+	"github.com/samber/mo"
+	"gorm.io/gorm"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
@@ -22,9 +26,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/dbutil"
-	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
-	"github.com/samber/mo"
-	"gorm.io/gorm"
 )
 
 const (

@@ -8,12 +8,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	dbtypes "github.com/getarcaneapp/arcane/types/v2/database"
 	"github.com/italypaleale/francis/components"
 	"github.com/italypaleale/francis/components/postgres"
 	"github.com/italypaleale/francis/components/sqlite"
 	"github.com/italypaleale/francis/host/local"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 )
 
 func providerOptionInternal(databaseURL string) (local.HostOption, error) {

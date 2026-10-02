@@ -6,10 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/moby/moby/api/types/image"
+
 	"github.com/getarcaneapp/arcane/types/v2/base"
 	"github.com/getarcaneapp/arcane/types/v2/containerregistry"
 	"github.com/getarcaneapp/arcane/types/v2/vulnerability"
-	"github.com/moby/moby/api/types/image"
 )
 
 // ListResponse is the paginated image list together with the upload limit the

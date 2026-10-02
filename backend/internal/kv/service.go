@@ -8,9 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 )
 
 // KVService persists lightweight application state in the kv table.

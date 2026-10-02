@@ -11,8 +11,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	gen "github.com/getarcaneapp/arcane/cli/v2/pkg/generate"
 	"github.com/stretchr/testify/require"
+
+	gen "github.com/getarcaneapp/arcane/cli/v2/pkg/generate"
 )
 
 func TestGenerateMTLSCommandWritesMLDSA87Assets(t *testing.T) {

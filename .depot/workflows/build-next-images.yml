@@ -30,7 +30,7 @@ jobs:
 
       - name: Compute next image version
         id: next-version
-        run: just next-image-version github-output
+        run: just release version github-output
 
   build-next-images:
     needs: next-version

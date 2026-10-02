@@ -10,13 +10,14 @@ import (
 	"strings"
 
 	ref "github.com/distribution/reference"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/client"
 	"github.com/samber/mo"
 	"go.getarcane.app/docker/compat"
 	kit "go.getarcane.app/kit/pkg"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
 )
 
 // RuntimeImage describes the Arcane runtime image that can run internal helper

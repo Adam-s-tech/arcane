@@ -10,10 +10,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/moby/moby/api/types/events"
 	kit "go.getarcane.app/kit/pkg"
 	"go.getarcane.app/streams/bus"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 )
 
 const daemonEventChanBuffer = 256

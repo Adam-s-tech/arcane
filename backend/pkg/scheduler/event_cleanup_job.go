@@ -5,11 +5,12 @@ import (
 	"log/slog"
 	"time"
 
+	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
+	kit "go.getarcane.app/kit/pkg"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/event"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
-	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
-	kit "go.getarcane.app/kit/pkg"
 )
 
 const EventCleanupJobName = "event-cleanup"

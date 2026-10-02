@@ -17,13 +17,6 @@ import (
 	"time"
 
 	composetypes "github.com/compose-spec/compose-go/v2/types"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/imageupdate"
-	dockerutil "github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/iconcatalog"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/imageref"
 	imagetypes "github.com/getarcaneapp/arcane/types/v2/image"
 	"github.com/getarcaneapp/arcane/types/v2/project"
 	"github.com/moby/moby/api/types/container"
@@ -34,6 +27,14 @@ import (
 	"go.getarcane.app/updater"
 	"go.getarcane.app/updater/labels"
 	"go.getarcane.app/updater/pkg/utils/tagpolicy"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/imageupdate"
+	dockerutil "github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/iconcatalog"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/imageref"
 )
 
 type ProjectServiceInfo struct {

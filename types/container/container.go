@@ -6,10 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/getarcaneapp/arcane/types/v2/containerregistry"
-	imagetypes "github.com/getarcaneapp/arcane/types/v2/image"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/network"
+
+	"github.com/getarcaneapp/arcane/types/v2/containerregistry"
+	imagetypes "github.com/getarcaneapp/arcane/types/v2/image"
 )
 
 // RestartPolicyCreate represents restart policy options for container creation.

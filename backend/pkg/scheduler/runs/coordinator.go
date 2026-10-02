@@ -15,11 +15,12 @@ import (
 	"time"
 	"uuid"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/kv"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/francis"
 	st "github.com/getarcaneapp/arcane/types/v2/scheduler"
 	"github.com/italypaleale/francis/actor"
 	kit "go.getarcane.app/kit/pkg"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/kv"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/francis"
 )
 
 // Coordinator persists work before dispatching it to the owning domain.

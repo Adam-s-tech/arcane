@@ -6,9 +6,10 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/labstack/echo/v5"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
-	"github.com/labstack/echo/v5"
 )
 
 // RegisterWithPermission registers a Huma operation that requires perm. It

@@ -17,11 +17,12 @@ import (
 
 	"github.com/compose-spec/compose-go/v2/consts"
 	"github.com/compose-spec/compose-go/v2/dotenv"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	projecttypes "github.com/getarcaneapp/arcane/types/v2/project"
 	"github.com/samber/hot"
 	"go.getarcane.app/acfs"
 	kit "go.getarcane.app/kit/pkg"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 )
 
 const (

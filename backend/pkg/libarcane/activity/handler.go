@@ -10,13 +10,14 @@ import (
 	"net/http"
 	"strings"
 
+	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
+	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
+	"github.com/samber/mo"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/jobcontext"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
-	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
-	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
-	"github.com/samber/mo"
 )
 
 const (

@@ -18,6 +18,18 @@ import (
 
 	cerrdefs "github.com/containerd/errdefs"
 	ref "github.com/distribution/reference"
+	versiontypes "github.com/getarcaneapp/arcane/types/v2/version"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/mount"
+	"github.com/moby/moby/client"
+	"github.com/opencontainers/go-digest"
+	"go.getarcane.app/docker/compat"
+	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/sys/cgroup"
+	"go.getarcane.app/updater"
+	"go.getarcane.app/updater/labels"
+	"golang.org/x/mod/semver"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/docker"
@@ -32,17 +44,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/remenv"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
-	versiontypes "github.com/getarcaneapp/arcane/types/v2/version"
-	"github.com/moby/moby/api/types/container"
-	"github.com/moby/moby/api/types/mount"
-	"github.com/moby/moby/client"
-	"github.com/opencontainers/go-digest"
-	"go.getarcane.app/docker/compat"
-	kit "go.getarcane.app/kit/pkg"
-	"go.getarcane.app/sys/cgroup"
-	"go.getarcane.app/updater"
-	"go.getarcane.app/updater/labels"
-	"golang.org/x/mod/semver"
 )
 
 var upgradeLogNameInternal = regexp.MustCompile(`^arcane-upgrade-[0-9]+\.log$`)

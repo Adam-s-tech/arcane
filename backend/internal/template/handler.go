@@ -7,13 +7,14 @@ import (
 	"errors"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/getarcaneapp/arcane/types/v2/base"
+	templatetypes "github.com/getarcaneapp/arcane/types/v2/template"
+	"go.getarcane.app/kit/pkg/mapping"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
-	"github.com/getarcaneapp/arcane/types/v2/base"
-	templatetypes "github.com/getarcaneapp/arcane/types/v2/template"
-	"go.getarcane.app/kit/pkg/mapping"
 )
 
 // TemplateHandler handles template management endpoints.

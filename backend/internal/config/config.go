@@ -12,9 +12,10 @@ import (
 	"strings"
 	"time"
 
+	kit "go.getarcane.app/kit/pkg"
+
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
-	kit "go.getarcane.app/kit/pkg"
 )
 
 type AppEnvironment string

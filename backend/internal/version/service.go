@@ -11,14 +11,6 @@ import (
 	"time"
 
 	ref "github.com/distribution/reference"
-	"github.com/getarcaneapp/arcane/backend/v2/buildables"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/apns"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/docker"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/imageupdate"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/registry"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
 	"github.com/getarcaneapp/arcane/types/v2/version"
 	containertypes "github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
@@ -29,6 +21,15 @@ import (
 	"go.getarcane.app/streams/agg"
 	"go.getarcane.app/sys/cgroup"
 	"golang.org/x/mod/semver"
+
+	"github.com/getarcaneapp/arcane/backend/v2/buildables"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/apns"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/docker"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/imageupdate"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/registry"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
 )
 
 const (

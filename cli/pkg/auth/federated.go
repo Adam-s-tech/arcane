@@ -11,15 +11,16 @@ import (
 	"strings"
 	"time"
 
+	federatedtypes "github.com/getarcaneapp/arcane/types/v2/federated"
+	"github.com/spf13/cobra"
+	kit "go.getarcane.app/kit/pkg"
+
 	"github.com/getarcaneapp/arcane/cli/v2/internal/ci"
 	"github.com/getarcaneapp/arcane/cli/v2/internal/client"
 	"github.com/getarcaneapp/arcane/cli/v2/internal/cmdutil"
 	"github.com/getarcaneapp/arcane/cli/v2/internal/config"
 	"github.com/getarcaneapp/arcane/cli/v2/internal/output"
 	"github.com/getarcaneapp/arcane/cli/v2/internal/types"
-	federatedtypes "github.com/getarcaneapp/arcane/types/v2/federated"
-	"github.com/spf13/cobra"
-	kit "go.getarcane.app/kit/pkg"
 )
 
 const (

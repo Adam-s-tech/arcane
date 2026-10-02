@@ -5,8 +5,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 	"github.com/samber/mo"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 )
 
 const (

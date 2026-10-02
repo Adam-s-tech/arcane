@@ -3,10 +3,11 @@ package project
 import (
 	"time"
 
+	gitopstypes "github.com/getarcaneapp/arcane/types/v2/gitops"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/environment"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/gitrepo"
-	gitopstypes "github.com/getarcaneapp/arcane/types/v2/gitops"
 )
 
 type ProjectStatus string

@@ -5,12 +5,13 @@ import (
 	"context"
 	"log/slog"
 
+	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
+	systemtypes "github.com/getarcaneapp/arcane/types/v2/system"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/notification"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/system"
 	scheduleutil "github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/schedule"
-	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
-	systemtypes "github.com/getarcaneapp/arcane/types/v2/system"
 )
 
 const ScheduledPruneJobName = "scheduled-prune"

@@ -4,10 +4,11 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/labstack/echo/v5"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/webhook"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
-	"github.com/labstack/echo/v5"
 )
 
 // RegisterWebhookTrigger registers the public (unauthenticated) trigger endpoint.

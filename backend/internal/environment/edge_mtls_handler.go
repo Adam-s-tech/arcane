@@ -10,9 +10,10 @@ import (
 	"strings"
 	"time"
 
+	typesenvironment "github.com/getarcaneapp/arcane/types/v2/environment"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/edge"
-	typesenvironment "github.com/getarcaneapp/arcane/types/v2/environment"
 )
 
 const edgeMTLSCertificateExpiryWarningWindow = 30 * 24 * time.Hour

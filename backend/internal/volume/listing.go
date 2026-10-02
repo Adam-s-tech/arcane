@@ -9,10 +9,6 @@ import (
 	"strings"
 	"time"
 
-	docker "github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/timeouts"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
 	backuptypes "github.com/getarcaneapp/arcane/types/v2/backup"
 	volumetypes "github.com/getarcaneapp/arcane/types/v2/volume"
 	"github.com/moby/moby/api/types/container"
@@ -21,6 +17,11 @@ import (
 	"github.com/moby/moby/client"
 	"github.com/samber/mo"
 	kit "go.getarcane.app/kit/pkg"
+
+	docker "github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/timeouts"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
 )
 
 func (s *VolumeService) GetVolumeUsage(ctx context.Context, name string) (bool, []string, error) {

@@ -7,6 +7,9 @@ set working-directory := './'
 edge_proto_dir := 'backend/proto'
 modules := './backend ./cli ./types'
 
+# Match the standard-library group in .golangci.yml until gci supports Go 1.27.
+go_stdlib_section := 'prefix(arena,archive/,bufio,bytes,cmp,compress/,container/,context,crypto,database/,debug/,embed,encoding,errors,expvar,flag,fmt,go/,hash,html,image,index/,io,iter,log,maps,math,mime,net,os,path,plugin,reflect,regexp,runtime,slices,sort,strconv,strings,structs,sync,syscall,testing,text/,time,unicode,unique,unsafe,uuid,weak)'
+
 _default:
     @just --list
 
@@ -15,17 +18,17 @@ _default:
 # -----------------------------------------------------------------------------
 
 # Run frontend dev server on port 3000
-[group('dev')]
-_dev-frontend:
+[group('development')]
+_dev_frontend:
     vp -C frontend run dev
 
 # Run backend with hot reload on port 3552
-[group('dev')]
-_dev-backend:
+[group('development')]
+_dev_backend:
     cd backend && air
 
-[group('dev')]
-_dev-agent:
+[group('development')]
+_dev_agent:
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -63,8 +66,8 @@ _dev-agent:
     ENCRYPTION_KEY="${encryption_key}" \
     go run ./backend/cmd
 
-[group('dev')]
-_dev-all:
+[group('development')]
+_dev_all:
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -87,61 +90,19 @@ _dev-all:
     wait "$frontend_pid"
 
 # Rebuild Docker dev environment
-[group('dev')]
-_dev-docker:
+[group('development')]
+_dev_docker:
     ./scripts/development/dev.sh rebuild
 
 # View Docker dev environment logs
-[group('dev')]
-_dev-logs:
+[group('development')]
+_dev_logs:
     ./scripts/development/dev.sh logs
 
 # Run development servers. Valid targets: "frontend", "backend", "agent", "all", "docker", "logs".
-[group('dev')]
+[group('development')]
 dev target="docker":
-    @just "_dev-{{ target }}"
-
-# Generate a self-signed TLS cert + key for the local manager (used by the
-# backend HTTPS listener on :3552 and pinned as EDGE_MTLS_CA_FILE by the
-# local edge agent). Writes to backend/local-manager.{crt,key} with SANs for
-# localhost + 127.0.0.1. Both files are gitignored via *.crt / *.key.
-#
-# Usage:
-#   just dev-tls                  # generate if missing
-
-# just dev-tls force=true       # overwrite existing files
-[group('dev')]
-dev-tls force="false":
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    cert_path="./backend/local-manager.crt"
-    key_path="./backend/local-manager.key"
-
-    if [ "{{ force }}" != "true" ] && [ -f "${cert_path}" ] && [ -f "${key_path}" ]; then
-        echo "Cert already exists at ${cert_path}; pass force=true to regenerate."
-        exit 0
-    fi
-
-    go run ./cli generate tls \
-        --out-dir ./backend \
-        --cert-name "$(basename "${cert_path}")" \
-        --key-name "$(basename "${key_path}")" \
-        --common-name arcane-local-manager \
-        --host localhost \
-        --host arcane-local \
-        --host 127.0.0.1 \
-        --host ::1
-
-    echo ""
-    echo "Generated self-signed TLS cert:"
-    echo "  cert: ${cert_path}"
-    echo "  key:  ${key_path}"
-    echo ""
-    echo "Run the backend with HTTPS enabled:"
-    echo "  TLS_ENABLED=true TLS_CERT_FILE=${cert_path} TLS_KEY_FILE=${key_path} just dev backend"
-    echo ""
-    echo "The local edge agent recipe already pins this cert via EDGE_MTLS_CA_FILE."
+    @just "_dev_{{ target }}"
 
 # -----------------------------------------------------------------------------
 # Build
@@ -149,37 +110,35 @@ dev-tls force="false":
 
 # Build the frontend
 [group('build')]
-_build-frontend:
+_build_frontend:
     vp -C frontend run build
 
 # Build the backend
 [group('build')]
-_build-backend:
+_build_backend:
     cd backend && go build ./...
 
 # Build both frontend and backend
 [group('build')]
-_build-all:
-    @just _build-frontend
-    @just _build-backend
+_build_all:
+    @just _build_frontend
+    @just _build_backend
 
 # Build manager container image
 [group('build')]
-_build-image-manager tag="ghcr.io/getarcaneapp/arcane:development" flag='':
+_build_image_manager tag="ghcr.io/getarcaneapp/arcane:development" flag='':
     docker buildx build {{ if flag == "--push" { "--push" } else { "" } }} --platform linux/arm64,linux/amd64,linux/arm/v7 -f 'docker/Dockerfile' --build-arg ENABLED_FEATURES="{{ env('ENABLED_FEATURES', env('BUILD_FEATURES', '')) }}" -t "{{ tag }}" .
 
 # Build agent container image
 [group('build')]
-_build-image-agent tag="ghcr.io/getarcaneapp/agent:development" flag='':
+_build_image_agent tag="ghcr.io/getarcaneapp/agent:development" flag='':
     docker buildx build {{ if flag == "--push" { "--push" } else { "" } }} --platform linux/arm64,linux/amd64,linux/arm/v7 -f 'docker/Dockerfile-agent' --build-arg ENABLED_FEATURES="{{ env('ENABLED_FEATURES', env('BUILD_FEATURES', '')) }}" -t "{{ tag }}" .
 
-# Build targets:
-#   just build single {frontend|backend|all}
-# just build image {manager|agent} [tag] [--push]
+# Build application code: single {frontend|backend|all}; containers: image {manager|agent} [tag] [--push]
 [group('build')]
 build buildtype type="" tag="" flag="":
-    @if [ "{{ buildtype }}" = "single" ]; then just _build-{{ type }}; \
-    elif [ "{{ buildtype }}" = "image" ]; then just _build-image-{{ type }} "{{ if tag != "" { tag } else if type == "manager" { "arcane:latest" } else { "arcane-agent:latest" } }}" "{{ flag }}"; \
+    @if [ "{{ buildtype }}" = "single" ]; then just _build_{{ type }}; \
+    elif [ "{{ buildtype }}" = "image" ]; then just _build_image_{{ type }} "{{ if tag != "" { tag } else if type == "manager" { "arcane:latest" } else { "arcane-agent:latest" } }}" "{{ flag }}"; \
     else echo "Unknown build target: {{ buildtype }}. Try: just build single|image" >&2; exit 1; \
     fi
 
@@ -188,13 +147,13 @@ build buildtype type="" tag="" flag="":
 # -----------------------------------------------------------------------------
 
 # Run Playwright E2E tests
-[group('test')]
-_test-e2e:
+[group('checks')]
+_test_e2e:
     vp -C tests run test
 
 # Run backend Go tests
-[group('test')]
-_test-backend:
+[group('checks')]
+_test_backend:
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -207,8 +166,8 @@ _test-backend:
     fi
 
 # Run CLI tests
-[group('test')]
-_test-cli:
+[group('checks')]
+_test_cli:
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -221,8 +180,8 @@ _test-cli:
     fi
 
 # Run shared types Go tests
-[group('test')]
-_test-types:
+[group('checks')]
+_test_types:
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -234,253 +193,254 @@ _test-types:
         go test ./... -race -coverprofile=coverage.txt -covermode=atomic -v
     fi
 
-[group('test')]
-_test-all:
-    @just _test-e2e
-    @just _test-backend
-    @just _test-cli
-    @just _test-types
+[group('checks')]
+_test_all:
+    @just _test_e2e
+    @just _test_backend
+    @just _test_cli
+    @just _test_types
 
 # Run tests. Valid targets: "e2e", "backend", "cli", "types", "all".
-[group('test')]
+[group('checks')]
 test target="all":
-    @just "_test-{{ target }}"
+    @just "_test_{{ target }}"
 
 # -----------------------------------------------------------------------------
 # Quality: format, lint, and fixes
 # -----------------------------------------------------------------------------
 
-# Format frontend/test/email TypeScript with vp fmt (Vite+) and Go modules with goimports-reviser and gofumpt
-[group('quality')]
-_format-frontend:
+# Format frontend/test/email TypeScript with vp fmt (Vite+) and Go modules with gci and gofumpt
+[group('checks')]
+_format_frontend:
     vp fmt frontend
 
-[group('quality')]
-_format-js:
+[group('checks')]
+_format_js:
     vp fmt tests
     vp fmt email-templates
 
-[group('quality')]
-_format-go:
+[group('checks')]
+_format_go:
     #!/usr/bin/env bash
     set -euo pipefail
     for module in {{ modules }}; do
-        # A non-matching project name keeps all non-stdlib imports in one group.
-        (cd "$module" && goimports-reviser -project-name . ./...)
+        (cd "$module" && gci write --skip-generated --skip-vendor --custom-order -s "{{ go_stdlib_section }}" -s default -s localmodule .)
         gofumpt -w -extra "$module"
     done
 
-[group('quality')]
-_format-just:
+[group('checks')]
+_format_just:
     just --fmt --unstable
 
-[group('quality')]
-_format-check-frontend:
+[group('checks')]
+_format_check_frontend:
     vp fmt --check frontend
 
-[group('quality')]
-_format-check-js:
+[group('checks')]
+_format_check_js:
     vp fmt --check tests
     vp fmt --check email-templates
 
-[group('quality')]
-_format-check-go:
+[group('checks')]
+_format_check_go:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    unformatted=$(gofumpt -l -extra {{ modules }})
+    unformatted=$(
+        for module in {{ modules }}; do
+            (cd "$module" && gci list --skip-generated --skip-vendor --custom-order -s "{{ go_stdlib_section }}" -s default -s localmodule .) || exit 1
+        done
+        gofumpt -l -extra {{ modules }}
+    )
     if [ -n "$unformatted" ]; then
         echo "Unformatted Go files:"
         echo "$unformatted"
         exit 1
     fi
 
-[group('quality')]
-_format-all:
+[group('checks')]
+_format_all:
     #!/usr/bin/env bash
     # Run every formatter even if one fails, so e.g. a vp/pnpm hiccup can't skip gofumpt
     failed=0
     for target in frontend js go just; do
-        just "_format-${target}" || failed=1
+        just "_format_${target}" || failed=1
     done
     exit "${failed}"
 
-[group('quality')]
-_format-check-all:
-    @just _format-check-frontend
-    @just _format-check-js
-    @just _format-check-go
+[group('checks')]
+_format_check_all:
+    @just _format_check_frontend
+    @just _format_check_js
+    @just _format_check_go
 
 # Format targets. Valid: "frontend", "js", "go", "just", "all". Use --check to verify formatting.
-[group('quality')]
+[group('checks')]
 format target="all" check="":
-    @if [ "{{ check }}" = "--check" ]; then just "_format-check-{{ target }}"; else just "_format-{{ target }}"; fi
+    @if [ "{{ check }}" = "--check" ]; then just "_format_check_{{ target }}"; else just "_format_{{ target }}"; fi
 
 # Type check/Lint frontend
-[group('quality')]
-_lint-frontend:
+[group('checks')]
+_lint_frontend:
     vp -C frontend run check
 
 # Type check Playwright tests
-[group('quality')]
-_lint-tests:
+[group('checks')]
+_lint_tests:
     vp -C tests run check
 
 # Type check email templates
-[group('quality')]
-_lint-email-templates:
+[group('checks')]
+_lint_email:
     vp -C email-templates run check
 
 # Type check all JavaScript/TypeScript workspaces
-[group('quality')]
-_lint-js:
-    @just _lint-frontend
-    @just _lint-tests
-    @just _lint-email-templates
+[group('checks')]
+_lint_js:
+    @just _lint_frontend
+    @just _lint_tests
+    @just _lint_email
 
 # Build golangci-lint with the custom linters enabled by the shared config
-[group('quality')]
-_build-golangci-lint:
+[group('checks')]
+_build_golangci_lint:
     golangci-lint custom
 
 # Lint Go backend
-[group('quality')]
-_lint-backend: _build-golangci-lint
-    cd backend && ../.bin/golangci-lint-custom run -c ../.github/.golangci.yml ./...
+[group('checks')]
+_lint_backend:
+    cd backend && golangci-lint run -c ../.golangci.yml ./...
 
 # Lint Go CLI
-[group('quality')]
-_lint-cli: _build-golangci-lint
-    cd cli && ../.bin/golangci-lint-custom run -c ../.github/.golangci.yml ./...
+[group('checks')]
+_lint_cli:
+    cd cli && golangci-lint run -c ../.golangci.yml ./...
 
 # Lint Types
-[group('quality')]
-_lint-types: _build-golangci-lint
-    cd types && ../.bin/golangci-lint-custom run -c ../.github/.golangci.yml ./...
+[group('checks')]
+_lint_types:
+    cd types && golangci-lint run -c ../.golangci.yml ./...
 
 # Lint edge tunnel protobuf definitions.
-[group('quality')]
-_lint-proto:
+[group('checks')]
+_lint_proto:
     cd {{ edge_proto_dir }} && go run github.com/bufbuild/buf/cmd/buf@latest lint
 
 # Lint all Go code
-[group('quality')]
-_lint-go: _lint-backend _lint-cli _lint-types
+[group('checks')]
+_lint_go: _lint_backend _lint_cli _lint_types
 
-[group('quality')]
-_lint-all:
-    @just _lint-js
-    @just _lint-go
-    @just _lint-proto
+[group('checks')]
+_lint_all:
+    @just _lint_js
+    @just _lint_go
+    @just _lint_proto
 
-# Lint targets. Valid: "backend", "frontend", "tests", "email-templates", "js", "cli", "types", "go", "proto", "all".
-[group('quality')]
+# Lint targets. Valid: "backend", "frontend", "tests", "email", "js", "cli", "types", "go", "proto", "all".
+[group('checks')]
 lint target="all":
-    @just "_lint-{{ target }}"
+    @just "_lint_{{ target }}"
 
 # Fix Go backend
-[group('quality')]
-_fix-backend:
+[group('checks')]
+_fix_backend:
     cd backend && go fix ./...
 
 # Fix Go CLI
-[group('quality')]
-_fix-cli:
+[group('checks')]
+_fix_cli:
     cd cli && go fix ./...
 
 # Fix Types
-[group('quality')]
-_fix-types:
+[group('checks')]
+_fix_types:
     cd types && go fix ./...
 
 # Fix all Go code
-[group('quality')]
-_fix-go: _fix-backend _fix-cli _fix-types
+[group('checks')]
+_fix_go: _fix_backend _fix_cli _fix_types
 
-[group('quality')]
-_fix-all:
-    @just _fix-go
+[group('checks')]
+_fix_all:
+    @just _fix_go
 
 # Fix targets. Valid: "backend", "cli", "types", "go", "all".
-[group('quality')]
+[group('checks')]
 fix target="all":
-    @just "_fix-{{ target }}"
+    @just "_fix_{{ target }}"
 
 # -----------------------------------------------------------------------------
 # Security
 # -----------------------------------------------------------------------------
 
 # Run Snyk against all projects including dev dependencies
-[group('security')]
-_snyk-scan:
+[group('checks')]
+_snyk_scan:
     snyk test --all-projects --dev --policy-path=.snyk
 
 # Snyk targets. Valid: "scan".
-[group('security')]
+[group('checks')]
 snyk target="scan":
-    @just "_snyk-{{ target }}"
+    @just "_snyk_{{ target }}"
 
 # -----------------------------------------------------------------------------
 # Dependencies
 # -----------------------------------------------------------------------------
 
-# Install frontend dependencies
-[group('deps')]
-_deps-install-viteplus:
-    vp migrate
-
-_deps-install-frontend:
+# Install Node.js workspace dependencies
+[group('dependencies')]
+_deps_install_frontend:
     vp install
 
 # Install tests dependencies
-[group('deps')]
-_deps-install-tests:
+[group('dependencies')]
+_deps_install_tests:
     vp -C tests install
     vp -C tests exec playwright install --with-deps chromium
 
 # Install backend Go dependencies
-[group('deps')]
-_deps-install-backend:
+[group('dependencies')]
+_deps_install_backend:
     cd backend && go mod download && go mod tidy && go mod verify
     go work sync
 
 # Install CLI Go dependencies
-[group('deps')]
-_deps-install-cli:
+[group('dependencies')]
+_deps_install_cli:
     cd cli && go mod download && go mod tidy && go mod verify
     go work sync
 
 # Install types Go dependencies
-[group('deps')]
-_deps-install-types:
+[group('dependencies')]
+_deps_install_types:
     cd types && go mod download && go mod tidy && go mod verify
     go work sync
 
 # Install all Go dependencies
-[group('deps')]
-_deps-install-go: _deps-install-backend _deps-install-cli _deps-install-types
+[group('dependencies')]
+_deps_install_go: _deps_install_backend _deps_install_cli _deps_install_types
 
 # Install all Node.js dependencies
-[group('deps')]
-_deps-install-node: _deps-install-frontend _deps-install-tests _deps-install-viteplus
+[group('dependencies')]
+_deps_install_node: _deps_install_frontend _deps_install_tests
 
 # Install all dependencies
-[group('deps')]
-_deps-install-all: _deps-install-node _deps-install-go
+[group('dependencies')]
+_deps_install_all: _deps_install_node _deps_install_go
 
 # Update frontend dependencies
-[group('deps')]
-_deps-update-frontend:
+[group('dependencies')]
+_deps_update_frontend:
     vp update
 
 # Update backend Go dependencies
-[group('deps')]
-_deps-update-backend:
+[group('dependencies')]
+_deps_update_backend:
     cd backend && go get -u ./... && go mod tidy
 
 # Update direct Go dependencies in all modules, then sync the workspace (requires jq).
-[group('deps')]
-_deps-update-go *args:
+[group('dependencies')]
+_deps_update_go *args:
     #!/usr/bin/env bash
     set -euo pipefail
     version=upgrade
@@ -514,24 +474,20 @@ _deps-update-go *args:
         go work sync
     done
 
-# Update pnpm version via corepack
-[group('deps')]
-_deps-update-pnpm:
-    npx corepack up
-
-[group('deps')]
-_deps-update-all: _deps-update-frontend _deps-update-backend _deps-update-pnpm
+# Update Node.js and direct Go dependencies
+[group('dependencies')]
+_deps_update_all: _deps_update_frontend _deps_update_go
 
 # Dedupe all pnpm workspace dependencies
-[group('deps')]
-_deps-dedupe-node:
+[group('dependencies')]
+_deps_dedupe_node:
     vp dedupe
 
-[group('deps')]
-_deps-dedupe-all: _deps-dedupe-node
+[group('dependencies')]
+_deps_dedupe_all: _deps_dedupe_node
 
-# Deps targets. Also supports "go update [--patch]" for direct Go dependency updates.
-[group('deps')]
+# Manage dependencies: {install|update|dedupe} [target], or go update [--patch]
+[group('dependencies')]
 deps action="update" target="all" *args:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -540,29 +496,33 @@ deps action="update" target="all" *args:
             echo 'Usage: just deps go update [--patch]' >&2
             exit 1
         fi
-        just _deps-update-go {{ args }}
+        just _deps_update_go {{ args }}
     else
-        just "_deps-{{ action }}-{{ target }}" {{ args }}
+        just "_deps_{{ action }}_{{ target }}" {{ args }}
     fi
 
 # -----------------------------------------------------------------------------
-# Code generation and docs
+# Code generation
 # -----------------------------------------------------------------------------
 
 # Generate edge tunnel protobuf/gRPC code.
-[group('codegen')]
-_generate-proto:
+[group('generation')]
+_generate_proto:
     cd {{ edge_proto_dir }} && go run github.com/bufbuild/buf/cmd/buf@latest lint
     cd {{ edge_proto_dir }} && go run github.com/bufbuild/buf/cmd/buf@latest generate
 
 # Generate targets. Valid: "proto".
-[group('codegen')]
+[group('generation')]
 generate target:
-    @just "_generate-{{ target }}"
+    @just "_generate_{{ target }}"
+
+# -----------------------------------------------------------------------------
+# Documentation and localization
+# -----------------------------------------------------------------------------
 
 # Generate the docs config schema JSON.
-[group('docs')]
-_docs-config output="" source_root=".":
+[group('generation')]
+_docs_config output="" source_root=".":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -574,24 +534,18 @@ _docs-config output="" source_root=".":
     "${cmd[@]}"
 
 # Docs targets. Example: just docs config
-[group('docs')]
+[group('generation')]
 docs target *args:
-    @just "_docs-{{ target }}" {{ args }}
+    @just "_docs_{{ target }}" {{ args }}
 
-# -----------------------------------------------------------------------------
-# Localization
-# -----------------------------------------------------------------------------
-
-# Add a new i18n locale. Example:
-
-# just i18n-add es "Español"
-[group('i18n')]
-i18n-add locale native_name settings="frontend/project.inlang/settings.json" picker="frontend/src/lib/components/locale-picker.svelte" messages_dir="frontend/messages" base_locale="en":
+# Add an i18n locale
+[group('generation')]
+_i18n_add locale native_name settings="frontend/project.inlang/settings.json" picker="frontend/src/lib/components/locale-picker.svelte" messages_dir="frontend/messages" base_locale="en":
     #!/usr/bin/env bash
     set -euo pipefail
 
     if [ -z "{{ locale }}" ] || [ -z "{{ native_name }}" ]; then
-        echo "Usage: just i18n-add <locale> <native_name> [settings] [picker] [messages_dir] [base_locale]"
+        echo "Usage: just i18n add <locale> <native_name> [settings] [picker] [messages_dir] [base_locale]"
         exit 1
     fi
 
@@ -766,272 +720,29 @@ i18n-add locale native_name settings="frontend/project.inlang/settings.json" pic
         echo "Created messages file: $target_file"
     fi
 
+# Localization targets: add <locale> <native_name>. Example: just i18n add es "Español"
+[group('generation')]
+i18n target *args:
+    @just "_i18n_{{ target }}" {{ args }}
+
 # -----------------------------------------------------------------------------
 # Benchmarks
 # -----------------------------------------------------------------------------
 
-# Benchmark edge tunnel transport performance (gRPC vs WebSocket) with allocations.
-
-# Usage: just bench-edge-tunnel [count] [benchtime]
-[group('bench')]
-bench-edge-tunnel count="3" benchtime="2s":
+# Benchmark edge tunnel transports with allocation counts
+[group('performance')]
+_bench_edge count="3" benchtime="2s":
     cd backend && go test -run '^$' -bench '^BenchmarkEdgeTunnelProxyRequest$' -benchmem -count={{ count }} -benchtime={{ benchtime }} ./pkg/libarcane/edge
 
-# Benchmark edge tunnel transport and write memory profile.
-
-# Usage: just bench-edge-tunnel-mem [profile] [benchtime]
-[group('bench')]
-bench-edge-tunnel-mem profile="edge_tunnel.mem.out" benchtime="5s":
+# Benchmark edge tunnel transports and write a memory profile
+[group('performance')]
+_bench_memory profile="edge_tunnel.mem.out" benchtime="5s":
     cd backend && go test -run '^$' -bench '^BenchmarkEdgeTunnelProxyRequest$' -benchmem -benchtime={{ benchtime }} -memprofile={{ profile }} ./pkg/libarcane/edge
 
-# -----------------------------------------------------------------------------
-# Deploy
-# -----------------------------------------------------------------------------
-
-# Deploy a local DinD engine plus a locally built Arcane edge agent.
-# The swarm form joins the engine to the host swarm; the normal agent form leaves
-# it outside the swarm so Arcane Easy Join can perform the join later.
-#
-# Usage:
-
-# just deploy swarm agent [agent_token] [manager_url] [node_name] [agent_name] [dind_image] [local_image]
-# just deploy agent [agent_token] [manager_url] [node_name] [agent_name] [dind_image] [local_image]
-[group('deploy')]
-_deploy-agent join_swarm agent_token="" manager_url="http://host.docker.internal:3552" node_name="arcane-agent-1" agent_name="arcane-agent" dind_image="docker:29-dind" local_image="ghcr.io/getarcaneapp/agent:local":
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    if ! command -v docker >/dev/null 2>&1; then
-        echo "docker is required"
-        exit 1
-    fi
-
-    if ! docker info >/dev/null 2>&1; then
-        echo "docker daemon is not running"
-        exit 1
-    fi
-
-    if [ "{{ join_swarm }}" = "true" ]; then
-        swarm_state="$(docker info 2>/dev/null | awk -F': ' '/Swarm:/{print tolower($2); exit}')"
-        swarm_control="$(docker info 2>/dev/null | awk -F': ' '/Is Manager:/{print tolower($2); exit}')"
-        if [ "$swarm_state" != "active" ] || [ "$swarm_control" != "true" ]; then
-            echo "host docker must already be an active swarm manager"
-            exit 1
-        fi
-    fi
-
-    echo "Building local agent image {{ local_image }}..."
-    docker buildx build --load -f docker/Dockerfile-agent -t "{{ local_image }}" .
-
-    if docker inspect "{{ node_name }}" >/dev/null 2>&1; then
-        echo "Reusing existing DinD engine {{ node_name }}..."
-        docker start "{{ node_name }}" >/dev/null 2>&1 || true
-    else
-        echo "Starting DinD engine {{ node_name }} from {{ dind_image }}..."
-        docker run -d \
-            --privileged \
-            --name "{{ node_name }}" \
-            --hostname "{{ node_name }}" \
-            --restart unless-stopped \
-            --add-host=host.docker.internal:host-gateway \
-            -e DOCKER_TLS_CERTDIR= \
-            "{{ dind_image }}"
-    fi
-
-    echo "Waiting for inner Docker daemon..."
-    for _ in $(seq 1 30); do
-        if docker exec "{{ node_name }}" docker info >/dev/null 2>&1; then
-            break
-        fi
-        sleep 1
-    done
-
-    if ! docker exec "{{ node_name }}" docker info >/dev/null 2>&1; then
-        echo "inner docker daemon did not become ready"
-        exit 1
-    fi
-
-    local_node_state="$(docker exec "{{ node_name }}" docker info --format '{{ "{{.Swarm.LocalNodeState}}" }}')"
-    if [ "{{ join_swarm }}" = "true" ]; then
-        if [ "$local_node_state" != "active" ]; then
-            join_token="$(docker swarm join-token -q worker)"
-            echo "Joining {{ node_name }} to host swarm..."
-            docker exec "{{ node_name }}" docker swarm join --token "$join_token" host.docker.internal:2377
-        else
-            echo "{{ node_name }} is already part of the swarm."
-        fi
-    else
-        if [ "$local_node_state" = "active" ]; then
-            echo "{{ node_name }} is already part of a swarm. Remove it first with: just remove agent {{ node_name }} {{ agent_name }}"
-            exit 1
-        fi
-        echo "Leaving {{ node_name }} outside the swarm for Arcane Easy Join."
-    fi
-
-    current_node_id="$(docker exec "{{ node_name }}" docker info --format '{{ "{{.Swarm.NodeID}}" }}')"
-    if [ -n "$current_node_id" ]; then
-        echo "Current swarm node ID: $current_node_id"
-    fi
-
-    if [ -n "{{ agent_token }}" ] && command -v sqlite3 >/dev/null 2>&1 && [ -f backend/data/arcane.db ]; then
-        expected_node_id="$(sqlite3 backend/data/arcane.db "SELECT COALESCE(swarm_node_id, '') FROM environments WHERE access_token = '{{ agent_token }}' LIMIT 1;")"
-        if [ -n "$expected_node_id" ] && [ "$expected_node_id" != "$current_node_id" ]; then
-            echo "agent token belongs to swarm node $expected_node_id, but {{ node_name }} is $current_node_id"
-            if [ "{{ join_swarm }}" = "true" ]; then
-                echo "Create a fresh Remote Environment from the Connect Agent dialog for node {{ node_name }}, then rerun this command with its token."
-            else
-                echo "Create a fresh visible Edge Agent under Environments, then rerun this command with its token."
-            fi
-            exit 1
-        fi
-    fi
-
-    if [ -z "{{ agent_token }}" ]; then
-        echo ""
-        if [ "{{ join_swarm }}" = "true" ]; then
-            echo "Swarm worker {{ node_name }} is ready, but no Arcane agent token was provided."
-            echo "Open Arcane, click Connect Agent for node {{ node_name }} (node ID: $current_node_id), create its Remote Environment, copy the generated token, and rerun:"
-            echo "  just deploy swarm agent <arcane_agent_token> {{ manager_url }} {{ node_name }} {{ agent_name }} {{ dind_image }} {{ local_image }}"
-        else
-            echo "Docker engine {{ node_name }} is ready, but no Arcane agent token was provided."
-            echo "Create a visible Edge Agent under Environments, copy its token, and rerun:"
-            echo "  just deploy agent <arcane_agent_token> {{ manager_url }} {{ node_name }} {{ agent_name }} {{ dind_image }} {{ local_image }}"
-        fi
-        exit 0
-    fi
-
-    echo "Loading local agent image into {{ node_name }}..."
-    docker save "{{ local_image }}" | docker exec -i "{{ node_name }}" docker load >/dev/null
-
-    echo "Starting agent container {{ agent_name }} inside {{ node_name }}..."
-    docker exec "{{ node_name }}" sh -lc '
-        docker rm -f "{{ agent_name }}" >/dev/null 2>&1 || true
-        docker run -d \
-          --name "{{ agent_name }}" \
-          --restart unless-stopped \
-          -e EDGE_AGENT=true \
-          -e EDGE_TRANSPORT=poll \
-          -e AGENT_TOKEN="{{ agent_token }}" \
-          -e MANAGER_API_URL="{{ manager_url }}" \
-          -v /var/run/docker.sock:/var/run/docker.sock \
-          -v arcane-data:/app/data \
-          "{{ local_image }}"
-    '
-
-    echo ""
-    if [ "{{ join_swarm }}" = "true" ]; then
-        echo "Swarm worker {{ node_name }} and local agent {{ agent_name }} are up."
-    else
-        echo "Docker engine {{ node_name }} and local agent {{ agent_name }} are up."
-        echo "The engine is connected to Arcane and remains outside the swarm."
-    fi
-    echo "Verify:"
-    if [ "{{ join_swarm }}" = "true" ]; then
-        echo "  docker node ls"
-    else
-        echo "  docker exec {{ node_name }} docker info --format '{{ "{{.Swarm.LocalNodeState}}" }}'"
-    fi
-    echo "  docker exec {{ node_name }} docker ps"
-    echo "  docker exec {{ node_name }} docker logs {{ agent_name }}"
-
-# Remove a local DinD engine plus its Arcane edge agent.
-#
-# Usage:
-#
-
-# just remove swarm agent [node_name] [agent_name]
-# just remove agent [node_name] [agent_name]
-[group('deploy')]
-_remove-agent node_name="arcane-agent-1" agent_name="arcane-agent":
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    if ! command -v docker >/dev/null 2>&1; then
-        echo "docker is required"
-        exit 1
-    fi
-
-    if ! docker info >/dev/null 2>&1; then
-        echo "docker daemon is not running"
-        exit 1
-    fi
-
-    if ! docker inspect "{{ node_name }}" >/dev/null 2>&1; then
-        echo "container {{ node_name }} does not exist"
-        exit 1
-    fi
-
-    echo "Stopping inner agent container {{ agent_name }} inside {{ node_name }}..."
-    docker exec "{{ node_name }}" sh -lc 'docker rm -f "{{ agent_name }}" >/dev/null 2>&1 || true'
-
-    node_id=""
-    if docker exec "{{ node_name }}" docker info >/dev/null 2>&1; then
-        local_node_state="$(docker exec "{{ node_name }}" docker info --format '{{ "{{.Swarm.LocalNodeState}}" }}' 2>/dev/null || true)"
-        if [ "$local_node_state" = "active" ]; then
-            node_id="$(docker exec "{{ node_name }}" docker info --format '{{ "{{.Swarm.NodeID}}" }}' 2>/dev/null || true)"
-            echo "Leaving swarm from {{ node_name }}..."
-            docker exec "{{ node_name }}" docker swarm leave -f >/dev/null 2>&1 || true
-        fi
-    fi
-
-    if [ -n "$node_id" ]; then
-        echo "Removing swarm node $node_id from host manager..."
-        docker node rm -f "$node_id" >/dev/null 2>&1 || true
-    fi
-
-    echo "Removing DinD engine container {{ node_name }} from host..."
-    docker rm -f "{{ node_name }}" >/dev/null
-
-    echo ""
-    echo "Removed Docker engine {{ node_name }} and inner agent {{ agent_name }}."
-
-# Deploy targets. Examples: just deploy agent [agent_token], just deploy swarm agent [agent_token]
-[group('deploy')]
-deploy target *args:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    set -- {{ args }}
-    case "{{ target }}" in
-        agent)
-            just _deploy-agent false "$@"
-            ;;
-        swarm)
-            if [ "${1:-}" != "agent" ]; then
-                echo "usage: just deploy swarm agent [agent_token] [manager_url] [node_name] [agent_name] [dind_image] [local_image]"
-                exit 1
-            fi
-            shift
-            just _deploy-agent true "$@"
-            ;;
-        *)
-            echo "unknown deploy target: {{ target }}"
-            exit 1
-            ;;
-    esac
-
-# Remove deployed targets. Examples: just remove agent, just remove swarm agent
-[group('deploy')]
-remove target *args:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    set -- {{ args }}
-    case "{{ target }}" in
-        agent)
-            just _remove-agent "$@"
-            ;;
-        swarm)
-            if [ "${1:-}" != "agent" ]; then
-                echo "usage: just remove swarm agent [node_name] [agent_name]"
-                exit 1
-            fi
-            shift
-            just _remove-agent "$@"
-            ;;
-        *)
-            echo "unknown remove target: {{ target }}"
-            exit 1
-            ;;
-    esac
+# Benchmark edge transports: edge [count] [benchtime], or memory [profile] [benchtime]
+[group('performance')]
+bench target="edge" *args:
+    @just "_bench_{{ target }}" {{ args }}
 
 # -----------------------------------------------------------------------------
 # Release
@@ -1042,9 +753,9 @@ remove target *args:
 # The -next.N counter continues from tags already published to GHCR; set
 # GHCR_TAGS (newline separated) to bypass the registry query for testing.
 #
-# Usage: just next-image-version [github-output]
+# Compute the next image version; use github-output to export workflow outputs
 [group('release')]
-next-image-version mode="":
+_release_version mode="":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -1122,8 +833,29 @@ next-image-version mode="":
             "image_tag=${IMAGE_TAG}" >> "${GITHUB_OUTPUT:?GITHUB_OUTPUT is not set}"
     fi
 
+# Compute the next image version: version [github-output]
 [group('release')]
-_utils-list-feats:
+release target="version" *args:
+    @just "_release_{{ target }}" {{ args }}
+
+# -----------------------------------------------------------------------------
+# Repository maintenance
+# -----------------------------------------------------------------------------
+
+# Clean build artifacts
+[group('maintenance')]
+_repo_clean:
+    rm -rf frontend/.svelte-kit frontend/build backend/.bin
+    find . -type d -name node_modules -prune -exec rm -rf {} \;
+
+# Repo targets. Valid: "clean".
+[group('maintenance')]
+repo target="clean":
+    @just "_repo_{{ target }}"
+
+# List open feature requests by votes
+[group('maintenance')]
+_utils_feats:
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -1161,8 +893,9 @@ _utils-list-feats:
         printf "         %s\n\n" "$url"
     done <<< "$discussions"
 
-[group('release')]
-_utils-list-fixes:
+# List fix commits since the latest release
+[group('maintenance')]
+_utils_fixes:
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -1225,22 +958,7 @@ _utils-list-fixes:
         echo "Test mode: no changes were made."
     fi
 
-# Utils targets. Valid: "list-feats", "list-fixes".
-[group('release')]
+# Utils targets. Valid: "feats", "fixes".
+[group('maintenance')]
 utils target *args:
-    @just "_utils-{{ target }}" {{ args }}
-
-# -----------------------------------------------------------------------------
-# Repository maintenance
-# -----------------------------------------------------------------------------
-
-# Clean build artifacts
-[group('maintenance')]
-_repo-clean:
-    rm -rf frontend/.svelte-kit frontend/build backend/.bin
-    find . -type d -name node_modules -prune -exec rm -rf {} \;
-
-# Repo targets. Valid: "clean".
-[group('maintenance')]
-repo target="clean":
-    @just "_repo-{{ target }}"
+    @just "_utils_{{ target }}" {{ args }}

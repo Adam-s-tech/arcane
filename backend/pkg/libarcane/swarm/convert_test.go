@@ -7,13 +7,14 @@ import (
 	"testing"
 
 	composegotypes "github.com/compose-spec/compose-go/v2/types"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 	projecttypes "github.com/getarcaneapp/arcane/types/v2/project"
 	swarmtypes "github.com/getarcaneapp/arcane/types/v2/swarm"
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/api/types/swarm"
 	"github.com/stretchr/testify/require"
 	kit "go.getarcane.app/kit/pkg"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 )
 
 func TestConvertServiceMountsResolvesComposeResourceNames(t *testing.T) {

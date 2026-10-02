@@ -5,15 +5,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/role"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 	"github.com/getarcaneapp/arcane/types/v2/auth"
 	"github.com/libtnb/sqlite"
 	"github.com/stretchr/testify/require"
 	kit "go.getarcane.app/kit/pkg"
 	"gorm.io/gorm"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/role"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 )
 
 func TestSessionService_RotateRefreshTokenRequiresCurrentHash(t *testing.T) {

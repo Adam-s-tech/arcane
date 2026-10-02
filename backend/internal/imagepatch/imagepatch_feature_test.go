@@ -8,6 +8,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/getarcaneapp/arcane/types/v2/features"
+	"github.com/getarcaneapp/arcane/types/v2/imagepatch"
+	"github.com/libtnb/sqlite"
+	"github.com/moby/moby/client"
+	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
@@ -15,12 +22,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/vulnerability"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
-	"github.com/getarcaneapp/arcane/types/v2/features"
-	"github.com/getarcaneapp/arcane/types/v2/imagepatch"
-	"github.com/libtnb/sqlite"
-	"github.com/moby/moby/client"
-	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
 )
 
 func patchFeatureSettingsInternal(t *testing.T) (*settings.SettingsService, *database.DB) {

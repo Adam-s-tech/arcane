@@ -14,6 +14,13 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/getarcaneapp/arcane/types/v2/auth"
+	"github.com/lestrrat-go/jwx/v4/jwa"
+	"github.com/lestrrat-go/jwx/v4/jwt"
+	"github.com/samber/hot"
+	"go.getarcane.app/kit/normalization"
+	kit "go.getarcane.app/kit/pkg"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
@@ -25,12 +32,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/jwtclaims"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/validation"
-	"github.com/getarcaneapp/arcane/types/v2/auth"
-	"github.com/lestrrat-go/jwx/v4/jwa"
-	"github.com/lestrrat-go/jwx/v4/jwt"
-	"github.com/samber/hot"
-	"go.getarcane.app/kit/normalization"
-	kit "go.getarcane.app/kit/pkg"
 )
 
 var (

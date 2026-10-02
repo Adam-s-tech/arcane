@@ -21,9 +21,6 @@ import (
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/docker"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/volumehelper"
 	volumetypes "github.com/getarcaneapp/arcane/types/v2/volume"
 	workspacetypes "github.com/getarcaneapp/arcane/types/v2/workspace"
 	"github.com/moby/moby/api/types/container"
@@ -33,6 +30,10 @@ import (
 	"go.getarcane.app/acfs"
 	acfstypes "go.getarcane.app/acfs/types"
 	kit "go.getarcane.app/kit/pkg"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/docker"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/volumehelper"
 )
 
 func newVolumeWorkspaceTestDockerClientInternal(t *testing.T, server *httptest.Server) *client.Client {

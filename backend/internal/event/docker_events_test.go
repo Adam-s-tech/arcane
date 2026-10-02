@@ -8,12 +8,13 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/moby/moby/api/types/events"
 	"github.com/stretchr/testify/require"
 	kit "go.getarcane.app/kit/pkg"
 	"go.getarcane.app/streams/bus"
 	"gorm.io/gorm"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 )
 
 func TestMapDaemonEventInternal(t *testing.T) {

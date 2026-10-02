@@ -7,14 +7,15 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/event"
-	projectpkg "github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 	gitopstypes "github.com/getarcaneapp/arcane/types/v2/gitops"
 	projecttypes "github.com/getarcaneapp/arcane/types/v2/project"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/event"
+	projectpkg "github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 )
 
 var errComposeTagReadOnly = errors.New("tag is defined in Compose and can only be changed through x-arcane metadata")

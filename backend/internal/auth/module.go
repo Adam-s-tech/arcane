@@ -6,9 +6,10 @@ import (
 	"context"
 
 	"github.com/danielgtaylor/huma/v2"
+	authtypes "github.com/getarcaneapp/arcane/types/v2/auth"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/user"
-	authtypes "github.com/getarcaneapp/arcane/types/v2/auth"
 )
 
 type Module struct {

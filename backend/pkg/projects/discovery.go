@@ -12,9 +12,10 @@ import (
 	"strings"
 
 	"github.com/compose-spec/compose-go/v2/loader"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	kit "go.getarcane.app/kit/pkg"
 	"go.yaml.in/yaml/v4"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 )
 
 type DiscoveredProjectDir struct {

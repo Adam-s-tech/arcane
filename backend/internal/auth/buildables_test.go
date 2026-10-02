@@ -6,9 +6,10 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/getarcaneapp/arcane/backend/v2/buildables"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
-	"github.com/stretchr/testify/require"
 )
 
 func enableAutoLoginFeature(t *testing.T) {

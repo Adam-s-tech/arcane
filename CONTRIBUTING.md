@@ -20,10 +20,10 @@ Thanks for helping make Arcane better! We've built a modern, streamlined develop
 - **Docker & Docker Compose**
 - **VS Code** based IDE (recommended for the best developer experience)
 - **[Vite+](https://viteplus.dev)** (`curl -fsSL https://vite.plus | bash`) — manages the Node toolchain, formatting, linting, and pre-commit hooks when working outside Docker
-- **[goimports-reviser](https://github.com/incu6us/goimports-reviser) and [gofumpt](https://github.com/mvdan/gofumpt)** — required for Go import grouping and code formatting. Install both with Go:
+- **[gci](https://github.com/daixiang0/gci) and [gofumpt](https://github.com/mvdan/gofumpt)** — required for Go import grouping and code formatting. Install both with Go:
 
   ```bash
-  go install github.com/incu6us/goimports-reviser/v3@latest
+  go install github.com/daixiang0/gci@latest
   go install mvdan.cc/gofumpt@latest
   ```
 

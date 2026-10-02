@@ -21,6 +21,15 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/getarcaneapp/arcane/types/v2/base"
+	"github.com/getarcaneapp/arcane/types/v2/features"
+	settingstypes "github.com/getarcaneapp/arcane/types/v2/settings"
+	"github.com/samber/mo"
+	"go.getarcane.app/kit/normalization"
+	kit "go.getarcane.app/kit/pkg"
+	libcrypto "go.getarcane.app/sys/crypto"
+	"gorm.io/gorm"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
@@ -30,14 +39,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/concurrency"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/validation"
-	"github.com/getarcaneapp/arcane/types/v2/base"
-	"github.com/getarcaneapp/arcane/types/v2/features"
-	settingstypes "github.com/getarcaneapp/arcane/types/v2/settings"
-	"github.com/samber/mo"
-	"go.getarcane.app/kit/normalization"
-	kit "go.getarcane.app/kit/pkg"
-	libcrypto "go.getarcane.app/sys/crypto"
-	"gorm.io/gorm"
 )
 
 const (

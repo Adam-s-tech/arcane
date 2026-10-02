@@ -6,12 +6,13 @@ import (
 	"time"
 	"uuid"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
 	st "github.com/getarcaneapp/arcane/types/v2/scheduler"
 	"github.com/stretchr/testify/require"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 )
 
 func newJobActivityTestServiceInternal(t *testing.T) (*JobService, *activity.ActivityService, *database.DB) {

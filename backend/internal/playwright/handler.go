@@ -5,8 +5,9 @@ package playwright
 import (
 	"net/http"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/federated"
 	"github.com/labstack/echo/v5"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/federated"
 )
 
 type playwrightHandlerInternal struct {

@@ -8,9 +8,10 @@ import (
 	"sync"
 	"time"
 
+	st "github.com/getarcaneapp/arcane/types/v2/scheduler"
+
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/runs"
 	scheduleutil "github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/schedule"
-	st "github.com/getarcaneapp/arcane/types/v2/scheduler"
 )
 
 var (

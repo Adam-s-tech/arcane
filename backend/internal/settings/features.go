@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/types/v2/features"
 	kit "go.getarcane.app/kit/pkg"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 )
 
 // IsFeatureEnabled resolves feature availability on this environment.

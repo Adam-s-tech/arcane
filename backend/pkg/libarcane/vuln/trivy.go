@@ -14,10 +14,11 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
 	containertypes "github.com/moby/moby/api/types/container"
 	dockerregistry "github.com/moby/moby/api/types/registry"
 	kit "go.getarcane.app/kit/pkg"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
 )
 
 const (

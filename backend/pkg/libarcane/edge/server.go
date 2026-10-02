@@ -13,10 +13,6 @@ import (
 	"time"
 	"uuid"
 
-	wshub "github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/ws"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/remenv"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
-	tunnelpb "github.com/getarcaneapp/arcane/backend/v2/proto/tunnel/v1"
 	certgen "github.com/getarcaneapp/arcane/cli/v2/pkg/generate"
 	"github.com/labstack/echo/v5"
 	"github.com/samber/mo"
@@ -27,6 +23,11 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+
+	wshub "github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/ws"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/remenv"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
+	tunnelpb "github.com/getarcaneapp/arcane/backend/v2/proto/tunnel/v1"
 )
 
 const (

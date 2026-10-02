@@ -9,8 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/getarcaneapp/arcane/cli/v2/internal/types"
 	"github.com/stretchr/testify/require"
+
+	"github.com/getarcaneapp/arcane/cli/v2/internal/types"
 )
 
 func TestClient_RetriesIdempotentRequests(t *testing.T) {

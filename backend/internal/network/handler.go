@@ -9,6 +9,15 @@ import (
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
+	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
+	"github.com/getarcaneapp/arcane/types/v2/base"
+	networktypes "github.com/getarcaneapp/arcane/types/v2/network"
+	dockernetwork "github.com/moby/moby/api/types/network"
+	"github.com/moby/moby/client"
+	"github.com/samber/mo"
+	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/kit/pkg/mapping"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
@@ -18,14 +27,6 @@ import (
 	activitylib "github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
-	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
-	"github.com/getarcaneapp/arcane/types/v2/base"
-	networktypes "github.com/getarcaneapp/arcane/types/v2/network"
-	dockernetwork "github.com/moby/moby/api/types/network"
-	"github.com/moby/moby/client"
-	"github.com/samber/mo"
-	kit "go.getarcane.app/kit/pkg"
-	"go.getarcane.app/kit/pkg/mapping"
 )
 
 type NetworkHandler struct {

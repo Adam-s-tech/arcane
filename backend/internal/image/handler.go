@@ -11,6 +11,15 @@ import (
 
 	"github.com/containerd/platforms"
 	"github.com/danielgtaylor/huma/v2"
+	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
+	"github.com/getarcaneapp/arcane/types/v2/base"
+	"github.com/getarcaneapp/arcane/types/v2/image"
+	"github.com/getarcaneapp/arcane/types/v2/system"
+	uploadtypes "github.com/getarcaneapp/arcane/types/v2/upload"
+	buildtypes "go.getarcane.app/builds/types"
+	kit "go.getarcane.app/kit/pkg"
+	"gorm.io/gorm"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/build"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
@@ -24,14 +33,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
-	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
-	"github.com/getarcaneapp/arcane/types/v2/base"
-	"github.com/getarcaneapp/arcane/types/v2/image"
-	"github.com/getarcaneapp/arcane/types/v2/system"
-	uploadtypes "github.com/getarcaneapp/arcane/types/v2/upload"
-	buildtypes "go.getarcane.app/builds/types"
-	kit "go.getarcane.app/kit/pkg"
-	"gorm.io/gorm"
 )
 
 // ImageHandler provides Huma-based image management endpoints.

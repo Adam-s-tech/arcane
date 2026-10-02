@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"io"
 
-	dockerutils "github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
 	"github.com/moby/moby/api/pkg/stdcopy"
 	"github.com/moby/moby/client"
 	"go.getarcane.app/docker/compat"
+
+	dockerutils "github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
 )
 
 type demuxedLogsInternal struct {

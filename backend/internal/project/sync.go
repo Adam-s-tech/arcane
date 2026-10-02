@@ -12,11 +12,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 	"github.com/samber/mo"
 	kit "go.getarcane.app/kit/pkg"
 	"gorm.io/gorm"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 )
 
 // projectCleanupDecision records a project the reconcile pass intends to delete,

@@ -10,6 +10,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/libtnb/sqlite"
+	"github.com/moby/moby/api/types/events"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/fx"
+	"go.uber.org/fx/fxtest"
+	"gorm.io/gorm"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/apikey"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/appimages"
@@ -55,12 +62,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/webhook"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/oidcjwk"
-	"github.com/libtnb/sqlite"
-	"github.com/moby/moby/api/types/events"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/fx"
-	"go.uber.org/fx/fxtest"
-	"gorm.io/gorm"
 )
 
 type graphParams struct {

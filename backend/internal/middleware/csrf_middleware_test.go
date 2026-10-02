@@ -5,9 +5,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/require"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 )
 
 func newCSRFTestRouterInternal() *echo.Echo {

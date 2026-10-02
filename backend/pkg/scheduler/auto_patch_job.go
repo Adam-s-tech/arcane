@@ -6,14 +6,15 @@ import (
 	"errors"
 	"log/slog"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/imagepatch"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
-	scheduleutil "github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/schedule"
 	"github.com/getarcaneapp/arcane/types/v2"
 	"github.com/getarcaneapp/arcane/types/v2/features"
 	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
 	kit "go.getarcane.app/kit/pkg"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/imagepatch"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
+	scheduleutil "github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/schedule"
 )
 
 const AutoPatchJobName = "auto-patch"

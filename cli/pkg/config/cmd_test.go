@@ -3,8 +3,9 @@ package config
 import (
 	"testing"
 
-	clitypes "github.com/getarcaneapp/arcane/cli/v2/internal/types"
 	"github.com/stretchr/testify/require"
+
+	clitypes "github.com/getarcaneapp/arcane/cli/v2/internal/types"
 )
 
 func TestApplyConfigSetArgs(t *testing.T) {

@@ -9,8 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	gen "github.com/getarcaneapp/arcane/cli/v2/pkg/generate"
 	"github.com/stretchr/testify/require"
+
+	gen "github.com/getarcaneapp/arcane/cli/v2/pkg/generate"
 )
 
 // captureOutput captures stdout produced by fn and returns it as a string.

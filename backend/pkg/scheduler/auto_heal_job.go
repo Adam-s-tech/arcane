@@ -11,6 +11,14 @@ import (
 	"sync"
 	"time"
 
+	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/client"
+	"go.getarcane.app/docker/compat"
+	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/sys/cgroup"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/docker"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/event"
@@ -22,13 +30,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/runs"
 	scheduleutil "github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/schedule"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
-	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
-	"github.com/moby/moby/api/types/container"
-	"github.com/moby/moby/client"
-	"go.getarcane.app/docker/compat"
-	kit "go.getarcane.app/kit/pkg"
-	"go.getarcane.app/sys/cgroup"
-	"golang.org/x/sync/errgroup"
 )
 
 const (

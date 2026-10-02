@@ -19,6 +19,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/getarcaneapp/arcane/types/v2/env"
+	"go.getarcane.app/acfs"
+	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/sys/crypto"
+	"gorm.io/gorm"
+
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/environment"
@@ -26,11 +32,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
-	"github.com/getarcaneapp/arcane/types/v2/env"
-	"go.getarcane.app/acfs"
-	kit "go.getarcane.app/kit/pkg"
-	"go.getarcane.app/sys/crypto"
-	"gorm.io/gorm"
 )
 
 // envKeyPattern is the POSIX env-name shape used to validate variable keys
