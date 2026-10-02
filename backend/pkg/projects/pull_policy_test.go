@@ -157,9 +157,11 @@ func TestBuildImagePullPlanDependentImages(t *testing.T) {
 		Name: "demo",
 		Services: composetypes.Services{
 			"web": {
-				Name:     "web",
-				Image:    "nginx:latest",
-				PreStart: []composetypes.ServiceHook{{Image: "busybox:stable", Command: composetypes.ShellCommand{"true"}}},
+				Name:  "web",
+				Image: "nginx:latest",
+				PreStart: []composetypes.PreStartHook{{ContainerSpec: composetypes.ContainerSpec{
+					Image: "busybox:stable", Command: composetypes.ShellCommand{"true"},
+				}}},
 				Volumes: []composetypes.ServiceVolumeConfig{
 					{Type: composetypes.VolumeTypeImage, Source: "content:latest", Target: "/data"},
 				},
@@ -168,7 +170,9 @@ func TestBuildImagePullPlanDependentImages(t *testing.T) {
 				Name:       "local",
 				Image:      "local:dev",
 				PullPolicy: composetypes.PullPolicyNever,
-				PreStart:   []composetypes.ServiceHook{{Image: "skipped:hook", Command: composetypes.ShellCommand{"true"}}},
+				PreStart: []composetypes.PreStartHook{{ContainerSpec: composetypes.ContainerSpec{
+					Image: "skipped:hook", Command: composetypes.ShellCommand{"true"},
+				}}},
 			},
 		},
 	}

@@ -3,12 +3,12 @@ module github.com/getarcaneapp/arcane/types/v2
 go 1.27
 
 require (
-	github.com/compose-spec/compose-go/v2 v2.15.0
+	github.com/compose-spec/compose-go/v2 v2.16.1
 	github.com/docker/go-units v0.5.0
-	github.com/moby/moby/api v1.56.0
-	github.com/moby/moby/client v0.6.0
+	github.com/moby/moby/api v1.56.1
+	github.com/moby/moby/client v0.6.1
 	github.com/stretchr/testify v1.12.1
-	go.getarcane.app/builds v0.4.2
+	go.getarcane.app/builds v0.4.3
 )
 
 require (
@@ -22,7 +22,7 @@ require (
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
-	github.com/mattn/go-shellwords v1.0.15 // indirect
+	github.com/mattn/go-shellwords v1.0.16 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
