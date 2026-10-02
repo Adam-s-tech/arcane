@@ -96,8 +96,8 @@ func (j *ScheduledPruneJob) Run(ctx context.Context) (schedulertypes.Outcome, er
 	}
 
 	// Send notification
-	if err := j.notificationService.SendPruneReportNotification(ctx, result); err != nil {
-		slog.WarnContext(ctx, "failed to send prune report notification", "error", err)
+	if sendPruneReportNotificationErr := j.notificationService.SendPruneReportNotification(ctx, result); sendPruneReportNotificationErr != nil {
+		slog.WarnContext(ctx, "failed to send prune report notification", "error", sendPruneReportNotificationErr)
 	}
 	outcome := schedulertypes.Outcome{Status: schedulertypes.Succeeded}
 	if result.ActivityID != nil {

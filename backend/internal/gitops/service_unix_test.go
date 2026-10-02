@@ -3,7 +3,6 @@
 package gitops
 
 import (
-	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -27,7 +26,7 @@ func TestGitOpsSyncService_SyncProjectDirectory_PreservesUnreadableBindMountData
 		t.Skip("permission bits are ignored when running as root")
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, db, projectsDir := setupGitOpsSyncDirectoryTestService(t)
 
 	projectPath := filepath.Join(projectsDir, "demo-project")

@@ -36,7 +36,9 @@ var OidcMappingsCmd = &cobra.Command{
 	Use:     "oidc",
 	Aliases: []string{"oidc-mappings", "oidc-mapping"},
 	Short:   "Manage OIDC group → role mappings",
-	Long:    "Manage OIDC group → role mappings. On every OIDC login, Arcane looks up the user's groups claim and applies the matching mappings as source='oidc' role assignments. The groups claim itself is configured via the oidcGroupsClaim setting (default `groups`).",
+	Long: "Manage OIDC group → role mappings. On every OIDC login, Arcane looks up the user's groups claim and applies " +
+		"the matching mappings as source='oidc' role assignments. The groups claim itself is configured via the " +
+		"oidcGroupsClaim setting (default `groups`).",
 }
 
 var listCmd = &cobra.Command{
@@ -72,8 +74,7 @@ var listCmd = &cobra.Command{
 			}
 			rows[i] = []string{m.ID, m.ClaimValue, m.RoleID, scope}
 		}
-		output.Table(headers, rows)
-		return nil
+		return output.Table(headers, rows)
 	},
 }
 
@@ -158,8 +159,8 @@ var updateCmd = &cobra.Command{
 			return fmt.Errorf("failed to update OIDC mapping: %w", err)
 		}
 		defer func() { _ = resp.Body.Close() }()
-		if err := cmdutil.EnsureSuccessStatus(resp); err != nil {
-			return fmt.Errorf("failed to update OIDC mapping: %w", err)
+		if ensureSuccessStatusErr := cmdutil.EnsureSuccessStatus(resp); ensureSuccessStatusErr != nil {
+			return fmt.Errorf("failed to update OIDC mapping: %w", ensureSuccessStatusErr)
 		}
 		output.Success("OIDC mapping updated")
 		return nil
@@ -192,8 +193,8 @@ var deleteCmd = &cobra.Command{
 			return fmt.Errorf("failed to delete OIDC mapping: %w", err)
 		}
 		defer func() { _ = resp.Body.Close() }()
-		if err := cmdutil.EnsureSuccessStatus(resp); err != nil {
-			return fmt.Errorf("failed to delete OIDC mapping: %w", err)
+		if ensureSuccessStatusErr := cmdutil.EnsureSuccessStatus(resp); ensureSuccessStatusErr != nil {
+			return fmt.Errorf("failed to delete OIDC mapping: %w", ensureSuccessStatusErr)
 		}
 		output.Success("OIDC mapping deleted")
 		return nil

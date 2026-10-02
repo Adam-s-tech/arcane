@@ -147,9 +147,9 @@ var createCmd = &cobra.Command{
 			req.TokenTTLSeconds = createTokenTTL
 		}
 		if createExpiresAt != "" {
-			parsed, err := time.Parse(time.RFC3339, createExpiresAt)
-			if err != nil {
-				return fmt.Errorf("invalid --expires-at format (use RFC3339): %w", err)
+			parsed, parseErr := time.Parse(time.RFC3339, createExpiresAt)
+			if parseErr != nil {
+				return fmt.Errorf("invalid --expires-at format (use RFC3339): %w", parseErr)
 			}
 			req.ExpiresAt = &parsed
 		}
@@ -225,9 +225,9 @@ var updateCmd = &cobra.Command{
 			req.TokenTTLSeconds = &updateTokenTTL
 		}
 		if cmd.Flags().Changed("expires-at") && updateExpiresAt != "" {
-			parsed, err := time.Parse(time.RFC3339, updateExpiresAt)
-			if err != nil {
-				return fmt.Errorf("invalid --expires-at format (use RFC3339): %w", err)
+			parsed, parseErr := time.Parse(time.RFC3339, updateExpiresAt)
+			if parseErr != nil {
+				return fmt.Errorf("invalid --expires-at format (use RFC3339): %w", parseErr)
 			}
 			req.ExpiresAt = &parsed
 		}
@@ -270,8 +270,8 @@ var deleteCmd = &cobra.Command{
 			return err
 		}
 
-		if _, err := c.DeleteJSON[base.MessageResponse](cmd.Context(), types.FederatedCredential(args[0])); err != nil {
-			return fmt.Errorf("failed to delete federated credential: %w", err)
+		if _, deleteCredentialErr := c.DeleteJSON[base.MessageResponse](cmd.Context(), types.FederatedCredential(args[0])); deleteCredentialErr != nil {
+			return fmt.Errorf("failed to delete federated credential: %w", deleteCredentialErr)
 		}
 
 		output.Success("Federated credential deleted")

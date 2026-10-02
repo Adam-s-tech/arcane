@@ -67,8 +67,10 @@ func CheckScheduledRemote(ctx context.Context, db *database.DB, destinations *s3
 	}
 	if result.Reason == s3util.RepositoryReasonMissingRepository {
 		var retained int64
-		if err := db.WithContext(ctx).Table(table).Where("s3_destination_id = ? AND COALESCE(remote_snapshot_id, '') <> ''", destinationID).Count(&retained).Error; err != nil {
-			return err
+		if countRetainedSnapshotsErr := db.WithContext(ctx).Table(table).
+			Where("s3_destination_id = ? AND COALESCE(remote_snapshot_id, '') <> ''", destinationID).
+			Count(&retained).Error; countRetainedSnapshotsErr != nil {
+			return countRetainedSnapshotsErr
 		}
 		if retained == 0 {
 			return nil

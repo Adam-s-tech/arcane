@@ -65,15 +65,15 @@ func TestKeySetVerifySignature(t *testing.T) {
 					if tc.initialFailure == "http" {
 						w.WriteHeader(http.StatusServiceUnavailable)
 					} else {
-						if _, err := fmt.Fprint(w, `{"keys":`); err != nil {
-							t.Errorf("write malformed JWKS response: %v", err)
+						if _, fprintErr := fmt.Fprint(w, `{"keys":`); fprintErr != nil {
+							t.Errorf("write malformed JWKS response: %v", fprintErr)
 						}
 					}
 					return
 				}
 				w.Header().Set("Content-Type", "application/json")
-				if _, err := fmt.Fprint(w, jwks); err != nil {
-					t.Errorf("write JWKS response: %v", err)
+				if _, fprintErr2 := fmt.Fprint(w, jwks); fprintErr2 != nil {
+					t.Errorf("write JWKS response: %v", fprintErr2)
 				}
 			}))
 			defer srv.Close()
@@ -93,7 +93,7 @@ func TestKeySetVerifySignature(t *testing.T) {
 			manager := oidcjwk.NewKeySetManager(ctx)
 			jwksURL := srv.URL + "/jwks?credential=test-secret"
 			t.Cleanup(func() {
-				shutdownCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+				shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Second)
 				defer cancel()
 				require.NoError(t, manager.Shutdown(shutdownCtx))
 			})

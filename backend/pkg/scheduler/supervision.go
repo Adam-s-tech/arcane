@@ -159,7 +159,7 @@ func (js *jobSchedulerInternal) WatcherHealth(id string) (schedulertypes.WorkerH
 	supervisor.mu.Lock()
 	defer supervisor.mu.Unlock()
 	health := supervisor.health
-	if watcher, ok := supervisor.watcher.(*ImageUpdateWatcher); ok && watcher.eventDegraded.Load() && health.Status == "running" {
+	if watcher, localOk := supervisor.watcher.(*ImageUpdateWatcher); localOk && watcher.eventDegraded.Load() && health.Status == "running" {
 		health.Status = "degraded"
 		health.LastError = "Docker image event subscription unavailable; polling remains active"
 	}

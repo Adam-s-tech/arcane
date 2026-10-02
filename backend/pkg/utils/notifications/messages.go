@@ -58,7 +58,7 @@ func formatNotificationCodeInternal(format MessageFormat, value string) string {
 	case MessageFormatHTML:
 		return fmt.Sprintf("<code>%s</code>", value)
 	case MessageFormatMarkdown, MessageFormatSlack:
-		return fmt.Sprintf("`%s`", value)
+		return "`" + value + "`"
 	default:
 		return value
 	}

@@ -163,10 +163,24 @@ func autoUpdateRetryOptionsInternal(previous schedulertypes.Run) (updatertypes.O
 		if unresolvedTargets {
 			return options, schedulertypes.Outcome{Status: schedulertypes.Failed, Message: "Remaining targets have no confirmed completion or safe retry", Targets: previous.Outcome.Targets}, true
 		}
-		return options, schedulertypes.Outcome{Status: schedulertypes.Failed, Message: "Target results do not confirm full-batch completion", ActivityID: previous.Outcome.ActivityID, Targets: previous.Outcome.Targets}, true
+		return options,
+			schedulertypes.Outcome{
+				Status:     schedulertypes.Failed,
+				Message:    "Target results do not confirm full-batch completion",
+				ActivityID: previous.Outcome.ActivityID,
+				Targets:    previous.Outcome.Targets,
+			},
+			true
 	}
 	if !hasResourceTargets {
-		return options, schedulertypes.Outcome{Status: schedulertypes.Failed, Message: "The previous update has no confirmed retry targets", ActivityID: previous.Outcome.ActivityID, Targets: previous.Outcome.Targets}, true
+		return options,
+			schedulertypes.Outcome{
+				Status:     schedulertypes.Failed,
+				Message:    "The previous update has no confirmed retry targets",
+				ActivityID: previous.Outcome.ActivityID,
+				Targets:    previous.Outcome.Targets,
+			},
+			true
 	}
 	if len(options.ResourceIds) > 0 {
 		options.Type = "container"

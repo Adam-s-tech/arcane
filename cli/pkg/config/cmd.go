@@ -137,11 +137,13 @@ Legacy flag syntax (flags shown below) is still supported:
 		updated = updated || updatedByFlags
 
 		if !updated {
-			return errors.New("no configuration values provided. Use `arcane config set <key> <value>` (e.g. `arcane config set server-url http://localhost:3552`) or legacy flags (--server-url, --api-key, --jwt-token, --environment, --log-level, --default-limit, --resource-limit)")
+			return errors.New("no configuration values provided. Use `arcane config set <key> <value>` (e.g. `arcane config set server-url " +
+				"http://localhost:3552`) or legacy flags (--server-url, --api-key, --jwt-token, --environment, --log-level, " +
+				"--default-limit, --resource-limit)")
 		}
 
-		if err := config.Save(cfg); err != nil {
-			return fmt.Errorf("failed to save config: %w", err)
+		if saveErr := config.Save(cfg); saveErr != nil {
+			return fmt.Errorf("failed to save config: %w", saveErr)
 		}
 
 		path, _ := config.ConfigPath()
@@ -173,15 +175,15 @@ var configTestCmd = &cobra.Command{
 			return fmt.Errorf("failed to load config: %w", err)
 		}
 
-		if err := cfg.Validate(); err != nil {
-			return err
+		if validateErr := cfg.Validate(); validateErr != nil {
+			return validateErr
 		}
 
 		fmt.Printf("Testing connection to %s...\n", cfg.ServerURL)
 
 		// Test connection directly without importing client to avoid circular import
 		httpClient := &http.Client{Timeout: 10 * time.Second}
-		req, err := http.NewRequestWithContext(cmd.Context(), http.MethodGet, cfg.ServerURL+"/api/version", nil)
+		req, err := http.NewRequestWithContext(cmd.Context(), http.MethodGet, cfg.ServerURL+"/api/version", http.NoBody)
 		if err != nil {
 			return fmt.Errorf("failed to create request: %w", err)
 		}
@@ -490,7 +492,8 @@ func applyConfigSetArg(cfg *types.Config, key, value string) (bool, error) {
 		return applyResourceLimitByKey(cfg, key, resource, value)
 	}
 
-	return false, fmt.Errorf("unknown config key %q. Supported keys include server-url, api-key, jwt-token, environment, federated-audience, log-level, default-limit, resource-limit, and pagination.resources.<resource>.limit", key)
+	return false, fmt.Errorf("unknown config key %q. Supported keys include server-url, api-key, jwt-token, environment, "+
+		"federated-audience, log-level, default-limit, resource-limit, and pagination.resources.<resource>.limit", key)
 }
 
 func applyResourceLimitByKey(cfg *types.Config, key, resourceValue, limitValue string) (bool, error) {

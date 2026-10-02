@@ -259,9 +259,9 @@ func (s *TunnelServer) HandlePoll(c *echo.Context) error {
 		)
 		return c.JSON(http.StatusUnauthorized, map[string]any{"error": "invalid agent token"})
 	}
-	if err := s.requireRequestCertificateIdentityInternal(req, envID); err != nil {
-		slog.WarnContext(ctx, "Rejected edge poll request with mismatched client certificate", "environment_id", envID, "error", err)
-		return c.JSON(http.StatusUnauthorized, map[string]any{"error": err.Error()})
+	if requireRequestCertificateIdentityErr := s.requireRequestCertificateIdentityInternal(req, envID); requireRequestCertificateIdentityErr != nil {
+		slog.WarnContext(ctx, "Rejected edge poll request with mismatched client certificate", "environment_id", envID, "error", requireRequestCertificateIdentityErr)
+		return c.JSON(http.StatusUnauthorized, map[string]any{"error": requireRequestCertificateIdentityErr.Error()})
 	}
 
 	pollInterval := DefaultTunnelPollInterval

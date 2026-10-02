@@ -108,12 +108,12 @@ func (t *TunnelConn) Send(msg *TunnelMessage) error {
 	if err != nil {
 		return err
 	}
-	wctx, cancel := context.WithTimeout(context.Background(), DefaultWriteTimeout)
+	wctx, cancel := context.WithTimeout(context.Background(), DefaultWriteTimeout) //nolint:forbidigo // Tunnel connection owns timed I/O independent of individual HTTP requests.
 	defer cancel()
-	if err := t.conn.Write(wctx, websocket.MessageText, data); err != nil {
+	if writeErr := t.conn.Write(wctx, websocket.MessageText, data); writeErr != nil {
 		// coder/websocket closes the connection after a failed or expired write.
 		t.closed.Store(true)
-		return err
+		return writeErr
 	}
 	return nil
 }
@@ -124,7 +124,7 @@ func (t *TunnelConn) Receive() (*TunnelMessage, error) {
 		return nil, ErrTunnelConnectionClosed
 	}
 
-	rctx, cancel := context.WithTimeout(context.Background(), tunnelReadWait)
+	rctx, cancel := context.WithTimeout(context.Background(), tunnelReadWait) //nolint:forbidigo // Tunnel connection owns timed I/O independent of individual HTTP requests.
 	defer cancel()
 	_, data, err := t.conn.Read(rctx)
 	if err != nil {
@@ -135,8 +135,8 @@ func (t *TunnelConn) Receive() (*TunnelMessage, error) {
 	}
 
 	var msg TunnelMessage
-	if err := json.Unmarshal(data, &msg); err != nil {
-		return nil, err
+	if unmarshalErr := json.Unmarshal(data, &msg); unmarshalErr != nil {
+		return nil, unmarshalErr
 	}
 	return &msg, nil
 }
@@ -227,9 +227,9 @@ func (t *GRPCManagerTunnelConn) Send(msg *TunnelMessage) error {
 		return err
 	}
 
-	if err := t.stream.Send(protoMsg); err != nil {
+	if sendErr := t.stream.Send(protoMsg); sendErr != nil {
 		t.markClosed()
-		return err
+		return sendErr
 	}
 	return nil
 }
@@ -321,9 +321,9 @@ func (t *GRPCAgentTunnelConn) Send(msg *TunnelMessage) error {
 		return err
 	}
 
-	if err := t.stream.Send(protoMsg); err != nil {
+	if sendErr := t.stream.Send(protoMsg); sendErr != nil {
 		t.markClosed()
-		return err
+		return sendErr
 	}
 	return nil
 }

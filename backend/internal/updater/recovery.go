@@ -78,7 +78,20 @@ func (s *UpdaterService) RecordUpdateRun(ctx context.Context, result updater.Res
 	if evidenceErr != nil {
 		progressMessage = evidenceErr.Error()
 	}
-	progressErr := jobcontext.Progress(ctx, schedulertypes.TargetOutcome{ID: result.ResourceID, ResourceType: string(result.ResourceType), Status: status, Message: progressMessage, ActivityID: activityIDFromContextInternal(ctx)})
+	progressErr := jobcontext.Progress(
+		ctx,
+		schedulertypes.TargetOutcome{
+			ID: result.ResourceID,
+			ResourceType: string(
+				result.ResourceType,
+			),
+			Status:  status,
+			Message: progressMessage,
+			ActivityID: activityIDFromContextInternal(
+				ctx,
+			),
+		},
+	)
 	err := errors.Join(recordErr, progressErr, evidenceErr)
 	if progress, ok := ctx.Value(updateProgressKeyInternal{}).(*updateProgressInternal); ok && err != nil {
 		progress.mu.Lock()
@@ -130,7 +143,19 @@ func (p *updateProgressInternal) completeBatchInternal(ctx context.Context, opti
 		status = schedulertypes.NeedsAttention
 	}
 	if selfTriggered {
-		err = errors.Join(err, jobcontext.Progress(ctx, schedulertypes.TargetOutcome{ID: selfID, ResourceType: "container", Status: schedulertypes.NeedsAttention, ActivityID: activityID, Message: "Self-update completion requires review"}))
+		err = errors.Join(
+			err,
+			jobcontext.Progress(
+				ctx,
+				schedulertypes.TargetOutcome{
+					ID:           selfID,
+					ResourceType: "container",
+					Status:       schedulertypes.NeedsAttention,
+					ActivityID:   activityID,
+					Message:      "Self-update completion requires review",
+				},
+			),
+		)
 		status = schedulertypes.NeedsAttention
 		err = errors.Join(err, errors.New("self-update was triggered but completion requires review"))
 	}
@@ -210,12 +235,23 @@ func (s *UpdaterService) freezePendingInternal(ctx context.Context) (context.Con
 	if err != nil {
 		return ctx, err
 	}
-	if err := jobcontext.Progress(ctx, schedulertypes.TargetOutcome{ID: "auto-update", ResourceType: "update-batch", Status: schedulertypes.Running, RecoveryData: raw, ActivityID: activityIDFromContextInternal(ctx)}); err != nil {
-		return ctx, err
+	if progressErr := jobcontext.Progress(
+		ctx,
+		schedulertypes.TargetOutcome{
+			ID:           "auto-update",
+			ResourceType: "update-batch",
+			Status:       schedulertypes.Running,
+			RecoveryData: raw,
+			ActivityID: activityIDFromContextInternal(
+				ctx,
+			),
+		},
+	); progressErr != nil {
+		return ctx, progressErr
 	}
 	for _, target := range plan.Targets {
-		if err := jobcontext.Progress(ctx, schedulertypes.TargetOutcome{ID: target.ContainerID, ResourceType: "container", Status: schedulertypes.Queued}); err != nil {
-			return ctx, err
+		if queuedProgressErr := jobcontext.Progress(ctx, schedulertypes.TargetOutcome{ID: target.ContainerID, ResourceType: "container", Status: schedulertypes.Queued}); queuedProgressErr != nil {
+			return ctx, queuedProgressErr
 		}
 	}
 	return context.WithValue(ctx, frozenPendingKeyInternal{}, &plan), nil
@@ -245,9 +281,9 @@ func (s *UpdaterService) buildFrozenPlanInternal(ctx context.Context, records []
 			if record.ContainerID == "" && refs.NormalizeImageUpdateRef(candidate.Image) != refs.NormalizeImageUpdateRef(record.ImageRef()) {
 				continue
 			}
-			target, selected, err := s.freezeRecordTargetInternal(ctx, record, candidate.ID)
-			if err != nil {
-				return plan, err
+			target, selected, freezeRecordTargetErr := s.freezeRecordTargetInternal(ctx, record, candidate.ID)
+			if freezeRecordTargetErr != nil {
+				return plan, freezeRecordTargetErr
 			}
 			plan.Records = append(plan.Records, selected)
 			plan.Targets = append(plan.Targets, *target)
@@ -294,7 +330,15 @@ func (s *UpdaterService) freezeContainerInternal(ctx context.Context, id string)
 		return nil, err
 	}
 	inspected := result.Container
-	target := &arcaneupdater.FrozenUpdateTarget{ContainerID: inspected.ID, ContainerName: strings.TrimPrefix(inspected.Name, "/"), BaselineImageID: inspected.Image, BaselineRestartCount: inspected.RestartCount}
+	target := &arcaneupdater.FrozenUpdateTarget{
+		ContainerID: inspected.ID,
+		ContainerName: strings.TrimPrefix(
+			inspected.Name,
+			"/",
+		),
+		BaselineImageID:      inspected.Image,
+		BaselineRestartCount: inspected.RestartCount,
+	}
 	if inspected.State != nil {
 		target.BaselineStartedAt = inspected.State.StartedAt
 	}
@@ -341,8 +385,8 @@ func (s *UpdaterService) prepareSinglePullInternal(ctx context.Context, imageRef
 			return "", err
 		}
 		target.DesiredDigest = digest
-		if err := single.Persist(); err != nil {
-			return "", err
+		if persistErr := single.Persist(); persistErr != nil {
+			return "", persistErr
 		}
 	}
 	if refs.NormalizeImageUpdateRef(target.DesiredImageRef) != refs.NormalizeImageUpdateRef(imageRef) {
@@ -365,8 +409,8 @@ func prepareBatchPullInternal(ctx context.Context, imageRef string, plan *frozen
 			return "", errors.New("conflicting frozen digests for one image reference")
 		}
 		immutable = selected
-		if err := jobcontext.Progress(ctx, schedulertypes.TargetOutcome{ID: target.ContainerID, ResourceType: "container", Status: schedulertypes.Running}); err != nil {
-			return "", err
+		if progressErr := jobcontext.Progress(ctx, schedulertypes.TargetOutcome{ID: target.ContainerID, ResourceType: "container", Status: schedulertypes.Running}); progressErr != nil {
+			return "", progressErr
 		}
 	}
 	if immutable == "" {
@@ -389,8 +433,8 @@ func (s *UpdaterService) confirmFrozenTargetInternal(ctx context.Context, target
 	immutable, imageErr := immutableImageInternal(target)
 	desiredID := ""
 	if imageErr == nil {
-		image, err := dockerClient.ImageInspect(ctx, immutable)
-		if err == nil {
+		image, imageInspectErr := dockerClient.ImageInspect(ctx, immutable)
+		if imageInspectErr == nil {
 			desiredID = image.ID
 		}
 	}
@@ -405,22 +449,28 @@ func (s *UpdaterService) confirmFrozenTargetInternal(ctx context.Context, target
 		if !named {
 			continue
 		}
-		result, err := compat.ContainerInspectWithCompatibility(ctx, dockerClient, candidate.ID, client.ContainerInspectOptions{})
-		if err != nil {
-			return false, false, err
+		result, containerInspectWithCompatibilityErr := compat.ContainerInspectWithCompatibility(ctx, dockerClient, candidate.ID, client.ContainerInspectOptions{})
+		if containerInspectWithCompatibilityErr != nil {
+			return false, false, containerInspectWithCompatibilityErr
 		}
 		inspected := result.Container
 		if inspected.Config == nil {
 			return false, false, nil
 		}
 		labels := inspected.Config.Labels
-		if labels["com.docker.compose.project"] != target.ComposeProject || labels["com.docker.compose.service"] != target.ComposeService || labels["com.docker.compose.container-number"] != target.ComposeNumber {
+		if labels["com.docker.compose.project"] != target.ComposeProject ||
+			labels["com.docker.compose.service"] != target.ComposeService ||
+			labels["com.docker.compose.container-number"] != target.ComposeNumber {
 			return false, false, nil
 		}
 		if desiredID != "" && inspected.Image == desiredID {
 			return true, false, nil
 		}
-		unchanged := inspected.ID == target.ContainerID && inspected.Image == target.BaselineImageID && inspected.RestartCount == target.BaselineRestartCount && inspected.State != nil && inspected.State.StartedAt == target.BaselineStartedAt
+		unchanged := inspected.ID == target.ContainerID &&
+			inspected.Image == target.BaselineImageID &&
+			inspected.RestartCount == target.BaselineRestartCount &&
+			inspected.State != nil &&
+			inspected.State.StartedAt == target.BaselineStartedAt
 		return false, unchanged, nil
 	}
 	return false, false, nil
@@ -437,8 +487,8 @@ func (s *UpdaterService) ReconcilePending(ctx context.Context, run schedulertype
 	found := false
 	for _, target := range run.Outcome.Targets {
 		if target.ID == "auto-update" && len(target.RecoveryData) > 0 {
-			if err := json.Unmarshal(target.RecoveryData, &plan); err != nil {
-				return schedulertypes.Outcome{Status: schedulertypes.Failed}, err
+			if unmarshalErr := json.Unmarshal(target.RecoveryData, &plan); unmarshalErr != nil {
+				return schedulertypes.Outcome{Status: schedulertypes.Failed}, unmarshalErr
 			}
 			found = true
 		}
@@ -452,13 +502,21 @@ func (s *UpdaterService) ReconcilePending(ctx context.Context, run schedulertype
 		if frozenTargetSettledInternal(run, target.ContainerID) {
 			continue
 		}
-		confirmed, unchanged, err := s.confirmFrozenTargetInternal(ctx, target)
-		if err != nil {
-			return schedulertypes.Outcome{Status: schedulertypes.Waiting}, err
+		confirmed, unchanged, confirmFrozenTargetErr := s.confirmFrozenTargetInternal(ctx, target)
+		if confirmFrozenTargetErr != nil {
+			return schedulertypes.Outcome{Status: schedulertypes.Waiting}, confirmFrozenTargetErr
 		}
 		if confirmed {
-			if err := jobcontext.Progress(ctx, schedulertypes.TargetOutcome{ID: target.ContainerID, ResourceType: "container", Status: schedulertypes.Succeeded, Message: "Frozen desired image confirmed after restart"}); err != nil {
-				return schedulertypes.Outcome{}, err
+			if progressErr := jobcontext.Progress(
+				ctx,
+				schedulertypes.TargetOutcome{
+					ID:           target.ContainerID,
+					ResourceType: "container",
+					Status:       schedulertypes.Succeeded,
+					Message:      "Frozen desired image confirmed after restart",
+				},
+			); progressErr != nil {
+				return schedulertypes.Outcome{}, progressErr
 			}
 			continue
 		}
@@ -470,9 +528,9 @@ func (s *UpdaterService) ReconcilePending(ctx context.Context, run schedulertype
 		remaining.Records = appendFrozenRecordInternal(remaining.Records, plan.Records, target.ContainerID)
 	}
 	if len(remaining.Records) > 0 {
-		result, err := s.ApplyPending(context.WithValue(ctx, frozenPendingKeyInternal{}, &remaining), arcaneupdater.Options{})
-		if err != nil || result == nil || result.Failed > 0 {
-			return schedulertypes.Outcome{Status: schedulertypes.Failed, Message: "Frozen update recovery could not confirm completion"}, err
+		result, applyPendingErr := s.ApplyPending(context.WithValue(ctx, frozenPendingKeyInternal{}, &remaining), arcaneupdater.Options{})
+		if applyPendingErr != nil || result == nil || result.Failed > 0 {
+			return schedulertypes.Outcome{Status: schedulertypes.Failed, Message: "Frozen update recovery could not confirm completion"}, applyPendingErr
 		}
 	}
 	status := schedulertypes.Succeeded

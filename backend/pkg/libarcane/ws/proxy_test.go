@@ -18,7 +18,7 @@ import (
 func allowAnyOriginForTest(*http.Request) bool { return true }
 
 func TestProxyHTTP_RequiresOriginValidator(t *testing.T) {
-	err := ProxyHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil), "ws://127.0.0.1:1", nil, nil)
+	err := ProxyHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", http.NoBody), "ws://127.0.0.1:1", nil, nil)
 	require.Error(t, err, "proxy must refuse to upgrade without an origin validator")
 }
 
@@ -32,12 +32,12 @@ func TestProxyHTTP_BidirectionalMessages(t *testing.T) {
 		defer func() { _ = conn.CloseNow() }()
 
 		for {
-			mt, msg, err := conn.Read(r.Context())
-			if err != nil {
+			mt, msg, readErr := conn.Read(r.Context())
+			if readErr != nil {
 				return
 			}
 			// Echo with prefix
-			if err := conn.Write(r.Context(), mt, append([]byte("echo:"), msg...)); err != nil {
+			if writeErr := conn.Write(r.Context(), mt, append([]byte("echo:"), msg...)); writeErr != nil {
 				return
 			}
 		}
@@ -63,13 +63,13 @@ func TestProxyHTTP_BidirectionalMessages(t *testing.T) {
 	// 4. Send messages and verify they get proxied and echoed
 	testMessages := []string{"hello", "world", "test123"}
 	for _, msg := range testMessages {
-		err := clientConn.Write(t.Context(), websocket.MessageText, []byte(msg))
-		require.NoError(t, err)
+		writeErr := clientConn.Write(t.Context(), websocket.MessageText, []byte(msg))
+		require.NoError(t, writeErr)
 
 		readCtx, readCancel := context.WithTimeout(t.Context(), 2*time.Second)
-		_, received, err := clientConn.Read(readCtx)
+		_, received, writeErr := clientConn.Read(readCtx)
 		readCancel()
-		require.NoError(t, err)
+		require.NoError(t, writeErr)
 		assert.Equal(t, "echo:"+msg, string(received))
 	}
 }
@@ -82,8 +82,8 @@ func TestProxyHTTP_RemoteClose(t *testing.T) {
 			return
 		}
 		// Close immediately
-		if err := conn.Close(websocket.StatusNormalClosure, "bye"); err != nil {
-			t.Logf("close websocket connection: %v", err)
+		if closeErr := conn.Close(websocket.StatusNormalClosure, "bye"); closeErr != nil {
+			t.Logf("close websocket connection: %v", closeErr)
 		}
 	}))
 	defer remoteServer.Close()
@@ -128,8 +128,8 @@ func TestProxyHTTP_InvalidRemoteURL(t *testing.T) {
 	}()
 
 	select {
-	case err := <-proxyDone:
-		require.Error(t, err, "ProxyHTTP should return error when remote is unreachable")
+	case operationErr := <-proxyDone:
+		require.Error(t, operationErr, "ProxyHTTP should return error when remote is unreachable")
 	case <-time.After(50 * time.Second):
 		require.FailNow(t, "ProxyHTTP did not return after failed dial")
 	}
@@ -145,11 +145,11 @@ func TestProxyHTTP_BinaryMessages(t *testing.T) {
 		defer func() { _ = conn.CloseNow() }()
 
 		for {
-			mt, msg, err := conn.Read(r.Context())
-			if err != nil {
+			mt, msg, readErr := conn.Read(r.Context())
+			if readErr != nil {
 				return
 			}
-			if err := conn.Write(r.Context(), mt, msg); err != nil {
+			if writeErr := conn.Write(r.Context(), mt, msg); writeErr != nil {
 				return
 			}
 		}

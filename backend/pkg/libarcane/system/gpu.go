@@ -206,7 +206,7 @@ func HasAMDGPU() bool {
 		if !strings.HasPrefix(name, "card") || strings.Contains(name, "-") {
 			continue
 		}
-		if _, err := os.Stat(fmt.Sprintf("%s/%s/device/mem_info_vram_total", AMDGPUSysfsPath, name)); err == nil {
+		if _, statErr := os.Stat(fmt.Sprintf("%s/%s/device/mem_info_vram_total", AMDGPUSysfsPath, name)); statErr == nil {
 			return true
 		}
 	}
@@ -250,18 +250,18 @@ func getNvidiaStatsInternal(ctx context.Context) ([]systemtypes.GPUStats, error)
 		if len(record) < 4 {
 			continue
 		}
-		index, err := strconv.Atoi(strings.TrimSpace(record[0]))
-		if err != nil {
+		index, atoiErr := strconv.Atoi(strings.TrimSpace(record[0]))
+		if atoiErr != nil {
 			slog.WarnContext(ctx, "Failed to parse GPU index", "value", record[0])
 			continue
 		}
-		memUsed, err := strconv.ParseFloat(strings.TrimSpace(record[2]), 64)
-		if err != nil {
+		memUsed, atoiErr := strconv.ParseFloat(strings.TrimSpace(record[2]), 64)
+		if atoiErr != nil {
 			slog.WarnContext(ctx, "Failed to parse memory used", "value", record[2])
 			continue
 		}
-		memTotal, err := strconv.ParseFloat(strings.TrimSpace(record[3]), 64)
-		if err != nil {
+		memTotal, atoiErr := strconv.ParseFloat(strings.TrimSpace(record[3]), 64)
+		if atoiErr != nil {
 			slog.WarnContext(ctx, "Failed to parse memory total", "value", record[3])
 			continue
 		}
@@ -298,13 +298,13 @@ func getAMDStatsInternal(ctx context.Context) ([]systemtypes.GPUStats, error) {
 		}
 
 		devicePath := fmt.Sprintf("%s/%s/device", AMDGPUSysfsPath, name)
-		memTotalBytes, err := readSysfsValueInternal(devicePath + "/mem_info_vram_total")
-		if err != nil {
+		memTotalBytes, readSysfsValueErr := readSysfsValueInternal(devicePath + "/mem_info_vram_total")
+		if readSysfsValueErr != nil {
 			continue
 		}
-		memUsedBytes, err := readSysfsValueInternal(devicePath + "/mem_info_vram_used")
-		if err != nil {
-			slog.WarnContext(ctx, "Failed to read AMD GPU memory used", "card", name, "error", err)
+		memUsedBytes, readSysfsValueErr := readSysfsValueInternal(devicePath + "/mem_info_vram_used")
+		if readSysfsValueErr != nil {
+			slog.WarnContext(ctx, "Failed to read AMD GPU memory used", "card", name, "error", readSysfsValueErr)
 			continue
 		}
 

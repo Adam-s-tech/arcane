@@ -175,13 +175,13 @@ func (s *EnvironmentService) applySwarmNodeAgentApiKeyInternal(
 		return "", fmt.Errorf("failed to create environment API key: %w", err)
 	}
 
-	if err := s.RegenerateEnvironmentApiKey(ctx, env.ID, apiKeyDto.ID, apiKeyDto.Key, userID, username, env.Name); err != nil {
+	if regenerateEnvironmentApiKeyErr := s.RegenerateEnvironmentApiKey(ctx, env.ID, apiKeyDto.ID, apiKeyDto.Key, userID, username, env.Name); regenerateEnvironmentApiKeyErr != nil {
 		// The new key was never linked; remove it so a failed rotation does
 		// not leave an orphaned valid credential behind.
 		if delErr := s.apiKeyService.DeleteApiKey(ctx, apiKeyDto.ID); delErr != nil && !errors.Is(delErr, apikey.ErrApiKeyNotFound) {
 			slog.ErrorContext(ctx, "Failed to clean up unlinked environment API key", "environmentID", env.ID, "error", delErr.Error())
 		}
-		return "", err
+		return "", regenerateEnvironmentApiKeyErr
 	}
 
 	// Delete the previous key only after the environment points at the new
@@ -190,8 +190,8 @@ func (s *EnvironmentService) applySwarmNodeAgentApiKeyInternal(
 	// remains a valid credential until deleted, so log it as an error; the key
 	// stays visible and deletable on the API Keys page.
 	if oldApiKeyID != nil && *oldApiKeyID != apiKeyDto.ID {
-		if err := s.apiKeyService.DeleteApiKey(ctx, *oldApiKeyID); err != nil && !errors.Is(err, apikey.ErrApiKeyNotFound) {
-			slog.ErrorContext(ctx, "Failed to delete previous environment API key; the old key remains valid until deleted manually", "environmentID", env.ID, "error", err.Error())
+		if deleteApiKeyErr := s.apiKeyService.DeleteApiKey(ctx, *oldApiKeyID); deleteApiKeyErr != nil && !errors.Is(deleteApiKeyErr, apikey.ErrApiKeyNotFound) {
+			slog.ErrorContext(ctx, "Failed to delete previous environment API key; the old key remains valid until deleted manually", "environmentID", env.ID, "error", deleteApiKeyErr.Error())
 		}
 	}
 

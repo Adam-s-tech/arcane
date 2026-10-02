@@ -40,9 +40,35 @@ func (s *VolumeService) StartBackup(ctx context.Context, environmentID, volumeNa
 	entry.ActivityID = &activityID
 	accepted := entry.ToDTO()
 	keyID, _ := ctx.Value(middleware.ContextKeyApiKeyID).(string)
-	payload, err := json.Marshal(manualVolumeBackupInternal{Checkpoint: volumeBackupRecoveryInternal{BackupID: entry.ID, LocalEnabled: plan.localEnabled, S3Enabled: plan.s3Enabled, S3DestinationID: plan.s3DestinationID, Policy: plan.policy}, VolumeName: volumeName, UserID: user.ID, ActivityID: activityID})
+	payload, err := json.Marshal(
+		manualVolumeBackupInternal{
+			Checkpoint: volumeBackupRecoveryInternal{
+				BackupID:        entry.ID,
+				LocalEnabled:    plan.localEnabled,
+				S3Enabled:       plan.s3Enabled,
+				S3DestinationID: plan.s3DestinationID,
+				Policy:          plan.policy,
+			},
+			VolumeName: volumeName,
+			UserID:     user.ID,
+			ActivityID: activityID,
+		},
+	)
 	if err == nil {
-		err = s.engine.SubmitDurableRun(workCtx, backuptypes.DurableRunCommand{Kind: "volume", RunID: entry.ID, ActivityID: activityID, Payload: payload, UserID: user.ID, EnvironmentID: environmentID, Permission: authz.PermVolumesBackup, RequestedWithKey: keyID}, lease)
+		err = s.engine.SubmitDurableRun(
+			workCtx,
+			backuptypes.DurableRunCommand{
+				Kind:             "volume",
+				RunID:            entry.ID,
+				ActivityID:       activityID,
+				Payload:          payload,
+				UserID:           user.ID,
+				EnvironmentID:    environmentID,
+				Permission:       authz.PermVolumesBackup,
+				RequestedWithKey: keyID,
+			},
+			lease,
+		)
 	}
 	if err != nil {
 		lease.Release(ctx)
@@ -91,9 +117,9 @@ func (s *VolumeService) ReconcileBackup(ctx context.Context, previous schedulert
 			if !admitted {
 				return outcome, nil
 			}
-			defer lease.Release(ctx)
-			if err := s.resumeBackupInternal(ctx, previous, &entry, checkpoint); err != nil {
-				return outcome, err
+			defer lease.Release(ctx) //nolint:gocritic // The matching recovery target always returns before the loop advances.
+			if resumeBackupErr := s.resumeBackupInternal(ctx, previous, &entry, checkpoint); resumeBackupErr != nil {
+				return outcome, resumeBackupErr
 			}
 		}
 		target.Status = schedulertypes.Succeeded
@@ -122,7 +148,19 @@ func (s *VolumeService) recoverSnapshotInternal(ctx context.Context, dockerClien
 	return s.engine.FindRunSnapshot(ctx, dockerClient, repository, password, entry.ID, snapshotID)
 }
 
-func (s *VolumeService) observeBackupDestinationsInternal(ctx context.Context, dockerClient *client.Client, previous schedulertypes.Run, entry *VolumeBackup, checkpoint volumeBackupRecoveryInternal) (backup.Repository, backup.Repository, error) {
+func (
+	s *VolumeService,
+) observeBackupDestinationsInternal(
+	ctx context.Context,
+	dockerClient *client.Client,
+	previous schedulertypes.Run,
+	entry *VolumeBackup,
+	checkpoint volumeBackupRecoveryInternal,
+) (
+	backup.Repository,
+	backup.Repository,
+	error,
+) {
 	var local, remote backup.Repository
 	var err error
 	if checkpoint.LocalEnabled {
@@ -131,9 +169,9 @@ func (s *VolumeService) observeBackupDestinationsInternal(ctx context.Context, d
 			return local, remote, err
 		}
 		if entry.LocalSnapshotID != "" || backupDestinationAttemptedInternal(previous, entry.ID, "local") {
-			snapshot, found, err := s.recoverSnapshotInternal(ctx, dockerClient, local, entry, entry.LocalSnapshotID)
-			if err != nil {
-				return local, remote, err
+			snapshot, found, recoverSnapshotErr := s.recoverSnapshotInternal(ctx, dockerClient, local, entry, entry.LocalSnapshotID)
+			if recoverSnapshotErr != nil {
+				return local, remote, recoverSnapshotErr
 			}
 			if found {
 				entry.LocalSnapshotID, entry.Size = snapshot.ID, snapshot.Size
@@ -146,9 +184,9 @@ func (s *VolumeService) observeBackupDestinationsInternal(ctx context.Context, d
 			return local, remote, err
 		}
 		if entry.RemoteSnapshotID != "" || backupDestinationAttemptedInternal(previous, entry.ID, "remote") {
-			snapshot, found, err := s.recoverSnapshotInternal(ctx, dockerClient, remote, entry, entry.RemoteSnapshotID)
-			if err != nil {
-				return local, remote, err
+			snapshot, found, recoverSnapshotErr2 := s.recoverSnapshotInternal(ctx, dockerClient, remote, entry, entry.RemoteSnapshotID)
+			if recoverSnapshotErr2 != nil {
+				return local, remote, recoverSnapshotErr2
 			}
 			if found {
 				entry.RemoteSnapshotID = snapshot.ID
@@ -171,20 +209,26 @@ func (s *VolumeService) resumeBackupInternal(ctx context.Context, previous sched
 		return err
 	}
 	if checkpoint.LocalEnabled && entry.LocalSnapshotID == "" && entry.RemoteSnapshotID != "" {
-		password, err := s.volumeBackupPasswordInternal(ctx, dockerClient, remote)
-		if err != nil {
-			return err
+		password, volumeBackupPasswordErr := s.volumeBackupPasswordInternal(ctx, dockerClient, remote)
+		if volumeBackupPasswordErr != nil {
+			return volumeBackupPasswordErr
 		}
-		snapshot, err := s.engine.Replicate(ctx, dockerClient, remote, entry.RemoteSnapshotID, local, password, entry.VolumeName, backup.RunSnapshotTag(entry.ID))
-		if err != nil {
-			return err
+		snapshot, volumeBackupPasswordErr := s.engine.Replicate(ctx, dockerClient, remote, entry.RemoteSnapshotID, local, password, entry.VolumeName, backup.RunSnapshotTag(entry.ID))
+		if volumeBackupPasswordErr != nil {
+			return volumeBackupPasswordErr
 		}
 		entry.LocalSnapshotID = snapshot.ID
 	}
-	if err := s.db.WithContext(ctx).Save(entry).Error; err != nil {
-		return err
+	if operationErr := s.db.WithContext(ctx).Save(entry).Error; operationErr != nil {
+		return operationErr
 	}
-	plan := backupPlanInternal{localEnabled: checkpoint.LocalEnabled, s3Enabled: checkpoint.S3Enabled, s3DestinationID: checkpoint.S3DestinationID, policy: checkpoint.Policy, destination: entry.Destination}
+	plan := backupPlanInternal{
+		localEnabled:    checkpoint.LocalEnabled,
+		s3Enabled:       checkpoint.S3Enabled,
+		s3DestinationID: checkpoint.S3DestinationID,
+		policy:          checkpoint.Policy,
+		destination:     entry.Destination,
+	}
 	err = s.executeBackupInternal(ctx, entry, common.SystemUser, plan)
 	return s.completeBackupInternal(ctx, entry, err)
 }
@@ -198,8 +242,8 @@ type manualVolumeBackupInternal struct {
 
 func (s *VolumeService) executeDurableBackupInternal(ctx context.Context, runID string, payload []byte, interrupted bool) (err error) {
 	var command manualVolumeBackupInternal
-	if err = json.Unmarshal(payload, &command); err != nil {
-		return err
+	if decodeErr := json.Unmarshal(payload, &command); decodeErr != nil {
+		return decodeErr
 	}
 	defer func() {
 		if ctx.Err() == nil {
@@ -211,8 +255,8 @@ func (s *VolumeService) executeDurableBackupInternal(ctx context.Context, runID 
 		}
 	}()
 	var entry VolumeBackup
-	if err = s.db.WithContext(ctx).Where("id = ?", command.Checkpoint.BackupID).First(&entry).Error; err != nil {
-		return err
+	if loadBackupErr := s.db.WithContext(ctx).Where("id = ?", command.Checkpoint.BackupID).First(&entry).Error; loadBackupErr != nil {
+		return loadBackupErr
 	}
 
 	if entry.Status == VolumeBackupStatusSucceeded {
@@ -239,18 +283,33 @@ func (s *VolumeService) executeDurableBackupInternal(ctx context.Context, runID 
 	defer lease.Release(ctx)
 	user := common.SystemUser
 	if command.UserID != "" && command.UserID != "agent" {
-		if err = s.db.WithContext(ctx).Where("id = ?", command.UserID).First(&user).Error; err != nil {
-			return err
+		if loadUserErr := s.db.WithContext(ctx).Where("id = ?", command.UserID).First(&user).Error; loadUserErr != nil {
+			return loadUserErr
 		}
 	}
 	checkpoint, err := json.Marshal(command.Checkpoint)
 	if err != nil {
 		return err
 	}
-	if err = jobcontext.Progress(ctx, schedulertypes.TargetOutcome{ResourceType: "volume_backup", ID: command.VolumeName, Status: schedulertypes.Running, RecoveryData: checkpoint, ActivityID: command.ActivityID}); err != nil {
-		return err
+	if progressErr := jobcontext.Progress(
+		ctx,
+		schedulertypes.TargetOutcome{
+			ResourceType: "volume_backup",
+			ID:           command.VolumeName,
+			Status:       schedulertypes.Running,
+			RecoveryData: checkpoint,
+			ActivityID:   command.ActivityID,
+		},
+	); progressErr != nil {
+		return progressErr
 	}
-	plan := backupPlanInternal{localEnabled: command.Checkpoint.LocalEnabled, s3Enabled: command.Checkpoint.S3Enabled, s3DestinationID: command.Checkpoint.S3DestinationID, policy: command.Checkpoint.Policy, destination: entry.Destination}
+	plan := backupPlanInternal{
+		localEnabled:    command.Checkpoint.LocalEnabled,
+		s3Enabled:       command.Checkpoint.S3Enabled,
+		s3DestinationID: command.Checkpoint.S3DestinationID,
+		policy:          command.Checkpoint.Policy,
+		destination:     entry.Destination,
+	}
 	err = s.executeBackupInternal(ctx, &entry, user, plan)
 	if ctx.Err() != nil {
 		return ctx.Err()

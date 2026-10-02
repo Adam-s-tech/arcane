@@ -61,6 +61,7 @@ func (s SettingVariable) AsDurationSeconds() time.Duration {
 	return kit.Ternary(err != nil, 0, time.Duration(val)*time.Second)
 }
 
+//nolint:lll // Reflection metadata must remain in single struct-tag literals.
 type Settings struct {
 	// General category
 	ProjectsDirectory           SettingVariable `key:"projectsDirectory,envOverride" meta:"label=Projects Directory;type=text;keywords=projects,directory,path,folder,location,storage,files,compose,docker-compose;category=internal;description=Configure where project files are stored"`

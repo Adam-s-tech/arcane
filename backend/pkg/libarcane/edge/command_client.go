@@ -81,21 +81,21 @@ func (c *CommandClient) Execute(ctx context.Context, tunnel *AgentTunnel, req *C
 		msg.Metadata = map[string]string{bodyTransferMetadataKey: transferID}
 	}
 
-	if err := tunnel.Conn.Send(msg); err != nil {
-		return nil, fmt.Errorf("tunnel request failed: %w", err)
+	if sendErr := tunnel.Conn.Send(msg); sendErr != nil {
+		return nil, fmt.Errorf("tunnel request failed: %w", sendErr)
 	}
 	if chunkRequestBody {
 		transferID := msg.Metadata[bodyTransferMetadataKey]
 		for sequence, offset := int64(0), 0; offset < len(req.Body); sequence++ {
 			end := min(offset+defaultCommandChunkSize, len(req.Body))
-			if err := tunnel.Conn.Send(&TunnelMessage{
+			if sendErr2 := tunnel.Conn.Send(&TunnelMessage{
 				ID:       transferID,
 				Type:     MessageTypeFileChunk,
 				Body:     req.Body[offset:end],
 				Sequence: sequence,
 				EOF:      end == len(req.Body),
-			}); err != nil {
-				return nil, fmt.Errorf("tunnel request body transfer failed: %w", err)
+			}); sendErr2 != nil {
+				return nil, fmt.Errorf("tunnel request body transfer failed: %w", sendErr2)
 			}
 			offset = end
 		}

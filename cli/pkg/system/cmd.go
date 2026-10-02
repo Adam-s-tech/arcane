@@ -292,7 +292,7 @@ type environmentUpdateJob struct {
 	CompletedAt *time.Time `json:"completedAt,omitempty"`
 }
 
-func printUpdateAllJobInternal(job environmentUpdateJob) {
+func printUpdateAllJobInternal(job environmentUpdateJob) error {
 	output.KeyValue("Status", job.Status)
 	if job.Username != "" {
 		output.KeyValue("Triggered By", job.Username)
@@ -310,7 +310,7 @@ func printUpdateAllJobInternal(job environmentUpdateJob) {
 		output.KeyValue("Completed At", job.CompletedAt.Format(time.RFC3339))
 	}
 	if len(job.Results) == 0 {
-		return
+		return nil
 	}
 
 	headers := []string{"ENVIRONMENT", "STATUS", "FROM", "TO", "ERROR"}
@@ -320,8 +320,10 @@ func printUpdateAllJobInternal(job environmentUpdateJob) {
 		resErr := cmp.Or(res.Error, "-")
 		rows[i] = []string{name, res.Status, res.FromVersion, res.ToVersion, resErr}
 	}
-	fmt.Println()
-	output.Table(headers, rows)
+	if _, spacingErr := fmt.Println(); spacingErr != nil {
+		return fmt.Errorf("failed to print update status: %w", spacingErr)
+	}
+	return output.Table(headers, rows)
 }
 
 var (
@@ -336,9 +338,9 @@ func runUpgradeAllInternal(cmd *cobra.Command) error {
 	}
 
 	if upgradeAllStatusFlag {
-		result, err := c.GetJSON[environmentUpdateJob](cmd.Context(), types.SystemUpgradeAllStatus(c.EnvID()))
-		if err != nil {
-			return fmt.Errorf("failed to get update-all status: %w", err)
+		result, getUpgradeStatusErr := c.GetJSON[environmentUpdateJob](cmd.Context(), types.SystemUpgradeAllStatus(c.EnvID()))
+		if getUpgradeStatusErr != nil {
+			return fmt.Errorf("failed to get update-all status: %w", getUpgradeStatusErr)
 		}
 
 		if jsonOutput {
@@ -346,14 +348,13 @@ func runUpgradeAllInternal(cmd *cobra.Command) error {
 		}
 
 		output.Header("Update-All Status")
-		printUpdateAllJobInternal(result.Data)
-		return nil
+		return printUpdateAllJobInternal(result.Data)
 	}
 
 	if !forceFlag {
-		confirmed, err := cmdutil.Confirm(cmd, "Are you sure you want to update all environments?")
-		if err != nil {
-			return err
+		confirmed, confirmErr := cmdutil.Confirm(cmd, "Are you sure you want to update all environments?")
+		if confirmErr != nil {
+			return confirmErr
 		}
 		if !confirmed {
 			fmt.Println("Cancelled")
@@ -371,8 +372,7 @@ func runUpgradeAllInternal(cmd *cobra.Command) error {
 	}
 
 	output.Success("Update-all started")
-	printUpdateAllJobInternal(result.Data)
-	return nil
+	return printUpdateAllJobInternal(result.Data)
 }
 
 func init() {

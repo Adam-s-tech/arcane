@@ -118,8 +118,8 @@ var deleteCmd = &cobra.Command{
 			return err
 		}
 
-		if _, err := c.DeleteJSON[base.MessageResponse](cmd.Context(), types.Environment(args[0])); err != nil {
-			return fmt.Errorf("failed to delete environment: %w", err)
+		if _, deleteEnvironmentErr := c.DeleteJSON[base.MessageResponse](cmd.Context(), types.Environment(args[0])); deleteEnvironmentErr != nil {
+			return fmt.Errorf("failed to delete environment: %w", deleteEnvironmentErr)
 		}
 
 		output.Success("Environment deleted successfully")
@@ -268,8 +268,8 @@ var switchCmd = &cobra.Command{
 		}
 
 		cfg.DefaultEnvironment = selected.ID
-		if err := config.Save(cfg); err != nil {
-			return fmt.Errorf("failed to save config: %w", err)
+		if saveErr := config.Save(cfg); saveErr != nil {
+			return fmt.Errorf("failed to save config: %w", saveErr)
 		}
 
 		output.Success("Default environment set to %s", selected.ID)

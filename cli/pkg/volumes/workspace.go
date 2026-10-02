@@ -47,13 +47,13 @@ var workspaceCmd = &cobra.Command{
 			return fmt.Errorf("failed to get volume workspace: %w", err)
 		}
 		defer func() { _ = resp.Body.Close() }()
-		if err := cmdutil.EnsureSuccessStatus(resp); err != nil {
-			return fmt.Errorf("failed to get volume workspace: %w", err)
+		if ensureSuccessStatusErr := cmdutil.EnsureSuccessStatus(resp); ensureSuccessStatusErr != nil {
+			return fmt.Errorf("failed to get volume workspace: %w", ensureSuccessStatusErr)
 		}
 
 		var result base.ApiResponse[workspacetypes.Workspace]
-		if err := cmdutil.DecodeJSON(resp, &result); err != nil {
-			return err
+		if decodeJSONErr := cmdutil.DecodeJSON(resp, &result); decodeJSONErr != nil {
+			return decodeJSONErr
 		}
 
 		// The endpoint returns the full tree; an optional path argument
@@ -95,7 +95,9 @@ var workspaceCmd = &cobra.Command{
 				entry.ModTime.Format(time.RFC3339),
 			}
 		}
-		output.Table(headers, rows)
+		if tableErr := output.Table(headers, rows); tableErr != nil {
+			return tableErr
+		}
 		if result.Data.FileTreeTruncated {
 			output.Warning("File listing was truncated by the server")
 		}
@@ -129,13 +131,13 @@ var workspaceCatCmd = &cobra.Command{
 			return fmt.Errorf("failed to get workspace file: %w", err)
 		}
 		defer func() { _ = resp.Body.Close() }()
-		if err := cmdutil.EnsureSuccessStatus(resp); err != nil {
-			return fmt.Errorf("failed to get workspace file: %w", err)
+		if ensureSuccessStatusErr := cmdutil.EnsureSuccessStatus(resp); ensureSuccessStatusErr != nil {
+			return fmt.Errorf("failed to get workspace file: %w", ensureSuccessStatusErr)
 		}
 
 		var result base.ApiResponse[workspacetypes.FileContent]
-		if err := cmdutil.DecodeJSON(resp, &result); err != nil {
-			return err
+		if decodeJSONErr := cmdutil.DecodeJSON(resp, &result); decodeJSONErr != nil {
+			return decodeJSONErr
 		}
 
 		if jsonOutput {
@@ -180,8 +182,8 @@ var workspaceDownloadCmd = &cobra.Command{
 			return fmt.Errorf("failed to download workspace file: %w", err)
 		}
 		defer func() { _ = resp.Body.Close() }()
-		if err := cmdutil.EnsureSuccessStatus(resp); err != nil {
-			return fmt.Errorf("failed to download workspace file: %w", err)
+		if ensureSuccessStatusErr := cmdutil.EnsureSuccessStatus(resp); ensureSuccessStatusErr != nil {
+			return fmt.Errorf("failed to download workspace file: %w", ensureSuccessStatusErr)
 		}
 
 		outputFile := ""
@@ -192,8 +194,8 @@ var workspaceDownloadCmd = &cobra.Command{
 			outputFile = downloadFilename(resp, path.Base(args[1]))
 		}
 
-		if err := writeResponseToFile(resp.Body, outputFile); err != nil {
-			return err
+		if writeResponseToFileErr := writeResponseToFile(resp.Body, outputFile); writeResponseToFileErr != nil {
+			return writeResponseToFileErr
 		}
 
 		output.Success("File downloaded to %s", outputFile)
@@ -229,9 +231,9 @@ var workspacePutCmd = &cobra.Command{
 		}
 
 		if !forceFlag {
-			confirmed, err := cmdutil.Confirm(cmd, fmt.Sprintf("Write %s to %s in volume %s?", args[1], relativePath, resolved.Name))
-			if err != nil {
-				return err
+			confirmed, confirmErr := cmdutil.Confirm(cmd, fmt.Sprintf("Write %s to %s in volume %s?", args[1], relativePath, resolved.Name))
+			if confirmErr != nil {
+				return confirmErr
 			}
 			if !confirmed {
 				fmt.Println("Cancelled")
@@ -244,12 +246,12 @@ var workspacePutCmd = &cobra.Command{
 			return fmt.Errorf("failed to get volume workspace: %w", err)
 		}
 		defer func() { _ = workspaceResp.Body.Close() }()
-		if err := cmdutil.EnsureSuccessStatus(workspaceResp); err != nil {
-			return fmt.Errorf("failed to get volume workspace: %w", err)
+		if ensureSuccessStatusErr := cmdutil.EnsureSuccessStatus(workspaceResp); ensureSuccessStatusErr != nil {
+			return fmt.Errorf("failed to get volume workspace: %w", ensureSuccessStatusErr)
 		}
 		var current base.ApiResponse[workspacetypes.Workspace]
-		if err := cmdutil.DecodeJSON(workspaceResp, &current); err != nil {
-			return err
+		if decodeJSONErr := cmdutil.DecodeJSON(workspaceResp, &current); decodeJSONErr != nil {
+			return decodeJSONErr
 		}
 
 		operation := volume.FileOpCreateFile
@@ -276,18 +278,18 @@ var workspacePutCmd = &cobra.Command{
 
 		var requestBody bytes.Buffer
 		writer := multipart.NewWriter(&requestBody)
-		if err := writer.WriteField("manifest", string(manifestJSON)); err != nil {
-			return fmt.Errorf("failed to write workspace manifest: %w", err)
+		if writeFieldErr := writer.WriteField("manifest", string(manifestJSON)); writeFieldErr != nil {
+			return fmt.Errorf("failed to write workspace manifest: %w", writeFieldErr)
 		}
 		filePart, err := writer.CreateFormFile("files", path.Base(relativePath))
 		if err != nil {
 			return fmt.Errorf("failed to create workspace upload: %w", err)
 		}
-		if _, err := filePart.Write(content); err != nil {
-			return fmt.Errorf("failed to write workspace upload: %w", err)
+		if _, writeErr := filePart.Write(content); writeErr != nil {
+			return fmt.Errorf("failed to write workspace upload: %w", writeErr)
 		}
-		if err := writer.Close(); err != nil {
-			return fmt.Errorf("failed to finalize workspace upload: %w", err)
+		if closeErr := writer.Close(); closeErr != nil {
+			return fmt.Errorf("failed to finalize workspace upload: %w", closeErr)
 		}
 
 		resp, err := c.RequestRaw(cmd.Context(), http.MethodPut, types.VolumeWorkspace(c.EnvID(), resolved.Name), &requestBody, map[string]string{"Content-Type": writer.FormDataContentType()})
@@ -295,14 +297,14 @@ var workspacePutCmd = &cobra.Command{
 			return fmt.Errorf("failed to update volume workspace: %w", err)
 		}
 		defer func() { _ = resp.Body.Close() }()
-		if err := cmdutil.EnsureSuccessStatus(resp); err != nil {
-			return fmt.Errorf("failed to update volume workspace: %w", err)
+		if updateStatusErr := cmdutil.EnsureSuccessStatus(resp); updateStatusErr != nil {
+			return fmt.Errorf("failed to update volume workspace: %w", updateStatusErr)
 		}
 
 		if jsonOutput {
 			var result base.ApiResponse[workspacetypes.Workspace]
-			if err := cmdutil.DecodeJSON(resp, &result); err != nil {
-				return err
+			if decodeUpdateErr := cmdutil.DecodeJSON(resp, &result); decodeUpdateErr != nil {
+				return decodeUpdateErr
 			}
 			return cmdutil.PrintJSON(result.Data)
 		}

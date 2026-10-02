@@ -19,7 +19,20 @@ type Module struct {
 	beginMFAAuthentication func(context.Context, string, authtypes.SessionMeta, string) (*authtypes.MFAChallenge, error)
 }
 
-func New(service *AuthService, userService *user.UserService, settingsService *settings.SettingsService, beginMFAAuthentication func(context.Context, string, authtypes.SessionMeta, string) (*authtypes.MFAChallenge, error)) *Module {
+func New(
+	service *AuthService,
+	userService *user.UserService,
+	settingsService *settings.SettingsService,
+	beginMFAAuthentication func(
+		context.Context,
+		string,
+		authtypes.SessionMeta,
+		string,
+	) (
+		*authtypes.MFAChallenge,
+		error,
+	),
+) *Module {
 	return &Module{service: service, user: userService, settings: settingsService, beginMFAAuthentication: beginMFAAuthentication}
 }
 

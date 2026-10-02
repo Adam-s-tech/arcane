@@ -15,7 +15,7 @@ import (
 )
 
 func TestBuildWorkspaceServiceDeleteFileRejectsCurrentDirectoryInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	settingsService, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -44,7 +44,7 @@ func newSettingsServiceForTestInternal(t testing.TB, ctx context.Context, db *da
 	t.Helper()
 	svc, err := settings.NewSettingsService(ctx, db)
 	if err == nil {
-		t.Cleanup(func() { require.NoError(t, svc.Stop(context.Background())) })
+		t.Cleanup(func() { require.NoError(t, svc.Stop(context.WithoutCancel(t.Context()))) })
 	}
 	return svc, err
 }

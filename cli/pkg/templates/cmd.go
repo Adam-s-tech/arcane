@@ -92,9 +92,9 @@ var listCmd = &cobra.Command{
 				return errors.New("--all cannot be combined with explicit pagination flags")
 			}
 
-			result, err := c.GetJSON[[]template.Template](cmd.Context(), types.TemplatesAll())
-			if err != nil {
-				return fmt.Errorf("failed to list templates: %w", err)
+			result, listTemplatesErr := c.GetJSON[[]template.Template](cmd.Context(), types.TemplatesAll())
+			if listTemplatesErr != nil {
+				return fmt.Errorf("failed to list templates: %w", listTemplatesErr)
 			}
 
 			if jsonOutput {
@@ -105,7 +105,9 @@ var listCmd = &cobra.Command{
 			for i, tpl := range result.Data {
 				rows[i] = row(tpl)
 			}
-			output.Table(headers, rows)
+			if tableErr := output.Table(headers, rows); tableErr != nil {
+				return tableErr
+			}
 			output.Showing(len(result.Data), int64(len(result.Data)), "templates")
 			return nil
 		}
@@ -217,7 +219,9 @@ var registriesCmd = &cobra.Command{
 			}
 		}
 
-		output.Table(headers, rows)
+		if tableErr := output.Table(headers, rows); tableErr != nil {
+			return tableErr
+		}
 		fmt.Printf("\nTotal: %d registries\n", len(result.Data))
 		return nil
 	},
@@ -600,9 +604,9 @@ var createCmd = &cobra.Command{
 		}
 
 		if templateCreateEnvFile != "" {
-			envContent, err := os.ReadFile(templateCreateEnvFile)
-			if err != nil {
-				return fmt.Errorf("failed to read env file %s: %w", templateCreateEnvFile, err)
+			envContent, readFileErr := os.ReadFile(templateCreateEnvFile)
+			if readFileErr != nil {
+				return fmt.Errorf("failed to read env file %s: %w", templateCreateEnvFile, readFileErr)
 			}
 			req.EnvContent = string(envContent)
 		}
@@ -663,17 +667,17 @@ var updateCmd = &cobra.Command{
 		}
 
 		if templateUpdateFile != "" {
-			content, err := os.ReadFile(templateUpdateFile)
-			if err != nil {
-				return fmt.Errorf("failed to read file %s: %w", templateUpdateFile, err)
+			content, readFileErr := os.ReadFile(templateUpdateFile)
+			if readFileErr != nil {
+				return fmt.Errorf("failed to read file %s: %w", templateUpdateFile, readFileErr)
 			}
 			req.Content = string(content)
 		}
 
 		if templateUpdateEnvFile != "" {
-			envContent, err := os.ReadFile(templateUpdateEnvFile)
-			if err != nil {
-				return fmt.Errorf("failed to read env file %s: %w", templateUpdateEnvFile, err)
+			envContent, readEnvFileErr := os.ReadFile(templateUpdateEnvFile)
+			if readEnvFileErr != nil {
+				return fmt.Errorf("failed to read env file %s: %w", templateUpdateEnvFile, readEnvFileErr)
 			}
 			req.EnvContent = string(envContent)
 		}
@@ -712,11 +716,11 @@ var downloadCmd = &cobra.Command{
 
 		if templateDownloadOutput != "" {
 			dir := filepath.Dir(templateDownloadOutput)
-			if err := os.MkdirAll(dir, 0o755); err != nil {
-				return fmt.Errorf("failed to create directory %s: %w", dir, err)
+			if mkdirAllErr := os.MkdirAll(dir, 0o755); mkdirAllErr != nil {
+				return fmt.Errorf("failed to create directory %s: %w", dir, mkdirAllErr)
 			}
-			if err := os.WriteFile(templateDownloadOutput, []byte(result.Data.Content), 0o600); err != nil {
-				return fmt.Errorf("failed to write file %s: %w", templateDownloadOutput, err)
+			if writeFileErr := os.WriteFile(templateDownloadOutput, []byte(result.Data.Content), 0o600); writeFileErr != nil {
+				return fmt.Errorf("failed to write file %s: %w", templateDownloadOutput, writeFileErr)
 			}
 			output.Success("Template downloaded to %s", templateDownloadOutput)
 			return nil
@@ -742,9 +746,9 @@ var defaultsSaveCmd = &cobra.Command{
 		}
 
 		if templateDefaultsEnvFile != "" {
-			envContent, err := os.ReadFile(templateDefaultsEnvFile)
-			if err != nil {
-				return fmt.Errorf("failed to read env file %s: %w", templateDefaultsEnvFile, err)
+			envContent, readFileErr := os.ReadFile(templateDefaultsEnvFile)
+			if readFileErr != nil {
+				return fmt.Errorf("failed to read env file %s: %w", templateDefaultsEnvFile, readFileErr)
 			}
 			req.EnvContent = string(envContent)
 		}

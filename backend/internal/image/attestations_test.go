@@ -60,9 +60,9 @@ func TestReadAttestationLayerBytesInternalDecompressesZstd(t *testing.T) {
 
 	compressed := encoder.EncodeAll(statement, nil)
 	{
-		err := encoder.Close()
-		require.NoError(t, err,
-			"zstd close: %v", err)
+		closeErr := encoder.Close()
+		require.NoError(t, closeErr,
+			"zstd close: %v", closeErr)
 	}
 
 	layer := static.NewLayer(compressed, inTotoLayerMediaTypeInternal)

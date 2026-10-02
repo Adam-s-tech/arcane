@@ -36,15 +36,15 @@ func BuildValidationEnvironment(ctx context.Context, projectsDirectory, projectP
 	// handling so the validation env matches the runtime env exactly.
 	if !parseComposeBoolInternal(fullEnvMap, consts.ComposeDisableDefaultEnvFile) {
 		if effectiveEnvContent != nil {
-			projectEnv, err := ParseValidationEnvContent(*effectiveEnvContent, fullEnvMap)
-			if err != nil {
-				return nil, fmt.Errorf("parse provided env content: %w", err)
+			projectEnv, parseValidationEnvContentErr := ParseValidationEnvContent(*effectiveEnvContent, fullEnvMap)
+			if parseValidationEnvContentErr != nil {
+				return nil, fmt.Errorf("parse provided env content: %w", parseValidationEnvContentErr)
 			}
 			maps.Copy(fullEnvMap, projectEnv)
 		} else {
-			projectEnv, err := ParseValidationEnvFile(filepath.Join(projectPath, ".env"), fullEnvMap)
-			if err != nil {
-				return nil, fmt.Errorf("parse project env file: %w", err)
+			projectEnv, parseValidationEnvFileErr := ParseValidationEnvFile(filepath.Join(projectPath, ".env"), fullEnvMap)
+			if parseValidationEnvFileErr != nil {
+				return nil, fmt.Errorf("parse project env file: %w", parseValidationEnvFileErr)
 			}
 			maps.Copy(fullEnvMap, projectEnv)
 		}

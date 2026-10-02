@@ -72,7 +72,7 @@ func (s *JobService) resolveRemoteRunInternal(ctx context.Context, environmentID
 		return acknowledged, nil
 	}
 	now := time.Now().UTC()
-	if err := s.runs.UpdateRun(ctx, local, func(current *st.Run) error {
+	if updateRunErr := s.runs.UpdateRun(ctx, local, func(current *st.Run) error {
 		if current.Status != st.NeedsAttention {
 			return runs.ErrRunConflict
 		}
@@ -83,8 +83,8 @@ func (s *JobService) resolveRemoteRunInternal(ctx context.Context, environmentID
 		current.RemoteSettled = true
 		current.LastConfirmedAt = &now
 		return nil
-	}); err != nil {
-		return st.Run{}, err
+	}); updateRunErr != nil {
+		return st.Run{}, updateRunErr
 	}
 	return s.runs.Resolve(ctx, environmentID, jobID, runID, acknowledged.Resolution.ResolvedBy)
 }
@@ -102,19 +102,19 @@ func (s *JobService) resolveAgentReviewInternal(ctx context.Context, environment
 	path := "/api/environments/0/jobs/" + url.PathEscape(jobID) + "/runs/" + url.PathEscape(runID)
 	var remote st.Run
 	// Read the owner on every request, including retries after a lost response.
-	if err := s.environment.ProxyJSONRequest(ctx, environmentID, http.MethodGet, path, nil, &remote); err != nil {
-		return st.Run{}, err
+	if proxyJSONRequestErr := s.environment.ProxyJSONRequest(ctx, environmentID, http.MethodGet, path, nil, &remote); proxyJSONRequestErr != nil {
+		return st.Run{}, proxyJSONRequestErr
 	}
 	if remote.ID != runID || remote.JobID != jobID || remote.EnvironmentID != "0" {
 		return st.Run{}, errors.New("agent returned an inconsistent run identity")
 	}
 	if remote.Status == st.NeedsAttention {
-		body, err := json.Marshal(map[string]string{"resolvedBy": actor})
-		if err != nil {
-			return st.Run{}, err
+		body, marshalErr := json.Marshal(map[string]string{"resolvedBy": actor})
+		if marshalErr != nil {
+			return st.Run{}, marshalErr
 		}
-		if err := s.environment.ProxyJSONRequest(ctx, environmentID, http.MethodPost, path+"/resolve", body, &remote); err != nil {
-			return st.Run{}, err
+		if resolveRemoteJobErr := s.environment.ProxyJSONRequest(ctx, environmentID, http.MethodPost, path+"/resolve", body, &remote); resolveRemoteJobErr != nil {
+			return st.Run{}, resolveRemoteJobErr
 		}
 	} else if actor != common.SystemUser.Username {
 		if remote.Status != st.Canceled || remote.Resolution == nil {
@@ -126,8 +126,8 @@ func (s *JobService) resolveAgentReviewInternal(ctx context.Context, environment
 		return st.Run{}, errors.New("agent resolution was not confirmed")
 	}
 	var acknowledged st.Run
-	if err := s.environment.ProxyJSONRequest(ctx, environmentID, http.MethodPost, path+"/ack", nil, &acknowledged); err != nil {
-		return st.Run{}, err
+	if acknowledgeRemoteResolutionErr := s.environment.ProxyJSONRequest(ctx, environmentID, http.MethodPost, path+"/ack", nil, &acknowledged); acknowledgeRemoteResolutionErr != nil {
+		return st.Run{}, acknowledgeRemoteResolutionErr
 	}
 	if acknowledged.ID != runID || acknowledged.JobID != jobID || acknowledged.EnvironmentID != "0" || acknowledged.Status != remote.Status || !acknowledged.RemoteSettled ||
 		(remote.Resolution != nil && (acknowledged.Resolution == nil || acknowledged.Resolution.ResolvedBy != remote.Resolution.ResolvedBy)) {

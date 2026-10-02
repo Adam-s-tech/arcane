@@ -65,31 +65,31 @@ func writeDockerExecAttachResponseInternal(t *testing.T, w http.ResponseWriter, 
 		return
 	}
 	defer func() { _ = connection.Close() }()
-	if _, err := fmt.Fprint(buffer, "HTTP/1.1 101 UPGRADED\r\nContent-Type: application/vnd.docker.raw-stream\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n"); err != nil {
-		t.Errorf("write Docker exec response headers: %v", err)
+	if _, fprintErr := fmt.Fprint(buffer, "HTTP/1.1 101 UPGRADED\r\nContent-Type: application/vnd.docker.raw-stream\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n"); fprintErr != nil {
+		t.Errorf("write Docker exec response headers: %v", fprintErr)
 		return
 	}
 	if stdout != "" {
 		header := make([]byte, 8)
 		header[0] = 1
 		binary.BigEndian.PutUint32(header[4:], uint32(len(stdout)))
-		if _, err := buffer.Write(header); err != nil {
-			t.Errorf("write Docker exec stream header: %v", err)
+		if _, writeErr := buffer.Write(header); writeErr != nil {
+			t.Errorf("write Docker exec stream header: %v", writeErr)
 			return
 		}
-		if _, err := buffer.WriteString(stdout); err != nil {
-			t.Errorf("write Docker exec stream: %v", err)
+		if _, writeStringErr := buffer.WriteString(stdout); writeStringErr != nil {
+			t.Errorf("write Docker exec stream: %v", writeStringErr)
 			return
 		}
 	}
-	if err := buffer.Flush(); err != nil {
-		t.Errorf("flush Docker exec response: %v", err)
+	if flushErr := buffer.Flush(); flushErr != nil {
+		t.Errorf("flush Docker exec response: %v", flushErr)
 	}
 }
 
 func TestUpdateVolumeWorkspaceValidationFailureReturnsNoWorkspace(t *testing.T) {
 	workspace, err := (&VolumeService{}).UpdateVolumeWorkspace(
-		context.Background(),
+		t.Context(),
 		"volume",
 		volumetypes.WorkspaceUpdateManifest{},
 		nil,
@@ -133,7 +133,7 @@ func TestVolumeWorkspaceReadsWaitForMutationLock(t *testing.T) {
 			readDone := make(chan error, 1)
 			go func() {
 				close(readStarted)
-				readDone <- read(context.Background(), service)
+				readDone <- read(t.Context(), service)
 			}()
 			<-readStarted
 
@@ -212,7 +212,7 @@ func TestDownloadVolumeWorkspaceFileHoldsReadLockUntilClosed(t *testing.T) {
 			"workspace-volume": {id: "helper", lastUsedAt: time.Now(), protocol: acfstypes.ProtocolVersion},
 		},
 	}
-	reader, size, err := service.DownloadVolumeWorkspaceFile(context.Background(), "workspace-volume", "file.txt")
+	reader, size, err := service.DownloadVolumeWorkspaceFile(t.Context(), "workspace-volume", "file.txt")
 	require.NoError(t, err)
 	require.EqualValues(t, 7, size)
 
@@ -245,9 +245,9 @@ func TestVolumeWorkspaceFileContentResponseInternal(t *testing.T) {
 	require.False(t, above.Editable)
 	require.Equal(t, workspacetypes.FileReadOnlyTooLarge, above.ReadOnlyReason)
 
-	binary, err := volumeWorkspaceFileContentResponseInternal("data.bin", "regular", 2, []byte{0xff, 0x00}, maxFileSizeBytes)
+	binaryContent, err := volumeWorkspaceFileContentResponseInternal("data.bin", "regular", 2, []byte{0xff, 0x00}, maxFileSizeBytes)
 	require.NoError(t, err)
-	require.Equal(t, workspacetypes.FileReadOnlyBinary, binary.ReadOnlyReason)
+	require.Equal(t, workspacetypes.FileReadOnlyBinary, binaryContent.ReadOnlyReason)
 
 	special, err := volumeWorkspaceFileContentResponseInternal("pipe", "special", 0, nil, maxFileSizeBytes)
 	require.NoError(t, err)
@@ -437,7 +437,7 @@ func TestStageVolumeWorkspaceChangesClearsAndCopiesContentsInOneArchive(t *testi
 	service := &VolumeService{dockerService: docker.NewDockerClientService(t.Context(), nil, nil, nil).WithClient(dockerClient)}
 	firstUpload := 0
 	secondUpload := 1
-	firstStaged, err := service.stageVolumeWorkspaceChangesInternal(context.Background(), dockerClient, "helper", []volumetypes.WorkspaceFileChange{
+	firstStaged, err := service.stageVolumeWorkspaceChangesInternal(t.Context(), dockerClient, "helper", []volumetypes.WorkspaceFileChange{
 		{UploadIndex: &firstUpload},
 		{},
 		{UploadIndex: &secondUpload},
@@ -446,7 +446,22 @@ func TestStageVolumeWorkspaceChangesClearsAndCopiesContentsInOneArchive(t *testi
 	require.Equal(t, volumeWorkspaceStagedFileInternal{path: "/tmp/arcane-workspace/change-0", size: 5}, firstStaged[0])
 	require.Equal(t, volumeWorkspaceStagedFileInternal{path: "/tmp/arcane-workspace/change-2", size: 0}, firstStaged[2])
 
-	secondStaged, err := service.stageVolumeWorkspaceChangesInternal(context.Background(), dockerClient, "helper", []volumetypes.WorkspaceFileChange{{UploadIndex: &firstUpload}}, map[int][]byte{0: []byte("second")}, volumeWorkspaceWriteIdentityInternal{})
+	secondStaged, err := service.stageVolumeWorkspaceChangesInternal(
+		t.Context(),
+		dockerClient,
+		"helper",
+		[]volumetypes.WorkspaceFileChange{
+			{
+				UploadIndex: &firstUpload,
+			},
+		},
+		map[int][]byte{
+			0: []byte(
+				"second",
+			),
+		},
+		volumeWorkspaceWriteIdentityInternal{},
+	)
 	require.NoError(t, err)
 	require.Equal(t, volumeWorkspaceStagedFileInternal{path: "/tmp/arcane-workspace/change-0", size: 6}, secondStaged[0])
 
@@ -520,8 +535,8 @@ func TestVolumeWorkspaceWritesUseRuntimeIdentity(t *testing.T) {
 					return
 				}
 				archiveHeaders = append(archiveHeaders, header)
-				if _, err := io.Copy(io.Discard, tarReader); err != nil {
-					t.Errorf("read staging archive content: %v", err)
+				if _, copyErr := io.Copy(io.Discard, tarReader); copyErr != nil {
+					t.Errorf("read staging archive content: %v", copyErr)
 					return
 				}
 			}
@@ -537,9 +552,9 @@ func TestVolumeWorkspaceWritesUseRuntimeIdentity(t *testing.T) {
 	identity := volumeWorkspaceWriteIdentityFromConfigUserInternal("1000:1000")
 	uploadIndex := 0
 	changes := []volumetypes.WorkspaceFileChange{{Operation: volumetypes.FileOpCreateFile, RelativePath: "config.txt", UploadIndex: &uploadIndex}}
-	stagedFiles, err := service.stageVolumeWorkspaceChangesInternal(context.Background(), dockerClient, "helper", changes, map[int][]byte{0: []byte("content")}, identity)
+	stagedFiles, err := service.stageVolumeWorkspaceChangesInternal(t.Context(), dockerClient, "helper", changes, map[int][]byte{0: []byte("content")}, identity)
 	require.NoError(t, err)
-	require.NoError(t, service.executeVolumeWorkspaceACFSBatchInternal(context.Background(), dockerClient, "helper", changes, stagedFiles, 0, identity))
+	require.NoError(t, service.executeVolumeWorkspaceACFSBatchInternal(t.Context(), dockerClient, "helper", changes, stagedFiles, 0, identity))
 
 	require.Len(t, execRequests, 2)
 	require.Empty(t, execRequests[0].user)
@@ -606,7 +621,7 @@ func TestUpdateVolumeWorkspaceRejectsStaleRevisionBeforeStaging(t *testing.T) {
 		helperByVolume: make(map[string]*volumeHelper),
 	}
 	uploadIndex := 0
-	workspace, err := service.UpdateVolumeWorkspace(context.Background(), "workspace-volume", volumetypes.WorkspaceUpdateManifest{
+	workspace, err := service.UpdateVolumeWorkspace(t.Context(), "workspace-volume", volumetypes.WorkspaceUpdateManifest{
 		FileTreeRevision: "stale",
 		FileChanges: []volumetypes.WorkspaceFileChange{{
 			Operation:    volumetypes.FileOpCreateFile,
@@ -670,7 +685,7 @@ func TestCreateVolumeWorkspaceMutationContainerUsesDedicatedBackupHelper(t *test
 		},
 	}
 
-	containerID, cleanup, err := service.createVolumeWorkspaceMutationContainerInternal(context.Background(), "workspace-volume", true)
+	containerID, cleanup, err := service.createVolumeWorkspaceMutationContainerInternal(t.Context(), "workspace-volume", true)
 	require.NoError(t, err)
 	require.Equal(t, "restore-helper", containerID)
 	require.Equal(t, 1, createCalls)
@@ -693,12 +708,12 @@ func TestVolumeWorkspaceScriptsAgainstToolsImage(t *testing.T) {
 	dockerPath, err := exec.LookPath("docker")
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
 	defer cancel()
 	runDocker := func(args ...string) string {
 		t.Helper()
-		output, err := exec.CommandContext(ctx, dockerPath, args...).CombinedOutput()
-		require.NoErrorf(t, err, "docker %s\n%s", strings.Join(args, " "), output)
+		output, combinedOutputErr := exec.CommandContext(ctx, dockerPath, args...).CombinedOutput()
+		require.NoErrorf(t, combinedOutputErr, "docker %s\n%s", strings.Join(args, " "), output)
 		return string(output)
 	}
 	runInVolume := func(volumeName, outerScript string, args ...string) string {
@@ -711,7 +726,7 @@ func TestVolumeWorkspaceScriptsAgainstToolsImage(t *testing.T) {
 	volumeName := "arcane-workspace-test-" + strconv.FormatInt(time.Now().UnixNano(), 10)
 	runDocker("volume", "create", volumeName)
 	t.Cleanup(func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
 		defer cleanupCancel()
 		_, _ = exec.CommandContext(cleanupCtx, dockerPath, "volume", "rm", volumeName).CombinedOutput()
 	})
@@ -734,7 +749,10 @@ acfs apply --root /volume --staging /tmp/staging --manifest manifest.json >/dev/
 	runInVolume(volumeName, `set -e
 mkdir -p /tmp/staging
 printf updated > /tmp/staging/change-0
-printf '%s' '{"changes":[{"operation":"update_file","path":"/nested/a.txt","stagedName":"change-0","size":7},{"operation":"rename","path":"/nested/a.txt","targetPath":"/nested/b.txt"},{"operation":"create_folder","path":"/dest"},{"operation":"move","path":"/nested/b.txt","targetPath":"/dest/b.txt"}],"version":2}' > /tmp/staging/manifest.json
+printf '%s' \
+  '{"changes":[{"operation":"update_file","path":"/nested/a.txt","stagedName":"change-0","size":7},{"op' \
+  'eration":"rename","path":"/nested/a.txt","targetPath":"/nested/b.txt"},{"operation":"create_folder",' \
+  '"path":"/dest"},{"operation":"move","path":"/nested/b.txt","targetPath":"/dest/b.txt"}],"version":2}' > /tmp/staging/manifest.json
 acfs apply --root /volume --staging /tmp/staging --manifest manifest.json >/dev/null`)
 	require.Equal(t, "updated", runInVolume(volumeName, `head -c 7 /volume/dest/b.txt`))
 

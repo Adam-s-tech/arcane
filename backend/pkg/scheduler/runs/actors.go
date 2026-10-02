@@ -194,8 +194,8 @@ func (a *coordinatorActorInternal) reconcileDispatchInternal(ctx context.Context
 		previous.JobID = id
 		state.Dispatches[key] = previous
 		state.Revision++
-		if err := a.q.service.SetState(ctx, coordinatorTypeInternal, a.id, *state, nil); err != nil {
-			return false, err
+		if setStateErr := a.q.service.SetState(ctx, coordinatorTypeInternal, a.id, *state, nil); setStateErr != nil {
+			return false, setStateErr
 		}
 	}
 	job, err := a.q.service.GetJob(ctx, previous.JobID)
@@ -227,8 +227,8 @@ func (a *coordinatorActorInternal) dispatchRunInternal(ctx context.Context, stat
 			return err
 		}
 		if err == nil {
-			if err := a.q.service.DeleteJob(ctx, actorType, a.id, intent.JobID); err != nil && !errors.Is(err, actor.ErrJobNotFound) {
-				return err
+			if deleteJobErr := a.q.service.DeleteJob(ctx, actorType, a.id, intent.JobID); deleteJobErr != nil && !errors.Is(deleteJobErr, actor.ErrJobNotFound) {
+				return deleteJobErr
 			}
 		}
 	}
@@ -257,8 +257,8 @@ func (a *coordinatorActorInternal) dispatchRunInternal(ctx context.Context, stat
 		return err
 	}
 	if job.Status.IsTerminal() {
-		if err := a.q.service.DeleteJob(ctx, actorType, a.id, id); err != nil && !errors.Is(err, actor.ErrJobNotFound) {
-			return err
+		if deleteJobErr2 := a.q.service.DeleteJob(ctx, actorType, a.id, id); deleteJobErr2 != nil && !errors.Is(deleteJobErr2, actor.ErrJobNotFound) {
+			return deleteJobErr2
 		}
 		id, _, err = a.q.service.Dispatch(ctx, actorType, a.id, "execute", command, options...)
 		if err != nil {
@@ -336,8 +336,8 @@ func (a *coordinatorActorInternal) Alarm(ctx context.Context, name string, data 
 	record.NextRun = schedule.Next(now.In(a.q.location))
 	record.Sequence++
 	state.Revision++
-	if err := a.q.service.SetState(ctx, coordinatorTypeInternal, a.id, state, nil); err != nil {
-		return err
+	if setStateErr := a.q.service.SetState(ctx, coordinatorTypeInternal, a.id, state, nil); setStateErr != nil {
+		return setStateErr
 	}
 	return a.flushInternal(ctx, &state)
 }
@@ -348,8 +348,8 @@ func (q *Coordinator) repairInternal(ctx context.Context) error {
 		return err
 	}
 	for _, record := range records {
-		if _, err := q.service.Invoke(ctx, coordinatorTypeInternal, kit.SHA256Hex(record.EnvironmentID+"\x00"+record.JobID), "repair", nil); err != nil {
-			return err
+		if _, invokeErr := q.service.Invoke(ctx, coordinatorTypeInternal, kit.SHA256Hex(record.EnvironmentID+"\x00"+record.JobID), "repair", nil); invokeErr != nil {
+			return invokeErr
 		}
 	}
 	return nil
@@ -362,16 +362,16 @@ func (q *Coordinator) importLegacyInternal(ctx context.Context) error {
 	}
 	for _, entry := range entries {
 		marker := "francis-import/" + entry.Key
-		_, done, err := q.store.Get(ctx, marker)
-		if err != nil {
-			return fmt.Errorf("import legacy job record %q: %w", entry.Key, err)
+		_, done, getErr := q.store.Get(ctx, marker)
+		if getErr != nil {
+			return fmt.Errorf("import legacy job record %q: %w", entry.Key, getErr)
 		}
 		if done {
 			continue
 		}
 		var record st.QueueRecord
-		if err := json.Unmarshal([]byte(entry.Value), &record); err != nil {
-			return fmt.Errorf("decode legacy job record %q: %w", entry.Key, err)
+		if unmarshalErr := json.Unmarshal([]byte(entry.Value), &record); unmarshalErr != nil {
+			return fmt.Errorf("decode legacy job record %q: %w", entry.Key, unmarshalErr)
 		}
 		id := kit.SHA256Hex(record.EnvironmentID + "\x00" + record.JobID)
 		if entry.Key != queuePrefixInternal+id {
@@ -379,12 +379,12 @@ func (q *Coordinator) importLegacyInternal(ctx context.Context) error {
 		}
 		sourceHash := kit.SHA256Hex(entry.Value)
 		command := st.CoordinatorImport{Record: record, SourceHash: sourceHash}
-		if _, err := q.service.Invoke(ctx, coordinatorTypeInternal, id, "import", command); err != nil {
-			return fmt.Errorf("import legacy job record %q: %w", entry.Key, err)
+		if _, invokeErr := q.service.Invoke(ctx, coordinatorTypeInternal, id, "import", command); invokeErr != nil {
+			return fmt.Errorf("import legacy job record %q: %w", entry.Key, invokeErr)
 		}
 		var imported st.CoordinatorState
-		if err := q.service.GetState(ctx, coordinatorTypeInternal, id, &imported); err != nil {
-			return fmt.Errorf("import legacy job record %q: %w", entry.Key, err)
+		if getStateErr := q.service.GetState(ctx, coordinatorTypeInternal, id, &imported); getStateErr != nil {
+			return fmt.Errorf("import legacy job record %q: %w", entry.Key, getStateErr)
 		}
 		if !imported.Imported || imported.ImportHash != sourceHash {
 			return fmt.Errorf("legacy import verification failed for job %q in environment %q", record.JobID, record.EnvironmentID)
@@ -392,8 +392,8 @@ func (q *Coordinator) importLegacyInternal(ctx context.Context) error {
 		if imported.Record.EnvironmentID != record.EnvironmentID || imported.Record.JobID != record.JobID {
 			return fmt.Errorf("legacy import identity mismatch for record %q", entry.Key)
 		}
-		if err := q.store.Set(ctx, marker, "complete"); err != nil {
-			return fmt.Errorf("import legacy job record %q: %w", entry.Key, err)
+		if setErr := q.store.Set(ctx, marker, "complete"); setErr != nil {
+			return fmt.Errorf("import legacy job record %q: %w", entry.Key, setErr)
 		}
 	}
 	return nil

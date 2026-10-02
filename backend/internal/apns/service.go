@@ -59,7 +59,14 @@ type ApnsService struct {
 	drainPending atomic.Bool
 }
 
-func NewApnsService(db *database.DB, cfg *config.Config, settingsService *settings.SettingsService, roleService *role.RoleService, eventService *event.EventService, httpClient *http.Client) *ApnsService {
+func NewApnsService(
+	db *database.DB,
+	cfg *config.Config,
+	settingsService *settings.SettingsService,
+	roleService *role.RoleService,
+	eventService *event.EventService,
+	httpClient *http.Client,
+) *ApnsService {
 	return &ApnsService{db: db, config: cfg, settings: settingsService, roles: roleService, events: eventService, httpClient: httpClient}
 }
 
@@ -100,8 +107,8 @@ func (s *ApnsService) signerInternal(ctx context.Context) (*signerInternal, erro
 		if err != nil {
 			return nil, fmt.Errorf("failed to encrypt push signing key: %w", err)
 		}
-		if err := s.settings.UpdateSetting(ctx, "apnsSigningKey", encrypted); err != nil {
-			return nil, err
+		if updateSettingErr := s.settings.UpdateSetting(ctx, "apnsSigningKey", encrypted); updateSettingErr != nil {
+			return nil, updateSettingErr
 		}
 	}
 
@@ -135,9 +142,9 @@ func (s *ApnsService) relayRequestInternal(ctx context.Context, method, path str
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if signer != nil {
-		sig, err := signer.sign(body)
-		if err != nil {
-			return 0, nil, fmt.Errorf("failed to sign push relay request: %w", err)
+		sig, signErr := signer.sign(body)
+		if signErr != nil {
+			return 0, nil, fmt.Errorf("failed to sign push relay request: %w", signErr)
 		}
 		req.Header.Set(signatureHeader, base64.StdEncoding.EncodeToString(sig))
 	}
@@ -178,11 +185,11 @@ func (s *ApnsService) EnsureChannel(ctx context.Context) (string, error) {
 	var parsed struct {
 		ChannelID string `json:"channelId"`
 	}
-	if err := json.Unmarshal(respBody, &parsed); err != nil || parsed.ChannelID == "" {
+	if unmarshalErr := json.Unmarshal(respBody, &parsed); unmarshalErr != nil || parsed.ChannelID == "" {
 		return "", fmt.Errorf("channel registration returned no channel id: %w", common.ErrApnsRelay)
 	}
-	if err := s.settings.UpdateSetting(ctx, "apnsChannelId", parsed.ChannelID); err != nil {
-		return "", err
+	if updateSettingErr := s.settings.UpdateSetting(ctx, "apnsChannelId", parsed.ChannelID); updateSettingErr != nil {
+		return "", updateSettingErr
 	}
 	slog.InfoContext(ctx, "Registered push relay channel", "channelId", parsed.ChannelID, "algorithm", signer.algorithm)
 	return parsed.ChannelID, nil
@@ -226,8 +233,8 @@ func (s *ApnsService) RevokeChannel(ctx context.Context) error {
 		if status != http.StatusNoContent && status != http.StatusNotFound && status != http.StatusGone {
 			return fmt.Errorf("channel revocation returned %d: %s: %w", status, strings.TrimSpace(string(respBody)), common.ErrApnsRelay)
 		}
-		if err := s.settings.UpdateSetting(ctx, "apnsChannelId", ""); err != nil {
-			return err
+		if updateSettingErr := s.settings.UpdateSetting(ctx, "apnsChannelId", ""); updateSettingErr != nil {
+			return updateSettingErr
 		}
 		slog.InfoContext(ctx, "Revoked push relay channel", "channelId", channelID)
 	}
@@ -306,7 +313,13 @@ func (s *ApnsService) RegisterDevice(ctx context.Context, userID string, req apn
 	events := req.Events
 	if events == nil {
 		events = map[string]bool{}
-		for _, t := range []notifications.NotificationEventType{notifications.NotificationEventImageUpdate, notifications.NotificationEventContainerUpdate, notifications.NotificationEventVulnerabilityFound, notifications.NotificationEventPruneReport, notifications.NotificationEventAutoHeal} {
+		for _, t := range []notifications.NotificationEventType{
+			notifications.NotificationEventImageUpdate,
+			notifications.NotificationEventContainerUpdate,
+			notifications.NotificationEventVulnerabilityFound,
+			notifications.NotificationEventPruneReport,
+			notifications.NotificationEventAutoHeal,
+		} {
 			events[string(t)] = true
 		}
 	}
@@ -325,16 +338,16 @@ func (s *ApnsService) RegisterDevice(ctx context.Context, userID string, req apn
 		existing.Events = events
 		existing.EnvironmentIDs = environmentIDs
 		existing.LastSeenAt = &now
-		if err := s.db.WithContext(ctx).Save(&existing).Error; err != nil {
-			return apnstypes.Device{}, fmt.Errorf("failed to update push device: %w", err)
+		if updateDeviceErr := s.db.WithContext(ctx).Save(&existing).Error; updateDeviceErr != nil {
+			return apnstypes.Device{}, fmt.Errorf("failed to update push device: %w", updateDeviceErr)
 		}
 		return deviceDTOInternal(existing), nil
 	case !errors.Is(err, gorm.ErrRecordNotFound):
 		return apnstypes.Device{}, fmt.Errorf("failed to load push device: %w", err)
 	}
 	device := Device{UserID: userID, RecipientID: req.RecipientID, Label: req.Label, Events: events, EnvironmentIDs: environmentIDs, LastSeenAt: &now}
-	if err := s.db.WithContext(ctx).Create(&device).Error; err != nil {
-		return apnstypes.Device{}, fmt.Errorf("failed to register push device: %w", err)
+	if createDeviceErr := s.db.WithContext(ctx).Create(&device).Error; createDeviceErr != nil {
+		return apnstypes.Device{}, fmt.Errorf("failed to register push device: %w", createDeviceErr)
 	}
 	return deviceDTOInternal(device), nil
 }
@@ -371,8 +384,8 @@ func (s *ApnsService) UpdateDevice(ctx context.Context, userID, id string, req a
 		}
 	}
 	device.LastSeenAt = new(time.Now())
-	if err := s.db.WithContext(ctx).Save(device).Error; err != nil {
-		return apnstypes.Device{}, fmt.Errorf("failed to update push device: %w", err)
+	if saveDeviceErr := s.db.WithContext(ctx).Save(device).Error; saveDeviceErr != nil {
+		return apnstypes.Device{}, fmt.Errorf("failed to update push device: %w", saveDeviceErr)
 	}
 	return deviceDTOInternal(*device), nil
 }
@@ -382,8 +395,8 @@ func (s *ApnsService) DeleteDevice(ctx context.Context, userID, id string) error
 	if err != nil {
 		return err
 	}
-	if err := s.db.WithContext(ctx).Delete(device).Error; err != nil {
-		return fmt.Errorf("failed to delete push device: %w", err)
+	if deleteDeviceErr := s.db.WithContext(ctx).Delete(device).Error; deleteDeviceErr != nil {
+		return fmt.Errorf("failed to delete push device: %w", deleteDeviceErr)
 	}
 	return nil
 }
@@ -489,13 +502,13 @@ func (s *ApnsService) Enqueue(ctx context.Context, environmentID, environmentNam
 		return fmt.Errorf("failed to marshal push envelope: %w", err)
 	}
 	entry := OutboxEntry{EventID: envelope.EventID, Envelope: string(raw), NextAttemptAt: time.Now()}
-	if err := s.db.WithContext(ctx).Create(&entry).Error; err != nil {
-		return fmt.Errorf("failed to enqueue push notification: %w", err)
+	if enqueueNotificationErr := s.db.WithContext(ctx).Create(&entry).Error; enqueueNotificationErr != nil {
+		return fmt.Errorf("failed to enqueue push notification: %w", enqueueNotificationErr)
 	}
 	go func() {
 		drainCtx := context.WithoutCancel(ctx)
-		if err := s.DrainOutbox(drainCtx); err != nil {
-			slog.WarnContext(drainCtx, "Push outbox drain failed", "error", err)
+		if drainOutboxErr := s.DrainOutbox(drainCtx); drainOutboxErr != nil {
+			slog.WarnContext(drainCtx, "Push outbox drain failed", "error", drainOutboxErr)
 		}
 	}()
 	return nil
@@ -597,17 +610,17 @@ func (s *ApnsService) sendOutboxEntryInternal(ctx context.Context, entry OutboxE
 			UnknownRecipientIDs []string `json:"unknownRecipientIds"`
 		}
 		if json.Unmarshal(respBody, &parsed) == nil && len(parsed.UnknownRecipientIDs) > 0 {
-			if err := s.db.WithContext(ctx).Where("recipient_id IN ?", parsed.UnknownRecipientIDs).Delete(&Device{}).Error; err != nil {
-				slog.WarnContext(ctx, "Failed to prune stale push devices", "error", err)
+			if deleteUnknownDevicesErr := s.db.WithContext(ctx).Where("recipient_id IN ?", parsed.UnknownRecipientIDs).Delete(&Device{}).Error; deleteUnknownDevicesErr != nil {
+				slog.WarnContext(ctx, "Failed to prune stale push devices", "error", deleteUnknownDevicesErr)
 			}
 		}
 		s.finishOutboxInternal(ctx, entry, envelope, "")
 	case err == nil && status == http.StatusGone:
-		if err := s.settings.UpdateSetting(ctx, "apnsChannelId", ""); err != nil {
-			slog.WarnContext(ctx, "Failed to clear revoked push channel", "error", err)
+		if updateSettingErr := s.settings.UpdateSetting(ctx, "apnsChannelId", ""); updateSettingErr != nil {
+			slog.WarnContext(ctx, "Failed to clear revoked push channel", "error", updateSettingErr)
 		}
-		if err := s.db.WithContext(ctx).Where("1 = 1").Delete(&Device{}).Error; err != nil {
-			slog.WarnContext(ctx, "Failed to remove push devices after channel revocation", "error", err)
+		if deleteInvalidDevicesErr := s.db.WithContext(ctx).Where("1 = 1").Delete(&Device{}).Error; deleteInvalidDevicesErr != nil {
+			slog.WarnContext(ctx, "Failed to remove push devices after channel revocation", "error", deleteInvalidDevicesErr)
 		}
 		s.finishOutboxInternal(ctx, entry, envelope, "relay channel revoked; devices must pair again")
 		return true

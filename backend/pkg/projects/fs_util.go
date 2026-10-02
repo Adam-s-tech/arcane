@@ -42,8 +42,8 @@ func GetProjectsDirectory(ctx context.Context, projectsDir string) (string, erro
 	// os.* rather than acfs: this creates the confinement root itself, which
 	// has to exist before acfs can open it.
 	if _, err := os.Stat(projectsDirectory); os.IsNotExist(err) {
-		if err := os.MkdirAll(projectsDirectory, utils.DirPerm); err != nil {
-			return "", err
+		if mkdirAllErr := os.MkdirAll(projectsDirectory, utils.DirPerm); mkdirAllErr != nil {
+			return "", mkdirAllErr
 		}
 		slog.InfoContext(ctx, "Created projects directory", "path", projectsDirectory)
 	}
@@ -138,8 +138,8 @@ func HasComposeRootKeysInFile(path string) (bool, error) {
 	}
 
 	composeData := map[string]any{}
-	if err := yaml.Unmarshal(content, &composeData); err != nil {
-		return false, err
+	if unmarshalErr := yaml.Unmarshal(content, &composeData); unmarshalErr != nil {
+		return false, unmarshalErr
 	}
 
 	_, hasServices := composeData["services"]
@@ -152,8 +152,8 @@ func GetTemplatesDirectory(ctx context.Context, templatesDir string) (string, er
 	// os.* rather than acfs: this creates the confinement root itself, which
 	// has to exist before acfs can open it.
 	if _, err := os.Stat(resolved); os.IsNotExist(err) {
-		if err := os.MkdirAll(resolved, utils.DirPerm); err != nil {
-			return "", err
+		if mkdirAllErr := os.MkdirAll(resolved, utils.DirPerm); mkdirAllErr != nil {
+			return "", mkdirAllErr
 		}
 		slog.InfoContext(ctx, "Created templates directory", "path", resolved)
 	}
@@ -312,8 +312,8 @@ func RemoveStaleComposeFiles(ctx context.Context, projectPath, composeFileName s
 	}
 
 	for _, name := range stale {
-		if err := acfs.Remove(ctx, projectPath, "/"+name); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return err
+		if removeErr := acfs.Remove(ctx, projectPath, "/"+name); removeErr != nil && !errors.Is(removeErr, fs.ErrNotExist) {
+			return removeErr
 		}
 	}
 
@@ -372,8 +372,8 @@ func CreateExactDir(ctx context.Context, projectsRoot, basePath, name string, pe
 		return "", "", fmt.Errorf("project directory would be outside allowed projects root: %w", err)
 	}
 
-	if err := acfs.Mkdir(ctx, projectsRoot, logicalPath, perm); err != nil {
-		return "", "", kit.Ternary[error](errors.Is(err, os.ErrExist), ErrProjectDirExists, err)
+	if mkdirErr := acfs.Mkdir(ctx, projectsRoot, logicalPath, perm); mkdirErr != nil {
+		return "", "", kit.Ternary[error](errors.Is(mkdirErr, os.ErrExist), ErrProjectDirExists, mkdirErr)
 	}
 
 	return basePath, sanitized, nil

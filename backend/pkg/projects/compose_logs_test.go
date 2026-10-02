@@ -2,7 +2,6 @@ package projects
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -50,10 +49,12 @@ func TestComposeLogsMarksStderrWithoutChangingComposeOptions(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		case "/containers/json":
 			w.Header().Set("Content-Type", "application/json")
-			require.NoError(t, json.NewEncoder(w).Encode([]map[string]any{
+			if !assert.NoError(t, json.NewEncoder(w).Encode([]map[string]any{
 				summary(composeLogsTestNonTTYContainerInternal, "web", "nginx"),
 				summary(composeLogsTestTTYContainerInternal, "ttyd", "ttyd"),
-			}))
+			})) {
+				return
+			}
 		case "/containers/" + composeLogsTestNonTTYContainerInternal + "/json":
 			writeComposeInspectJSONInternal(t, w, composeLogsTestNonTTYContainerInternal, "web", false)
 		case "/containers/" + composeLogsTestTTYContainerInternal + "/json":
@@ -65,11 +66,15 @@ func TestComposeLogsMarksStderrWithoutChangingComposeOptions(t *testing.T) {
 				frameLogEntryInternal(stdcopy.Stdout, []byte(composeLogsTestTimestampInternal+"hello stdout\n")),
 				frameLogEntryInternal(stdcopy.Stderr, []byte(composeLogsTestTimestampInternal+"hello stderr\n")),
 			}, nil))
-			require.NoError(t, err)
+			if !assert.NoError(t, err) {
+				return
+			}
 		case "/containers/" + composeLogsTestTTYContainerInternal + "/logs":
 			w.Header().Set("Content-Type", "application/vnd.docker.raw-stream")
 			_, err := w.Write([]byte(composeLogsTestTimestampInternal + "raw tty output\n"))
-			require.NoError(t, err)
+			if !assert.NoError(t, err) {
+				return
+			}
 		default:
 			http.NotFound(w, r)
 		}
@@ -79,7 +84,7 @@ func TestComposeLogsMarksStderrWithoutChangingComposeOptions(t *testing.T) {
 	t.Setenv("DOCKER_HOST", "tcp://"+strings.TrimPrefix(server.URL, "http://"))
 
 	out := &bytes.Buffer{}
-	err := ComposeLogs(context.Background(), composeLogsTestProjectInternal, out, false, "all", "", true)
+	err := ComposeLogs(t.Context(), composeLogsTestProjectInternal, out, false, "all", "", true)
 	require.NoError(t, err)
 
 	body := out.String()

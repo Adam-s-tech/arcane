@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -24,7 +25,7 @@ func TestIsWebSocketUpgradeRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := httptest.NewRequest("GET", "/", nil)
+			r := httptest.NewRequest("GET", "/", http.NoBody)
 			if tt.connection != "" {
 				r.Header.Set("Connection", tt.connection)
 			}

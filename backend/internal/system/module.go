@@ -23,7 +23,14 @@ type Module struct {
 }
 
 // New wires system routes around an existing service.
-func New(service *SystemService, dockerService *docker.DockerClientService, upgradeService *SystemUpgradeService, environmentService *environment.EnvironmentService, cfg *config.Config, activityService *activity.ActivityService) *Module {
+func New(
+	service *SystemService,
+	dockerService *docker.DockerClientService,
+	upgradeService *SystemUpgradeService,
+	environmentService *environment.EnvironmentService,
+	cfg *config.Config,
+	activityService *activity.ActivityService,
+) *Module {
 	return &Module{service: service, dockerService: dockerService, upgradeService: upgradeService, environmentService: environmentService, cfg: cfg, activityService: activityService}
 }
 

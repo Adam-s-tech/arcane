@@ -3,7 +3,6 @@ package registry
 import (
 	"context"
 	"encoding/base64"
-	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -22,7 +21,17 @@ func TestListImageTagsCredentialsInternal(t *testing.T) {
 		wantPassword string
 	}{
 		{name: "stored", wantUser: "stored-user", wantPassword: "stored-token"},
-		{name: "external overrides stored", external: []containerregistry.Credential{{URL: "docker.io", Username: "external-user", Token: "external-token", Enabled: true}}, wantUser: "external-user", wantPassword: "external-token"},
+		{
+			name: "external overrides stored",
+			external: []containerregistry.Credential{{
+				URL:      "docker.io",
+				Username: "external-user",
+				Token:    "external-token",
+				Enabled:  true,
+			}},
+			wantUser:     "external-user",
+			wantPassword: "external-token",
+		},
 		{name: "external excludes unrelated stored", external: []containerregistry.Credential{{URL: "other.test", Username: "external-user", Token: "external-token", Enabled: true}}},
 		{name: "disabled external ignored", external: []containerregistry.Credential{{URL: "docker.io", Username: "external-user", Token: "external-token", Enabled: false}}},
 	} {
@@ -65,7 +74,16 @@ func TestListImageTagsDoesNotFallBackOnRateLimitInternal(t *testing.T) {
 		}
 		return &http.Response{StatusCode: http.StatusTooManyRequests, Body: http.NoBody, Header: http.Header{}}, nil
 	})})
-	tags, err := svc.ListImageTags(t.Context(), "registry.test/team/app:1.0.0", []containerregistry.Credential{{URL: "registry.test", Username: "user", Token: "token", Enabled: true}})
+	tags, err := svc.ListImageTags(
+		t.Context(),
+		"registry.test/team/app:1.0.0",
+		[]containerregistry.Credential{{
+			URL:      "registry.test",
+			Username: "user",
+			Token:    "token",
+			Enabled:  true,
+		}},
+	)
 	require.Error(t, err)
 	assert.Nil(t, tags)
 	assert.Positive(t, credentialed)
@@ -77,7 +95,7 @@ func TestListImageTagsCancellationInternal(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	_, err := svc.ListImageTags(ctx, "registry.test/team/app:1.0.0", nil)
-	require.True(t, errors.Is(err, context.Canceled), "error = %v", err)
+	require.ErrorIs(t, err, context.Canceled, "error = %v", err)
 }
 
 func TestListImageTagsRejectedCredentialFallbackInternal(t *testing.T) {

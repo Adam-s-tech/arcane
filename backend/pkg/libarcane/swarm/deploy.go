@@ -80,8 +80,8 @@ func DeployStack(ctx context.Context, dockerClient *dockerclient.Client, opts St
 		return err
 	}
 
-	if err := ensureSwarmVolumesInternal(ctx, dockerClient, project, ns, stackLabels); err != nil {
-		return err
+	if ensureSwarmVolumesErr := ensureSwarmVolumesInternal(ctx, dockerClient, project, ns, stackLabels); ensureSwarmVolumesErr != nil {
+		return ensureSwarmVolumesErr
 	}
 
 	configPlans, err := planConfigsInternal(project, ns)
@@ -140,14 +140,14 @@ func DeployStack(ctx context.Context, dockerClient *dockerclient.Client, opts St
 			if _, ok := desiredServices[name]; ok {
 				continue
 			}
-			if _, err := dockerClient.ServiceRemove(ctx, svc.ID, dockerclient.ServiceRemoveOptions{}); err != nil {
-				return fmt.Errorf("failed to remove swarm service %s: %w", name, err)
+			if _, serviceRemoveErr := dockerClient.ServiceRemove(ctx, svc.ID, dockerclient.ServiceRemoveOptions{}); serviceRemoveErr != nil {
+				return fmt.Errorf("failed to remove swarm service %s: %w", name, serviceRemoveErr)
 			}
 		}
 	}
 
-	if err := cleanupStackResourcesInternal(ctx, dockerClient, stackName, configMetaByKey, secretMetaByKey); err != nil {
-		return err
+	if cleanupStackResourcesErr := cleanupStackResourcesInternal(ctx, dockerClient, stackName, configMetaByKey, secretMetaByKey); cleanupStackResourcesErr != nil {
+		return cleanupStackResourcesErr
 	}
 
 	return nil
@@ -178,14 +178,14 @@ func reconcileStackServicesInternal(
 		desiredServices[spec.Name] = struct{}{}
 
 		if existing, ok := existingServices[spec.Name]; ok {
-			if err := updateSwarmServiceInternal(ctx, dockerClient, existing, spec, opts.WithRegistryAuth, opts.RegistryAuthForImage, resolveMode); err != nil {
-				return nil, err
+			if updateSwarmServiceErr := updateSwarmServiceInternal(ctx, dockerClient, existing, spec, opts.WithRegistryAuth, opts.RegistryAuthForImage, resolveMode); updateSwarmServiceErr != nil {
+				return nil, updateSwarmServiceErr
 			}
 			continue
 		}
 
-		if err := createSwarmServiceInternal(ctx, dockerClient, spec, opts.WithRegistryAuth, opts.RegistryAuthForImage, resolveMode); err != nil {
-			return nil, err
+		if createSwarmServiceErr := createSwarmServiceInternal(ctx, dockerClient, spec, opts.WithRegistryAuth, opts.RegistryAuthForImage, resolveMode); createSwarmServiceErr != nil {
+			return nil, createSwarmServiceErr
 		}
 	}
 
@@ -225,8 +225,8 @@ func createSwarmServiceInternal(
 		QueryRegistry: queryRegistry,
 	}
 	opts.EncodedRegistryAuth = cmp.Or(encodedRegistryAuth, opts.EncodedRegistryAuth)
-	if _, err := dockerClient.ServiceCreate(ctx, opts); err != nil {
-		return fmt.Errorf("failed to create swarm service %s: %w", spec.Name, err)
+	if _, serviceCreateErr := dockerClient.ServiceCreate(ctx, opts); serviceCreateErr != nil {
+		return fmt.Errorf("failed to create swarm service %s: %w", spec.Name, serviceCreateErr)
 	}
 	return nil
 }
@@ -263,15 +263,15 @@ func updateSwarmServiceInternal(
 		opts.RegistryAuthFrom = swarm.RegistryAuthFromPreviousSpec
 	}
 
-	if _, err := dockerClient.ServiceUpdate(ctx, existing.ID, opts); err != nil {
-		if strings.Contains(err.Error(), "service does not have a previous spec") {
+	if _, serviceUpdateErr := dockerClient.ServiceUpdate(ctx, existing.ID, opts); serviceUpdateErr != nil {
+		if strings.Contains(serviceUpdateErr.Error(), "service does not have a previous spec") {
 			opts.RegistryAuthFrom = ""
 			if _, retryErr := dockerClient.ServiceUpdate(ctx, existing.ID, opts); retryErr != nil {
 				return fmt.Errorf("failed to update swarm service %s: %w", spec.Name, retryErr)
 			}
 			return nil
 		}
-		return fmt.Errorf("failed to update swarm service %s: %w", spec.Name, err)
+		return fmt.Errorf("failed to update swarm service %s: %w", spec.Name, serviceUpdateErr)
 	}
 	return nil
 }

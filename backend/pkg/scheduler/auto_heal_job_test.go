@@ -137,7 +137,7 @@ func TestAutoHeal_Schedule_Default(t *testing.T) {
 }
 
 func TestAutoHeal_ShouldSchedule(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	_, settingsSvc, _ := setupAnalyticsStateServicesInternal(t)
 	job, err := NewAutoHealJob(nil, settingsSvc, nil, nil, newTestAdmissionGateInternal(t))
 	require.NoError(t, err)
@@ -165,7 +165,7 @@ func TestAutoHeal_ResetRestartTracking(t *testing.T) {
 }
 
 func TestAutoHeal_Run_UsesBoundedConcurrency(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
@@ -221,7 +221,8 @@ func TestAutoHeal_Run_UsesBoundedConcurrency(t *testing.T) {
 		return nil
 	}
 
-	job.Run(ctx)
+	_, runErr1 := job.Run(ctx)
+	require.NoError(t, runErr1)
 
 	require.Greater(t, maxConcurrent.Load(), int32(1))
 	require.LessOrEqual(t, maxConcurrent.Load(), int32(autoHealInspectConcurrency))
@@ -229,7 +230,7 @@ func TestAutoHeal_Run_UsesBoundedConcurrency(t *testing.T) {
 }
 
 func TestAutoHealJob_OverlappingRunIsSkippedInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	_, settingsSvc, _ := setupAnalyticsStateServicesInternal(t)
 	require.NoError(t, settingsSvc.SetBoolSetting(ctx, "autoHealEnabled", true))
 
@@ -251,12 +252,18 @@ func TestAutoHealJob_OverlappingRunIsSkippedInternal(t *testing.T) {
 
 	firstDone := make(chan struct{})
 	go func() {
-		job.Run(ctx)
+		_, runErr2 := job.Run(ctx)
+		if runErr2 != nil {
+			t.Errorf("first auto heal job run failed: %v", runErr2)
+			close(firstDone)
+			return
+		}
 		close(firstDone)
 	}()
 	<-started
 
-	job.Run(ctx)
+	_, runErr3 := job.Run(ctx)
+	require.NoError(t, runErr3)
 	require.Equal(t, int32(1), calls.Load())
 
 	close(release)

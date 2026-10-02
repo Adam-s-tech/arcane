@@ -98,8 +98,8 @@ func (a *backupRunActorInternal) Invoke(ctx context.Context, _ string, data acto
 	err := a.service.GetState(ctx, backupRunTypeInternal, a.id, &state)
 	if errors.Is(err, actor.ErrStateNotFound) {
 		state = backuptypes.DurableRunState{Command: command, Status: st.Queued}
-		if err := a.service.SetState(ctx, backupRunTypeInternal, a.id, state, nil); err != nil {
-			return nil, err
+		if setStateErr := a.service.SetState(ctx, backupRunTypeInternal, a.id, state, nil); setStateErr != nil {
+			return nil, setStateErr
 		}
 	} else if err != nil {
 		return nil, err
@@ -194,16 +194,16 @@ func (a *backupRunActorInternal) executeInternal(ctx context.Context, command ba
 		return errors.New("backup run kind is unavailable")
 	}
 	if a.engine.authorize != nil {
-		if err := a.engine.authorize(ctx, command); err != nil {
+		if authorizeErr := a.engine.authorize(ctx, command); authorizeErr != nil {
 			a.engine.mu.Lock()
 			lease := a.engine.leases[a.id]
 			delete(a.engine.leases, a.id)
 			a.engine.mu.Unlock()
 			defer lease.Release(ctx)
 			if failure != nil {
-				err = errors.Join(err, failure(ctx, a.id, command.Payload, err))
+				authorizeErr = errors.Join(authorizeErr, failure(ctx, a.id, command.Payload, authorizeErr))
 			}
-			return err
+			return authorizeErr
 		}
 	}
 	return handler(ctx, a.id, command.Payload, interrupted)
@@ -221,8 +221,8 @@ func (e *Engine) activeRunsInternal(ctx context.Context) ([]backuptypes.DurableR
 				continue
 			}
 			var state backuptypes.DurableRunState
-			if err := item.Data.Decode(&state); err != nil {
-				return nil, err
+			if decodeErr := item.Data.Decode(&state); decodeErr != nil {
+				return nil, decodeErr
 			}
 			if state.Status == st.Queued || state.Status == st.Running || state.Status == st.NeedsAttention {
 				result = append(result, state)
@@ -280,9 +280,9 @@ func (e *Engine) ReconcileDispatches(ctx context.Context) error {
 		if state.Status == st.NeedsAttention {
 			continue
 		}
-		jobs, err := e.service.ListJobs(ctx, backupRunTypeInternal, state.Command.RunID)
-		if err != nil {
-			return err
+		jobs, listJobsErr := e.service.ListJobs(ctx, backupRunTypeInternal, state.Command.RunID)
+		if listJobsErr != nil {
+			return listJobsErr
 		}
 		live := false
 		for _, job := range jobs {
@@ -291,21 +291,21 @@ func (e *Engine) ReconcileDispatches(ctx context.Context) error {
 				break
 			}
 			if job.Status == actor.JobStatusDeadLettered {
-				if _, err := e.service.RetryJob(ctx, job.JobID); err != nil {
-					return err
+				if _, retryJobErr := e.service.RetryJob(ctx, job.JobID); retryJobErr != nil {
+					return retryJobErr
 				}
 				live = true
 				break
 			}
-			if err := e.service.DeleteJob(ctx, backupRunTypeInternal, state.Command.RunID, job.JobID); err != nil && !errors.Is(err, actor.ErrJobNotFound) {
-				return err
+			if deleteJobErr := e.service.DeleteJob(ctx, backupRunTypeInternal, state.Command.RunID, job.JobID); deleteJobErr != nil && !errors.Is(deleteJobErr, actor.ErrJobNotFound) {
+				return deleteJobErr
 			}
 		}
 		if live {
 			continue
 		}
-		if _, _, err := e.service.Dispatch(ctx, backupRunTypeInternal, state.Command.RunID, "execute", nil, actor.WithIdempotencyKey(state.Command.RunID)); err != nil {
-			return err
+		if _, _, dispatchErr := e.service.Dispatch(ctx, backupRunTypeInternal, state.Command.RunID, "execute", nil, actor.WithIdempotencyKey(state.Command.RunID)); dispatchErr != nil {
+			return dispatchErr
 		}
 	}
 	return nil

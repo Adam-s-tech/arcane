@@ -1,7 +1,6 @@
 package projects
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -112,7 +111,7 @@ services:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			iconURL := ResolveTemplateIconURL(context.Background(), tt.compose, tt.envContent)
+			iconURL := ResolveTemplateIconURL(t.Context(), tt.compose, tt.envContent)
 			if tt.want == "" {
 				require.Nil(t, iconURL)
 				return

@@ -1,7 +1,6 @@
 package client
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -34,7 +33,7 @@ func TestClient_UsesAPIKeyHeader(t *testing.T) {
 	require.NoError(t, err,
 		"New() error: %v", err)
 
-	resp, err := c.Get(context.Background(), "/api/version")
+	resp, err := c.Get(t.Context(), "/api/version")
 
 	require.NoError(t, err,
 		"Get() error: %v", err)
@@ -67,7 +66,7 @@ func TestClient_UsesBearerTokenHeader(t *testing.T) {
 	require.NoError(t, err,
 		"New() error: %v", err)
 
-	resp, err := c.Get(context.Background(), "/api/version")
+	resp, err := c.Get(t.Context(), "/api/version")
 
 	require.NoError(t, err,
 		"Get() error: %v", err)
@@ -96,7 +95,7 @@ func TestClient_NewUnauthenticated_DoesNotSendAuthHeaders(t *testing.T) {
 	require.NoError(t, err,
 		"NewUnauthenticated() error: %v", err)
 
-	resp, err := c.Get(context.Background(), "/api/auth/login")
+	resp, err := c.Get(t.Context(), "/api/auth/login")
 
 	require.NoError(t, err,
 		"Get() error: %v", err)
@@ -140,7 +139,7 @@ func TestClient_Request_DoesNotDoubleMarshalBytes(t *testing.T) {
 	require.NoError(t, err,
 		"json.Marshal() error: %v", err)
 
-	resp, err := c.Post(context.Background(), "/api/auth/login", raw)
+	resp, err := c.Post(t.Context(), "/api/auth/login", raw)
 
 	require.NoError(t, err,
 		"Post() error: %v", err)

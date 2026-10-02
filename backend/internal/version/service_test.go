@@ -1,7 +1,6 @@
 package version
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -37,7 +36,7 @@ import (
 )
 
 func TestVersionService_GetAppVersionInfoDoesNotUseStoredDigestUpdateForSemverBuildInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupImageUpdateTestDB(t)
 
 	const (
@@ -134,7 +133,7 @@ func TestVersionService_GetAppVersionInfoDoesNotUseStoredDigestUpdateForSemverBu
 func TestVersionService_GetAppVersionInfoDisplaysSemverNextVersion(t *testing.T) {
 	svc := NewVersionService(nil, true, "2.4.0-next.2", "2c3e44a10ddda540d7e19fc2a876c931fc33a426", nil, nil, nil, nil)
 
-	info := svc.GetAppVersionInfo(context.Background())
+	info := svc.GetAppVersionInfo(t.Context())
 
 	require.NotNil(t, info)
 	assert.Equal(t, "v2.4.0-next.2", info.DisplayVersion)
@@ -144,7 +143,7 @@ func TestVersionService_GetAppVersionInfoDisplaysSemverNextVersion(t *testing.T)
 func TestVersionService_GetAppVersionInfoPreservesDevVersionInternal(t *testing.T) {
 	svc := NewVersionService(nil, true, "dev", "unknown", nil, nil, nil, nil)
 
-	info := svc.GetAppVersionInfo(context.Background())
+	info := svc.GetAppVersionInfo(t.Context())
 
 	require.NotNil(t, info)
 	assert.Equal(t, "dev", info.CurrentVersion)
@@ -258,7 +257,7 @@ func newNextChannelDockerServerInternal(t *testing.T, containerID, imageID, repo
 }
 
 func TestVersionService_GetAppVersionInfoNextChannelUsesImageLabelInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupImageUpdateTestDB(t)
 
 	const (
@@ -324,7 +323,7 @@ func TestVersionService_GetAppVersionInfoNextChannelUsesImageLabelInternal(t *te
 }
 
 func TestVersionService_GetAppVersionInfoNextChannelLabelFailureFallsBackToDigestInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupImageUpdateTestDB(t)
 
 	const (
@@ -377,7 +376,7 @@ func TestVersionService_GetAppVersionInfoSuppressesOlderStableForPrereleaseInter
 	// still drop the older stable tag rather than showing a backwards arrow.
 	svc := NewVersionService(httpClient, false, "2.8.0-rc.1", "revision", nil, nil, nil, nil)
 
-	info := svc.GetAppVersionInfo(context.Background())
+	info := svc.GetAppVersionInfo(t.Context())
 
 	require.NotNil(t, info)
 	assert.False(t, info.UpdateAvailable)

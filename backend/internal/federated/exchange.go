@@ -100,9 +100,9 @@ func (s *FederatedCredentialService) ExchangeToken(ctx context.Context, req fede
 		return nil, common.Classify(common.ErrFederatedCredentialInvalidGrant, errors.New("invalid federated token grant"))
 	}
 	matchedCredential = credential
-	if err := s.recordTokenReplayGuardInternal(ctx, issuer, req.SubjectToken, verifiedClaims, verifiedToken.Expiry); err != nil {
+	if recordTokenReplayGuardErr := s.recordTokenReplayGuardInternal(ctx, issuer, req.SubjectToken, verifiedClaims, verifiedToken.Expiry); recordTokenReplayGuardErr != nil {
 		logReason = "token_replay_rejected"
-		return nil, err
+		return nil, recordTokenReplayGuardErr
 	}
 
 	user, err := s.userService.GetUserByID(ctx, credential.IdentityUserID)
@@ -120,13 +120,13 @@ func (s *FederatedCredentialService) ExchangeToken(ctx context.Context, req fede
 
 	go func() {
 		bgCtx := context.WithoutCancel(ctx)
-		now := time.Now()
-		cutoff := now.Add(-federatedCredentialLastUsedWriteWindow)
-		if err := s.db.WithContext(bgCtx).
+		localNow := time.Now()
+		cutoff := localNow.Add(-federatedCredentialLastUsedWriteWindow)
+		if updateLastUsedErr := s.db.WithContext(bgCtx).
 			Model(&FederatedCredential{}).
 			Where("id = ? AND (last_used_at IS NULL OR last_used_at < ?)", credential.ID, cutoff).
-			Update("last_used_at", now).Error; err != nil {
-			slog.WarnContext(bgCtx, "failed to update federated credential last_used_at", "credential_id", credential.ID, "error", err)
+			Update("last_used_at", localNow).Error; updateLastUsedErr != nil {
+			slog.WarnContext(bgCtx, "failed to update federated credential last_used_at", "credential_id", credential.ID, "error", updateLastUsedErr)
 		}
 	}()
 
@@ -157,8 +157,8 @@ func (s *FederatedCredentialService) verifySubjectTokenInternal(ctx context.Cont
 	}
 
 	claims := map[string]any{}
-	if err := idToken.Claims(&claims); err != nil {
-		return nil, nil, err
+	if claimsErr := idToken.Claims(&claims); claimsErr != nil {
+		return nil, nil, claimsErr
 	}
 	return idToken, claims, nil
 }
@@ -214,8 +214,8 @@ func (s *FederatedCredentialService) keySetForIssuerInternal(ctx context.Context
 		var metadata struct {
 			JWKSURL string `json:"jwks_uri"`
 		}
-		if err := provider.Claims(&metadata); err != nil {
-			return nil, fmt.Errorf("failed to read federated issuer metadata: %w", err)
+		if claimsErr := provider.Claims(&metadata); claimsErr != nil {
+			return nil, fmt.Errorf("failed to read federated issuer metadata: %w", claimsErr)
 		}
 		if metadata.JWKSURL == "" {
 			return nil, errors.New("federated issuer metadata is missing jwks_uri")

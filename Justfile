@@ -224,6 +224,7 @@ _format_go:
     #!/usr/bin/env bash
     set -euo pipefail
     for module in {{ modules }}; do
+        echo "Formatting Go module: ${module} (gci + gofumpt)"
         (cd "$module" && gci write --skip-generated --skip-vendor --custom-order -s "{{ go_stdlib_section }}" -s default -s localmodule .)
         gofumpt -w -extra "$module"
     done

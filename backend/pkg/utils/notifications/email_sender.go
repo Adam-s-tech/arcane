@@ -131,17 +131,17 @@ func sendEmailInternal(ctx context.Context, config EmailConfig, subject, htmlBod
 	}
 
 	msg := mail.NewMsg()
-	if err := msg.From(config.FromAddress); err != nil {
-		return fmt.Errorf("invalid from address %q: %w", config.FromAddress, err)
+	if fromErr := msg.From(config.FromAddress); fromErr != nil {
+		return fmt.Errorf("invalid from address %q: %w", config.FromAddress, fromErr)
 	}
-	if err := msg.To(config.ToAddresses...); err != nil {
-		return fmt.Errorf("invalid recipient address(es): %w", err)
+	if toErr := msg.To(config.ToAddresses...); toErr != nil {
+		return fmt.Errorf("invalid recipient address(es): %w", toErr)
 	}
 	msg.Subject(subject)
 	msg.SetBodyString(mail.TypeTextHTML, htmlBody)
 
-	if err := client.DialAndSendWithContext(ctx, msg); err != nil {
-		return fmt.Errorf("failed to send email: %w", err)
+	if dialAndSendWithContextErr := client.DialAndSendWithContext(ctx, msg); dialAndSendWithContextErr != nil {
+		return fmt.Errorf("failed to send email: %w", dialAndSendWithContextErr)
 	}
 
 	return nil

@@ -126,8 +126,8 @@ func (l *EnvLoader) LoadEnvironment(ctx context.Context) (envMap, injectionVars 
 
 	if strings.TrimSpace(l.projectsDir) != "" {
 		globalEnvPath := filepath.Join(l.projectsDir, GlobalEnvFileName)
-		if err := l.loadAndMergeGlobalEnv(ctx, globalEnvPath, envMap, injectionVars); err != nil && !errors.Is(err, os.ErrNotExist) {
-			slog.WarnContext(ctx, "Failed to load global env", "path", globalEnvPath, "error", err)
+		if loadAndMergeGlobalEnvErr := l.loadAndMergeGlobalEnv(ctx, globalEnvPath, envMap, injectionVars); loadAndMergeGlobalEnvErr != nil && !errors.Is(loadAndMergeGlobalEnvErr, os.ErrNotExist) {
+			slog.WarnContext(ctx, "Failed to load global env", "path", globalEnvPath, "error", loadAndMergeGlobalEnvErr)
 		}
 	}
 
@@ -139,14 +139,21 @@ func (l *EnvLoader) LoadEnvironment(ctx context.Context) (envMap, injectionVars 
 		slog.DebugContext(ctx, "COMPOSE_DISABLE_ENV_FILE set; skipping project .env", "workdir", l.workdir)
 	} else {
 		projectEnvPath := filepath.Join(l.workdir, EffectiveEnvFileName)
-		if err := l.loadAndMergeProjectEnv(ctx, projectEnvPath, envMap, injectionVars); err != nil {
+		if loadAndMergeProjectEnvErr := l.loadAndMergeProjectEnv(ctx, projectEnvPath, envMap, injectionVars); loadAndMergeProjectEnvErr != nil {
 			switch {
-			case errors.Is(err, os.ErrNotExist):
+			case errors.Is(loadAndMergeProjectEnvErr, os.ErrNotExist):
 				slog.DebugContext(ctx, "Project .env file does not exist", "path", projectEnvPath)
-			case errors.Is(err, os.ErrPermission):
-				return envMap, injectionVars, common.Classify(common.ErrProjectEnvUnreadable, fmt.Errorf("%s is not readable by the runtime user (uid %d, gid %d); fix its ownership/read permission or set PUID/PGID to a user that can read it: %w", projectEnvPath, os.Geteuid(), os.Getegid(), err))
+			case errors.Is(loadAndMergeProjectEnvErr, os.ErrPermission):
+				return envMap,
+					injectionVars,
+					common.Classify(common.ErrProjectEnvUnreadable,
+						fmt.Errorf("%s is not readable by the runtime user (uid %d, gid %d); fix its ownership/read permission or set PUID/PGID to a user that can read it: %w",
+							projectEnvPath,
+							os.Geteuid(),
+							os.Getegid(),
+							loadAndMergeProjectEnvErr))
 			default:
-				slog.WarnContext(ctx, "Failed to load project env", "path", projectEnvPath, "error", err)
+				slog.WarnContext(ctx, "Failed to load project env", "path", projectEnvPath, "error", loadAndMergeProjectEnvErr)
 			}
 		}
 	}
@@ -852,7 +859,13 @@ func ComposeFileEnvSelection(ctx context.Context, projectsDir, dir string) ([]st
 		projectEnv, err := ParseProjectEnvFile(projectEnvPath, envMap)
 		if err != nil {
 			if errors.Is(err, os.ErrPermission) {
-				return nil, common.Classify(common.ErrProjectEnvUnreadable, fmt.Errorf("%s is not readable by the runtime user (uid %d, gid %d); fix its ownership/read permission or set PUID/PGID to a user that can read it: %w", projectEnvPath, os.Geteuid(), os.Getegid(), err))
+				return nil,
+					common.Classify(common.ErrProjectEnvUnreadable,
+						fmt.Errorf("%s is not readable by the runtime user (uid %d, gid %d); fix its ownership/read permission or set PUID/PGID to a user that can read it: %w",
+							projectEnvPath,
+							os.Geteuid(),
+							os.Getegid(),
+							err))
 			}
 			return nil, err
 		}

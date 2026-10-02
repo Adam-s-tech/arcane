@@ -60,7 +60,9 @@ var imagesSearchCmd = &cobra.Command{
 			rows = append(rows, []string{item.Name, truncateCell(item.Description, 60), strconv.Itoa(item.StarCount), official})
 		}
 
-		output.Table(headers, rows)
+		if tableErr := output.Table(headers, rows); tableErr != nil {
+			return tableErr
+		}
 		output.Showing(len(result.Data), int64(len(result.Data)), "results")
 
 		return nil
@@ -110,8 +112,8 @@ var imagesHistoryCmd = &cobra.Command{
 			Success bool                `json:"success"`
 			Data    []image.HistoryItem `json:"data"`
 		}
-		if err := json.Unmarshal(body, &result); err != nil {
-			return fmt.Errorf("failed to parse response: %w", err)
+		if unmarshalErr := json.Unmarshal(body, &result); unmarshalErr != nil {
+			return fmt.Errorf("failed to parse response: %w", unmarshalErr)
 		}
 
 		headers := []string{"CREATED", "CREATED BY", "SIZE", "COMMENT"}
@@ -124,9 +126,7 @@ var imagesHistoryCmd = &cobra.Command{
 			rows = append(rows, []string{created, truncateCell(item.CreatedBy, 60), output.Bytes(item.Size), truncateCell(item.Comment, 30)})
 		}
 
-		output.Table(headers, rows)
-
-		return nil
+		return output.Table(headers, rows)
 	},
 }
 
@@ -179,8 +179,8 @@ var imagesTagCmd = &cobra.Command{
 			Success bool                 `json:"success"`
 			Data    base.MessageResponse `json:"data"`
 		}
-		if err := json.Unmarshal(body, &result); err != nil {
-			return fmt.Errorf("failed to parse response: %w", err)
+		if unmarshalErr := json.Unmarshal(body, &result); unmarshalErr != nil {
+			return fmt.Errorf("failed to parse response: %w", unmarshalErr)
 		}
 
 		output.Success("%s", result.Data.Message)
@@ -226,8 +226,8 @@ var imagesExportCmd = &cobra.Command{
 			return fmt.Errorf("failed to export image: %w", err)
 		}
 		defer func() { _ = resp.Body.Close() }()
-		if err := cmdutil.EnsureSuccessStatus(resp); err != nil {
-			return fmt.Errorf("failed to export image: %w", err)
+		if ensureSuccessStatusErr := cmdutil.EnsureSuccessStatus(resp); ensureSuccessStatusErr != nil {
+			return fmt.Errorf("failed to export image: %w", ensureSuccessStatusErr)
 		}
 
 		file, err := os.Create(outputFile)
@@ -328,8 +328,8 @@ var imagesAttestationsCmd = &cobra.Command{
 			Success bool                  `json:"success"`
 			Data    image.AttestationList `json:"data"`
 		}
-		if err := json.Unmarshal(body, &result); err != nil {
-			return fmt.Errorf("failed to parse response: %w", err)
+		if unmarshalErr := json.Unmarshal(body, &result); unmarshalErr != nil {
+			return fmt.Errorf("failed to parse response: %w", unmarshalErr)
 		}
 
 		output.Header("Image Attestations")
@@ -350,7 +350,9 @@ var imagesAttestationsCmd = &cobra.Command{
 			rows = append(rows, []string{att.PredicateType, att.Platform, truncateCell(att.Digest, 19), output.Bytes(att.Size)})
 		}
 		fmt.Println()
-		output.Table(headers, rows)
+		if tableErr := output.Table(headers, rows); tableErr != nil {
+			return tableErr
+		}
 
 		return nil
 	},
@@ -379,9 +381,9 @@ var imagesBuildCmd = &cobra.Command{
 			requestBody["dockerfile"] = buildDockerfile
 		}
 		if buildInlineFile != "" {
-			content, err := os.ReadFile(buildInlineFile)
-			if err != nil {
-				return fmt.Errorf("failed to read Dockerfile: %w", err)
+			content, readFileErr := os.ReadFile(buildInlineFile)
+			if readFileErr != nil {
+				return fmt.Errorf("failed to read Dockerfile: %w", readFileErr)
 			}
 			requestBody["dockerfileInline"] = string(content)
 		}
@@ -433,8 +435,8 @@ var imagesBuildCmd = &cobra.Command{
 			return fmt.Errorf("failed to build image: %w", err)
 		}
 		defer func() { _ = resp.Body.Close() }()
-		if err := cmdutil.EnsureSuccessStatus(resp); err != nil {
-			return fmt.Errorf("failed to build image: %w", err)
+		if ensureSuccessStatusErr := cmdutil.EnsureSuccessStatus(resp); ensureSuccessStatusErr != nil {
+			return fmt.Errorf("failed to build image: %w", ensureSuccessStatusErr)
 		}
 
 		if cmdutil.JSONOutputEnabled(cmd) {
@@ -445,8 +447,8 @@ var imagesBuildCmd = &cobra.Command{
 			return nil
 		}
 
-		if err := streamBuildOutput(resp.Body); err != nil {
-			return err
+		if streamBuildOutputErr := streamBuildOutput(resp.Body); streamBuildOutputErr != nil {
+			return streamBuildOutputErr
 		}
 
 		output.Success("Image built successfully")
@@ -567,8 +569,8 @@ var imagesBuildsGetCmd = &cobra.Command{
 			Success bool              `json:"success"`
 			Data    image.BuildRecord `json:"data"`
 		}
-		if err := json.Unmarshal(body, &result); err != nil {
-			return fmt.Errorf("failed to parse response: %w", err)
+		if unmarshalErr := json.Unmarshal(body, &result); unmarshalErr != nil {
+			return fmt.Errorf("failed to parse response: %w", unmarshalErr)
 		}
 
 		record := result.Data

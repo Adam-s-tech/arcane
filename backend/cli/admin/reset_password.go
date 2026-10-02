@@ -77,12 +77,12 @@ func runResetPasswordCommandInternal(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	if err := resetPasswordInternal(cmd.Context(), db, username, password, policy); err != nil {
-		return err
+	if resetPasswordErr := resetPasswordInternal(cmd.Context(), db, username, password, policy); resetPasswordErr != nil {
+		return resetPasswordErr
 	}
 
-	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Password reset successfully for global administrator %q\n", username); err != nil {
-		return fmt.Errorf("failed to write password reset result: %w", err)
+	if _, fprintfErr := fmt.Fprintf(cmd.OutOrStdout(), "Password reset successfully for global administrator %q\n", username); fprintfErr != nil {
+		return fmt.Errorf("failed to write password reset result: %w", fprintfErr)
 	}
 	return nil
 }
@@ -108,8 +108,8 @@ func readNewPasswordInternal(out io.Writer, policy string) (string, error) {
 		return "", fmt.Errorf("failed to read password confirmation: %w", err)
 	}
 
-	if err := validatePasswordPairInternal(password, confirmation, policy); err != nil {
-		return "", err
+	if validatePasswordPairErr := validatePasswordPairInternal(password, confirmation, policy); validatePasswordPairErr != nil {
+		return "", validatePasswordPairErr
 	}
 	return password, nil
 }
@@ -175,8 +175,8 @@ func resetPasswordInternal(ctx context.Context, db *database.DB, username, passw
 		return fmt.Errorf("user %q does not have effective global administrator permissions", username)
 	}
 
-	if _, err := userService.SetPasswordAndRevokeSessionsExcept(ctx, target, password, ""); err != nil {
-		return fmt.Errorf("failed to reset password: %w", err)
+	if _, setPasswordAndRevokeSessionsExceptErr := userService.SetPasswordAndRevokeSessionsExcept(ctx, target, password, ""); setPasswordAndRevokeSessionsExceptErr != nil {
+		return fmt.Errorf("failed to reset password: %w", setPasswordAndRevokeSessionsExceptErr)
 	}
 
 	return nil

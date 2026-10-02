@@ -48,7 +48,7 @@ func TestActivityFailureNeverReplaysAcceptedExecution(t *testing.T) {
 	require.NoError(t, q.Start(t.Context(), t.Context()))
 	q.Activate()
 	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Second)
 		defer cancel()
 		require.NoError(t, q.Stop(ctx))
 	})

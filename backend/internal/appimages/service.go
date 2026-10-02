@@ -43,8 +43,8 @@ func NewApplicationImagesService(embeddedFS embed.FS, settingsService *settings.
 		ext := strings.ToLower(filepath.Ext(filename))
 		nameWithoutExt := strings.TrimSuffix(filename, ext)
 
-		data, err := embeddedFS.ReadFile(filepath.Join(imageDir, filename))
-		if err != nil {
+		data, readFileErr := embeddedFS.ReadFile(filepath.Join(imageDir, filename))
+		if readFileErr != nil {
 			continue
 		}
 

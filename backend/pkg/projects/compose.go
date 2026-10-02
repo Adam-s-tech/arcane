@@ -65,8 +65,8 @@ func NewClient(ctx context.Context, dockerHost string, authConfigs map[string]re
 	if dockerHost != "" {
 		opts.Hosts = []string{dockerHost}
 	}
-	if err := cli.Initialize(opts); err != nil {
-		return nil, err
+	if initializeErr := cli.Initialize(opts); initializeErr != nil {
+		return nil, initializeErr
 	}
 	if composeAuthConfigs := buildComposeAuthConfigsInternal(authConfigs); len(composeAuthConfigs) > 0 {
 		configFile := cli.ConfigFile()
@@ -144,7 +144,7 @@ func plainComposeClientInternal(ctx context.Context, dockerHost string) (*Client
 
 	// Built on context.Background so request-scoped values (progress
 	// writers, deadlines) do not leak into the long-lived client.
-	c, err := NewClient(context.Background(), dockerHost, nil, nil) //nolint:contextcheck // deliberate: see comment above
+	c, err := NewClient(context.Background(), dockerHost, nil, nil) //nolint:contextcheck,forbidigo // Cached Compose client must not retain request values or cancellation.
 	if err != nil {
 		return nil, false, err
 	}

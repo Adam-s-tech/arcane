@@ -72,8 +72,8 @@ func BenchmarkJSONRequestDecoding(b *testing.B) {
 		b.ReportAllocs()
 		for b.Loop() {
 			var output jsonBenchmarkResponse
-			if err := jsonv1.NewDecoder(bytes.NewReader(data)).Decode(&output); err != nil {
-				require.FailNowf(b, "benchmark JSON decoding failed", "%v", err)
+			if decodeErr := jsonv1.NewDecoder(bytes.NewReader(data)).Decode(&output); decodeErr != nil {
+				require.FailNowf(b, "benchmark JSON decoding failed", "%v", decodeErr)
 			}
 		}
 	})
@@ -82,8 +82,8 @@ func BenchmarkJSONRequestDecoding(b *testing.B) {
 		b.ReportAllocs()
 		for b.Loop() {
 			var output jsonBenchmarkResponse
-			if err := jsonv2.UnmarshalRead(bytes.NewReader(data), &output, jsonV2APIOptions); err != nil {
-				require.FailNowf(b, "benchmark JSON decoding failed", "%v", err)
+			if unmarshalReadErr := jsonv2.UnmarshalRead(bytes.NewReader(data), &output, jsonV2APIOptions); unmarshalReadErr != nil {
+				require.FailNowf(b, "benchmark JSON decoding failed", "%v", unmarshalReadErr)
 			}
 		}
 	})

@@ -1,7 +1,6 @@
 package ci
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -27,7 +26,7 @@ func TestDetectFederatedTokenFromGitHubActionsInternal(t *testing.T) {
 		"ACTIONS_ID_TOKEN_REQUEST_URL":   server.URL + "?api-version=2",
 		"ACTIONS_ID_TOKEN_REQUEST_TOKEN": "request-token",
 	}
-	token, provider, err := DetectToken(context.Background(), "auto", "https://arcane.example.com", envGetterFromMapInternal(env), server.Client())
+	token, provider, err := DetectToken(t.Context(), "auto", "https://arcane.example.com", envGetterFromMapInternal(env), server.Client())
 
 	require.NoError(t, err)
 	require.Equal(t, "github.jwt", token)
@@ -39,7 +38,7 @@ func TestDetectFederatedTokenFromGitHubActionsInternal(t *testing.T) {
 func TestDetectFederatedTokenFromGitLabLegacyInternal(t *testing.T) {
 	t.Parallel()
 
-	token, provider, err := DetectToken(context.Background(), "auto", "https://arcane.example.com", envGetterFromMapInternal(map[string]string{
+	token, provider, err := DetectToken(t.Context(), "auto", "https://arcane.example.com", envGetterFromMapInternal(map[string]string{
 		"CI_JOB_JWT_V2": "gitlab.jwt",
 	}), http.DefaultClient)
 
@@ -51,7 +50,7 @@ func TestDetectFederatedTokenFromGitLabLegacyInternal(t *testing.T) {
 func TestDetectFederatedTokenProviderMismatchInternal(t *testing.T) {
 	t.Parallel()
 
-	_, _, err := DetectToken(context.Background(), "github", "aud", envGetterFromMapInternal(map[string]string{
+	_, _, err := DetectToken(t.Context(), "github", "aud", envGetterFromMapInternal(map[string]string{
 		"CI_JOB_JWT_V2": "gitlab.jwt",
 	}), http.DefaultClient)
 

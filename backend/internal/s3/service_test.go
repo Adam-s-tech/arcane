@@ -1,7 +1,6 @@
 package s3
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +11,7 @@ import (
 
 	backuptypes "github.com/getarcaneapp/arcane/types/v2/backup"
 	"github.com/libtnb/sqlite"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	kit "go.getarcane.app/kit/pkg"
 	"go.getarcane.app/sys/crypto"
@@ -45,7 +45,7 @@ func setupS3DestinationServiceTestInternal(t *testing.T) (*S3DestinationService,
 
 func TestS3DestinationService_CRUD(t *testing.T) {
 	service, gormDB := setupS3DestinationServiceTestInternal(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	created, err := service.CreateS3Destination(ctx, backuptypes.CreateS3Destination{
 		Name:            "  Cafe\u0301 offsite  ",
@@ -100,7 +100,7 @@ func TestS3DestinationService_CRUD(t *testing.T) {
 
 func TestS3DestinationService_DeleteRejectsConfiguredDestination(t *testing.T) {
 	service, gormDB := setupS3DestinationServiceTestInternal(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	destination, err := service.CreateS3Destination(ctx, backuptypes.CreateS3Destination{
 		Name:            "In use",
 		Bucket:          "arcane-backups",
@@ -118,7 +118,7 @@ func TestS3DestinationService_DeleteRejectsConfiguredDestination(t *testing.T) {
 
 func TestS3DestinationService_SyncS3Destinations(t *testing.T) {
 	service, gormDB := setupS3DestinationServiceTestInternal(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	legacy, err := service.CreateS3Destination(ctx, backuptypes.CreateS3Destination{
 		Name:            "Legacy",
@@ -184,14 +184,20 @@ func TestS3DestinationService_TestS3DestinationRoundTrip(t *testing.T) {
 	var requestMethods []string
 	expectedPathPrefix := "/arcane-backups/production/.arcane-connection-test-"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.NotEmpty(t, r.Header.Get("Authorization"))
-		require.True(t, strings.HasPrefix(r.URL.Path, expectedPathPrefix))
+		if !assert.NotEmpty(t, r.Header.Get("Authorization")) {
+			return
+		}
+		if !assert.True(t, strings.HasPrefix(r.URL.Path, expectedPathPrefix)) {
+			return
+		}
 		requestMethods = append(requestMethods, r.Method)
 		switch r.Method {
 		case http.MethodPut:
 			var err error
 			object, err = io.ReadAll(r.Body)
-			require.NoError(t, err)
+			if !assert.NoError(t, err) {
+				return
+			}
 			w.Header().Set("ETag", `"test-etag"`)
 			w.WriteHeader(http.StatusOK)
 		case http.MethodGet:
@@ -208,7 +214,7 @@ func TestS3DestinationService_TestS3DestinationRoundTrip(t *testing.T) {
 	defer server.Close()
 
 	service, _ := setupS3DestinationServiceTestInternal(t)
-	require.NoError(t, service.TestS3DestinationConfiguration(context.Background(), backuptypes.CreateS3Destination{
+	require.NoError(t, service.TestS3DestinationConfiguration(t.Context(), backuptypes.CreateS3Destination{
 		Name:            "Unsaved destination",
 		Endpoint:        server.URL,
 		Bucket:          "arcane-backups",
@@ -219,7 +225,7 @@ func TestS3DestinationService_TestS3DestinationRoundTrip(t *testing.T) {
 		UseSSL:          false,
 		ForcePathStyle:  true,
 	}))
-	destination, err := service.CreateS3Destination(context.Background(), backuptypes.CreateS3Destination{
+	destination, err := service.CreateS3Destination(t.Context(), backuptypes.CreateS3Destination{
 		Name:            "Test destination",
 		Endpoint:        server.URL,
 		Bucket:          "arcane-backups",
@@ -232,13 +238,13 @@ func TestS3DestinationService_TestS3DestinationRoundTrip(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	require.NoError(t, service.TestS3Destination(context.Background(), destination.ID, nil))
+	require.NoError(t, service.TestS3Destination(t.Context(), destination.ID, nil))
 
 	// Changing a connection field without re-supplying the secret is rejected
 	// before any outbound request: the stored secret must never sign requests
 	// against caller-modified connection settings.
 	requestsBeforeRejection := len(requestMethods)
-	err = service.TestS3Destination(context.Background(), destination.ID, &backuptypes.UpdateS3Destination{
+	err = service.TestS3Destination(t.Context(), destination.ID, &backuptypes.UpdateS3Destination{
 		Name:           destination.Name,
 		Endpoint:       server.URL,
 		Bucket:         "edited-bucket",
@@ -252,7 +258,7 @@ func TestS3DestinationService_TestS3DestinationRoundTrip(t *testing.T) {
 	require.Len(t, requestMethods, requestsBeforeRejection)
 
 	expectedPathPrefix = "/edited-bucket/edited/.arcane-connection-test-"
-	require.NoError(t, service.TestS3Destination(context.Background(), destination.ID, &backuptypes.UpdateS3Destination{
+	require.NoError(t, service.TestS3Destination(t.Context(), destination.ID, &backuptypes.UpdateS3Destination{
 		Name:            destination.Name,
 		Endpoint:        server.URL,
 		Bucket:          "edited-bucket",
@@ -270,7 +276,7 @@ func TestS3DestinationService_TestS3DestinationRoundTrip(t *testing.T) {
 		http.MethodPut, http.MethodGet, http.MethodDelete,
 	}, requestMethods)
 	require.Empty(t, object)
-	persisted, err := service.GetS3Destination(context.Background(), destination.ID)
+	persisted, err := service.GetS3Destination(t.Context(), destination.ID)
 	require.NoError(t, err)
 	require.Equal(t, "arcane-backups", persisted.Bucket)
 	require.Equal(t, "production", persisted.Prefix)

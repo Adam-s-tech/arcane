@@ -58,10 +58,24 @@ func RegisterImagePatches(api huma.API, imagePatchService *ImagePatchService, ap
 		handlerutil.Operation("list-image-patches", http.MethodGet, "/environments/{id}/images/patches", "List image patches", "Retrieves the paginated image patch history for the environment", "Images"),
 		authz.PermImagesList, h.ListImagePatches)
 	handlerutil.RegisterSecured(api,
-		handlerutil.Operation("list-image-patch-targets", http.MethodGet, "/environments/{id}/images/patch-targets", "List image patch targets", "Retrieves scanned images with fixable vulnerability counts and their latest patch run", "Images"),
+		handlerutil.Operation(
+			"list-image-patch-targets",
+			http.MethodGet,
+			"/environments/{id}/images/patch-targets",
+			"List image patch targets",
+			"Retrieves scanned images with fixable vulnerability counts and their latest patch run",
+			"Images",
+		),
 		authz.PermVulnsRead, h.ListPatchTargets)
 	handlerutil.RegisterSecured(api,
-		handlerutil.Operation("patch-image", http.MethodPost, "/environments/{id}/images/{imageId}/patch", "Patch image", "Patches OS package vulnerabilities in the image using Copacetic, producing a new patched tag", "Images"),
+		handlerutil.Operation(
+			"patch-image",
+			http.MethodPost,
+			"/environments/{id}/images/{imageId}/patch",
+			"Patch image",
+			"Patches OS package vulnerabilities in the image using Copacetic, producing a new patched tag",
+			"Images",
+		),
 		authz.PermImagesPatch, h.PatchImage)
 }
 

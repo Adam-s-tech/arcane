@@ -39,7 +39,7 @@ func TestRequirePermission_RejectsCallerMissingPermission(t *testing.T) {
 		return nil, nil
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/environments/env-1/containers/c/start", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/environments/env-1/containers/c/start", http.NoBody)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -79,7 +79,7 @@ func TestRequirePermission_AllowsCallerWithPermissionOnEnv(t *testing.T) {
 		}{Success: true}}, nil
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/environments/env-1/containers/c/start", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/environments/env-1/containers/c/start", http.NoBody)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -112,7 +112,7 @@ func TestRequirePermission_EnvScopedDoesNotLeakAcrossEnvs(t *testing.T) {
 		return nil, nil
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/environments/env-2/containers/c/start", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/environments/env-2/containers/c/start", http.NoBody)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -142,7 +142,7 @@ func TestRequirePermissionEnvironmentGrantCannotManageGlobalNotificationsInterna
 		return nil, nil
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/environments/env-1/notifications/settings", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/environments/env-1/notifications/settings", http.NoBody)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -171,7 +171,7 @@ func TestRequirePermission_SudoCallerAllowed(t *testing.T) {
 		return &struct{}{}, nil
 	})
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/users/u-1", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/users/u-1", http.NoBody)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -216,7 +216,7 @@ func TestRequireSudoRejectsHumanAdminAndAllowsAgent(t *testing.T) {
 				return &struct{}{}, nil
 			})
 
-			req := httptest.NewRequest(http.MethodGet, "/api/environments/0/templates/variables", nil)
+			req := httptest.NewRequest(http.MethodGet, "/api/environments/0/templates/variables", http.NoBody)
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, req)
 

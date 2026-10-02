@@ -90,9 +90,9 @@ func (s *ContainerRegistryService) ListRepositoryTags(ctx context.Context, id, r
 	group.SetLimit(tagDetailsConcurrency)
 	for i, tagName := range page {
 		group.Go(func() error {
-			tag, err := tagDetailsInternal(repo, target.options, tagName)
-			if err != nil {
-				tag.Error = err.Error()
+			tag, tagDetailsErr := tagDetailsInternal(repo, target.options, tagName)
+			if tagDetailsErr != nil {
+				tag.Error = tagDetailsErr.Error()
 			}
 			items[i] = tag
 			return nil
@@ -127,8 +127,8 @@ func (s *ContainerRegistryService) DeleteRepositoryTag(ctx context.Context, id, 
 		return "", classifyBrowseErrorInternal(err, "failed to resolve tag digest")
 	}
 	digest := descriptor.Digest.String()
-	if err := remote.Delete(repo.Digest(digest), target.options...); err != nil {
-		return "", classifyBrowseErrorInternal(err, "failed to delete manifest")
+	if deleteErr := remote.Delete(repo.Digest(digest), target.options...); deleteErr != nil {
+		return "", classifyBrowseErrorInternal(deleteErr, "failed to delete manifest")
 	}
 	return digest, nil
 }
@@ -214,17 +214,17 @@ func tagDetailsInternal(repo name.Repository, options []remote.Option, tagName s
 	tag.MediaType = string(descriptor.MediaType)
 
 	if !descriptor.MediaType.IsIndex() {
-		img, err := descriptor.Image()
-		if err != nil {
-			return tag, err
+		img, imageErr := descriptor.Image()
+		if imageErr != nil {
+			return tag, imageErr
 		}
-		config, err := img.ConfigFile()
-		if err != nil {
-			return tag, err
+		config, imageErr := img.ConfigFile()
+		if imageErr != nil {
+			return tag, imageErr
 		}
-		platform, err := tagPlatformInternal(img, config.Platform(), descriptor.Digest)
-		if err != nil {
-			return tag, err
+		platform, imageErr := tagPlatformInternal(img, config.Platform(), descriptor.Digest)
+		if imageErr != nil {
+			return tag, imageErr
 		}
 		tag.Platforms = []containerregistry.TagPlatform{platform}
 		tag.Size = platform.Size
@@ -252,13 +252,13 @@ func tagDetailsInternal(repo name.Repository, options []remote.Option, tagName s
 			continue
 		}
 		group.Go(func() error {
-			img, err := index.Image(child.Digest)
-			if err != nil {
-				return err
+			img, imageErr := index.Image(child.Digest)
+			if imageErr != nil {
+				return imageErr
 			}
-			platform, err := tagPlatformInternal(img, child.Platform, child.Digest)
-			if err != nil {
-				return err
+			platform, imageErr := tagPlatformInternal(img, child.Platform, child.Digest)
+			if imageErr != nil {
+				return imageErr
 			}
 			mu.Lock()
 			tag.Platforms = append(tag.Platforms, platform)
@@ -267,8 +267,8 @@ func tagDetailsInternal(repo name.Repository, options []remote.Option, tagName s
 			return nil
 		})
 	}
-	if err := group.Wait(); err != nil {
-		return tag, err
+	if waitErr := group.Wait(); waitErr != nil {
+		return tag, waitErr
 	}
 
 	slices.SortFunc(tag.Platforms, func(a, b containerregistry.TagPlatform) int {

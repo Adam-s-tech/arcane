@@ -147,9 +147,9 @@ var getCmd = &cobra.Command{
 		}
 
 		if !complete {
-			result, err := c.GetJSON[gitops.GitOpsSync](cmd.Context(), types.GitOpsSync(c.EnvID(), resolved.ID))
-			if err != nil {
-				return fmt.Errorf("failed to get gitops sync: %w", err)
+			result, getSyncErr := c.GetJSON[gitops.GitOpsSync](cmd.Context(), types.GitOpsSync(c.EnvID(), resolved.ID))
+			if getSyncErr != nil {
+				return fmt.Errorf("failed to get gitops sync: %w", getSyncErr)
 			}
 			resolved = &result.Data
 		}
@@ -224,8 +224,8 @@ var updateCmd = &cobra.Command{
 		}
 		defer func() { _ = resp.Body.Close() }()
 
-		if err := cmdutil.EnsureSuccessStatus(resp); err != nil {
-			return fmt.Errorf("failed to update gitops sync: %w", err)
+		if ensureSuccessStatusErr := cmdutil.EnsureSuccessStatus(resp); ensureSuccessStatusErr != nil {
+			return fmt.Errorf("failed to update gitops sync: %w", ensureSuccessStatusErr)
 		}
 
 		output.Success("GitOps sync %s updated successfully", resolved.Name)
@@ -255,9 +255,9 @@ var deleteCmd = &cobra.Command{
 			if display == "" {
 				display = resolved.ID
 			}
-			confirmed, err := cmdutil.Confirm(cmd, fmt.Sprintf("Are you sure you want to delete gitops sync %s?", display))
-			if err != nil {
-				return err
+			confirmed, confirmErr := cmdutil.Confirm(cmd, fmt.Sprintf("Are you sure you want to delete gitops sync %s?", display))
+			if confirmErr != nil {
+				return confirmErr
 			}
 			if !confirmed {
 				fmt.Println("Cancelled")
@@ -270,8 +270,8 @@ var deleteCmd = &cobra.Command{
 			return fmt.Errorf("failed to delete gitops sync: %w", err)
 		}
 		defer func() { _ = resp.Body.Close() }()
-		if err := cmdutil.EnsureSuccessStatus(resp); err != nil {
-			return fmt.Errorf("failed to delete gitops sync: %w", err)
+		if ensureSuccessStatusErr := cmdutil.EnsureSuccessStatus(resp); ensureSuccessStatusErr != nil {
+			return fmt.Errorf("failed to delete gitops sync: %w", ensureSuccessStatusErr)
 		}
 
 		output.Success("GitOps sync %s deleted successfully", resolved.Name)
@@ -398,8 +398,7 @@ var filesCmd = &cobra.Command{
 		headers := []string{"NAME", "TYPE", "PATH", "SIZE"}
 		rows := flattenFileTree(files, 0)
 
-		output.Table(headers, rows)
-		return nil
+		return output.Table(headers, rows)
 	},
 }
 

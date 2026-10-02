@@ -47,13 +47,13 @@ func TestTunnelConn(t *testing.T) {
 		defer func() { _ = conn.CloseNow() }()
 
 		for {
-			mt, message, err := conn.Read(r.Context())
-			if err != nil {
+			mt, message, readErr := conn.Read(r.Context())
+			if readErr != nil {
 				break
 			}
 			// Echo back
-			err = conn.Write(r.Context(), mt, message)
-			if err != nil {
+			readErr = conn.Write(r.Context(), mt, message)
+			if readErr != nil {
 				break
 			}
 		}
@@ -168,9 +168,9 @@ func TestTunnelConn_CloseSendsCloseFrame(t *testing.T) {
 	require.NoError(t, tunnelConn.Close())
 
 	select {
-	case err := <-peerRead:
-		assert.Equal(t, websocket.StatusNormalClosure, websocket.CloseStatus(err),
-			"peer should observe a normal closure, got: %v", err)
+	case operationErr := <-peerRead:
+		assert.Equal(t, websocket.StatusNormalClosure, websocket.CloseStatus(operationErr),
+			"peer should observe a normal closure, got: %v", operationErr)
 	case <-time.After(5 * time.Second):
 		require.FailNow(t, "timed out waiting for peer read to return")
 	}
@@ -203,6 +203,7 @@ func TestTunnelConn_ReceiveDeadlineMarksClosed(t *testing.T) {
 }
 
 type closeOrderAgentStream struct {
+	ctx    context.Context
 	events []string
 }
 
@@ -210,7 +211,7 @@ func (s *closeOrderAgentStream) Send(*tunnelpb.AgentMessage) error { return nil 
 
 func (s *closeOrderAgentStream) Recv() (*tunnelpb.ManagerMessage, error) { return nil, io.EOF }
 
-func (s *closeOrderAgentStream) Context() context.Context { return context.Background() }
+func (s *closeOrderAgentStream) Context() context.Context { return s.ctx }
 
 func (s *closeOrderAgentStream) CloseSend() error {
 	s.events = append(s.events, "close_send")
@@ -218,7 +219,7 @@ func (s *closeOrderAgentStream) CloseSend() error {
 }
 
 func TestGRPCAgentTunnelConn_CloseHalfClosesBeforeCancel(t *testing.T) {
-	stream := &closeOrderAgentStream{}
+	stream := &closeOrderAgentStream{ctx: t.Context()}
 	conn := NewGRPCAgentTunnelConn(stream, func() { stream.events = append(stream.events, "cancel") })
 
 	require.NoError(t, conn.Close())

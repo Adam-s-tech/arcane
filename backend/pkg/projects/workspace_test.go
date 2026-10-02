@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/getarcaneapp/arcane/types/v2/project"
@@ -166,8 +165,8 @@ func TestApplyWorkspaceFileChanges_WrapsForbiddenSentinelErrors(t *testing.T) {
 	targetPath := filepath.Join(projectDir, "target.txt")
 	linkPath := filepath.Join(projectDir, "link.txt")
 	require.NoError(t, os.WriteFile(targetPath, []byte("target\n"), 0o644))
-	if err := os.Symlink(targetPath, linkPath); err != nil {
-		t.Skipf("symlink creation is unavailable: %v", err)
+	if symlinkErr := os.Symlink(targetPath, linkPath); symlinkErr != nil {
+		t.Skipf("symlink creation is unavailable: %v", symlinkErr)
 	}
 
 	content := []byte("updated\n")
@@ -180,8 +179,8 @@ func TestApplyWorkspaceFileChanges_WrapsForbiddenSentinelErrors(t *testing.T) {
 	outsideDir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(outsideDir, "outside.txt"), []byte("outside\n"), 0o644))
 	linkDirPath := filepath.Join(projectDir, "link-dir")
-	if err := os.Symlink(outsideDir, linkDirPath); err != nil {
-		t.Skipf("symlink creation is unavailable: %v", err)
+	if symlinkErr2 := os.Symlink(outsideDir, linkDirPath); symlinkErr2 != nil {
+		t.Skipf("symlink creation is unavailable: %v", symlinkErr2)
 	}
 
 	err = ApplyProjectWorkspaceChanges(projectDir, []project.WorkspaceFileChange{
@@ -342,7 +341,7 @@ func TestApplyProjectWorkspaceChangesRejectsUnusedUploadsForEmptyManifest(t *tes
 func TestValidateProjectWorkspaceFileName_RejectsPathSeparators(t *testing.T) {
 	t.Parallel()
 
-	_, err := kit.ValidateFileName(strings.Join([]string{"folder", "name"}, string(filepath.Separator)))
+	_, err := kit.ValidateFileName("folder" + string(filepath.Separator) + "name")
 	require.Error(t, err)
 }
 
@@ -448,7 +447,14 @@ func TestApplyProjectWorkspaceChanges_BaselineGuardsConcurrentEdit(t *testing.T)
 	// A baseline matching the current on-disk content saves normally.
 	err = ApplyProjectWorkspaceChanges(projectDir, []project.WorkspaceFileChange{
 		{Operation: project.FileOpUpdateFile, RelativePath: "config.txt", UploadIndex: new(0), BaselineIndex: new(1)},
-	}, map[int][]byte{0: []byte("fresh draft\n"), 1: []byte("external newer edit\n")}, ProjectWorkspaceApplyOptions{ComposeFileName: "compose.yaml", ExpectedRevision: revision, MaxDepth: 3})
+	}, map[int][]byte{
+		0: []byte("fresh draft\n"),
+		1: []byte("external newer edit\n"),
+	}, ProjectWorkspaceApplyOptions{
+		ComposeFileName:  "compose.yaml",
+		ExpectedRevision: revision,
+		MaxDepth:         3,
+	})
 	require.NoError(t, err)
 	content, err = os.ReadFile(filepath.Join(projectDir, "config.txt"))
 	require.NoError(t, err)

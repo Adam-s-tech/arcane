@@ -256,9 +256,9 @@ func (c *Client) Request(ctx context.Context, method, path string, body any, hea
 			bodyBytes = v
 		case io.Reader:
 			// Streaming bodies cannot be replayed, so skip auto-refresh.
-			req, err := http.NewRequestWithContext(ctx, method, fullURL, v)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create request: %w", err)
+			req, newRequestWithContextErr := http.NewRequestWithContext(ctx, method, fullURL, v)
+			if newRequestWithContextErr != nil {
+				return nil, fmt.Errorf("failed to create request: %w", newRequestWithContextErr)
 			}
 			c.applyAuth(req)
 			req.Header.Set("Content-Type", "application/json")
@@ -269,17 +269,17 @@ func (c *Client) Request(ctx context.Context, method, path string, body any, hea
 
 			start := time.Now()
 			logger.GetLogger().Debug("Sending request", "method", method, "url", fullURL, "env_id", c.envID, "streaming_body", true)
-			resp, err := c.httpClient.Do(req)
-			if err != nil {
-				logger.GetLogger().Debug("Request failed", "method", method, "url", fullURL, "env_id", c.envID, "duration", time.Since(start).String(), "error", err)
-				return nil, fmt.Errorf("request failed: %w", err)
+			resp, newRequestWithContextErr := c.httpClient.Do(req)
+			if newRequestWithContextErr != nil {
+				logger.GetLogger().Debug("Request failed", "method", method, "url", fullURL, "env_id", c.envID, "duration", time.Since(start).String(), "error", newRequestWithContextErr)
+				return nil, fmt.Errorf("request failed: %w", newRequestWithContextErr)
 			}
 			logger.GetLogger().Debug("Response received", "method", method, "url", fullURL, "env_id", c.envID, "status", resp.Status, "duration", time.Since(start).String())
 			return resp, nil
 		default:
-			jsonBody, err := json.Marshal(body)
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal request body: %w", err)
+			jsonBody, marshalErr := json.Marshal(body)
+			if marshalErr != nil {
+				return nil, fmt.Errorf("failed to marshal request body: %w", marshalErr)
 			}
 			bodyBytes = jsonBody
 		}
@@ -382,8 +382,8 @@ func (c *Client) doRequestInternal(ctx context.Context, method, fullURL string, 
 		if resp.StatusCode == http.StatusUnauthorized && allowRefresh && c.jwtToken != "" && c.refreshToken != "" {
 			logger.GetLogger().Debug("Refreshing access token after unauthorized response", "method", method, "url", fullURL, "env_id", c.envID, "attempt", attempt)
 			_ = resp.Body.Close()
-			if err := c.refreshAccessToken(ctx); err != nil {
-				return nil, err
+			if refreshAccessTokenErr := c.refreshAccessToken(ctx); refreshAccessTokenErr != nil {
+				return nil, refreshAccessTokenErr
 			}
 			allowRefresh = false
 			continue
@@ -510,8 +510,8 @@ func (c *Client) refreshAccessToken(ctx context.Context) error {
 	}
 
 	var result base.ApiResponse[auth.TokenRefreshResponse]
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return fmt.Errorf("failed to parse refresh response: %w", err)
+	if unmarshalErr := json.Unmarshal(respBody, &result); unmarshalErr != nil {
+		return fmt.Errorf("failed to parse refresh response: %w", unmarshalErr)
 	}
 	if !result.Success || result.Data.Token == "" {
 		return errors.New("token refresh failed: unexpected response from server")
@@ -533,8 +533,8 @@ func (c *Client) refreshAccessToken(ctx context.Context) error {
 	cfg.JWTToken = result.Data.Token
 	cfg.APIKey = ""
 	cfg.RefreshToken = newRefresh
-	if err := config.Save(cfg); err != nil {
-		return fmt.Errorf("failed to save refreshed token: %w", err)
+	if saveErr := config.Save(cfg); saveErr != nil {
+		return fmt.Errorf("failed to save refreshed token: %w", saveErr)
 	}
 
 	return nil
@@ -587,8 +587,8 @@ func (c *Client) DoJSON[T any](ctx context.Context, method, path string, body an
 		return out, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
 	}
 
-	if err := json.UnmarshalRead(resp.Body, &out); err != nil {
-		return out, fmt.Errorf("failed to decode response: %w", err)
+	if unmarshalReadErr := json.UnmarshalRead(resp.Body, &out); unmarshalReadErr != nil {
+		return out, fmt.Errorf("failed to decode response: %w", unmarshalReadErr)
 	}
 	return out, nil
 }
@@ -673,8 +673,8 @@ func decodeResponseStrictInternal[T any](resp *http.Response) (*APIResponse[T], 
 	}
 
 	var result APIResponse[T]
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("failed to decode response (body: %s): %w", string(body), err)
+	if unmarshalErr := json.Unmarshal(body, &result); unmarshalErr != nil {
+		return nil, fmt.Errorf("failed to decode response (body: %s): %w", string(body), unmarshalErr)
 	}
 
 	if !result.Success {

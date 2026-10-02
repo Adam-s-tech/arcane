@@ -177,8 +177,8 @@ func (s *TemplateService) GetAllTemplatesPaginated(ctx context.Context, params p
 	items := make([]tmpl.Template, 0, len(templates))
 	for _, t := range templates {
 		var dtoItem tmpl.Template
-		if err := mapping.MapStruct(&t, &dtoItem); err != nil {
-			slog.WarnContext(ctx, "failed to map template to DTO", "error", err, "templateID", t.ID)
+		if mapStructErr := mapping.MapStruct(&t, &dtoItem); mapStructErr != nil {
+			slog.WarnContext(ctx, "failed to map template to DTO", "error", mapStructErr, "templateID", t.ID)
 			continue
 		}
 		items = append(items, dtoItem)
@@ -261,17 +261,29 @@ func (s *TemplateService) GetTemplate(ctx context.Context, id string) (*ComposeT
 	// silently returned empty.
 	if strings.HasPrefix(id, remoteIDPrefix+":") {
 		slog.InfoContext(ctx, "remote template not in cache, forcing registry refresh", "templateID", id, "cacheSize", len(templates))
-		templates, refreshErr := s.remoteTemplatesInternal(ctx, true)
+		localTemplates, refreshErr := s.remoteTemplatesInternal(ctx, true)
 		if refreshErr != nil {
 			return nil, fmt.Errorf("template %q not found and registry refresh failed: %w", id, refreshErr)
 		}
-		if found := s.lookupRemoteTemplateInternal(templates, id); found != nil {
+		if found := s.lookupRemoteTemplateInternal(localTemplates, id); found != nil {
 			return found, nil
 		}
-		return nil, common.Classify(common.ErrTemplateNotFound, fmt.Errorf("Template not found: %w", fmt.Errorf("template %q not found in any registered registry (cache size=%d after refresh)", id, len(templates)))) //nolint:staticcheck // Preserve the existing error message.
+		return nil, common.Classify(
+			common.ErrTemplateNotFound,
+			fmt.Errorf(
+				"template not found: %w",
+				fmt.Errorf(
+					"template %q not found in any registered registry (cache size=%d after refresh)",
+					id,
+					len(
+						localTemplates,
+					),
+				),
+			),
+		)
 	}
 
-	return nil, common.Classify(common.ErrTemplateNotFound, errors.New("Template not found")) //nolint:staticcheck // Preserve the existing error message.
+	return nil, common.Classify(common.ErrTemplateNotFound, errors.New("template not found"))
 }
 
 func (s *TemplateService) lookupRemoteTemplateInternal(templates []ComposeTemplate, id string) *ComposeTemplate {
@@ -310,7 +322,7 @@ func (s *TemplateService) UpdateTemplate(ctx context.Context, id string, updates
 		var existing ComposeTemplate
 		if err := tx.Where("id = ?", id).First(&existing).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return common.Classify(common.ErrTemplateNotFound, errors.New("Template not found")) //nolint:staticcheck // Preserve the existing error message.
+				return common.Classify(common.ErrTemplateNotFound, errors.New("template not found"))
 			}
 			return fmt.Errorf("failed to find template: %w", err)
 		}
@@ -336,7 +348,7 @@ func (s *TemplateService) DeleteTemplate(ctx context.Context, id string) error {
 		var existing ComposeTemplate
 		if err := tx.Where("id = ?", id).First(&existing).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return common.Classify(common.ErrTemplateNotFound, errors.New("Template not found")) //nolint:staticcheck // Preserve the existing error message.
+				return common.Classify(common.ErrTemplateNotFound, errors.New("template not found"))
 			}
 			return fmt.Errorf("failed to find template: %w", err)
 		}
@@ -351,15 +363,15 @@ func (s *TemplateService) DeleteTemplate(ctx context.Context, id string) error {
 		}
 
 		templatePath := filepath.Join(baseDir, existing.Name)
-		if entry, err := acfs.Stat(ctx, baseDir, "/"+existing.Name, false); err == nil && entry.IsDirectory {
-			if _, err := projects.DetectComposeFile(ctx, "", templatePath); err == nil {
-				if err := acfs.RemoveAll(ctx, baseDir, entry.Path); err != nil {
-					return fmt.Errorf("failed to delete template directory: %w", err)
+		if entry, statErr := acfs.Stat(ctx, baseDir, "/"+existing.Name, false); statErr == nil && entry.IsDirectory {
+			if _, detectComposeFileErr := projects.DetectComposeFile(ctx, "", templatePath); detectComposeFileErr == nil {
+				if removeAllErr := acfs.RemoveAll(ctx, baseDir, entry.Path); removeAllErr != nil {
+					return fmt.Errorf("failed to delete template directory: %w", removeAllErr)
 				}
 			}
 		}
-		if err := tx.Delete(&existing).Error; err != nil {
-			return fmt.Errorf("failed to delete template: %w", err)
+		if deleteTemplateErr := tx.Delete(&existing).Error; deleteTemplateErr != nil {
+			return fmt.Errorf("failed to delete template: %w", deleteTemplateErr)
 		}
 		return nil
 	})
@@ -595,16 +607,16 @@ func (s *TemplateService) loadRemoteTemplatesInternal(ctx context.Context, gener
 		g.Go(func() (workerErr error) {
 			defer utils.RecoverToError(&workerErr, "template worker")
 
-			remoteTemplates, err := s.fetchRegistryTemplatesInternal(groupCtx, &reg, generation)
-			if err != nil {
-				slog.WarnContext(groupCtx, "failed to fetch templates from registry", "registry", reg.Name, "url", reg.URL, "error", err)
+			remoteTemplates, fetchRegistryTemplatesErr := s.fetchRegistryTemplatesInternal(groupCtx, &reg, generation)
+			if fetchRegistryTemplatesErr != nil {
+				slog.WarnContext(groupCtx, "failed to fetch templates from registry", "registry", reg.Name, "url", reg.URL, "error", fetchRegistryTemplatesErr)
 				s.registryMu.Lock()
 				if generation == s.remoteGeneration.Load() {
-					s.registryErrors[reg.ID] = err.Error()
+					s.registryErrors[reg.ID] = fetchRegistryTemplatesErr.Error()
 				}
 				s.registryMu.Unlock()
 				mu.Lock()
-				fetchErrors = append(fetchErrors, fmt.Errorf("registry %q: %w", reg.Name, err))
+				fetchErrors = append(fetchErrors, fmt.Errorf("registry %q: %w", reg.Name, fetchRegistryTemplatesErr))
 				mu.Unlock()
 				return nil // Don't fail the whole group if one registry fails
 			}
@@ -627,8 +639,8 @@ func (s *TemplateService) loadRemoteTemplatesInternal(ctx context.Context, gener
 		})
 	}
 
-	if err := g.Wait(); err != nil {
-		return nil, err
+	if waitErr := g.Wait(); waitErr != nil {
+		return nil, waitErr
 	}
 	if generation != s.remoteGeneration.Load() {
 		return nil, errRemoteCacheInvalidatedInternal
@@ -707,8 +719,8 @@ func (s *TemplateService) fetchRegistryTemplatesInternal(ctx context.Context, re
 	}
 
 	var regDTO tmpl.RemoteRegistry
-	if err := json.Unmarshal(body, &regDTO); err != nil {
-		return nil, fmt.Errorf("parse registry JSON: %w", err)
+	if unmarshalErr := json.Unmarshal(body, &regDTO); unmarshalErr != nil {
+		return nil, fmt.Errorf("parse registry JSON: %w", unmarshalErr)
 	}
 
 	templates := make([]ComposeTemplate, 0, len(regDTO.Templates))
@@ -739,8 +751,8 @@ func (s *TemplateService) fetchRegistryManifest(ctx context.Context, url string)
 		return nil, err
 	}
 	var reg tmpl.RemoteRegistry
-	if err := json.Unmarshal(body, &reg); err != nil {
-		return nil, fmt.Errorf("failed to parse registry JSON: %w", err)
+	if unmarshalErr := json.Unmarshal(body, &reg); unmarshalErr != nil {
+		return nil, fmt.Errorf("failed to parse registry JSON: %w", unmarshalErr)
 	}
 	if reg.Name == "" || len(reg.Templates) == 0 {
 		return nil, errors.New("invalid registry manifest: missing required fields (name, templates)")
@@ -880,7 +892,7 @@ func (s *TemplateService) newSafeRequestInternal(ctx context.Context, method, ra
 		}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, parsedURL.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, method, parsedURL.String(), http.NoBody)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create request for %s: %w", rawURL, err)
 	}
@@ -914,9 +926,9 @@ func (s *TemplateService) downloadTemplateTransaction(ctx context.Context, remot
 			return fmt.Errorf("failed to check existing template: %w", err)
 		} else if err == nil {
 			// Existing template found
-			composeContent, envContent, err := s.FetchTemplateContent(ctx, remoteTemplate)
-			if err != nil {
-				return fmt.Errorf("failed to fetch template content for existing local template: %w", err)
+			composeContent, envContent, fetchTemplateContentErr := s.FetchTemplateContent(ctx, remoteTemplate)
+			if fetchTemplateContentErr != nil {
+				return fmt.Errorf("failed to fetch template content for existing local template: %w", fetchTemplateContentErr)
 			}
 
 			envPtr, werr := projects.WriteTemplateFiles(composePath, envPath, composeContent, envContent)
@@ -928,8 +940,8 @@ func (s *TemplateService) downloadTemplateTransaction(ctx context.Context, remot
 			existing.EnvContent = envPtr
 			existing.Metadata = cloneTemplateMetadata(remoteTemplate.Metadata)
 
-			if err := tx.Save(&existing).Error; err != nil {
-				return fmt.Errorf("failed to update existing local template: %w", err)
+			if updateLocalTemplateErr := tx.Save(&existing).Error; updateLocalTemplateErr != nil {
+				return fmt.Errorf("failed to update existing local template: %w", updateLocalTemplateErr)
 			}
 			resultTemplate = &existing
 			return nil
@@ -959,8 +971,8 @@ func (s *TemplateService) downloadTemplateTransaction(ctx context.Context, remot
 			Metadata:    cloneTemplateMetadata(remoteTemplate.Metadata),
 		}
 
-		if err := tx.Create(localTemplate).Error; err != nil {
-			return fmt.Errorf("failed to save local template: %w", err)
+		if createLocalTemplateErr := tx.Create(localTemplate).Error; createLocalTemplateErr != nil {
+			return fmt.Errorf("failed to save local template: %w", createLocalTemplateErr)
 		}
 		resultTemplate = localTemplate
 		return nil
@@ -1125,8 +1137,8 @@ func (s *TemplateService) syncFilesystemTemplatesInternal(ctx context.Context) e
 		if !ent.IsDirectory {
 			continue
 		}
-		if err := s.processFolderEntry(ctx, dir, ent.Name); err != nil {
-			slog.WarnContext(ctx, "failed to read folder template", "folder", ent.Name, "error", err)
+		if processFolderEntryErr := s.processFolderEntry(ctx, dir, ent.Name); processFolderEntryErr != nil {
+			slog.WarnContext(ctx, "failed to read folder template", "folder", ent.Name, "error", processFolderEntryErr)
 		}
 	}
 

@@ -1,7 +1,6 @@
 package git
 
 import (
-	"context"
 	"errors"
 	"net"
 	"os"
@@ -226,8 +225,8 @@ func TestCreateAcceptNewHostKeyCallback(t *testing.T) {
 		{
 
 			// Verify directory was created
-			_, err := os.Stat(filepath.Dir(knownHostsPath))
-			assert.False(t, os.IsNotExist(err),
+			_, statErr := os.Stat(filepath.Dir(knownHostsPath))
+			assert.False(t, os.IsNotExist(statErr),
 				"expected known_hosts directory to be created")
 		}
 	})
@@ -389,7 +388,7 @@ func TestWalkDirectory_BasicWalk(t *testing.T) {
 	writeFileInternal(t, tmpDir, "file2.txt", []byte("another file"))
 
 	client := NewClient("")
-	result, err := client.WalkDirectory(context.Background(), tmpDir, "compose.yaml", 0, 0, 0)
+	result, err := client.WalkDirectory(t.Context(), tmpDir, "compose.yaml", 0, 0, 0)
 
 	require.NoError(t, err,
 		"unexpected error: %v", err)
@@ -407,13 +406,13 @@ func TestWalkDirectory_PreservesExecutableBit(t *testing.T) {
 	writeFileInternal(t, tmpDir, "scripts/hook.sh", []byte("#!/bin/sh\necho hi\n"))
 	writeFileInternal(t, tmpDir, "README.md", []byte("readme"))
 	{
-		err := os.Chmod(filepath.Join(tmpDir, "scripts/hook.sh"), 0o755)
+		err := os.Chmod(filepath.Join(tmpDir, "scripts", "hook.sh"), 0o755)
 		require.NoError(t, err,
 			"chmod: %v", err)
 	}
 
 	client := NewClient("")
-	result, err := client.WalkDirectory(context.Background(), tmpDir, "compose.yaml", 0, 0, 0)
+	result, err := client.WalkDirectory(t.Context(), tmpDir, "compose.yaml", 0, 0, 0)
 
 	require.NoError(t, err,
 		"unexpected error: %v", err)
@@ -432,8 +431,8 @@ func TestWalkDirectory_PreservesExecutableBit(t *testing.T) {
 		"expected scripts/hook.sh to be reported Executable, got false")
 	{
 
-		readme, ok := byPath["README.md"]
-		assert.False(t, ok && readme.Executable,
+		readme, localOk := byPath["README.md"]
+		assert.False(t, localOk && readme.Executable,
 			"expected README.md to not be Executable")
 	}
 }
@@ -447,7 +446,7 @@ func TestWalkDirectory_MaxFilesLimit(t *testing.T) {
 	writeFileInternal(t, tmpDir, "d.txt", []byte("d"))
 
 	client := NewClient("")
-	_, err := client.WalkDirectory(context.Background(), tmpDir, "compose.yaml", 3, 0, 0)
+	_, err := client.WalkDirectory(t.Context(), tmpDir, "compose.yaml", 3, 0, 0)
 
 	require.Error(t, err,
 		"expected error for file count limit, got nil")
@@ -465,7 +464,7 @@ func TestWalkDirectory_MaxFilesUnlimited(t *testing.T) {
 	writeFileInternal(t, tmpDir, "d.txt", []byte("d"))
 
 	client := NewClient("")
-	result, err := client.WalkDirectory(context.Background(), tmpDir, "compose.yaml", 0, 0, 0)
+	result, err := client.WalkDirectory(t.Context(), tmpDir, "compose.yaml", 0, 0, 0)
 
 	require.NoError(t, err,
 		"unexpected error: %v", err)
@@ -481,7 +480,7 @@ func TestWalkDirectory_MaxTotalSizeLimit(t *testing.T) {
 	writeFileInternal(t, tmpDir, "big2.txt", []byte(strings.Repeat("y", 40)))
 
 	client := NewClient("")
-	_, err := client.WalkDirectory(context.Background(), tmpDir, "compose.yaml", 0, 50, 0)
+	_, err := client.WalkDirectory(t.Context(), tmpDir, "compose.yaml", 0, 50, 0)
 
 	require.Error(t, err,
 		"expected error for total size limit, got nil")
@@ -497,7 +496,7 @@ func TestWalkDirectory_MaxTotalSizeUnlimited(t *testing.T) {
 	writeFileInternal(t, tmpDir, "big2.txt", []byte(strings.Repeat("y", 500)))
 
 	client := NewClient("")
-	result, err := client.WalkDirectory(context.Background(), tmpDir, "compose.yaml", 0, 0, 0)
+	result, err := client.WalkDirectory(t.Context(), tmpDir, "compose.yaml", 0, 0, 0)
 
 	require.NoError(t, err,
 		"unexpected error: %v", err)
@@ -514,7 +513,7 @@ func TestWalkDirectory_MaxBinarySizeSkips(t *testing.T) {
 	writeFileInternal(t, tmpDir, "data.bin", binaryContent)
 
 	client := NewClient("")
-	result, err := client.WalkDirectory(context.Background(), tmpDir, "compose.yaml", 0, 0, 5)
+	result, err := client.WalkDirectory(t.Context(), tmpDir, "compose.yaml", 0, 0, 5)
 
 	require.NoError(t, err,
 		"unexpected error: %v", err)
@@ -530,7 +529,7 @@ func TestWalkDirectory_MaxBinarySizeUnlimited(t *testing.T) {
 	writeFileInternal(t, tmpDir, "data.bin", binaryContent)
 
 	client := NewClient("")
-	result, err := client.WalkDirectory(context.Background(), tmpDir, "compose.yaml", 0, 0, 0)
+	result, err := client.WalkDirectory(t.Context(), tmpDir, "compose.yaml", 0, 0, 0)
 
 	require.NoError(t, err,
 		"unexpected error: %v", err)
@@ -548,7 +547,7 @@ func TestWalkDirectory_LargeTextFileNotSkippedByBinaryLimit(t *testing.T) {
 	writeFileInternal(t, tmpDir, "notes.txt", []byte(strings.Repeat("plain text\n", 32)))
 
 	client := NewClient("")
-	result, err := client.WalkDirectory(context.Background(), tmpDir, "compose.yaml", 0, 0, 16)
+	result, err := client.WalkDirectory(t.Context(), tmpDir, "compose.yaml", 0, 0, 16)
 
 	require.NoError(t, err,
 		"unexpected error: %v", err)
@@ -566,7 +565,7 @@ func TestWalkDirectory_ComposeInSubdirectory(t *testing.T) {
 	writeFileInternal(t, tmpDir, "subdir/dynamic_config.yml", []byte("http:\n  routers: {}\n"))
 
 	client := NewClient("")
-	result, err := client.WalkDirectory(context.Background(), tmpDir, "subdir/docker-compose.yml", 0, 0, 0)
+	result, err := client.WalkDirectory(t.Context(), tmpDir, "subdir/docker-compose.yml", 0, 0, 0)
 
 	require.NoError(t, err,
 		"unexpected error: %v", err)
@@ -596,7 +595,7 @@ func TestWalkDirectory_NestedSiblingFile(t *testing.T) {
 	writeFileInternal(t, tmpDir, "subdir/config/dynamic_config.yml", []byte("tls:\n  certificates: []\n"))
 
 	client := NewClient("")
-	result, err := client.WalkDirectory(context.Background(), tmpDir, "subdir/docker-compose.yml", 0, 0, 0)
+	result, err := client.WalkDirectory(t.Context(), tmpDir, "subdir/docker-compose.yml", 0, 0, 0)
 
 	require.NoError(t, err,
 		"unexpected error: %v", err)
@@ -626,7 +625,7 @@ func TestWalkDirectory_SpecialCharsInPath(t *testing.T) {
 	writeFileInternal(t, tmpDir, "traefik (nl10)/config/dynamic_config.yml", []byte("http:\n  middlewares: {}\n"))
 
 	client := NewClient("")
-	result, err := client.WalkDirectory(context.Background(), tmpDir, "traefik (nl10)/docker-compose.yml", 0, 0, 0)
+	result, err := client.WalkDirectory(t.Context(), tmpDir, "traefik (nl10)/docker-compose.yml", 0, 0, 0)
 
 	require.NoError(t, err,
 		"unexpected error: %v", err)
@@ -699,7 +698,7 @@ func generateTestPublicKeyVariant(t *testing.T) gossh.PublicKey {
 }
 
 func TestPurgeScratchDirs(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	workDir := t.TempDir()
 	client := NewClient(workDir)
 
@@ -721,8 +720,8 @@ func TestPurgeScratchDirs(t *testing.T) {
 	_, err = os.Stat(staleDir)
 	require.ErrorIs(t, err, os.ErrNotExist, "stale clone dir should be removed")
 	for _, p := range []string{freshDir, keepDir, scratchFile} {
-		_, err := os.Stat(p)
-		assert.NoError(t, err, "must be kept by the age-cutoff purge: %s", p)
+		_, statErr := os.Stat(p)
+		require.NoError(t, statErr, "must be kept by the age-cutoff purge: %s", p)
 	}
 
 	removed, err = client.PurgeScratchDirs(ctx, 0)
@@ -732,14 +731,14 @@ func TestPurgeScratchDirs(t *testing.T) {
 	_, err = os.Stat(freshDir)
 	require.ErrorIs(t, err, os.ErrNotExist, "boot sweep should remove fresh clone dirs")
 	for _, p := range []string{keepDir, scratchFile} {
-		_, err := os.Stat(p)
-		assert.NoError(t, err, "boot sweep must keep non-scratch entries: %s", p)
+		_, statErr2 := os.Stat(p)
+		require.NoError(t, statErr2, "boot sweep must keep non-scratch entries: %s", p)
 	}
 
 	t.Run("missing work dir is not an error", func(t *testing.T) {
-		removed, err := NewClient(filepath.Join(t.TempDir(), "missing")).PurgeScratchDirs(ctx, 0)
-		require.NoError(t, err)
-		assert.Equal(t, 0, removed)
+		localRemoved, purgeErr := NewClient(filepath.Join(t.TempDir(), "missing")).PurgeScratchDirs(ctx, 0)
+		require.NoError(t, purgeErr)
+		assert.Equal(t, 0, localRemoved)
 	})
 }
 

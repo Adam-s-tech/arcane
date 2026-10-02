@@ -62,9 +62,9 @@ func (a *Admission) TryAcquire(ctx context.Context, key st.AdmissionKey) (*Lease
 		return nil, false, err
 	}
 	var acquired bool
-	if err := envelope.Decode(&acquired); err != nil {
+	if decodeErr := envelope.Decode(&acquired); decodeErr != nil {
 		a.releaseInternal(ctx, id, st.AdmissionCommand{Epoch: a.epoch, Token: token})
-		return nil, false, err
+		return nil, false, decodeErr
 	}
 	if !acquired {
 		return nil, false, nil
@@ -123,8 +123,8 @@ func (a *admissionActorInternal) Invoke(ctx context.Context, method string, data
 		return nil, err
 	}
 	var command st.AdmissionCommand
-	if err := data.Decode(&command); err != nil {
-		return nil, err
+	if decodeErr := data.Decode(&command); decodeErr != nil {
+		return nil, decodeErr
 	}
 	switch method {
 	case "acquire":
@@ -140,8 +140,8 @@ func (a *admissionActorInternal) Invoke(ctx context.Context, method string, data
 	default:
 		return nil, errors.New("unknown resource admission command")
 	}
-	if err := a.service.SetState(ctx, admissionTypeInternal, a.id, state, nil); err != nil {
-		return nil, err
+	if setStateErr := a.service.SetState(ctx, admissionTypeInternal, a.id, state, nil); setStateErr != nil {
+		return nil, setStateErr
 	}
 	return true, nil
 }

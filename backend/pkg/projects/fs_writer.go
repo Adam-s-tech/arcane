@@ -296,9 +296,10 @@ func RollbackRenamedProjectDirectory(ctx context.Context, oldPath, newPath strin
 	newExists, _ := pathExistsInternal(newPath)
 	switch {
 	case oldExists && newExists:
-		conflictPath, err := relocateRenameConflictDirectoryInternal(ctx, newPath)
-		if err != nil {
-			slog.Warn("project rename directory rollback found both paths and failed to relocate target path; keeping old path and clearing journal", "oldPath", oldPath, "newPath", newPath, "error", err)
+		conflictPath, relocateRenameConflictDirectoryErr := relocateRenameConflictDirectoryInternal(ctx, newPath)
+		if relocateRenameConflictDirectoryErr != nil {
+			slog.Warn("project rename directory rollback found both paths and failed to relocate target path; keeping old path and clearing journal",
+				"oldPath", oldPath, "newPath", newPath, "error", relocateRenameConflictDirectoryErr)
 		} else {
 			slog.Warn("project rename directory rollback found both paths; moved target path aside and kept old path", "oldPath", oldPath, "newPath", newPath, "conflictPath", conflictPath)
 		}
@@ -322,9 +323,9 @@ func RollbackRenamedProjectDirectory(ctx context.Context, oldPath, newPath strin
 	return pathsMissing, nil
 }
 
-func relocateRenameConflictDirectoryInternal(ctx context.Context, path string) (string, error) {
-	parent := filepath.Dir(path)
-	base := filepath.Base(path)
+func relocateRenameConflictDirectoryInternal(ctx context.Context, localPath string) (string, error) {
+	parent := filepath.Dir(localPath)
+	base := filepath.Base(localPath)
 	now := time.Now().UTC().UnixNano()
 	for attempt := range 10 {
 		conflictName := fmt.Sprintf(".%s.rename-conflict-%d-%d", base, now, attempt)
@@ -338,7 +339,7 @@ func relocateRenameConflictDirectoryInternal(ctx context.Context, path string) (
 		}
 		return filepath.Join(parent, conflictName), nil
 	}
-	return "", fmt.Errorf("relocate project rename target path: no available conflict path for %s", path)
+	return "", fmt.Errorf("relocate project rename target path: no available conflict path for %s", localPath)
 }
 
 // SyncFile represents a file to be written during directory sync
@@ -372,15 +373,15 @@ func WriteSyncedDirectory(ctx context.Context, projectsRoot, projectPath string,
 			return nil, fmt.Errorf("file path %s would escape project directory", file.RelativePath)
 		}
 
-		if err := acfs.MkdirAll(ctx, projectPath, path.Dir(logicalPath), utils.DirPerm); err != nil {
-			return nil, fmt.Errorf("failed to create directory for %s: %w", file.RelativePath, err)
+		if mkdirAllErr := acfs.MkdirAll(ctx, projectPath, path.Dir(logicalPath), utils.DirPerm); mkdirAllErr != nil {
+			return nil, fmt.Errorf("failed to create directory for %s: %w", file.RelativePath, mkdirAllErr)
 		}
 
 		entry, statErr := acfs.Stat(ctx, projectPath, logicalPath, false)
 		switch {
 		case statErr == nil && entry.IsDirectory:
-			if err := acfs.RemoveAll(ctx, projectPath, logicalPath); err != nil {
-				return nil, fmt.Errorf("failed to replace directory at %s: %w", file.RelativePath, err)
+			if removeAllErr := acfs.RemoveAll(ctx, projectPath, logicalPath); removeAllErr != nil {
+				return nil, fmt.Errorf("failed to replace directory at %s: %w", file.RelativePath, removeAllErr)
 			}
 		case statErr != nil && !errors.Is(statErr, fs.ErrNotExist):
 			return nil, fmt.Errorf("failed to inspect target path for %s: %w", file.RelativePath, statErr)
@@ -389,8 +390,8 @@ func WriteSyncedDirectory(ctx context.Context, projectsRoot, projectPath string,
 		// Write the file. Honor the source's executable bit so scripts arrive
 		// runnable for lifecycle hooks and similar consumers.
 		perm := kit.Ternary(file.Executable, 0o755, utils.FilePerm)
-		if err := acfs.Write(ctx, projectPath, logicalPath, file.Content, acfs.WriteOptions{Mode: perm, InPlace: true}); err != nil {
-			return nil, fmt.Errorf("failed to write file %s: %w", file.RelativePath, err)
+		if writeErr := acfs.Write(ctx, projectPath, logicalPath, file.Content, acfs.WriteOptions{Mode: perm, InPlace: true}); writeErr != nil {
+			return nil, fmt.Errorf("failed to write file %s: %w", file.RelativePath, writeErr)
 		}
 
 		writtenPaths = append(writtenPaths, file.RelativePath)
@@ -429,9 +430,9 @@ func CleanupRemovedFiles(ctx context.Context, projectsRoot, projectPath string, 
 		}
 
 		// Delete the file (best effort)
-		if err := acfs.Remove(ctx, projectPath, logicalPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		if removeErr := acfs.Remove(ctx, projectPath, logicalPath); removeErr != nil && !errors.Is(removeErr, fs.ErrNotExist) {
 			// Log but continue - this is best effort
-			slog.WarnContext(ctx, "Failed to remove old synced file", "file", oldFile, "error", err)
+			slog.WarnContext(ctx, "Failed to remove old synced file", "file", oldFile, "error", removeErr)
 		}
 
 		// Track parent directory for potential cleanup

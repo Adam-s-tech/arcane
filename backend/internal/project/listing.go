@@ -199,21 +199,19 @@ func incrementStatusCounts(status ProjectStatus, running, stopped *int) {
 	}
 }
 
-func (s *ProjectService) GetProjectStatusCounts(ctx context.Context) (folderCount, runningProjects, stoppedProjects, totalProjects, archivedProjects int, err error) {
-	folderCount, _ = s.countProjectFolders(ctx)
+func (s *ProjectService) GetProjectStatusCounts(ctx context.Context) (project.StatusCounts, error) {
+	counts := project.StatusCounts{}
 
 	var projectsList []Project
-	if err := s.db.WithContext(ctx).Find(&projectsList).Error; err != nil {
-		return folderCount, 0, 0, 0, 0, fmt.Errorf("failed to list projects: %w", err)
+	if listProjectsErr := s.db.WithContext(ctx).Find(&projectsList).Error; listProjectsErr != nil {
+		return counts, fmt.Errorf("failed to list projects: %w", listProjectsErr)
 	}
 
-	totalProjects = len(projectsList)
-	runningProjects = 0
-	stoppedProjects = 0
+	counts.TotalProjects = len(projectsList)
 	activeProjects := make([]Project, 0, len(projectsList))
 	for _, p := range projectsList {
 		if p.IsArchived {
-			archivedProjects++
+			counts.ArchivedProjects++
 			continue
 		}
 		activeProjects = append(activeProjects, p)
@@ -225,9 +223,9 @@ func (s *ProjectService) GetProjectStatusCounts(ctx context.Context) (folderCoun
 		slog.ErrorContext(ctx, "Failed to list global compose containers for counts", "error", err)
 		// Fallback to DB status
 		for _, p := range activeProjects {
-			incrementStatusCounts(p.Status, &runningProjects, &stoppedProjects)
+			incrementStatusCounts(p.Status, &counts.RunningProjects, &counts.StoppedProjects)
 		}
-		return folderCount, runningProjects, stoppedProjects, totalProjects, archivedProjects, nil
+		return counts, nil
 	}
 
 	// 2. Group by project
@@ -252,10 +250,10 @@ func (s *ProjectService) GetProjectStatusCounts(ctx context.Context) (folderCoun
 			status = calculateProjectStatus(services)
 		}
 
-		incrementStatusCounts(status, &runningProjects, &stoppedProjects)
+		incrementStatusCounts(status, &counts.RunningProjects, &counts.StoppedProjects)
 	}
 
-	return folderCount, runningProjects, stoppedProjects, totalProjects, archivedProjects, nil
+	return counts, nil
 }
 
 func (s *ProjectService) ListProjects(ctx context.Context, params pagination.QueryParams) ([]project.Details, pagination.Response, error) {
@@ -297,8 +295,8 @@ func (s *ProjectService) ListProjects(ctx context.Context, params pagination.Que
 	// Fetch live status concurrently for all projects
 	env := s.newProjectMetadataEnvInternal(ctx, projectsArray)
 	result := s.fetchProjectStatusConcurrently(ctx, projectsArray, env)
-	if err := s.enrichProjectsWithTagsInternal(ctx, result); err != nil {
-		return nil, pagination.Response{}, err
+	if enrichProjectsWithTagsErr := s.enrichProjectsWithTagsInternal(ctx, result); enrichProjectsWithTagsErr != nil {
+		return nil, pagination.Response{}, enrichProjectsWithTagsErr
 	}
 	s.enrichProjectsWithUpdateInfoInternal(ctx, projectsArray, result, true, env)
 
@@ -814,7 +812,18 @@ func (s *ProjectService) CountProjectsWithPendingUpdates(ctx context.Context, al
 	for i, proj := range activeProjects {
 		details[i].ID = proj.ID
 		for _, c := range lookupProjectContainersInternal(proj, containersByProject) {
-			details[i].RuntimeServices = append(details[i].RuntimeServices, project.RuntimeService{Name: dockerutil.ComposeServiceLabel(c.Labels), ContainerID: c.ID, Image: c.Image, ImageID: c.ImageID, ContainerLabels: c.Labels})
+			details[i].RuntimeServices = append(
+				details[i].RuntimeServices,
+				project.RuntimeService{
+					Name: dockerutil.ComposeServiceLabel(
+						c.Labels,
+					),
+					ContainerID:     c.ID,
+					Image:           c.Image,
+					ImageID:         c.ImageID,
+					ContainerLabels: c.Labels,
+				},
+			)
 		}
 	}
 	s.enrichProjectsWithUpdateInfoInternal(ctx, activeProjects, details, false, nil)
@@ -936,8 +945,8 @@ func (s *ProjectService) applyProjectPresentationInternal(ctx context.Context, p
 		resp.ConfigurationError = projects.CheckProjectEnvAccess(ctx, metaEnv.projectsDirectory, projectsList[i].Path)
 		for k := range resp.RuntimeServices {
 			service := &resp.RuntimeServices[k]
-			icon := resolveServiceIconInternal(catalog, service.ContainerLabels, service.Name, metas[i])
-			service.IconLightURL, service.IconDarkURL = icon.IconLightURL, icon.IconDarkURL
+			localIcon := resolveServiceIconInternal(catalog, service.ContainerLabels, service.Name, metas[i])
+			service.IconLightURL, service.IconDarkURL = localIcon.IconLightURL, localIcon.IconDarkURL
 		}
 	}
 }
@@ -1095,8 +1104,8 @@ func (s *ProjectService) ProjectMetadata(ctx context.Context, p Project, env *pr
 	if s.metaCache == nil || p.ID == "" {
 		return meta
 	}
-	if err := s.metaCache.Set(p.ID, fingerprint, p.Path, env.projectsDirectory, composeFile, meta.ComposeFiles, meta.EnvFiles, meta); err != nil {
-		slog.DebugContext(ctx, "failed to cache Compose metadata", "projectID", p.ID, "error", err)
+	if setErr := s.metaCache.Set(p.ID, fingerprint, p.Path, env.projectsDirectory, composeFile, meta.ComposeFiles, meta.EnvFiles, meta); setErr != nil {
+		slog.DebugContext(ctx, "failed to cache Compose metadata", "projectID", p.ID, "error", setErr)
 	}
 
 	return meta

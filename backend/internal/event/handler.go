@@ -83,7 +83,7 @@ func RegisterAgentEventIngestion(g *echo.Group, eventService *EventService, reso
 		}
 
 		var input CreateEventRequest
-		if err := json.UnmarshalRead(http.MaxBytesReader(c.Response(), c.Request().Body, 1<<20), &input); err != nil {
+		if unmarshalReadErr := json.UnmarshalRead(http.MaxBytesReader(c.Response(), c.Request().Body, 1<<20), &input); unmarshalReadErr != nil {
 			return c.JSON(http.StatusBadRequest, base.ApiResponse[base.MessageResponse]{
 				Success: false,
 				Data:    base.MessageResponse{Message: "invalid event payload"},
@@ -96,10 +96,10 @@ func RegisterAgentEventIngestion(g *echo.Group, eventService *EventService, reso
 			})
 		}
 
-		if _, err := eventService.IngestAgentEvent(c.Request().Context(), environmentID, input); err != nil {
+		if _, ingestAgentEventErr := eventService.IngestAgentEvent(c.Request().Context(), environmentID, input); ingestAgentEventErr != nil {
 			return c.JSON(http.StatusInternalServerError, base.ApiResponse[base.MessageResponse]{
 				Success: false,
-				Data:    base.MessageResponse{Message: "Failed to create event: " + err.Error()},
+				Data:    base.MessageResponse{Message: "Failed to create event: " + ingestAgentEventErr.Error()},
 			})
 		}
 

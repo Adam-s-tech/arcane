@@ -152,7 +152,17 @@ type UploadImageInput struct {
 }
 
 // RegisterImages registers image management routes using Huma.
-func RegisterImages(api huma.API, dockerService *docker.DockerClientService, imageService *ImageService, imageUpdateService *imageupdate.ImageUpdateService, settingsService *settings.SettingsService, buildService *build.BuildService, activityService *activity.ActivityService, uploadService *upload.UploadService, appCtx handlerutil.ActivityAppContext) {
+func RegisterImages(
+	api huma.API,
+	dockerService *docker.DockerClientService,
+	imageService *ImageService,
+	imageUpdateService *imageupdate.ImageUpdateService,
+	settingsService *settings.SettingsService,
+	buildService *build.BuildService,
+	activityService *activity.ActivityService,
+	uploadService *upload.UploadService,
+	appCtx handlerutil.ActivityAppContext,
+) {
 	h := &ImageHandler{
 		dockerService:      dockerService,
 		imageService:       imageService,
@@ -309,7 +319,9 @@ func RegisterImages(api huma.API, dockerService *docker.DockerClientService, ima
 		Method:      http.MethodPost,
 		Path:        "/environments/{id}/images/upload",
 		Summary:     "Upload an image",
-		Description: "Load a Docker image tar archive from a complete chunked upload session. multipart/form-data bodies are still accepted for backward compatibility; that form is deprecated and will be removed in a future release.",
+		Description: "Load a Docker image tar archive from a complete chunked upload session. multipart/form-data bodies " +
+			"are still accepted for backward compatibility; that form is deprecated and will be removed in a " +
+			"future release.",
 		Tags:        []string{"Images"},
 		Security:    handlerutil.DefaultOperationSecurity(),
 		Middlewares: upload.LegacyMultipartMiddleware(api, h.uploadService, uploadtypes.KindImage),
@@ -370,7 +382,7 @@ func (h *ImageHandler) GetImageAttestations(ctx context.Context, input *GetImage
 	}
 
 	if input.Platform != "" {
-		if _, err := platforms.Parse(input.Platform); err != nil {
+		if _, parseErr := platforms.Parse(input.Platform); parseErr != nil {
 			return nil, huma.Error400BadRequest(fmt.Sprintf("invalid platform %q", input.Platform))
 		}
 	}
@@ -407,8 +419,8 @@ func (h *ImageHandler) TagImage(ctx context.Context, input *TagImageInput) (*han
 		return nil, err
 	}
 
-	if err := h.imageService.TagImage(ctx, imageName, input.Body, *user); err != nil {
-		return nil, huma.Error500InternalServerError(fmt.Sprintf("failed to tag image: %v", err))
+	if tagImageErr := h.imageService.TagImage(ctx, imageName, input.Body, *user); tagImageErr != nil {
+		return nil, huma.Error500InternalServerError(fmt.Sprintf("failed to tag image: %v", tagImageErr))
 	}
 
 	return &handlerutil.Out[base.MessageResponse]{
@@ -508,8 +520,8 @@ func (h *ImageHandler) RemoveImage(ctx context.Context, input *RemoveImageInput)
 		return nil, err
 	}
 
-	if err := h.imageService.RemoveImage(ctx, input.ImageID, input.Force, *user); err != nil {
-		return nil, huma.Error500InternalServerError("Failed to remove image: " + err.Error())
+	if removeImageErr := h.imageService.RemoveImage(ctx, input.ImageID, input.Force, *user); removeImageErr != nil {
+		return nil, huma.Error500InternalServerError("Failed to remove image: " + removeImageErr.Error())
 	}
 
 	return &handlerutil.Out[base.MessageResponse]{
@@ -564,10 +576,10 @@ func (h *ImageHandler) PullImage(ctx context.Context, input *PullImageInput) (*h
 			activitylib.AwaitHandlerActivitySlot(runtimeCtx, h.activityService, activityID, input.EnvironmentID)
 
 			writer := activitylib.NewWriter(runtimeCtx, h.activityService, activityID, rawWriter, "Pulling image")
-			if err := h.imageService.PullImage(runtimeCtx, fullImageName, writer, *user, credentials); err != nil {
+			if pullImageErr := h.imageService.PullImage(runtimeCtx, fullImageName, writer, *user, credentials); pullImageErr != nil {
 				activitylib.FlushWriter(writer)
-				activitylib.CompleteHandlerActivity(runtimeCtx, h.activityService, activityID, "Image pull failed", err)
-				_, _ = fmt.Fprintf(writer, "{\"error\":%q}\n", err.Error())
+				activitylib.CompleteHandlerActivity(runtimeCtx, h.activityService, activityID, "Image pull failed", pullImageErr)
+				_, _ = fmt.Fprintf(writer, "{\"error\":%q}\n", pullImageErr.Error())
 				if f, ok := writer.(http.Flusher); ok {
 					f.Flush()
 				}
@@ -622,10 +634,10 @@ func (h *ImageHandler) BuildImage(ctx context.Context, input *BuildImageInput) (
 			activitylib.AwaitHandlerActivitySlot(runtimeCtx, h.activityService, activityID, input.EnvironmentID)
 
 			writer := activitylib.NewWriter(runtimeCtx, h.activityService, activityID, rawWriter, "Building image")
-			if _, err := h.buildService.BuildImage(runtimeCtx, input.EnvironmentID, input.Body, writer, "", user); err != nil {
+			if _, buildImageErr := h.buildService.BuildImage(runtimeCtx, input.EnvironmentID, input.Body, writer, "", user); buildImageErr != nil {
 				activitylib.FlushWriter(writer)
-				activitylib.CompleteHandlerActivity(runtimeCtx, h.activityService, activityID, "Image build failed", err)
-				_, _ = fmt.Fprintf(writer, "{\"error\":%q}\n", err.Error())
+				activitylib.CompleteHandlerActivity(runtimeCtx, h.activityService, activityID, "Image build failed", buildImageErr)
+				_, _ = fmt.Fprintf(writer, "{\"error\":%q}\n", buildImageErr.Error())
 				if f, ok := writer.(http.Flusher); ok {
 					f.Flush()
 				}

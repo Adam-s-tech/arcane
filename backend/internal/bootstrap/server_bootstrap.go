@@ -54,17 +54,17 @@ func NewHTTPServer(lc fx.Lifecycle, p HTTPServerParams) (*http.Server, error) {
 	httpHandler, protocols := configureHTTPProtocolsInternal(useTLS, httpHandler)
 
 	// Request contexts deliberately do not inherit the app lifecycle marker.
-	baseCtx, cancelBase := context.WithCancel(context.Background())
+	baseCtx, cancelBase := context.WithCancel(context.Background()) //nolint:forbidigo // HTTP requests need a root without the application lifecycle marker.
 	srv, err := newHTTPServerInternal(baseCtx, listenAddr, httpHandler, protocols, useTLS, edgeCfg)
 	if err != nil {
 		cancelBase()
 		return nil, err
 	}
 	if useTLS {
-		certificate, err := tls.LoadX509KeyPair(tlsCertFile, tlsKeyFile)
-		if err != nil {
+		certificate, loadX509KeyPairErr := tls.LoadX509KeyPair(tlsCertFile, tlsKeyFile)
+		if loadX509KeyPairErr != nil {
 			cancelBase()
-			return nil, err
+			return nil, loadX509KeyPairErr
 		}
 		if srv.TLSConfig == nil {
 			srv.TLSConfig = &tls.Config{}
@@ -76,10 +76,10 @@ func NewHTTPServer(lc fx.Lifecycle, p HTTPServerParams) (*http.Server, error) {
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			listener, err := new(net.ListenConfig).Listen(ctx, "tcp", listenAddr)
-			if err != nil {
+			listener, listenErr := new(net.ListenConfig).Listen(ctx, "tcp", listenAddr)
+			if listenErr != nil {
 				cancelBase()
-				return err
+				return listenErr
 			}
 			srv.Addr = listener.Addr().String()
 

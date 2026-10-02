@@ -58,7 +58,7 @@ func runResetMFACommandInternal(cmd *cobra.Command, _ []string) error {
 	}()
 
 	userService := user.NewUserService(db, nil)
-	user, err := userService.GetUserByUsername(cmd.Context(), username)
+	localUser, err := userService.GetUserByUsername(cmd.Context(), username)
 	if err != nil {
 		if errors.Is(err, common.ErrUserNotFound) {
 			return fmt.Errorf("user %q not found", username)
@@ -67,12 +67,12 @@ func runResetMFACommandInternal(cmd *cobra.Command, _ []string) error {
 	}
 
 	passkeyService := passkey.NewPasskeyService(db, cfg)
-	if err := passkeyService.ResetMFAForUser(cmd.Context(), user.ID); err != nil {
-		return fmt.Errorf("failed to reset passkey MFA: %w", err)
+	if resetMFAForUserErr := passkeyService.ResetMFAForUser(cmd.Context(), localUser.ID); resetMFAForUserErr != nil {
+		return fmt.Errorf("failed to reset passkey MFA: %w", resetMFAForUserErr)
 	}
 
-	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Passkey MFA reset successfully for %q\n", username); err != nil {
-		return fmt.Errorf("failed to write MFA reset result: %w", err)
+	if _, fprintfErr := fmt.Fprintf(cmd.OutOrStdout(), "Passkey MFA reset successfully for %q\n", username); fprintfErr != nil {
+		return fmt.Errorf("failed to write MFA reset result: %w", fprintfErr)
 	}
 	return nil
 }

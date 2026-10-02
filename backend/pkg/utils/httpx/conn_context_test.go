@@ -20,7 +20,7 @@ func newConnContextForTest(t *testing.T) context.Context {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
 
-	return WithConn(context.Background(), conn)
+	return WithConn(t.Context(), conn)
 }
 
 // HTTP/2 multiplexes the dashboard and activity streams onto one connection, so
@@ -53,7 +53,7 @@ func TestAcquireDeadPeerTimeoutHoldsUntilLastRelease(t *testing.T) {
 // never passed through WithConn) must degrade quietly rather than fail the
 // stream.
 func TestAcquireDeadPeerTimeoutIgnoresMissingConn(t *testing.T) {
-	release, err := AcquireDeadPeerTimeout(context.Background(), 45*time.Second)
+	release, err := AcquireDeadPeerTimeout(t.Context(), 45*time.Second)
 	require.NoError(t, err)
 	require.NotPanics(t, release)
 }

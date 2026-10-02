@@ -18,13 +18,92 @@ import (
 
 func (h *JobSchedulesHandler) registerRunRoutesInternal(api huma.API) {
 	base := "/environments/{id}/jobs/{jobId}"
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "list-job-runs", Method: http.MethodGet, Path: base + "/runs", Summary: "List job runs", Security: handlerutil.DefaultOperationSecurity()}, authz.PermJobsManage, h.ListRuns)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "get-job-run", Method: http.MethodGet, Path: base + "/runs/{runId}", Summary: "Get job run", Security: handlerutil.DefaultOperationSecurity()}, authz.PermJobsManage, h.GetRun)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "retry-job-run", Method: http.MethodPost, Path: base + "/runs/{runId}/retry", Summary: "Retry job run", Security: handlerutil.DefaultOperationSecurity()}, authz.PermJobsManage, h.RetryRun)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "cancel-job-run", Method: http.MethodPost, Path: base + "/runs/{runId}/cancel", Summary: "Cancel pending job run", Security: handlerutil.DefaultOperationSecurity()}, authz.PermJobsManage, h.CancelRun)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "resolve-job-run", Method: http.MethodPost, Path: base + "/runs/{runId}/resolve", Summary: "Resolve legacy job run", Description: "Deprecated compatibility endpoint for mixed-version upgrades. Removed in v3.", Deprecated: true, Security: handlerutil.DefaultOperationSecurity()}, authz.PermJobsManage, h.ResolveRun)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "ack-job-run", Method: http.MethodPost, Path: base + "/runs/{runId}/ack", Summary: "Acknowledge remote run completion", Security: handlerutil.DefaultOperationSecurity()}, authz.PermJobsManage, h.AcknowledgeRun)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "restart-job-worker", Method: http.MethodPost, Path: base + "/restart", Summary: "Restart continuous job worker", Security: handlerutil.DefaultOperationSecurity()}, authz.PermJobsManage, h.RestartWorker)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "list-job-runs",
+			Method:      http.MethodGet,
+			Path:        base + "/runs",
+			Summary:     "List job runs",
+			Security:    handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermJobsManage,
+		h.ListRuns,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "get-job-run",
+			Method:      http.MethodGet,
+			Path:        base + "/runs/{runId}",
+			Summary:     "Get job run",
+			Security:    handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermJobsManage,
+		h.GetRun,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "retry-job-run",
+			Method:      http.MethodPost,
+			Path:        base + "/runs/{runId}/retry",
+			Summary:     "Retry job run",
+			Security:    handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermJobsManage,
+		h.RetryRun,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "cancel-job-run",
+			Method:      http.MethodPost,
+			Path:        base + "/runs/{runId}/cancel",
+			Summary:     "Cancel pending job run",
+			Security:    handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermJobsManage,
+		h.CancelRun,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "resolve-job-run",
+			Method:      http.MethodPost,
+			Path:        base + "/runs/{runId}/resolve",
+			Summary:     "Resolve legacy job run",
+			Description: "Deprecated compatibility endpoint for mixed-version upgrades. Removed in v3.",
+			Deprecated:  true,
+			Security:    handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermJobsManage,
+		h.ResolveRun,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "ack-job-run",
+			Method:      http.MethodPost,
+			Path:        base + "/runs/{runId}/ack",
+			Summary:     "Acknowledge remote run completion",
+			Security:    handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermJobsManage,
+		h.AcknowledgeRun,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "restart-job-worker",
+			Method:      http.MethodPost,
+			Path:        base + "/restart",
+			Summary:     "Restart continuous job worker",
+			Security:    handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermJobsManage,
+		h.RestartWorker,
+	)
 }
 
 // ListRuns returns paginated history for the requested job and environment.
@@ -139,9 +218,9 @@ func (s *JobService) RetryRun(ctx context.Context, environmentID, jobID, runID s
 	}
 	if s.scheduler != nil {
 		if job, ok := s.scheduler.GetJob(jobID); ok {
-			if validator, ok := job.(st.RetryValidator); ok {
-				if err := validator.ValidateRetry(ctx, run); err != nil {
-					return run, err
+			if validator, localOk := job.(st.RetryValidator); localOk {
+				if validateRetryErr := validator.ValidateRetry(ctx, run); validateRetryErr != nil {
+					return run, validateRetryErr
 				}
 			}
 		}

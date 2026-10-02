@@ -18,7 +18,14 @@ type Module struct {
 	handler *EnvironmentHandler
 }
 
-func New(service *EnvironmentService, settingsService *settings.SettingsService, apiKey *apikey.ApiKeyService, eventService *event.EventService, cfg *config.Config, activityService activitylib.Service) *Module {
+func New(
+	service *EnvironmentService,
+	settingsService *settings.SettingsService,
+	apiKey *apikey.ApiKeyService,
+	eventService *event.EventService,
+	cfg *config.Config,
+	activityService activitylib.Service,
+) *Module {
 	return &Module{
 		service: service,
 		handler: NewHandler(service, settingsService, apiKey, eventService, cfg, activityService),

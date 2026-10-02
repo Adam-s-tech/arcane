@@ -40,7 +40,7 @@ func newSettingsServiceForSwarmTestInternal(t testing.TB, ctx context.Context, d
 	t.Helper()
 	svc, err := settings.NewSettingsService(ctx, db)
 	if err == nil {
-		t.Cleanup(func() { require.NoError(t, svc.Stop(context.Background())) })
+		t.Cleanup(func() { require.NoError(t, svc.Stop(context.WithoutCancel(t.Context()))) })
 	}
 	return svc, err
 }
@@ -116,7 +116,14 @@ func TestDescribeSwarmJoinFailureInternal(t *testing.T) {
 
 	require.Equal(t,
 		"failed to join swarm: Timeout was reached before node joined using [redacted]",
-		describeSwarmJoinFailureInternal(statusErr(500, `{"title":"Internal Server Error","status":500,"detail":"failed to join swarm: Timeout was reached before node joined using `+token+`"}`), token),
+		describeSwarmJoinFailureInternal(
+			statusErr(
+				500,
+				"{\"title\":\"Internal Server Error\",\"status\":500,\"detail\":\"failed to join swarm: Timeout was reached be"+
+					"fore node joined using "+token+`"}`,
+			),
+			token,
+		),
 	)
 	require.Equal(t, "legacy join failure", describeSwarmJoinFailureInternal(statusErr(400, `{"success":false,"error":"legacy join failure"}`), token))
 	require.Equal(t, "swarm join failed with HTTP 502 from the target agent", describeSwarmJoinFailureInternal(statusErr(502, "<html>bad gateway</html>"), token))
@@ -129,7 +136,7 @@ func TestDescribeSwarmJoinFailureInternal(t *testing.T) {
 }
 
 func TestSwarmService_FetchSwarmNodeIdentityViaEdgeInternal_UsesEnvironmentAccessToken(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSwarmServiceTestDBInternal(t)
 	settingsSvc, err := newSettingsServiceForSwarmTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -196,7 +203,7 @@ func stubStackSourceUpdateDeployInternal(t *testing.T) *stackSourceDeployRecorde
 }
 
 func TestSwarmService_UpdateAndGetStackSource_UsesStoredFilesWithoutSwarmManager(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSwarmServiceTestDBInternal(t)
 	rootDir := t.TempDir()
 	t.Setenv("SWARM_STACK_SOURCES_DIRECTORY", rootDir)
@@ -260,7 +267,7 @@ func TestSwarmService_UpdateAndGetStackSource_UsesStoredFilesWithoutSwarmManager
 }
 
 func TestSwarmService_UpdateAndGetStackSource_RoundTripsOverride(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSwarmServiceTestDBInternal(t)
 	rootDir := t.TempDir()
 	t.Setenv("SWARM_STACK_SOURCES_DIRECTORY", rootDir)
@@ -300,7 +307,7 @@ func TestSwarmService_UpdateAndGetStackSource_RoundTripsOverride(t *testing.T) {
 }
 
 func TestSwarmService_UpdateStackSource_PrunesAndRestoresOnDeployFailure(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSwarmServiceTestDBInternal(t)
 	rootDir := t.TempDir()
 	t.Setenv("SWARM_STACK_SOURCES_DIRECTORY", rootDir)
@@ -344,7 +351,7 @@ func TestSwarmService_UpdateStackSource_PrunesAndRestoresOnDeployFailure(t *test
 }
 
 func TestSwarmService_ScaleService_HandlesServiceModesInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	replicas := uint64(5)
 	maxConcurrent := uint64(2)
 

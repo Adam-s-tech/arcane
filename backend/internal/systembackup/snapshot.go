@@ -17,7 +17,17 @@ import (
 )
 
 // snapshotWithStagedDatabaseInternal archives a consistent database without blocking actor leases during the upload.
-func (s *SystemBackupService) snapshotWithStagedDatabaseInternal(ctx context.Context, dockerClient *client.Client, repository backup.Repository, recoveryKey, backupID string) (backup.Snapshot, error) {
+func (
+	s *SystemBackupService,
+) snapshotWithStagedDatabaseInternal(
+	ctx context.Context,
+	dockerClient *client.Client,
+	repository backup.Repository,
+	recoveryKey, backupID string,
+) (
+	backup.Snapshot,
+	error,
+) {
 	layout, err := s.backupSourceLayoutInternal(ctx, dockerClient)
 	if err != nil {
 		return backup.Snapshot{}, err
@@ -34,8 +44,8 @@ func (s *SystemBackupService) snapshotWithStagedDatabaseInternal(ctx context.Con
 	databasePath := filepath.Join(layout.dataDirectory, layout.databaseName)
 	stagedDatabase := filepath.Join(stage, layout.databaseName)
 	snapshotDatabase := filepath.Join(snapshotDataPath, layout.databaseName)
-	if err := s.writeManifestInternal(ctx, backupID, layout); err != nil {
-		return backup.Snapshot{}, err
+	if writeManifestErr := s.writeManifestInternal(ctx, backupID, layout); writeManifestErr != nil {
+		return backup.Snapshot{}, writeManifestErr
 	}
 	defer func() { _ = os.Remove(layout.manifestPathInternal()) }()
 	layout.excludes = []string{
@@ -46,8 +56,8 @@ func (s *SystemBackupService) snapshotWithStagedDatabaseInternal(ctx context.Con
 	if err != nil {
 		return backup.Snapshot{}, err
 	}
-	if err := stageSystemDatabaseInternal(ctx, sqlDB, databasePath, stagedDatabase); err != nil {
-		return backup.Snapshot{}, err
+	if stageSystemDatabaseErr := stageSystemDatabaseInternal(ctx, sqlDB, databasePath, stagedDatabase); stageSystemDatabaseErr != nil {
+		return backup.Snapshot{}, stageSystemDatabaseErr
 	}
 	mounts, inContainer, err := currentMountsInternal(ctx, dockerClient)
 	if err != nil {
@@ -106,9 +116,9 @@ func snapshotSourceFilesInternal(ctx context.Context, layout backupSourceLayoutI
 			return nil
 		}
 		for _, excluded := range layout.excludes {
-			matched, err := filepath.Match(excluded, relative)
-			if err != nil {
-				return err
+			matched, matchErr := filepath.Match(excluded, relative)
+			if matchErr != nil {
+				return matchErr
 			}
 			if !matched {
 				continue
@@ -156,16 +166,16 @@ func stageSystemDatabaseInternal(ctx context.Context, db *sql.DB, databasePath, 
 	if err != nil {
 		return err
 	}
-	if _, err := db.ExecContext(ctx, "VACUUM INTO ?", stagedDatabase); err != nil {
-		return fmt.Errorf("stage Arcane database: %w", err)
+	if _, execContextErr := db.ExecContext(ctx, "VACUUM INTO ?", stagedDatabase); execContextErr != nil {
+		return fmt.Errorf("stage Arcane database: %w", execContextErr)
 	}
 	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
-		if err := os.Chown(stagedDatabase, int(stat.Uid), int(stat.Gid)); err != nil {
-			return fmt.Errorf("preserve staged database ownership: %w", err)
+		if chownErr := os.Chown(stagedDatabase, int(stat.Uid), int(stat.Gid)); chownErr != nil {
+			return fmt.Errorf("preserve staged database ownership: %w", chownErr)
 		}
 	}
-	if err := os.Chmod(stagedDatabase, info.Mode()); err != nil {
-		return fmt.Errorf("preserve staged database permissions: %w", err)
+	if chmodErr := os.Chmod(stagedDatabase, info.Mode()); chmodErr != nil {
+		return fmt.Errorf("preserve staged database permissions: %w", chmodErr)
 	}
 	return nil
 }

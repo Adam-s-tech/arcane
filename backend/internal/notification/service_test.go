@@ -53,7 +53,7 @@ func setupNotificationTestDB(t *testing.T) *database.DB {
 	return &database.DB{DB: db}
 }
 
-func setupNotificationTestServiceInternal(t *testing.T) (*database.DB, *environment.EnvironmentService, *NotificationService) {
+func setupNotificationTestServiceInternal(t *testing.T) (*database.DB, *NotificationService) {
 	t.Helper()
 
 	db := setupNotificationTestDB(t)
@@ -63,7 +63,7 @@ func setupNotificationTestServiceInternal(t *testing.T) (*database.DB, *environm
 		AppUrl: "http://localhost:3552",
 	}
 
-	return db, envSvc, NewNotificationService(db, cfg, envSvc, event.NewEventService(db, cfg, nil), nil)
+	return db, NewNotificationService(db, cfg, envSvc, event.NewEventService(db, cfg, nil), nil)
 }
 
 func newNotificationTestUpdateInfoInternal() *imageupdate.Response {
@@ -91,8 +91,8 @@ func captureNotificationServiceLogsInternal(t *testing.T) *bytes.Buffer {
 }
 
 func TestNotificationService_ResolveNotificationTargetInternal_UsesEnvironmentRecordAndFallback(t *testing.T) {
-	ctx := context.Background()
-	db, _, svc := setupNotificationTestServiceInternal(t)
+	ctx := t.Context()
+	db, svc := setupNotificationTestServiceInternal(t)
 
 	target, err := svc.resolveNotificationTargetInternal(ctx, "")
 	require.NoError(t, err)
@@ -115,8 +115,8 @@ func TestNotificationService_ResolveNotificationTargetInternal_UsesEnvironmentRe
 }
 
 func TestNotificationService_ResolveNotificationTargetForAccessTokenInternal_UsesStoredEnvironmentName(t *testing.T) {
-	ctx := context.Background()
-	db, _, svc := setupNotificationTestServiceInternal(t)
+	ctx := t.Context()
+	db, svc := setupNotificationTestServiceInternal(t)
 
 	token := "remote-token"
 	now := time.Now()
@@ -136,8 +136,8 @@ func TestNotificationService_ResolveNotificationTargetForAccessTokenInternal_Use
 }
 
 func TestNotificationService_DispatchNotification_InvalidAccessTokenReturnsUnauthorizedSentinel(t *testing.T) {
-	ctx := context.Background()
-	_, _, svc := setupNotificationTestServiceInternal(t)
+	ctx := t.Context()
+	_, svc := setupNotificationTestServiceInternal(t)
 
 	_, err := svc.DispatchNotification(ctx, "missing-token", notificationdto.DispatchRequest{
 		Kind: notificationdto.DispatchKindImageUpdate,
@@ -152,8 +152,8 @@ func TestNotificationService_DispatchNotification_InvalidAccessTokenReturnsUnaut
 }
 
 func TestNotificationService_DispatchNotification_UnsupportedKindReturnsSentinel(t *testing.T) {
-	ctx := context.Background()
-	db, _, svc := setupNotificationTestServiceInternal(t)
+	ctx := t.Context()
+	db, svc := setupNotificationTestServiceInternal(t)
 
 	token := "remote-token"
 	now := time.Now()
@@ -178,8 +178,8 @@ func TestNotificationService_DispatchNotification_UnsupportedKindReturnsSentinel
 }
 
 func TestNotificationService_DispatchNotification_LogsManagerDispatchForAgent(t *testing.T) {
-	ctx := context.Background()
-	db, _, svc := setupNotificationTestServiceInternal(t)
+	ctx := t.Context()
+	db, svc := setupNotificationTestServiceInternal(t)
 	logBuffer := captureNotificationServiceLogsInternal(t)
 
 	token := "remote-token"
@@ -212,7 +212,7 @@ func TestNotificationService_DispatchNotification_LogsManagerDispatchForAgent(t 
 }
 
 func TestNotificationService_SendImageUpdateNotification_AgentModeDispatchesToManager(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupNotificationTestDB(t)
 	envSvc := environment.NewEnvironmentService(db, nil, nil, nil, nil, nil)
 
@@ -261,7 +261,7 @@ func TestNotificationService_SendImageUpdateNotification_AgentModeDispatchesToMa
 }
 
 func TestNotificationService_SendBatchImageUpdateNotification_AgentModeUsesManagerDeliveredCountInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupNotificationTestDB(t)
 	envSvc := environment.NewEnvironmentService(db, nil, nil, nil, nil, nil)
 
@@ -309,7 +309,7 @@ func TestNotificationService_SendBatchImageUpdateNotification_AgentModeUsesManag
 }
 
 func TestNotificationService_SendImageUpdateNotification_AgentModeRequiresUpdateInfo(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupNotificationTestDB(t)
 	envSvc := environment.NewEnvironmentService(db, nil, nil, nil, nil, nil)
 
@@ -324,7 +324,7 @@ func TestNotificationService_SendImageUpdateNotification_AgentModeRequiresUpdate
 }
 
 func TestNotificationService_SendBatchImageUpdateNotification_AgentModeSkipsNoOpDispatchInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupNotificationTestDB(t)
 	envSvc := environment.NewEnvironmentService(db, nil, nil, nil, nil, nil)
 
@@ -365,7 +365,7 @@ func TestNotificationService_SendBatchImageUpdateNotification_AgentModeSkipsNoOp
 }
 
 func TestNotificationService_RenderEmailTemplate_IncludesEnvironment(t *testing.T) {
-	_, _, svc := setupNotificationTestServiceInternal(t)
+	_, svc := setupNotificationTestServiceInternal(t)
 
 	htmlBody, textBody, err := svc.renderEmailTemplateInternal("Homelab Prod", "nginx:latest", newNotificationTestUpdateInfoInternal())
 	require.NoError(t, err)
@@ -377,7 +377,7 @@ func TestNotificationService_RenderEmailTemplate_IncludesEnvironment(t *testing.
 }
 
 func TestNotificationService_RenderContainerUpdateEmailTemplate_IncludesEnvironment(t *testing.T) {
-	_, _, svc := setupNotificationTestServiceInternal(t)
+	_, svc := setupNotificationTestServiceInternal(t)
 
 	htmlBody, textBody, err := svc.renderContainerUpdateEmailTemplateInternal("Lab Remote", "nginx", "nginx:latest", "sha256:old", "sha256:new")
 	require.NoError(t, err)
@@ -389,7 +389,7 @@ func TestNotificationService_RenderContainerUpdateEmailTemplate_IncludesEnvironm
 }
 
 func TestNotificationService_RenderBatchEmailTemplate_IncludesEnvironment(t *testing.T) {
-	_, _, svc := setupNotificationTestServiceInternal(t)
+	_, svc := setupNotificationTestServiceInternal(t)
 
 	updates := map[string]*imageupdate.Response{
 		"nginx:latest": newNotificationTestUpdateInfoInternal(),
@@ -412,7 +412,7 @@ func TestNotificationService_RenderBatchEmailTemplate_IncludesEnvironment(t *tes
 }
 
 func TestNotificationService_RenderVulnerabilitySummaryEmailTemplate_IncludesEnvironment(t *testing.T) {
-	_, _, svc := setupNotificationTestServiceInternal(t)
+	_, svc := setupNotificationTestServiceInternal(t)
 
 	htmlBody, textBody, err := svc.renderVulnerabilitySummaryEmailTemplateInternal("Remote Alpha", VulnerabilityNotificationPayload{
 		CVEID:        "Daily Summary - 2026-01-09",
@@ -427,7 +427,7 @@ func TestNotificationService_RenderVulnerabilitySummaryEmailTemplate_IncludesEnv
 }
 
 func TestNotificationService_RenderPruneReportEmailTemplate_IncludesEnvironment(t *testing.T) {
-	_, _, svc := setupNotificationTestServiceInternal(t)
+	_, svc := setupNotificationTestServiceInternal(t)
 
 	htmlBody, textBody, err := svc.renderPruneReportEmailTemplateInternal("Cluster West", &system.PruneAllResult{
 		SpaceReclaimed:           3825205248,
@@ -552,7 +552,7 @@ func TestNotificationCredentialInternal_LeavesEmptyValuesEmpty(t *testing.T) {
 }
 
 func TestNotificationService_CreateOrUpdateSettingsEncryptsCredentialFieldsInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupNotificationTestDB(t)
 	svc := NewNotificationService(db, &config.Config{}, nil, nil, nil)
 
@@ -575,7 +575,7 @@ func TestNotificationService_CreateOrUpdateSettingsEncryptsCredentialFieldsInter
 }
 
 func TestNotificationService_CreateOrUpdateSettingsPreservesStoredCredentialWhenEmptyInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupNotificationTestDB(t)
 	svc := NewNotificationService(db, &config.Config{}, nil, nil, nil)
 
@@ -603,7 +603,7 @@ func TestNotificationService_CreateOrUpdateSettingsPreservesStoredCredentialWhen
 }
 
 func TestNotificationService_CreateOrUpdateSettingsRejectsTargetChangeWithStoredCredentialInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupNotificationTestDB(t)
 	svc := NewNotificationService(db, &config.Config{}, nil, nil, nil)
 
@@ -638,7 +638,7 @@ func TestNotificationService_CreateOrUpdateSettingsRejectsTargetChangeWithStored
 }
 
 func TestNotificationService_CreateOrUpdateSettingsClearsEmailPasswordWhenAuthModeNoneInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupNotificationTestDB(t)
 	svc := NewNotificationService(db, &config.Config{}, nil, nil, nil)
 
@@ -662,7 +662,7 @@ func TestNotificationService_CreateOrUpdateSettingsClearsEmailPasswordWhenAuthMo
 }
 
 func TestNotificationService_CreateOrUpdateSettingsPreservesCredentialAcrossDisableInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupNotificationTestDB(t)
 	svc := NewNotificationService(db, &config.Config{}, nil, nil, nil)
 
@@ -693,7 +693,7 @@ func TestNotificationService_CreateOrUpdateSettingsPreservesCredentialAcrossDisa
 }
 
 func TestNotificationService_CreateOrUpdateSettingsKeepsConfigWhenDisabledInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupNotificationTestDB(t)
 	svc := NewNotificationService(db, &config.Config{}, nil, nil, nil)
 
@@ -729,7 +729,7 @@ func TestNotificationService_CreateOrUpdateSettingsKeepsConfigWhenDisabledIntern
 }
 
 func TestNotificationService_NotifyEnabledProvidersInternal_SkipsFiltersAndAggregatesInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupNotificationTestDB(t)
 	svc := NewNotificationService(db, &config.Config{}, nil, event.NewEventService(db, nil, nil), nil)
 
@@ -831,8 +831,8 @@ func TestSupportedNotificationTestTypes_IncludesAutoHeal(t *testing.T) {
 }
 
 func TestNotificationService_DispatchNotificationForEnvironment_ResolvesTunnelSessionEnvironment(t *testing.T) {
-	ctx := context.Background()
-	db, _, svc := setupNotificationTestServiceInternal(t)
+	ctx := t.Context()
+	db, svc := setupNotificationTestServiceInternal(t)
 
 	now := time.Now()
 	require.NoError(t, db.WithContext(ctx).Create(&environment.Environment{
@@ -858,7 +858,7 @@ func TestNotificationService_DispatchNotificationForEnvironment_ResolvesTunnelSe
 }
 
 func TestNotificationService_AgentDispatchWithoutHTTPConfigFallsBackToTunnel(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupNotificationTestDB(t)
 	svc := NewNotificationService(db, &config.Config{AgentMode: true}, nil, event.NewEventService(db, &config.Config{AgentMode: true}, nil), nil)
 
@@ -876,7 +876,7 @@ func TestNotificationService_AgentDispatchWithoutHTTPConfigFallsBackToTunnel(t *
 }
 
 func TestNotificationService_AgentDispatchHTTPFailureFallsBackToTunnel(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupNotificationTestDB(t)
 	cfg := &config.Config{AgentMode: true, ManagerApiUrl: "http://127.0.0.1:0", AgentToken: "token"}
 	svc := NewNotificationService(db, cfg, nil, event.NewEventService(db, cfg, nil), nil)

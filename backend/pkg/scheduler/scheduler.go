@@ -45,7 +45,17 @@ func NewJobScheduler(ctx context.Context, coordinator *runs.Coordinator, locatio
 		location = time.UTC
 	}
 	lifetime, cancel := context.WithCancel(ctx)
-	return &jobSchedulerInternal{context: lifetime, cancel: cancel, location: location, coordinator: coordinator, jobsByID: map[string]st.Job{}, watchers: map[string]st.BusWatcher{}, allWatchers: map[string]watcherRegistrationInternal{}, supervisors: map[string]*watcherSupervisorInternal{}}, nil
+	return &jobSchedulerInternal{
+			context:     lifetime,
+			cancel:      cancel,
+			location:    location,
+			coordinator: coordinator,
+			jobsByID:    map[string]st.Job{},
+			watchers:    map[string]st.BusWatcher{},
+			allWatchers: map[string]watcherRegistrationInternal{},
+			supervisors: map[string]*watcherSupervisorInternal{},
+		},
+		nil
 }
 
 func (js *jobSchedulerInternal) RegisterJob(job st.Job) error {
@@ -135,15 +145,15 @@ func (js *jobSchedulerInternal) StartScheduler(ctx context.Context) error {
 		_, watching := js.watchers[record.JobID]
 		js.mu.RUnlock()
 		if record.EnvironmentID == "0" && record.Schedule != "" && !js.HasJob(record.JobID) && !watching {
-			if err := js.coordinator.Checkpoint(ctx, record.JobID, "", time.Time{}); err != nil {
-				return err
+			if checkpointErr := js.coordinator.Checkpoint(ctx, record.JobID, "", time.Time{}); checkpointErr != nil {
+				return checkpointErr
 			}
 		}
 	}
 	var schedulingErr error
 	for _, job := range js.ListRegisteredJobs() {
-		if err := js.installInternal(ctx, job); err != nil {
-			schedulingErr = errors.Join(schedulingErr, fmt.Errorf("%s: %w", "schedule "+job.Name(), err))
+		if installErr := js.installInternal(ctx, job); installErr != nil {
+			schedulingErr = errors.Join(schedulingErr, fmt.Errorf("%s: %w", "schedule "+job.Name(), installErr))
 		}
 	}
 	return schedulingErr

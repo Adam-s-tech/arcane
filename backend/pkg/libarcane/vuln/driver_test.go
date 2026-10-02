@@ -183,7 +183,7 @@ func TestCleanupTrivyLogTempFilesInternal_RemovesFiles(t *testing.T) {
 	_, err = stderrFile.WriteString("stderr")
 	require.NoError(t, err)
 
-	CleanupLogTempFiles(context.Background(), stdoutFile, stderrFile)
+	CleanupLogTempFiles(t.Context(), stdoutFile, stderrFile)
 
 	_, err = os.Stat(stdoutPath)
 	require.Error(t, err)
@@ -383,7 +383,7 @@ func TestSelectDefaultTrivyNetworkModeInternal(t *testing.T) {
 func TestResolveTrivyUnixSocketSourceInternal(t *testing.T) {
 	t.Run("uses resolved host path", func(t *testing.T) {
 		source, err := ResolveUnixSocketSource(
-			context.Background(),
+			t.Context(),
 			"/run/user/1000/podman/podman.sock",
 			func(context.Context, string) (string, error) {
 				return "/host/podman/podman.sock", nil
@@ -397,7 +397,7 @@ func TestResolveTrivyUnixSocketSourceInternal(t *testing.T) {
 
 	t.Run("fails when socket cannot be resolved in docker", func(t *testing.T) {
 		_, err := ResolveUnixSocketSource(
-			context.Background(),
+			t.Context(),
 			"/run/user/1000/podman/podman.sock",
 			func(context.Context, string) (string, error) {
 				return "", nil
@@ -411,7 +411,7 @@ func TestResolveTrivyUnixSocketSourceInternal(t *testing.T) {
 
 	t.Run("falls back to original path outside docker", func(t *testing.T) {
 		source, err := ResolveUnixSocketSource(
-			context.Background(),
+			t.Context(),
 			"/var/run/docker.sock",
 			func(context.Context, string) (string, error) {
 				return "", errors.New("not running in docker")
@@ -504,7 +504,7 @@ func TestAwaitContainerWaitResponseInternal_Status(t *testing.T) {
 	errCh := make(chan error)
 	statusCh <- containertypes.WaitResponse{StatusCode: 12}
 
-	status, err := AwaitContainerWaitResponse(context.Background(), statusCh, errCh)
+	status, err := AwaitContainerWaitResponse(t.Context(), statusCh, errCh)
 	require.NoError(t, err)
 	require.Equal(t, int64(12), status)
 }
@@ -514,7 +514,7 @@ func TestAwaitContainerWaitResponseInternal_Error(t *testing.T) {
 	errCh := make(chan error, 1)
 	errCh <- errors.New("boom")
 
-	status, err := AwaitContainerWaitResponse(context.Background(), statusCh, errCh)
+	status, err := AwaitContainerWaitResponse(t.Context(), statusCh, errCh)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "boom")
 	require.Equal(t, int64(0), status)
@@ -527,7 +527,7 @@ func TestAwaitContainerWaitResponseInternal_ClosedErrorChannelStillReadsStatus(t
 	close(errCh)
 	statusCh <- containertypes.WaitResponse{StatusCode: 7}
 
-	status, err := AwaitContainerWaitResponse(context.Background(), statusCh, errCh)
+	status, err := AwaitContainerWaitResponse(t.Context(), statusCh, errCh)
 	require.NoError(t, err)
 	require.Equal(t, int64(7), status)
 }
@@ -535,7 +535,7 @@ func TestAwaitContainerWaitResponseInternal_ClosedErrorChannelStillReadsStatus(t
 func TestAwaitContainerWaitResponseInternal_ContextDone(t *testing.T) {
 	statusCh := make(chan containertypes.WaitResponse)
 	errCh := make(chan error)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
 	defer cancel()
 
 	status, err := AwaitContainerWaitResponse(ctx, statusCh, errCh)
@@ -550,7 +550,7 @@ func TestAwaitContainerWaitResponseInternal_NoStatus(t *testing.T) {
 	close(statusCh)
 	close(errCh)
 
-	status, err := AwaitContainerWaitResponse(context.Background(), statusCh, errCh)
+	status, err := AwaitContainerWaitResponse(t.Context(), statusCh, errCh)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "ended without status")
 	require.Equal(t, int64(0), status)

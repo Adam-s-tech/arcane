@@ -207,11 +207,11 @@ func TestTunnelRegistryPublishesReplacementBeforeClosingPreviousInternal(t *test
 	replacement.AgentInstance = "agent-a"
 	registered := make(chan bool, 1)
 	go func() {
-		accepted, _, _, registerErr := registry.RegisterSession(t.Context(), replacement, TunnelStaleTimeout)
+		localAccepted, _, _, registerErr := registry.RegisterSession(t.Context(), replacement, TunnelStaleTimeout)
 		if !assert.NoError(t, registerErr) {
 			return
 		}
-		registered <- accepted
+		registered <- localAccepted
 	}()
 
 	select {
@@ -225,7 +225,7 @@ func TestTunnelRegistryPublishesReplacementBeforeClosingPreviousInternal(t *test
 	close(previousConn.releaseClose)
 	require.True(t, <-registered)
 
-	stopCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	stopCtx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
 	require.NoError(t, registry.Stop(stopCtx))
 }
@@ -233,7 +233,7 @@ func TestTunnelRegistryPublishesReplacementBeforeClosingPreviousInternal(t *test
 func TestTunnelRegistryRejectsRegistrationAfterStopInternal(t *testing.T) {
 	registry := NewTunnelRegistry()
 
-	stopCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	stopCtx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
 	require.NoError(t, registry.Stop(stopCtx))
 

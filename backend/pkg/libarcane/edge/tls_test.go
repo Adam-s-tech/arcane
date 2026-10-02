@@ -21,6 +21,7 @@ import (
 	"time"
 
 	certgen "github.com/getarcaneapp/arcane/cli/v2/pkg/generate"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	kit "go.getarcane.app/kit/pkg"
 	libcrypto "go.getarcane.app/sys/crypto"
@@ -57,7 +58,7 @@ func TestPrepareManagerMTLSAssetsWithContext(t *testing.T) {
 		AppURL:            "https://manager.example.com",
 	}
 
-	require.NoError(t, PrepareManagerMTLSAssetsWithContext(context.Background(), cfg))
+	require.NoError(t, PrepareManagerMTLSAssetsWithContext(t.Context(), cfg))
 	require.NotEmpty(t, cfg.EdgeMTLSCAFile)
 	require.FileExists(t, cfg.EdgeMTLSCAFile)
 }
@@ -69,7 +70,7 @@ func TestGenerateManagerClientMTLSAssetsWithContext(t *testing.T) {
 		AppURL:            "https://manager.example.com",
 	}
 
-	assets, err := GenerateManagerClientMTLSAssetsWithContext(context.Background(), cfg, "env-123", "Lab Server")
+	assets, err := GenerateManagerClientMTLSAssetsWithContext(t.Context(), cfg, "env-123", "Lab Server")
 	require.NoError(t, err)
 	require.NotNil(t, assets)
 	require.Empty(t, cfg.EdgeMTLSCAFile)
@@ -113,7 +114,7 @@ func TestGeneratedClientCertificate_IncludesSANs(t *testing.T) {
 		AppURL:            "https://manager.example.com",
 	}
 
-	assets, err := GenerateManagerClientMTLSAssetsWithContext(context.Background(), cfg, "env-abc", "Lab Server")
+	assets, err := GenerateManagerClientMTLSAssetsWithContext(t.Context(), cfg, "env-abc", "Lab Server")
 	require.NoError(t, err)
 	require.NotNil(t, assets)
 
@@ -153,7 +154,7 @@ func TestEnsureAgentMTLSAssets_RejectsPlainHTTPEnrollment(t *testing.T) {
 		EdgeMTLSAssetsDir: t.TempDir(),
 	}
 
-	err := EnsureAgentMTLSAssets(context.Background(), cfg)
+	err := EnsureAgentMTLSAssets(t.Context(), cfg)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "MANAGER_API_URL to use https for certificate enrollment")
 }
@@ -179,7 +180,7 @@ func TestEnsureAgentMTLSAssets_LimitsEnrollmentErrorBody(t *testing.T) {
 		EdgeMTLSAssetsDir: t.TempDir(),
 	}
 
-	err := EnsureAgentMTLSAssets(context.Background(), cfg)
+	err := EnsureAgentMTLSAssets(t.Context(), cfg)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "edge mTLS enrollment failed with status 500")
 	require.LessOrEqual(t, len(err.Error()), maxEnrollResponseBytes+128)
@@ -189,7 +190,7 @@ func TestEnsureAgentMTLSAssets_UsesDownloadedCAPathWhenPresent(t *testing.T) {
 	assetsDir := t.TempDir()
 	caPath := filepath.Join(assetsDir, generatedMTLSCACertFileName)
 
-	generated, err := GenerateManagerClientMTLSAssetsWithContext(context.Background(), &Config{
+	generated, err := GenerateManagerClientMTLSAssetsWithContext(t.Context(), &Config{
 		EdgeMTLSMode:      EdgeMTLSModeRequired,
 		EdgeMTLSAssetsDir: t.TempDir(),
 		AppURL:            "https://manager.example.com",
@@ -208,7 +209,7 @@ func TestEnsureAgentMTLSAssets_UsesDownloadedCAPathWhenPresent(t *testing.T) {
 		EdgeMTLSAssetsDir: assetsDir,
 	}
 
-	require.NoError(t, EnsureAgentMTLSAssets(context.Background(), cfg))
+	require.NoError(t, EnsureAgentMTLSAssets(t.Context(), cfg))
 	require.NotEmpty(t, cfg.EdgeMTLSCertFile)
 	require.NotEmpty(t, cfg.EdgeMTLSKeyFile)
 	require.FileExists(t, cfg.EdgeMTLSCertFile)
@@ -289,7 +290,7 @@ func TestValidateManagerMTLSConfig_DoesNotRequireArcaneTLSTermination(t *testing
 	}))
 
 	assetsDir := t.TempDir()
-	caPath, _, _, err := ensureManagerCAInternal(context.Background(), assetsDir)
+	caPath, _, _, err := ensureManagerCAInternal(t.Context(), assetsDir)
 	require.NoError(t, err)
 
 	err = ValidateManagerMTLSConfig(&Config{
@@ -329,7 +330,7 @@ func TestTunnelServerRequiredMTLS_AllowsHTTPRequestsWithoutVisibleTLSState(t *te
 		AppURL:       "https://manager.example.com",
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/tunnel/connect", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/tunnel/connect", http.NoBody)
 	require.NoError(t, server.requireRequestCertificateIdentityInternal(req, "env-a"))
 }
 
@@ -337,7 +338,7 @@ func TestTunnelServerRequiredMTLS_RejectsDirectTLSWithoutVerifiedClientCertifica
 	server := NewTunnelServerWithRegistry(GetRegistry(), nil, nil)
 	server.SetConfig(&Config{EdgeMTLSMode: EdgeMTLSModeRequired})
 
-	req := httptest.NewRequest(http.MethodGet, "https://manager.example.com/api/tunnel/connect", nil)
+	req := httptest.NewRequest(http.MethodGet, "https://manager.example.com/api/tunnel/connect", http.NoBody)
 	req.TLS = &tls.ConnectionState{}
 	require.ErrorContains(t, server.requireRequestCertificateIdentityInternal(req, "env-a"), "verified edge mTLS client certificate is required")
 
@@ -353,14 +354,14 @@ func TestTunnelServerRequiredMTLS_DetectsOnlyDirectTLSForRequestSecurityMode(t *
 	})
 
 	cert := &x509.Certificate{}
-	req := httptest.NewRequest(http.MethodGet, "/api/tunnel/connect", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/tunnel/connect", http.NoBody)
 	req.TLS = &tls.ConnectionState{
 		PeerCertificates: []*x509.Certificate{cert},
 		VerifiedChains:   [][]*x509.Certificate{{cert}},
 	}
 	require.Equal(t, "mtls", requestSecurityModeInternal(req))
 
-	req = httptest.NewRequest(http.MethodGet, "/api/tunnel/connect", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/tunnel/connect", http.NoBody)
 	req.Header.Set("X-SSL-Client-Verify", "SUCCESS")
 	require.Equal(t, "token", requestSecurityModeInternal(req))
 	require.NoError(t, server.requireRequestCertificateIdentityInternal(req, "env-a"))
@@ -381,7 +382,7 @@ func TestTunnelServerRequiredMTLS_IgnoresProxyVerificationHeaders(t *testing.T) 
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/api/tunnel/connect", nil)
+			req := httptest.NewRequest(http.MethodGet, "/api/tunnel/connect", http.NoBody)
 			req.Header.Set("X-SSL-Client-Verify", tt.value)
 
 			require.Equal(t, "token", requestSecurityModeInternal(req))
@@ -394,16 +395,16 @@ func TestTunnelServerRequiredMTLS_AllowsGRPCContextsWithoutVisibleTLSState(t *te
 	server.SetConfig(&Config{EdgeMTLSMode: EdgeMTLSModeRequired})
 
 	t.Run("missing peer", func(t *testing.T) {
-		require.NoError(t, server.requireCertificateIdentityFromContextInternal(context.Background(), "env-a"))
+		require.NoError(t, server.requireCertificateIdentityFromContextInternal(t.Context(), "env-a"))
 	})
 
 	t.Run("non tls peer", func(t *testing.T) {
-		ctx := peer.NewContext(context.Background(), &peer.Peer{AuthInfo: testAuthInfo{}})
+		ctx := peer.NewContext(t.Context(), &peer.Peer{AuthInfo: testAuthInfo{}})
 		require.NoError(t, server.requireCertificateIdentityFromContextInternal(ctx, "env-a"))
 	})
 
 	t.Run("direct tls without verified client certificate", func(t *testing.T) {
-		ctx := peer.NewContext(context.Background(), &peer.Peer{AuthInfo: credentials.TLSInfo{}})
+		ctx := peer.NewContext(t.Context(), &peer.Peer{AuthInfo: credentials.TLSInfo{}})
 		require.ErrorContains(t, server.requireCertificateIdentityFromContextInternal(ctx, "env-a"), "verified edge mTLS client certificate is required")
 	})
 
@@ -411,7 +412,7 @@ func TestTunnelServerRequiredMTLS_AllowsGRPCContextsWithoutVisibleTLSState(t *te
 		uriSAN, err := url.Parse("spiffe://manager.example.com/edge/env-a")
 		require.NoError(t, err)
 		cert := &x509.Certificate{URIs: []*url.URL{uriSAN}}
-		ctx := peer.NewContext(context.Background(), &peer.Peer{AuthInfo: credentials.TLSInfo{State: tls.ConnectionState{
+		ctx := peer.NewContext(t.Context(), &peer.Peer{AuthInfo: credentials.TLSInfo{State: tls.ConnectionState{
 			PeerCertificates: []*x509.Certificate{cert},
 			VerifiedChains:   [][]*x509.Certificate{{cert}},
 		}}})
@@ -426,7 +427,7 @@ func TestTunnelServerRequiredMTLS_AllowsGRPCContextsWithoutVisibleTLSState(t *te
 
 func TestAgentMTLSAssetsNeedEnrollmentInternal_RenewsExpiredCertificate(t *testing.T) {
 	assetsDir := t.TempDir()
-	assets, err := GenerateManagerClientMTLSAssetsWithContext(context.Background(), &Config{
+	assets, err := GenerateManagerClientMTLSAssetsWithContext(t.Context(), &Config{
 		EdgeMTLSMode:      EdgeMTLSModeRequired,
 		EdgeMTLSAssetsDir: t.TempDir(),
 		AppURL:            "https://manager.example.com",
@@ -451,7 +452,7 @@ func TestAgentMTLSAssetsNeedEnrollmentInternal_RenewsExpiredCertificate(t *testi
 func TestValidateGeneratedClientCertificateInternal_RejectsMismatchedKeyPair(t *testing.T) {
 	assetsDir := t.TempDir()
 
-	clientCertPath, _, _, err := ensureClientCertificateInternal(context.Background(), assetsDir, "env-123", "Lab Server", "https://manager.example.com")
+	clientCertPath, _, _, err := ensureClientCertificateInternal(t.Context(), assetsDir, "env-123", "Lab Server", "https://manager.example.com")
 	require.NoError(t, err)
 
 	replacementKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
@@ -475,13 +476,13 @@ func TestValidateGeneratedClientCertificateInternal_RejectsMismatchedKeyPair(t *
 func TestEnsureClientCertificateInternal_PreservesCertificateWhenEnvironmentNameChanges(t *testing.T) {
 	assetsDir := t.TempDir()
 
-	clientCertPath, _, _, err := ensureClientCertificateInternal(context.Background(), assetsDir, "env-123", "", "https://manager.example.com")
+	clientCertPath, _, _, err := ensureClientCertificateInternal(t.Context(), assetsDir, "env-123", "", "https://manager.example.com")
 	require.NoError(t, err)
 
 	originalPEM, err := os.ReadFile(clientCertPath)
 	require.NoError(t, err)
 
-	clientCertPath, _, _, err = ensureClientCertificateInternal(context.Background(), assetsDir, "env-123", "Lab Server", "https://manager.example.com")
+	clientCertPath, _, _, err = ensureClientCertificateInternal(t.Context(), assetsDir, "env-123", "Lab Server", "https://manager.example.com")
 	require.NoError(t, err)
 
 	updatedPEM, err := os.ReadFile(clientCertPath)
@@ -500,7 +501,7 @@ func TestCAKey_EncryptedOnDiskWhenCryptoInitialized(t *testing.T) {
 	initEdgeTestCrypto(t)
 
 	assetsDir := t.TempDir()
-	caCertPath, caKeyPath, _, err := ensureManagerCAInternal(context.Background(), assetsDir)
+	caCertPath, caKeyPath, _, err := ensureManagerCAInternal(t.Context(), assetsDir)
 	require.NoError(t, err)
 	require.FileExists(t, caCertPath)
 	require.FileExists(t, caKeyPath)
@@ -517,7 +518,7 @@ func TestCAKey_EncryptedOnDiskWhenCryptoInitialized(t *testing.T) {
 	_, err = x509.ParsePKCS8PrivateKey(block.Bytes)
 	require.NoError(t, err)
 
-	clientCertPath, clientKeyPath, _, err := ensureClientCertificateInternal(context.Background(), assetsDir, "env-round", "Round Trip", "https://manager.example.com")
+	clientCertPath, clientKeyPath, _, err := ensureClientCertificateInternal(t.Context(), assetsDir, "env-round", "Round Trip", "https://manager.example.com")
 	require.NoError(t, err)
 	require.FileExists(t, clientCertPath)
 	require.FileExists(t, clientKeyPath)
@@ -543,11 +544,11 @@ func TestCAKey_EncryptionFailureReturnsError(t *testing.T) {
 func TestLockEdgeMTLSPathInternal_ReturnsOnContextCancellation(t *testing.T) {
 	assetsDir := t.TempDir()
 
-	unlock, err := lockEdgeMTLSPathInternal(context.Background(), assetsDir, ".ca.lock")
+	unlock, err := lockEdgeMTLSPathInternal(t.Context(), assetsDir, ".ca.lock")
 	require.NoError(t, err)
 	defer unlock()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
 	_, err = lockEdgeMTLSPathInternal(ctx, assetsDir, ".ca.lock")
@@ -617,7 +618,7 @@ func TestGeneratedMLDSAAssets_HandshakeWithVerifiedClientCertificate(t *testing.
 		EdgeMTLSAssetsDir: assetsDir,
 		AppURL:            "https://manager.example.com",
 	}
-	_, err := GenerateManagerClientMTLSAssetsWithContext(context.Background(), cfg, "env-hs", "Handshake")
+	_, err := GenerateManagerClientMTLSAssetsWithContext(t.Context(), cfg, "env-hs", "Handshake")
 	require.NoError(t, err)
 
 	caCertPath := filepath.Join(assetsDir, "ca.crt")
@@ -663,7 +664,7 @@ func TestGeneratedMLDSAAssets_HandshakeWithVerifiedClientCertificate(t *testing.
 
 	listener, err := tls.Listen("tcp", "127.0.0.1:0", serverTLS)
 	require.NoError(t, err)
-	defer listener.Close()
+	defer func() { assert.NoError(t, listener.Close()) }()
 
 	type handshakeResult struct {
 		state tls.ConnectionState
@@ -671,15 +672,15 @@ func TestGeneratedMLDSAAssets_HandshakeWithVerifiedClientCertificate(t *testing.
 	}
 	resultCh := make(chan handshakeResult, 1)
 	go func() {
-		conn, err := listener.Accept()
-		if err != nil {
-			resultCh <- handshakeResult{err: err}
+		conn, acceptErr := listener.Accept()
+		if acceptErr != nil {
+			resultCh <- handshakeResult{err: acceptErr}
 			return
 		}
-		defer conn.Close()
+		defer func() { assert.NoError(t, conn.Close()) }()
 		tlsConn := conn.(*tls.Conn)
-		if err := tlsConn.Handshake(); err != nil {
-			resultCh <- handshakeResult{err: err}
+		if handshakeErr := tlsConn.Handshake(); handshakeErr != nil {
+			resultCh <- handshakeResult{err: handshakeErr}
 			return
 		}
 		resultCh <- handshakeResult{state: tlsConn.ConnectionState()}
@@ -687,7 +688,7 @@ func TestGeneratedMLDSAAssets_HandshakeWithVerifiedClientCertificate(t *testing.
 
 	conn, err := tls.Dial("tcp", listener.Addr().String(), clientTLS)
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() { assert.NoError(t, conn.Close()) }()
 	require.Equal(t, uint16(tls.VersionTLS13), conn.ConnectionState().Version)
 
 	result := <-resultCh

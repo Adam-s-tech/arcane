@@ -3,7 +3,6 @@
 package system
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -24,13 +23,13 @@ func TestGPUMonitorStatsCachedWithinTTL(t *testing.T) {
 
 	monitor := NewGPUMonitor(true, "nvidia")
 
-	stats, err := monitor.Stats(context.Background())
+	stats, err := monitor.Stats(t.Context())
 	require.NoError(t, err)
 	require.Len(t, stats, 1)
 	require.Equal(t, "Fake GPU", stats[0].Name)
-	require.EqualValues(t, 512*1024*1024, stats[0].MemoryUsed)
+	require.InDelta(t, float64(512*1024*1024), stats[0].MemoryUsed, 0)
 
-	again, err := monitor.Stats(context.Background())
+	again, err := monitor.Stats(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, stats, again)
 

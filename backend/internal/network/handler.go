@@ -319,8 +319,8 @@ func (h *NetworkHandler) GetNetwork(ctx context.Context, input *GetNetworkInput)
 			valA := cmp.Or(a.IPv4Address, a.IPv6Address)
 			valB := cmp.Or(b.IPv4Address, b.IPv6Address)
 
-			cmp := kit.CompareAddresses(valA, valB)
-			return kit.Ternary(input.Order == "desc", cmp > 0, cmp < 0)
+			localCmp := kit.CompareAddresses(valA, valB)
+			return kit.Ternary(input.Order == "desc", localCmp > 0, localCmp < 0)
 		}
 
 		// Default to Name

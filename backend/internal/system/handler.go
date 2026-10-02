@@ -124,7 +124,16 @@ type UpdateAllStatusInput struct {
 
 // RegisterSystem registers system management endpoints using Huma.
 // WebSocket statistics endpoints live in api/ws.
-func RegisterSystem(api huma.API, dockerService *docker.DockerClientService, systemService *SystemService, upgradeService *SystemUpgradeService, environmentService *environment.EnvironmentService, cfg *config.Config, activityService *activity.ActivityService, appCtx handlerutil.ActivityAppContext) {
+func RegisterSystem(
+	api huma.API,
+	dockerService *docker.DockerClientService,
+	systemService *SystemService,
+	upgradeService *SystemUpgradeService,
+	environmentService *environment.EnvironmentService,
+	cfg *config.Config,
+	activityService *activity.ActivityService,
+	appCtx handlerutil.ActivityAppContext,
+) {
 	h := &SystemHandler{
 		dockerService:      dockerService,
 		systemService:      systemService,
@@ -301,7 +310,7 @@ func (h *SystemHandler) GetDockerInfo(ctx context.Context, input *GetDockerInfoI
 	// LXC guest has a smaller cgroup budget — apply those limits so the
 	// dashboard shows what Arcane's host actually has available.
 	if !cgroup.IsDockerContainer() {
-		if cgroupLimits, err := cgroup.DetectLimits(); err == nil {
+		if cgroupLimits, detectLimitsErr := cgroup.DetectLimits(); detectLimitsErr == nil {
 			if limit := cgroupLimits.MemoryLimit; limit > 0 {
 				limitInt := limit
 				if memTotal == 0 || limitInt < memTotal {

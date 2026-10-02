@@ -58,14 +58,14 @@ func (s *ProjectService) refreshProjectImageRefsInternal(ctx context.Context, pr
 	}
 	imageRefsJSON := projects.MarshalImageRefsJSON(refs)
 	buildImageRefsJSON := cmp.Or(projects.MarshalImageRefsJSON(buildRefs), "[]")
-	if err := s.db.WithContext(ctx).
+	if persistImageRefsErr := s.db.WithContext(ctx).
 		Model(&Project{}).
 		Where("id = ?", proj.ID).
 		Updates(map[string]any{
 			"image_refs_json":       imageRefsJSON,
 			"build_image_refs_json": buildImageRefsJSON,
-		}).Error; err != nil {
-		slog.WarnContext(ctx, "failed to persist project image refs", "projectID", proj.ID, "error", err)
+		}).Error; persistImageRefsErr != nil {
+		slog.WarnContext(ctx, "failed to persist project image refs", "projectID", proj.ID, "error", persistImageRefsErr)
 		return
 	}
 	proj.ImageRefsJSON = imageRefsJSON
@@ -85,8 +85,8 @@ func (s *ProjectService) HandleProjectFilesChanged(ctx context.Context, paths []
 	for i := range affected {
 		s.invalidateProjectCachesInternal(affected[i].ID)
 		s.refreshProjectImageRefsInternal(ctx, &affected[i])
-		if err := s.reconcileComposeTagsForProjectInternal(ctx, &affected[i]); err != nil {
-			slog.WarnContext(ctx, "failed to reconcile Compose project tags after file change", "projectID", affected[i].ID, "error", err)
+		if reconcileComposeTagsForProjectErr := s.reconcileComposeTagsForProjectInternal(ctx, &affected[i]); reconcileComposeTagsForProjectErr != nil {
+			slog.WarnContext(ctx, "failed to reconcile Compose project tags after file change", "projectID", affected[i].ID, "error", reconcileComposeTagsForProjectErr)
 		}
 	}
 }
@@ -341,7 +341,9 @@ func cleanupWouldMassWipeInternal(ctx context.Context, candidates, deleteCount i
 	}
 
 	slog.WarnContext(ctx,
-		"skipping project cleanup: this reconcile would delete most projects in a single pass, which usually means the projects directory is empty, unmounted, or mis-mapped; preserving DB records — check the projects volume is mounted and mapped correctly",
+		"skipping project cleanup: this reconcile would delete most projects in a single pass, which usually "+
+			"means the projects directory is empty, unmounted, or mis-mapped; preserving DB records — check the "+
+			"projects volume is mounted and mapped correctly",
 		"wouldDelete", deleteCount,
 		"cleanupCandidates", candidates,
 		"projectsDir", projectsDir,
@@ -404,7 +406,7 @@ func (s *ProjectService) projectExceedsScanDepthInternal(p Project, projectsDir 
 	}
 
 	rel := getProjectRelativePathInternal(projectsDir, p.Path)
-	return rel != "" && strings.Count(rel, "/")+1 > maxDepth
+	return rel != "" && strings.Count(rel, "/") >= maxDepth
 }
 
 func evaluateProjectPathErrorInternal(ctx context.Context, p Project, err error) mo.Option[projectCleanupDecision] {
@@ -573,8 +575,8 @@ func persistEffectiveEnvContentInternal(ctx context.Context, projectPath, projec
 
 	if !state.HasGitSource {
 		if state.HasOverride {
-			if err := projects.RemoveProjectFile(ctx, projectsDirectory, projectPath, projects.OverrideEnvFileName); err != nil {
-				return err
+			if removeProjectFileErr := projects.RemoveProjectFile(ctx, projectsDirectory, projectPath, projects.OverrideEnvFileName); removeProjectFileErr != nil {
+				return removeProjectFileErr
 			}
 		}
 		return projects.WriteManagedEnvFile(ctx, projectsDirectory, projectPath, projects.EffectiveEnvFileName, state.EffectiveUnreadable, envContent)
@@ -590,8 +592,15 @@ func persistEffectiveEnvContentInternal(ctx context.Context, projectPath, projec
 		return fmt.Errorf("build effective env content: %w", err)
 	}
 
-	if err := projects.WriteManagedEnvFile(ctx, projectsDirectory, projectPath, projects.EffectiveEnvFileName, state.EffectiveUnreadable, effectiveContent); err != nil {
-		return err
+	if writeManagedEnvFileErr := projects.WriteManagedEnvFile(
+		ctx,
+		projectsDirectory,
+		projectPath,
+		projects.EffectiveEnvFileName,
+		state.EffectiveUnreadable,
+		effectiveContent,
+	); writeManagedEnvFileErr != nil {
+		return writeManagedEnvFileErr
 	}
 
 	return projects.WriteManagedEnvFile(ctx, projectsDirectory, projectPath, projects.OverrideEnvFileName, state.OverrideUnreadable, overrideContent)
@@ -605,12 +614,12 @@ func (s *ProjectService) ensureEffectiveEnvFileInternal(ctx context.Context, pro
 
 	if !state.HasGitSource {
 		if state.HasOverride {
-			if err := projects.RemoveProjectFile(ctx, projectsDirectory, projectPath, projects.OverrideEnvFileName); err != nil {
-				return err
+			if removeProjectFileErr := projects.RemoveProjectFile(ctx, projectsDirectory, projectPath, projects.OverrideEnvFileName); removeProjectFileErr != nil {
+				return removeProjectFileErr
 			}
-			effectiveContent, err := resolveStoredEffectiveEnvContentInternal(state)
-			if err != nil {
-				return err
+			effectiveContent, resolveStoredEffectiveEnvContentErr := resolveStoredEffectiveEnvContentInternal(state)
+			if resolveStoredEffectiveEnvContentErr != nil {
+				return resolveStoredEffectiveEnvContentErr
 			}
 			return projects.WriteManagedEnvFile(ctx, projectsDirectory, projectPath, projects.EffectiveEnvFileName, state.EffectiveUnreadable, effectiveContent)
 		}
@@ -637,9 +646,9 @@ func (s *ProjectService) prepareGitSyncEnvUpdateInternal(projectPath string, git
 	}
 
 	if gitEnvContent == nil {
-		effectiveContent, err := resolveStoredEffectiveEnvContentInternal(state)
-		if err != nil {
-			return gitSyncEnvUpdateInternal{}, err
+		effectiveContent, resolveStoredEffectiveEnvContentErr := resolveStoredEffectiveEnvContentInternal(state)
+		if resolveStoredEffectiveEnvContentErr != nil {
+			return gitSyncEnvUpdateInternal{}, resolveStoredEffectiveEnvContentErr
 		}
 		if effectiveContent == "" && !state.HasEffective && !state.HasGitSource && !state.HasOverride {
 			return update, nil
@@ -743,8 +752,8 @@ func (s *ProjectService) ApplyGitSyncEnvToDirectory(ctx context.Context, project
 	if update.effectiveContent != nil {
 		after = *update.effectiveContent
 	}
-	if err := persistGitSyncEnvFilesInternal(ctx, projectPath, projectsDirectory, update); err != nil {
-		return "", "", fmt.Errorf("failed to sync git env files: %w", err)
+	if persistGitSyncEnvFilesErr := persistGitSyncEnvFilesInternal(ctx, projectPath, projectsDirectory, update); persistGitSyncEnvFilesErr != nil {
+		return "", "", fmt.Errorf("failed to sync git env files: %w", persistGitSyncEnvFilesErr)
 	}
 	return before, after, nil
 }

@@ -1,7 +1,6 @@
 package port
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -57,7 +56,7 @@ func TestPortService_ListPortsPaginated_FlattensPublishedAndExposedPorts(t *test
 		},
 	}))
 
-	items, page, err := svc.ListPortsPaginated(context.Background(), pagination.QueryParams{
+	items, page, err := svc.ListPortsPaginated(t.Context(), pagination.QueryParams{
 		Limit: 20,
 	})
 	require.NoError(t, err)
@@ -109,7 +108,7 @@ func TestPortService_ListPortsPaginated_SortsByHostPortWithUnpublishedLast(t *te
 		},
 	}))
 
-	items, _, err := svc.ListPortsPaginated(context.Background(), pagination.QueryParams{
+	items, _, err := svc.ListPortsPaginated(t.Context(), pagination.QueryParams{
 		Sort:  "hostPort",
 		Order: pagination.SortAsc,
 		Limit: 20,
@@ -154,7 +153,7 @@ func TestPortService_ListPortsPaginated_SortsByHostPortDescWithUnpublishedLast(t
 		},
 	}))
 
-	items, _, err := svc.ListPortsPaginated(context.Background(), pagination.QueryParams{
+	items, _, err := svc.ListPortsPaginated(t.Context(), pagination.QueryParams{
 		Sort:  "hostPort",
 		Order: pagination.SortDesc,
 		Limit: 20,
@@ -199,7 +198,7 @@ func TestPortService_ListPortsPaginated_SortsByHostIPDescWithUnpublishedLast(t *
 		},
 	}))
 
-	items, _, err := svc.ListPortsPaginated(context.Background(), pagination.QueryParams{
+	items, _, err := svc.ListPortsPaginated(t.Context(), pagination.QueryParams{
 		Sort:  "hostIp",
 		Order: pagination.SortDesc,
 		Limit: 20,

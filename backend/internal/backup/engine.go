@@ -136,7 +136,34 @@ type Engine struct {
 
 func NewEngine(ctx context.Context, admission *runs.Admission, imageService *image.ImageService) *Engine {
 	runCtx, cancel := context.WithCancel(ctx)
-	return &Engine{cancel: cancel, imageService: imageService, admission: admission, lifecycleCtx: runCtx, repositories: make(map[string]*sync.Mutex), handlers: make(map[string]func(context.Context, string, []byte, bool) error), failures: make(map[string]func(context.Context, string, []byte, error) error), leases: make(map[string]*runs.Lease)}
+	return &Engine{
+		cancel:       cancel,
+		imageService: imageService,
+		admission:    admission,
+		lifecycleCtx: runCtx,
+		repositories: make(
+			map[string]*sync.Mutex,
+		),
+		handlers: make(
+			map[string]func(
+				context.Context,
+				string,
+				[]byte,
+				bool,
+			) error,
+		),
+		failures: make(
+			map[string]func(
+				context.Context,
+				string,
+				[]byte,
+				error,
+			) error,
+		),
+		leases: make(
+			map[string]*runs.Lease,
+		),
+	}
 }
 
 func (e *Engine) TryAcquireRun(ctx context.Context, scope, id string) (*runs.Lease, bool, error) {
@@ -186,8 +213,8 @@ func (e *Engine) CreateSnapshot(ctx context.Context, dockerClient *client.Client
 		return Snapshot{}, err
 	}
 	var decoded rusticSnapshotOutputInternal
-	if err := json.Unmarshal([]byte(output), &decoded); err != nil {
-		return Snapshot{}, fmt.Errorf("failed to decode Rustic snapshot: %w", err)
+	if unmarshalErr := json.Unmarshal([]byte(output), &decoded); unmarshalErr != nil {
+		return Snapshot{}, fmt.Errorf("failed to decode Rustic snapshot: %w", unmarshalErr)
 	}
 	if decoded.ID == "" {
 		return Snapshot{}, errors.New("rustic did not return a snapshot ID")
@@ -230,20 +257,20 @@ func (e *Engine) ListSnapshotFiles(ctx context.Context, dockerClient *client.Cli
 		return nil, fmt.Errorf("failed to list Rustic snapshot: %w", err)
 	}
 	var files []string
-	if err := json.Unmarshal([]byte(output), &files); err != nil {
-		return nil, fmt.Errorf("failed to decode Rustic file list: %w", err)
+	if unmarshalErr := json.Unmarshal([]byte(output), &files); unmarshalErr != nil {
+		return nil, fmt.Errorf("failed to decode Rustic file list: %w", unmarshalErr)
 	}
 	if !recursive && len(files) > 0 {
 		// Rustic's JSON listing omits node types; the stable long listing restores them.
 		longCommand := slices.Clone(command)
 		longCommand[1] = "--long"
-		longOutput, err := e.runInternal(ctx, dockerClient, repository, password, longCommand)
-		if err != nil {
-			return nil, fmt.Errorf("failed to list Rustic snapshot metadata: %w", err)
+		longOutput, runErr := e.runInternal(ctx, dockerClient, repository, password, longCommand)
+		if runErr != nil {
+			return nil, fmt.Errorf("failed to list Rustic snapshot metadata: %w", runErr)
 		}
-		files, err = markSnapshotDirectoriesInternal(files, longOutput)
-		if err != nil {
-			return nil, err
+		files, runErr = markSnapshotDirectoriesInternal(files, longOutput)
+		if runErr != nil {
+			return nil, runErr
 		}
 	}
 	return qualifySnapshotListingInternal(files, cleanedPath), nil
@@ -371,7 +398,7 @@ func (e *Engine) ListSnapshots(ctx context.Context, dockerClient *client.Client,
 
 func decodeSnapshotsInternal(output string) ([]DiscoveredSnapshot, error) {
 	trimmedOutput := strings.TrimSpace(output)
-	if len(trimmedOutput) == 0 || trimmedOutput[0] != '[' {
+	if trimmedOutput == "" || trimmedOutput[0] != '[' {
 		return nil, errors.New("invalid Rustic snapshot listing: expected an array")
 	}
 	var entries []jsontext.Value
@@ -666,8 +693,8 @@ func (s *RecoveryKeyStore) Set(ctx context.Context, recoveryKey string) error {
 		return fmt.Errorf("failed to encrypt recovery key: %w", err)
 	}
 	config := SystemBackupRecoveryConfig{ID: RecoveryKeyConfigID, EncryptedRecoveryKey: encrypted}
-	if err := s.db.WithContext(ctx).Save(&config).Error; err != nil {
-		return fmt.Errorf("failed to save recovery key: %w", err)
+	if saveRecoveryKeyErr := s.db.WithContext(ctx).Save(&config).Error; saveRecoveryKeyErr != nil {
+		return fmt.Errorf("failed to save recovery key: %w", saveRecoveryKeyErr)
 	}
 	return nil
 }

@@ -334,11 +334,11 @@ func (h *ApiKeyHandler) DeleteMyApiKey(ctx context.Context, input *DeleteApiKeyI
 		return nil, huma.Error404NotFound("API key not found")
 	}
 
-	if err := h.apiKeyService.DeleteApiKey(ctx, input.ID); err != nil {
-		if errors.Is(err, ErrApiKeyNotFound) {
+	if deleteApiKeyErr := h.apiKeyService.DeleteApiKey(ctx, input.ID); deleteApiKeyErr != nil {
+		if errors.Is(deleteApiKeyErr, ErrApiKeyNotFound) {
 			return nil, huma.Error404NotFound("API key not found")
 		}
-		if errors.Is(err, ErrApiKeyProtected) {
+		if errors.Is(deleteApiKeyErr, ErrApiKeyProtected) {
 			return nil, huma.Error403Forbidden("this API key cannot be deleted")
 		}
 		return nil, huma.Error500InternalServerError("Failed to delete API key")

@@ -20,7 +20,7 @@ func TestJSONV2SerializerUsesV2ResponseSemantics(t *testing.T) {
 
 	e := echo.New()
 	recorder := httptest.NewRecorder()
-	context := e.NewContext(httptest.NewRequest("GET", "/", nil), recorder)
+	context := e.NewContext(httptest.NewRequest("GET", "/", http.NoBody), recorder)
 
 	err := (jsonV2Serializer{}).Serialize(context, response{}, "")
 
@@ -41,7 +41,7 @@ func TestJSONV2SerializerPreservesDurationNanoseconds(t *testing.T) {
 
 	e := echo.New()
 	recorder := httptest.NewRecorder()
-	context := e.NewContext(httptest.NewRequest("GET", "/", nil), recorder)
+	context := e.NewContext(httptest.NewRequest("GET", "/", http.NoBody), recorder)
 
 	err := (jsonV2Serializer{}).Serialize(context, response{HeartbeatPeriod: 5 * time.Second}, "")
 

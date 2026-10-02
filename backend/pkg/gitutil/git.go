@@ -122,30 +122,30 @@ type AuthConfig struct {
 }
 
 // getAuthInternal returns the appropriate transport.AuthMethod.
-func (c *Client) getAuthInternal(url string, config AuthConfig) (transport.AuthMethod, error) {
-	switch config.AuthType {
+func (c *Client) getAuthInternal(url string, localConfig AuthConfig) (transport.AuthMethod, error) {
+	switch localConfig.AuthType {
 	case "http":
-		if config.Token != "" {
+		if localConfig.Token != "" {
 			return &githttp.BasicAuth{
-				Username: config.Username,
-				Password: config.Token,
+				Username: localConfig.Username,
+				Password: localConfig.Token,
 			}, nil
 		}
 		return nil, nil
 	case "ssh":
-		if config.SSHKey != "" {
+		if localConfig.SSHKey != "" {
 			endpoint, err := transport.NewEndpoint(url)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse SSH repository URL: %w", err)
 			}
 			username := cmp.Or(endpoint.User, "git")
-			publicKeys, err := ssh.NewPublicKeys(username, []byte(config.SSHKey), "")
+			publicKeys, err := ssh.NewPublicKeys(username, []byte(localConfig.SSHKey), "")
 			if err != nil {
 				return nil, fmt.Errorf("failed to create ssh auth: %w", err)
 			}
 
 			// Configure host key verification based on mode
-			hostKeyCallback, err := c.getSSHHostKeyCallback(config.SSHHostKeyVerification)
+			hostKeyCallback, err := c.getSSHHostKeyCallback(localConfig.SSHHostKeyVerification)
 			if err != nil {
 				return nil, fmt.Errorf("failed to configure SSH host key verification: %w", err)
 			}
@@ -195,12 +195,12 @@ func (c *Client) createAcceptNewHostKeyCallback() (gossh.HostKeyCallback, error)
 
 	// Create the file if it doesn't exist
 	if _, err := os.Stat(knownHostsPath); os.IsNotExist(err) {
-		file, err := os.OpenFile(knownHostsPath, os.O_CREATE|os.O_WRONLY, 0o600)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create known_hosts file: %w", err)
+		file, openFileErr := os.OpenFile(knownHostsPath, os.O_CREATE|os.O_WRONLY, 0o600)
+		if openFileErr != nil {
+			return nil, fmt.Errorf("failed to create known_hosts file: %w", openFileErr)
 		}
-		if err := file.Close(); err != nil {
-			slog.Warn("Failed to close known_hosts file", "path", knownHostsPath, "error", err)
+		if closeErr := file.Close(); closeErr != nil {
+			slog.Warn("Failed to close known_hosts file", "path", knownHostsPath, "error", closeErr)
 		}
 	}
 
@@ -213,23 +213,23 @@ func (c *Client) createAcceptNewHostKeyCallback() (gossh.HostKeyCallback, error)
 
 		// Check if the host is already known
 		if existingCallback != nil {
-			err := existingCallback(hostname, remote, key)
-			if err == nil {
+			existingCallbackErr := existingCallback(hostname, remote, key)
+			if existingCallbackErr == nil {
 				return nil // Host key matches
 			}
 			// Check if it's a "key mismatch" error vs "unknown host"
-			if keyErr, ok := errors.AsType[*knownhosts.KeyError](err); ok && len(keyErr.Want) > 0 {
+			if keyErr, ok := errors.AsType[*knownhosts.KeyError](existingCallbackErr); ok && len(keyErr.Want) > 0 {
 				// Host is known but key doesn't match - this is a security concern
-				return fmt.Errorf("host key mismatch for %s (possible MITM attack): %w", hostname, err)
+				return fmt.Errorf("host key mismatch for %s (possible MITM attack): %w", hostname, existingCallbackErr)
 			}
 			// Otherwise, host is unknown - we'll add it
 		}
 
 		// Add the new host key to known_hosts
-		if err := addHostKey(knownHostsPath, hostname, key); err != nil {
+		if addHostKeyErr := addHostKey(knownHostsPath, hostname, key); addHostKeyErr != nil {
 			// Log the error but don't fail - still allow the connection
 			// The host key just won't be remembered for next time
-			slog.Warn("Failed to save host key", "hostname", hostname, "error", err)
+			slog.Warn("Failed to save host key", "hostname", hostname, "error", addHostKeyErr)
 		}
 
 		return nil
@@ -243,8 +243,8 @@ func getKnownHostsPath() string {
 
 func getKnownHostsPathInternal(getenv func(string) string, stat func(string) (os.FileInfo, error), userHomeDir func() (string, error)) string {
 	// Check environment variable first
-	if path := getenv("SSH_KNOWN_HOSTS"); path != "" {
-		return path
+	if localPath := getenv("SSH_KNOWN_HOSTS"); localPath != "" {
+		return localPath
 	}
 
 	// Prefer Arcane's writable persistent data directory when it is available,
@@ -270,8 +270,8 @@ func addHostKey(knownHostsPath, hostname string, key gossh.PublicKey) (err error
 
 	// Acquire exclusive lock to prevent concurrent writes
 	fileLock := flock.New(knownHostsPath)
-	if err := fileLock.Lock(); err != nil {
-		return fmt.Errorf("failed to acquire lock on known_hosts file: %w", err)
+	if lockErr := fileLock.Lock(); lockErr != nil {
+		return fmt.Errorf("failed to acquire lock on known_hosts file: %w", lockErr)
 	}
 	defer func() {
 		if unlockErr := fileLock.Unlock(); unlockErr != nil && err == nil {
@@ -292,8 +292,8 @@ func addHostKey(knownHostsPath, hostname string, key gossh.PublicKey) (err error
 		}
 	}()
 
-	if _, err := file.WriteString(line + "\n"); err != nil {
-		return fmt.Errorf("failed to write to known_hosts file: %w", err)
+	if _, writeStringErr := file.WriteString(line + "\n"); writeStringErr != nil {
+		return fmt.Errorf("failed to write to known_hosts file: %w", writeStringErr)
 	}
 
 	return nil
@@ -526,8 +526,8 @@ func (c *Client) BrowseTree(ctx context.Context, repoPath, targetPath string) ([
 
 	var nodes []gitops.FileTreeNode
 	for _, child := range entries {
-		if err := ctx.Err(); err != nil {
-			return nil, err
+		if errErr := ctx.Err(); errErr != nil {
+			return nil, errErr
 		}
 		// Skip .git directory
 		if child.Name == ".git" {
@@ -579,8 +579,8 @@ func (c *Client) PurgeScratchDirs(ctx context.Context, maxAge time.Duration) (in
 
 	removed := 0
 	for _, entry := range entries {
-		if err := ctx.Err(); err != nil {
-			return removed, err
+		if errErr := ctx.Err(); errErr != nil {
+			return removed, errErr
 		}
 		entryPath := filepath.Join(root, entry.Name())
 		if !entry.IsDir() || !strings.HasPrefix(entry.Name(), cloneScratchPrefix) {

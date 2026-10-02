@@ -90,18 +90,19 @@ type GitOpsSync struct {
 	RepositoryID           string     `json:"repositoryId" sortable:"true"`
 	Branch                 string     `json:"branch" sortable:"true" search:"branch,main,master,develop,feature,release"`
 	ComposePath            string     `json:"composePath" sortable:"true" search:"compose,docker-compose,path,file,yaml,yml"`
-	TargetType             string     `json:"targetType" gorm:"column:target_type;default:'project'"`                         // "project" or "swarm_stack"
-	ProjectName            string     `json:"projectName" sortable:"true" search:"project,name,stack,application,service"`    // Name of project to create/update
-	PreDeployNetworkMode   string     `json:"preDeployNetworkMode" gorm:"column:pre_deploy_network_mode;default:'none'"`      // Docker network mode passed to the runner container. Default "none" denies network access; set to "bridge", "host", or a named network when the script needs it.
-	SyncInterval           int        `json:"syncInterval" sortable:"true" search:"interval,frequency,schedule,cron,minutes"` // in minutes
-	MaxSyncFiles           int        `json:"maxSyncFiles" gorm:"column:max_sync_files;default:500"`                          // 0 = unlimited; env var overrides take precedence
-	MaxSyncTotalSize       int64      `json:"maxSyncTotalSize" gorm:"column:max_sync_total_size;default:52428800"`            // bytes; 0 = unlimited; env var overrides take precedence
-	MaxSyncBinarySize      int64      `json:"maxSyncBinarySize" gorm:"column:max_sync_binary_size;default:10485760"`          // bytes; 0 = unlimited; env var overrides take precedence
-	PreDeployTimeoutSec    int        `json:"preDeployTimeoutSec" gorm:"column:pre_deploy_timeout_sec;default:60"`
-	AutoSync               bool       `json:"autoSync" sortable:"true" search:"auto,automatic,sync,continuous,scheduled"`
-	SyncDirectory          bool       `json:"syncDirectory" gorm:"column:sync_directory"` // Sync entire directory containing compose file
-	PullImageAfterSync     bool       `json:"pullImageAfterSync" gorm:"column:pull_image_after_sync;default:false"`
-	RedeployAfterSync      bool       `json:"redeployAfterSync" gorm:"column:redeploy_after_sync;default:false"`
+	TargetType             string     `json:"targetType" gorm:"column:target_type;default:'project'"`                      // "project" or "swarm_stack"
+	ProjectName            string     `json:"projectName" sortable:"true" search:"project,name,stack,application,service"` // Name of project to create/update
+	// Docker network mode for the runner: "none" denies access; "bridge", "host", or a named network enables it.
+	PreDeployNetworkMode string `json:"preDeployNetworkMode" gorm:"column:pre_deploy_network_mode;default:'none'"`
+	SyncInterval         int    `json:"syncInterval" sortable:"true" search:"interval,frequency,schedule,cron,minutes"` // in minutes
+	MaxSyncFiles         int    `json:"maxSyncFiles" gorm:"column:max_sync_files;default:500"`                          // 0 = unlimited; env var overrides take precedence
+	MaxSyncTotalSize     int64  `json:"maxSyncTotalSize" gorm:"column:max_sync_total_size;default:52428800"`            // bytes; 0 = unlimited; env var overrides take precedence
+	MaxSyncBinarySize    int64  `json:"maxSyncBinarySize" gorm:"column:max_sync_binary_size;default:10485760"`          // bytes; 0 = unlimited; env var overrides take precedence
+	PreDeployTimeoutSec  int    `json:"preDeployTimeoutSec" gorm:"column:pre_deploy_timeout_sec;default:60"`
+	AutoSync             bool   `json:"autoSync" sortable:"true" search:"auto,automatic,sync,continuous,scheduled"`
+	SyncDirectory        bool   `json:"syncDirectory" gorm:"column:sync_directory"` // Sync entire directory containing compose file
+	PullImageAfterSync   bool   `json:"pullImageAfterSync" gorm:"column:pull_image_after_sync;default:false"`
+	RedeployAfterSync    bool   `json:"redeployAfterSync" gorm:"column:redeploy_after_sync;default:false"`
 
 	// Backup mode ("backup" commits saved project files to the repository;
 	// "deploy" is the original pull direction).

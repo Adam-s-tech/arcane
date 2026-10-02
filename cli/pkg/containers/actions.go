@@ -166,9 +166,9 @@ var containersEditCmd = &cobra.Command{
 		}
 
 		if editFile == "" {
-			result, err := c.GetJSON[container.EditConfig](cmd.Context(), types.ContainerEditConfig(c.EnvID(), resolved.ID))
-			if err != nil {
-				return fmt.Errorf("failed to get container edit config: %w", err)
+			result, getEditConfigErr := c.GetJSON[container.EditConfig](cmd.Context(), types.ContainerEditConfig(c.EnvID(), resolved.ID))
+			if getEditConfigErr != nil {
+				return fmt.Errorf("failed to get container edit config: %w", getEditConfigErr)
 			}
 
 			return cmdutil.PrintJSON(result.Data)
@@ -179,8 +179,8 @@ var containersEditCmd = &cobra.Command{
 			return fmt.Errorf("failed to read file %s: %w", editFile, err)
 		}
 		var body container.Edit
-		if err := json.Unmarshal(data, &body); err != nil {
-			return fmt.Errorf("failed to parse edit payload: %w", err)
+		if unmarshalErr := json.Unmarshal(data, &body); unmarshalErr != nil {
+			return fmt.Errorf("failed to parse edit payload: %w", unmarshalErr)
 		}
 
 		c.SetTimeout(30 * time.Minute)

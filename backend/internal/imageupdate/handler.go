@@ -53,7 +53,18 @@ type GetUpdateSummaryInput struct {
 }
 
 // RegisterImageUpdates registers image update endpoints.
-func RegisterImageUpdates(api huma.API, imageUpdateSvc *ImageUpdateService, getUpdateInfoByImageRefs func(context.Context, []string) (map[string]*imagetypes.UpdateInfo, error), appCtx handlerutil.ActivityAppContext) {
+func RegisterImageUpdates(
+	api huma.API,
+	imageUpdateSvc *ImageUpdateService,
+	getUpdateInfoByImageRefs func(
+		context.Context,
+		[]string,
+	) (
+		map[string]*imagetypes.UpdateInfo,
+		error,
+	),
+	appCtx handlerutil.ActivityAppContext,
+) {
 	h := &ImageUpdateHandler{
 		imageUpdateService:       imageUpdateSvc,
 		getUpdateInfoByImageRefs: getUpdateInfoByImageRefs,

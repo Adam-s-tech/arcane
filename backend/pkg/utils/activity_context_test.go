@@ -11,8 +11,8 @@ import (
 type activityContextTestKey string
 
 func TestActivityRuntimeContextPrefersAppContextInternal(t *testing.T) {
-	requestCtx, cancelRequest := context.WithCancel(context.Background())
-	appCtx, cancelApp := context.WithCancel(context.Background())
+	requestCtx, cancelRequest := context.WithCancel(t.Context())
+	appCtx, cancelApp := context.WithCancel(t.Context())
 	defer cancelApp()
 
 	ctx := ActivityRuntimeContext(requestCtx, appCtx)
@@ -25,8 +25,8 @@ func TestActivityRuntimeContextPrefersAppContextInternal(t *testing.T) {
 }
 
 func TestActivityRuntimeContextPreservesRequestValuesWithAppCancellationInternal(t *testing.T) {
-	requestCtx, cancelRequest := context.WithCancel(context.WithValue(context.Background(), activityContextTestKey("request-id"), "req-123"))
-	appCtx, cancelApp := context.WithCancel(WithAppLifecycleContext(context.Background()))
+	requestCtx, cancelRequest := context.WithCancel(context.WithValue(t.Context(), activityContextTestKey("request-id"), "req-123"))
+	appCtx, cancelApp := context.WithCancel(WithAppLifecycleContext(t.Context()))
 	defer cancelApp()
 
 	ctx := ActivityRuntimeContext(requestCtx, appCtx)
@@ -44,9 +44,9 @@ func TestActivityRuntimeContextPreservesRequestValuesWithAppCancellationInternal
 func TestActivityRuntimeContextUsesAppDeadlineWithRequestValuesInternal(t *testing.T) {
 	requestDeadline := time.Now().Add(time.Hour)
 	appDeadline := time.Now().Add(time.Minute)
-	requestCtx, cancelRequest := context.WithDeadline(context.WithValue(context.Background(), activityContextTestKey("trace-id"), "trace-123"), requestDeadline)
+	requestCtx, cancelRequest := context.WithDeadline(context.WithValue(t.Context(), activityContextTestKey("trace-id"), "trace-123"), requestDeadline)
 	defer cancelRequest()
-	appCtx, cancelApp := context.WithDeadline(context.Background(), appDeadline)
+	appCtx, cancelApp := context.WithDeadline(t.Context(), appDeadline)
 	defer cancelApp()
 
 	ctx := ActivityRuntimeContext(requestCtx, appCtx)
@@ -58,7 +58,7 @@ func TestActivityRuntimeContextUsesAppDeadlineWithRequestValuesInternal(t *testi
 }
 
 func TestActivityRuntimeContextFallsBackToDetachedRequestContextInternal(t *testing.T) {
-	requestCtx, cancelRequest := context.WithCancel(context.Background())
+	requestCtx, cancelRequest := context.WithCancel(t.Context())
 
 	ctx := ActivityRuntimeContext(requestCtx, nil)
 
@@ -67,7 +67,7 @@ func TestActivityRuntimeContextFallsBackToDetachedRequestContextInternal(t *test
 }
 
 func TestActivityRuntimeContextPreservesMarkedAppContextInternal(t *testing.T) {
-	appCtx, cancelApp := context.WithCancel(WithAppLifecycleContext(context.Background()))
+	appCtx, cancelApp := context.WithCancel(WithAppLifecycleContext(t.Context()))
 
 	ctx := ActivityRuntimeContext(appCtx, nil)
 
@@ -76,7 +76,7 @@ func TestActivityRuntimeContextPreservesMarkedAppContextInternal(t *testing.T) {
 }
 
 func TestWithAppLifecycleContextMarksContextInternal(t *testing.T) {
-	ctx := WithAppLifecycleContext(context.Background())
+	ctx := WithAppLifecycleContext(t.Context())
 
 	require.True(t, IsAppLifecycleContext(ctx))
 }

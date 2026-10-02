@@ -288,8 +288,8 @@ var deleteCmd = &cobra.Command{
 			return fmt.Errorf("failed to delete registry: %w", err)
 		}
 		defer func() { _ = resp.Body.Close() }()
-		if err := cmdutil.EnsureSuccessStatus(resp); err != nil {
-			return fmt.Errorf("failed to delete registry: %w", err)
+		if ensureSuccessStatusErr := cmdutil.EnsureSuccessStatus(resp); ensureSuccessStatusErr != nil {
+			return fmt.Errorf("failed to delete registry: %w", ensureSuccessStatusErr)
 		}
 
 		output.Success("Registry deleted successfully")
@@ -344,8 +344,7 @@ var usageCmd = &cobra.Command{
 				usage.Error,
 			}
 		}
-		output.Table(headers, rows)
-		return nil
+		return output.Table(headers, rows)
 	},
 }
 

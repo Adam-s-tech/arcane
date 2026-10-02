@@ -40,8 +40,8 @@ func (r PolicyReconciliation[P, U]) Run(ctx context.Context, updates []U) error 
 	if err != nil {
 		return err
 	}
-	if err := r.persistInternal(ctx, policies, kept); err != nil {
-		return fmt.Errorf("failed to save %s backup policies: %w", r.Domain, err)
+	if persistErr := r.persistInternal(ctx, policies, kept); persistErr != nil {
+		return fmt.Errorf("failed to save %s backup policies: %w", r.Domain, persistErr)
 	}
 	for i := range r.Existing {
 		if _, ok := kept[r.ID(&r.Existing[i])]; !ok {
@@ -98,7 +98,7 @@ func ValidatePolicyUpdate(ctx context.Context, domain string, update backuptypes
 		if s3 == nil {
 			return update, errors.New("S3 backup destinations are unavailable")
 		}
-		if _, err := s3.Configuration(ctx, update.S3DestinationID); err != nil {
+		if _, configurationErr := s3.Configuration(ctx, update.S3DestinationID); configurationErr != nil {
 			return update, fmt.Errorf("select a valid S3 destination for %s backups", domain)
 		}
 	} else {

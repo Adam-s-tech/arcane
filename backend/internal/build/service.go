@@ -51,7 +51,7 @@ const buildHistoryOutputLimitBytes = 2 * 1024 * 1024
 
 func NewBuildService(
 	db *database.DB,
-	settings *settings.SettingsService,
+	localSettings *settings.SettingsService,
 	dockerService *docker.DockerClientService,
 	registryService *registry.ContainerRegistryService,
 	gitRepository *gitrepo.GitRepositoryService,
@@ -59,7 +59,7 @@ func NewBuildService(
 ) *BuildService {
 	svc := &BuildService{
 		db:              db,
-		settings:        settings,
+		settings:        localSettings,
 		dockerService:   dockerService,
 		registryService: registryService,
 		gitRepository:   gitRepository,
@@ -85,16 +85,28 @@ func (s *BuildService) BuildSettings() buildtypes.BuildSettings {
 	if s.settings == nil {
 		return buildtypes.BuildSettings{}
 	}
-	settings := s.settings.GetSettingsConfig()
+	localSettings := s.settings.GetSettingsConfig()
 	return buildtypes.BuildSettings{
-		DepotProjectID:   settings.DepotProjectId.Value,
-		DepotToken:       settings.DepotToken.Value,
-		BuildProvider:    settings.BuildProvider.Value,
-		BuildTimeoutSecs: settings.BuildTimeout.AsInt(),
+		DepotProjectID:   localSettings.DepotProjectId.Value,
+		DepotToken:       localSettings.DepotToken.Value,
+		BuildProvider:    localSettings.BuildProvider.Value,
+		BuildTimeoutSecs: localSettings.BuildTimeout.AsInt(),
 	}
 }
 
-func (s *BuildService) BuildImage(ctx context.Context, environmentID string, req buildtypes.BuildRequest, progressWriter io.Writer, serviceName string, user *common.User) (*buildtypes.BuildResult, error) {
+func (
+	s *BuildService,
+) BuildImage(
+	ctx context.Context,
+	environmentID string,
+	req buildtypes.BuildRequest,
+	progressWriter io.Writer,
+	serviceName string,
+	user *common.User,
+) (
+	*buildtypes.BuildResult,
+	error,
+) {
 	if s.builder == nil {
 		return nil, errors.New("build service not available")
 	}
@@ -167,7 +179,22 @@ func (s *BuildService) BuildImage(ctx context.Context, environmentID string, req
 			errMsg = new(err.Error())
 		}
 
-		if updateErr := s.completeBuildRecord(ctx, buildRecordID, status, outputPtr, logCapture.Truncated(), errMsg, digest, provider, completedAt, new(completedAt.Sub(startedAt).Milliseconds())); updateErr != nil {
+		if updateErr := s.completeBuildRecord(
+			ctx,
+			buildRecordID,
+			status,
+			outputPtr,
+			logCapture.Truncated(),
+			errMsg,
+			digest,
+			provider,
+			completedAt,
+			new(
+				completedAt.Sub(
+					startedAt,
+				).Milliseconds(),
+			),
+		); updateErr != nil {
 			slog.WarnContext(ctx, "failed to update build history record", "error", updateErr)
 		}
 	}
@@ -278,8 +305,8 @@ func (s *BuildService) resolveBuildRequestInternal(
 	}
 	if gitkit.RequiresRemoteProbe(source.RepositoryURL) {
 		writeBuildProgressStatusInternal(progressWriter, serviceName, "verifying remote git repository "+source.RepositoryURL)
-		if err := s.probeGitContextInternal(ctx, source.RepositoryURL, authConfig); err != nil {
-			return buildtypes.BuildRequest{}, func() error { return nil }, fmt.Errorf("failed to verify remote git repository %q: %w", source.RepositoryURL, err)
+		if probeGitContextErr := s.probeGitContextInternal(ctx, source.RepositoryURL, authConfig); probeGitContextErr != nil {
+			return buildtypes.BuildRequest{}, func() error { return nil }, fmt.Errorf("failed to verify remote git repository %q: %w", source.RepositoryURL, probeGitContextErr)
 		}
 	}
 
@@ -290,9 +317,9 @@ func (s *BuildService) resolveBuildRequestInternal(
 
 	contextDir := repoPath
 	if source.Subdir != "" {
-		if err := buildgit.ValidatePath(repoPath, filepath.FromSlash(source.Subdir)); err != nil {
+		if validatePathErr := buildgit.ValidatePath(repoPath, filepath.FromSlash(source.Subdir)); validatePathErr != nil {
 			_ = s.cleanupGitContextInternal(repoPath)
-			return buildtypes.BuildRequest{}, func() error { return nil }, fmt.Errorf("invalid git build context subdir: %w", err)
+			return buildtypes.BuildRequest{}, func() error { return nil }, fmt.Errorf("invalid git build context subdir: %w", validatePathErr)
 		}
 		contextDir = filepath.Join(repoPath, filepath.FromSlash(source.Subdir))
 	}

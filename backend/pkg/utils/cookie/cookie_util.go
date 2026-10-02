@@ -79,8 +79,8 @@ func readTokenCookieInternal(r *http.Request, base string) (string, error) {
 	var value strings.Builder
 	value.WriteString(first)
 	for i := 1; ; i++ {
-		chunk, ok := byName[tokenCookieChunkNameInternal(base, i)]
-		if !ok {
+		chunk, localOk := byName[tokenCookieChunkNameInternal(base, i)]
+		if !localOk {
 			break
 		}
 		value.WriteString(chunk)

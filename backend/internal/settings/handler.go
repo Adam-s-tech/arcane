@@ -413,8 +413,8 @@ func (h *SettingsHandler) updateSettingsForLocalEnvironment(ctx context.Context,
 			if err != nil {
 				return nil, huma.Error400BadRequest(fmt.Sprintf("cannot read projects directory %q: %v", resolved, err))
 			}
-			if err := f.Close(); err != nil {
-				return nil, huma.Error400BadRequest(fmt.Sprintf("cannot read projects directory %q: %v", resolved, err))
+			if closeErr := f.Close(); closeErr != nil {
+				return nil, huma.Error400BadRequest(fmt.Sprintf("cannot read projects directory %q: %v", resolved, closeErr))
 			}
 		}
 	}

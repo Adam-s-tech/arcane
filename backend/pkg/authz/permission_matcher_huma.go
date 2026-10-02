@@ -44,7 +44,7 @@ func (m *PermissionMatcher) CollectFromHumaAPI(humaAPI huma.API) {
 			if op == nil {
 				continue
 			}
-			if perm, ok := requiredPermissionInternal(op).Get(); ok {
+			if perm, localOk := requiredPermissionInternal(op).Get(); localOk {
 				m.Add(method, suffix, perm)
 				continue
 			}

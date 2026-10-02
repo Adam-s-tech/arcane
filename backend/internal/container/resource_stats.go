@@ -184,8 +184,8 @@ func (s *ContainerService) collectResourceSampleInternal(ctx context.Context, co
 	defer func() { _ = stats.Body.Close() }()
 
 	var statsData container.StatsResponse
-	if err := json.UnmarshalDecode(jsontext.NewDecoder(stats.Body), &statsData); err != nil {
-		return nil, fmt.Errorf("failed to decode container stats: %w", err)
+	if unmarshalDecodeErr := json.UnmarshalDecode(jsontext.NewDecoder(stats.Body), &statsData); unmarshalDecodeErr != nil {
+		return nil, fmt.Errorf("failed to decode container stats: %w", unmarshalDecodeErr)
 	}
 
 	built := containerstats.BuildSample(statsData)

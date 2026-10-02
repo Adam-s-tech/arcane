@@ -62,7 +62,7 @@ func newTestWebhookService(db *database.DB) *WebhookService {
 func fetchWebhook(t *testing.T, db *database.DB, id string) Webhook {
 	t.Helper()
 	var wh Webhook
-	require.NoError(t, db.WithContext(context.Background()).Where("id = ?", id).First(&wh).Error)
+	require.NoError(t, db.WithContext(t.Context()).Where("id = ?", id).First(&wh).Error)
 	return wh
 }
 
@@ -134,7 +134,7 @@ func TestParseWebhookPrefix_LeadingWhitespaceStripped(t *testing.T) {
 }
 
 func TestIsKnownToken_StoredIdentity(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 	wh, raw, err := svc.CreateWebhook(ctx, "known", WebhookTargetTypeProject, WebhookActionTypeUpdate, "p1", "env-1", common.User{})
@@ -164,7 +164,7 @@ func TestIsKnownToken_StoredIdentity(t *testing.T) {
 }
 
 func TestKnownTokenRateLimit_ExhaustedIPDoesNotBlockFirstUse(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 	_, first, err := svc.CreateWebhook(ctx, "first", WebhookTargetTypeProject, WebhookActionTypeUpdate, "p1", "env-1", common.User{})
@@ -183,7 +183,7 @@ func TestKnownTokenRateLimit_ExhaustedIPDoesNotBlockFirstUse(t *testing.T) {
 	router.Use(middleware.PerTokenRateLimitForPaths([]string{"/trigger/:token"}, 1, 1, svc.IsKnownToken))
 	router.POST("/trigger/:token", func(c *echo.Context) error { return c.NoContent(http.StatusAccepted) })
 	request := func(token string) int {
-		req := httptest.NewRequest(http.MethodPost, "/trigger/"+token, nil)
+		req := httptest.NewRequest(http.MethodPost, "/trigger/"+token, http.NoBody)
 		req.RemoteAddr = "192.0.2.10:4000"
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
@@ -202,7 +202,7 @@ func TestKnownTokenRateLimit_ExhaustedIPDoesNotBlockFirstUse(t *testing.T) {
 }
 
 func TestLoadTokenHashes_FailurePreservesIndex(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 	_, raw, err := svc.CreateWebhook(ctx, "known", WebhookTargetTypeProject, WebhookActionTypeUpdate, "p1", "env-1", common.User{})
@@ -217,12 +217,15 @@ func TestLoadTokenHashes_FailurePreservesIndex(t *testing.T) {
 }
 
 func TestKnownTokenIndex_ConcurrentReloadAndCRUD(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc := newTestWebhookService(setupWebhookServiceTestDB(t))
 	var workers sync.WaitGroup
 	workers.Go(func() {
 		for range 30 {
-			assert.NoError(t, svc.LoadTokenHashes(ctx))
+			if err := svc.LoadTokenHashes(ctx); err != nil {
+				t.Errorf("reload token hashes: %v", err)
+				return
+			}
 			svc.IsKnownToken("arc_wh_unknown")
 		}
 	})
@@ -239,7 +242,7 @@ func TestKnownTokenIndex_ConcurrentReloadAndCRUD(t *testing.T) {
 // --- CreateWebhook ---
 
 func TestCreateWebhook_TokenNotStoredInPlaintext(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -253,7 +256,7 @@ func TestCreateWebhook_TokenNotStoredInPlaintext(t *testing.T) {
 }
 
 func TestCreateWebhook_PrefixMatchesToken(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -270,7 +273,7 @@ func TestCreateWebhook_PrefixMatchesToken(t *testing.T) {
 }
 
 func TestCreateWebhook_InvalidTargetTypeRejected(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -279,7 +282,7 @@ func TestCreateWebhook_InvalidTargetTypeRejected(t *testing.T) {
 }
 
 func TestCreateWebhook_EmptyTargetIDRejectedForNonUpdaterTypes(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -294,7 +297,7 @@ func TestCreateWebhook_EmptyTargetIDRejectedForNonUpdaterTypes(t *testing.T) {
 }
 
 func TestCreateWebhook_InvalidActionTypeRejected(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -303,7 +306,7 @@ func TestCreateWebhook_InvalidActionTypeRejected(t *testing.T) {
 }
 
 func TestCreateWebhook_EmptyActionTypeDefaultsPerTarget(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -317,7 +320,7 @@ func TestCreateWebhook_EmptyActionTypeDefaultsPerTarget(t *testing.T) {
 }
 
 func TestCreateWebhook_EmptyTargetIDAcceptedForUpdaterType(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -327,7 +330,7 @@ func TestCreateWebhook_EmptyTargetIDAcceptedForUpdaterType(t *testing.T) {
 }
 
 func TestCreateWebhook_ContainerTypeAccepted(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -338,7 +341,7 @@ func TestCreateWebhook_ContainerTypeAccepted(t *testing.T) {
 }
 
 func TestCreateWebhook_ProjectTypeAccepted(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -349,7 +352,7 @@ func TestCreateWebhook_ProjectTypeAccepted(t *testing.T) {
 }
 
 func TestCreateWebhook_UpdaterTypeAccepted(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -360,7 +363,7 @@ func TestCreateWebhook_UpdaterTypeAccepted(t *testing.T) {
 }
 
 func TestCreateWebhook_GitOpsTypeAccepted(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -371,7 +374,7 @@ func TestCreateWebhook_GitOpsTypeAccepted(t *testing.T) {
 }
 
 func TestCreateWebhook_EnabledByDefault(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -381,7 +384,7 @@ func TestCreateWebhook_EnabledByDefault(t *testing.T) {
 }
 
 func TestCreateWebhook_UniqueTokensEachCall(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -396,7 +399,7 @@ func TestCreateWebhook_UniqueTokensEachCall(t *testing.T) {
 // --- ListWebhooks ---
 
 func TestListWebhooks_ScopedToEnvironment(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -412,7 +415,7 @@ func TestListWebhooks_ScopedToEnvironment(t *testing.T) {
 }
 
 func TestListWebhooks_EmptyForUnknownEnvironment(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -422,7 +425,7 @@ func TestListWebhooks_EmptyForUnknownEnvironment(t *testing.T) {
 }
 
 func TestListWebhookSummaries_ResolvesTargetNames(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -454,7 +457,7 @@ func TestListWebhookSummaries_ResolvesTargetNames(t *testing.T) {
 }
 
 func TestListWebhookSummaries_DefaultsLegacyActionType(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -479,7 +482,7 @@ func TestListWebhookSummaries_DefaultsLegacyActionType(t *testing.T) {
 // --- GetWebhookByID ---
 
 func TestGetWebhookByID_ReturnsCorrectWebhook(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -492,7 +495,7 @@ func TestGetWebhookByID_ReturnsCorrectWebhook(t *testing.T) {
 }
 
 func TestGetWebhookByID_NotFoundForWrongEnvironment(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -504,7 +507,7 @@ func TestGetWebhookByID_NotFoundForWrongEnvironment(t *testing.T) {
 }
 
 func TestGetWebhookByID_NotFoundForUnknownID(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -515,7 +518,7 @@ func TestGetWebhookByID_NotFoundForUnknownID(t *testing.T) {
 // --- DeleteWebhook ---
 
 func TestDeleteWebhook_RemovesRecord(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -529,7 +532,7 @@ func TestDeleteWebhook_RemovesRecord(t *testing.T) {
 }
 
 func TestDeleteWebhook_NotFoundForWrongEnvironment(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -545,7 +548,7 @@ func TestDeleteWebhook_NotFoundForWrongEnvironment(t *testing.T) {
 }
 
 func TestDeleteWebhook_NotFoundForUnknownID(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -556,7 +559,7 @@ func TestDeleteWebhook_NotFoundForUnknownID(t *testing.T) {
 // --- UpdateWebhook ---
 
 func TestUpdateWebhook_DisableAndEnable(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -574,7 +577,7 @@ func TestUpdateWebhook_DisableAndEnable(t *testing.T) {
 }
 
 func TestUpdateWebhook_NotFoundForWrongEnvironment(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -586,7 +589,7 @@ func TestUpdateWebhook_NotFoundForWrongEnvironment(t *testing.T) {
 }
 
 func TestUpdateWebhook_NotFoundForUnknownID(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -597,7 +600,7 @@ func TestUpdateWebhook_NotFoundForUnknownID(t *testing.T) {
 // --- TriggerByToken ---
 
 func TestTriggerByToken_InvalidFormat(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -606,7 +609,7 @@ func TestTriggerByToken_InvalidFormat(t *testing.T) {
 }
 
 func TestTriggerByToken_NotFound(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -617,7 +620,7 @@ func TestTriggerByToken_NotFound(t *testing.T) {
 }
 
 func TestTriggerByToken_WrongHash_NotFound(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -637,7 +640,7 @@ func TestTriggerByToken_WrongHash_NotFound(t *testing.T) {
 }
 
 func TestTriggerByToken_DisabledWebhook(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -651,7 +654,7 @@ func TestTriggerByToken_DisabledWebhook(t *testing.T) {
 }
 
 func TestTriggerByToken_UnknownTargetType_ReturnsInvalidType(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -696,7 +699,7 @@ func insertWebhookDirect(t *testing.T, ctx context.Context, db *database.DB, raw
 }
 
 func TestTriggerByToken_AcceptsImmediatelyAndRecordsTriggerTime(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db) // action services are nil; the async action fails, acceptance must not
 
@@ -712,7 +715,7 @@ func TestTriggerByToken_AcceptsImmediatelyAndRecordsTriggerTime(t *testing.T) {
 }
 
 func TestTriggerByToken_DoesNotUpdateLastTriggeredAtOnError(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 
@@ -727,7 +730,7 @@ func TestTriggerByToken_DoesNotUpdateLastTriggeredAtOnError(t *testing.T) {
 }
 
 func TestTriggerByToken_UnknownActionType_ReturnsInvalidAction(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupWebhookServiceTestDB(t)
 	svc := newTestWebhookService(db)
 

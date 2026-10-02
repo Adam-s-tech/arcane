@@ -1,7 +1,6 @@
 package registry
 
 import (
-	"context"
 	"io"
 	"log"
 	"net/http/httptest"
@@ -35,12 +34,12 @@ func pushLabeledImageInternal(t *testing.T, imageRef string, imageLabels map[str
 	require.NoError(t, err)
 
 	if imageLabels != nil {
-		cfg, err := img.ConfigFile()
-		require.NoError(t, err)
+		cfg, configFileErr := img.ConfigFile()
+		require.NoError(t, configFileErr)
 		cfg = cfg.DeepCopy()
 		cfg.Config.Labels = imageLabels
-		img, err = mutate.ConfigFile(img, cfg)
-		require.NoError(t, err)
+		img, configFileErr = mutate.ConfigFile(img, cfg)
+		require.NoError(t, configFileErr)
 	}
 
 	ref, err := name.ParseReference(imageRef)
@@ -58,14 +57,14 @@ func TestContainerRegistryService_ImageVersionLabelInternal(t *testing.T) {
 
 	svc := NewContainerRegistryService(nil, nil, nil, nil)
 
-	label, err := svc.ImageVersionLabel(context.Background(), imageRef)
+	label, err := svc.ImageVersionLabel(t.Context(), imageRef)
 	require.NoError(t, err)
 	assert.Equal(t, "v2.8.0-next.66", label)
 
 	// Digest references resolve too — the version service prefers them.
 	imgDigest, err := img.Digest()
 	require.NoError(t, err)
-	label, err = svc.ImageVersionLabel(context.Background(), host+"/getarcaneapp/arcane@"+imgDigest.String())
+	label, err = svc.ImageVersionLabel(t.Context(), host+"/getarcaneapp/arcane@"+imgDigest.String())
 	require.NoError(t, err)
 	assert.Equal(t, "v2.8.0-next.66", label)
 }
@@ -76,7 +75,7 @@ func TestContainerRegistryService_ImageVersionLabelMissingLabelInternal(t *testi
 	pushLabeledImageInternal(t, imageRef, nil)
 
 	svc := NewContainerRegistryService(nil, nil, nil, nil)
-	_, err := svc.ImageVersionLabel(context.Background(), imageRef)
+	_, err := svc.ImageVersionLabel(t.Context(), imageRef)
 	assert.ErrorIs(t, err, ErrNoVersionLabel)
 }
 
@@ -87,14 +86,14 @@ func TestContainerRegistryService_ImageVersionLabelErrorNotCachedInternal(t *tes
 	svc := NewContainerRegistryService(nil, nil, nil, nil)
 
 	// The image does not exist yet: the lookup must fail...
-	_, err := svc.ImageVersionLabel(context.Background(), imageRef)
+	_, err := svc.ImageVersionLabel(t.Context(), imageRef)
 	require.Error(t, err)
 
 	// ...and the failure must not be cached: after the push the same ref resolves.
 	pushLabeledImageInternal(t, imageRef, map[string]string{
 		ociImageVersionLabel: "v2.8.0-next.67",
 	})
-	label, err := svc.ImageVersionLabel(context.Background(), imageRef)
+	label, err := svc.ImageVersionLabel(t.Context(), imageRef)
 	require.NoError(t, err)
 	assert.Equal(t, "v2.8.0-next.67", label)
 }

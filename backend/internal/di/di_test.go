@@ -137,7 +137,7 @@ func TestOptionsValidate(t *testing.T) {
 			(*database.DB)(nil),
 			&http.Client{},
 		),
-		fx.Provide(func() context.Context { return context.Background() }),
+		fx.Provide(func() context.Context { return t.Context() }),
 		ActorOptions,
 		ServiceOptions,
 		JobOptions,
@@ -161,7 +161,17 @@ func TestDockerEventLifecycleInternal(t *testing.T) {
 					return
 				}
 				w.Header().Set("Content-Type", "application/json")
-				err := json.MarshalWrite(w, events.Message{Type: events.ContainerEventType, Action: events.ActionStart, Actor: events.Actor{ID: "daemon-container", Attributes: map[string]string{"name": "external"}}})
+				err := json.MarshalWrite(
+					w,
+					events.Message{
+						Type:   events.ContainerEventType,
+						Action: events.ActionStart,
+						Actor: events.Actor{
+							ID:         "daemon-container",
+							Attributes: map[string]string{"name": "external"},
+						},
+					},
+				)
 				if err != nil {
 					return
 				}
@@ -183,7 +193,7 @@ func TestDockerEventLifecycleInternal(t *testing.T) {
 			eventService := event.NewEventService(databaseDB, cfg, nil)
 			provideDockerClientServiceInternal(t.Context(), lifecycle, databaseDB, cfg, nil, eventService)
 			t.Cleanup(func() {
-				ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+				ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 3*time.Second)
 				defer cancel()
 				require.NoError(t, lifecycle.Stop(ctx))
 			})
@@ -198,7 +208,7 @@ func TestDockerEventLifecycleInternal(t *testing.T) {
 			require.Equal(t, "System", *record.Username)
 			require.Equal(t, "0", *record.EnvironmentID)
 			require.Equal(t, "docker", record.Metadata["source"])
-			stopCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			stopCtx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 			defer cancel()
 			require.NoError(t, lifecycle.Stop(stopCtx))
 			select {

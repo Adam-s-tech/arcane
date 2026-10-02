@@ -82,8 +82,8 @@ func (s *FederatedCredentialService) Create(ctx context.Context, callerUserID st
 	if err != nil {
 		return nil, err
 	}
-	if err := s.validateRoleGrantAgainstUserInternal(ctx, callerUserID, normalized.RoleID, normalized.EnvironmentID); err != nil {
-		return nil, err
+	if validateRoleGrantAgainstUserErr := s.validateRoleGrantAgainstUserInternal(ctx, callerUserID, normalized.RoleID, normalized.EnvironmentID); validateRoleGrantAgainstUserErr != nil {
+		return nil, validateRoleGrantAgainstUserErr
 	}
 
 	var created FederatedCredential
@@ -93,8 +93,8 @@ func (s *FederatedCredentialService) Create(ctx context.Context, callerUserID st
 			DisplayName:      mo.EmptyableToOption(strings.TrimSpace("Federated: " + normalized.Name)).ToPointer(),
 			IsServiceAccount: true,
 		}
-		if err := tx.Create(&serviceUser).Error; err != nil {
-			return fmt.Errorf("failed to create federated service user: %w", err)
+		if createServiceUserErr := tx.Create(&serviceUser).Error; createServiceUserErr != nil {
+			return fmt.Errorf("failed to create federated service user: %w", createServiceUserErr)
 		}
 
 		created = FederatedCredential{
@@ -112,8 +112,8 @@ func (s *FederatedCredentialService) Create(ctx context.Context, callerUserID st
 			TokenTTLSeconds: normalized.TokenTTLSeconds,
 			ExpiresAt:       normalized.ExpiresAt,
 		}
-		if err := tx.Create(&created).Error; err != nil {
-			return fmt.Errorf("failed to create federated credential: %w", err)
+		if createCredentialErr := tx.Create(&created).Error; createCredentialErr != nil {
+			return fmt.Errorf("failed to create federated credential: %w", createCredentialErr)
 		}
 
 		assignment := role.UserRoleAssignment{
@@ -122,8 +122,8 @@ func (s *FederatedCredentialService) Create(ctx context.Context, callerUserID st
 			EnvironmentID: normalized.EnvironmentID,
 			Source:        role.RoleAssignmentSourceManual,
 		}
-		if err := tx.Create(&assignment).Error; err != nil {
-			return fmt.Errorf("failed to create federated role assignment: %w", err)
+		if createRoleAssignmentErr := tx.Create(&assignment).Error; createRoleAssignmentErr != nil {
+			return fmt.Errorf("failed to create federated role assignment: %w", createRoleAssignmentErr)
 		}
 		return nil
 	})
@@ -197,27 +197,27 @@ func (s *FederatedCredentialService) Update(ctx context.Context, callerUserID, i
 	}
 	revokeActiveSessions := credential.Enabled && !updated.Enabled
 	if roleChanged {
-		if err := s.validateRoleGrantAgainstUserInternal(ctx, callerUserID, updated.RoleID, updated.EnvironmentID); err != nil {
-			return nil, err
+		if validateRoleGrantAgainstUserErr := s.validateRoleGrantAgainstUserInternal(ctx, callerUserID, updated.RoleID, updated.EnvironmentID); validateRoleGrantAgainstUserErr != nil {
+			return nil, validateRoleGrantAgainstUserErr
 		}
 	}
 
 	err = dbutil.WithTx(ctx, s.db.DB, func(tx *gorm.DB) error {
-		if err := tx.Save(&updated).Error; err != nil {
-			return fmt.Errorf("failed to update federated credential: %w", err)
+		if updateCredentialErr := tx.Save(&updated).Error; updateCredentialErr != nil {
+			return fmt.Errorf("failed to update federated credential: %w", updateCredentialErr)
 		}
 		if revokeActiveSessions {
 			now := time.Now()
-			if err := tx.Model(&session.UserSession{}).
+			if revokeCredentialSessionsErr := tx.Model(&session.UserSession{}).
 				Where("federated_credential_id = ? AND revoked_at IS NULL", updated.ID).
-				Updates(map[string]any{"revoked_at": now, "updated_at": now}).Error; err != nil {
-				return fmt.Errorf("failed to revoke federated credential sessions: %w", err)
+				Updates(map[string]any{"revoked_at": now, "updated_at": now}).Error; revokeCredentialSessionsErr != nil {
+				return fmt.Errorf("failed to revoke federated credential sessions: %w", revokeCredentialSessionsErr)
 			}
 		}
 		if roleChanged {
-			if err := tx.Where("user_id = ? AND source = ?", updated.IdentityUserID, role.RoleAssignmentSourceManual).
-				Delete(&role.UserRoleAssignment{}).Error; err != nil {
-				return fmt.Errorf("failed to clear federated role assignment: %w", err)
+			if clearRoleAssignmentErr := tx.Where("user_id = ? AND source = ?", updated.IdentityUserID, role.RoleAssignmentSourceManual).
+				Delete(&role.UserRoleAssignment{}).Error; clearRoleAssignmentErr != nil {
+				return fmt.Errorf("failed to clear federated role assignment: %w", clearRoleAssignmentErr)
 			}
 			assignment := role.UserRoleAssignment{
 				UserID:        updated.IdentityUserID,
@@ -225,8 +225,8 @@ func (s *FederatedCredentialService) Update(ctx context.Context, callerUserID, i
 				EnvironmentID: updated.EnvironmentID,
 				Source:        role.RoleAssignmentSourceManual,
 			}
-			if err := tx.Create(&assignment).Error; err != nil {
-				return fmt.Errorf("failed to update federated role assignment: %w", err)
+			if updateRoleAssignmentErr := tx.Create(&assignment).Error; updateRoleAssignmentErr != nil {
+				return fmt.Errorf("failed to update federated role assignment: %w", updateRoleAssignmentErr)
 			}
 		}
 		return nil

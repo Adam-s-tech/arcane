@@ -468,8 +468,8 @@ func (h *WebSocketHandler) SystemStats(c *echo.Context) error {
 		if err != nil {
 			return err
 		}
-		wctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		defer cancel()
+		wctx, localCancel := context.WithTimeout(ctx, 10*time.Second)
+		defer localCancel()
 		return conn.Write(wctx, websocket.MessageText, b)
 	}
 

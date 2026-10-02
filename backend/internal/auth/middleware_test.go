@@ -96,7 +96,7 @@ func TestAuthMiddleware_ManagerAuthResolvesPermissionsByKeyKind(t *testing.T) {
 				return c.JSON(http.StatusOK, map[string]any{"ok": true})
 			})
 
-			req := httptest.NewRequest(http.MethodGet, "/secure", nil)
+			req := httptest.NewRequest(http.MethodGet, "/secure", http.NoBody)
 			req.Header.Set("X-API-Key", "valid-key")
 			rec := httptest.NewRecorder()
 
@@ -106,7 +106,7 @@ func TestAuthMiddleware_ManagerAuthResolvesPermissionsByKeyKind(t *testing.T) {
 	}
 
 	t.Run("browser cookie uses owner role permissions", func(t *testing.T) {
-		ctx := context.Background()
+		ctx := t.Context()
 		db := setupAuthMiddlewareTestDBInternal(t)
 		userSvc := usersvc.NewUserService(db, nil)
 		sessionSvc := session.NewSessionService(db)
@@ -139,13 +139,13 @@ func TestAuthMiddleware_ManagerAuthResolvesPermissionsByKeyKind(t *testing.T) {
 			return c.NoContent(http.StatusOK)
 		})
 
-		req := httptest.NewRequest(http.MethodGet, "/secure", nil)
+		req := httptest.NewRequest(http.MethodGet, "/secure", http.NoBody)
 		req.Header.Set("Authorization", "Bearer "+tokenPair.BrowserToken)
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 		require.Equal(t, http.StatusUnauthorized, rec.Code)
 
-		req = httptest.NewRequest(http.MethodGet, "/secure", nil)
+		req = httptest.NewRequest(http.MethodGet, "/secure", http.NoBody)
 		req.AddCookie(&http.Cookie{Name: cookie.InsecureTokenCookieName, Value: tokenPair.BrowserToken})
 		rec = httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
@@ -203,7 +203,7 @@ func TestAuthMiddleware_ManagerAuthEnvironmentAccessToken(t *testing.T) {
 				return c.JSON(http.StatusOK, map[string]any{"userId": user.ID})
 			})
 
-			req := httptest.NewRequest(http.MethodGet, "/secure", nil)
+			req := httptest.NewRequest(http.MethodGet, "/secure", http.NoBody)
 			req.Header.Set(tc.header, token)
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, req)

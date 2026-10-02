@@ -91,9 +91,9 @@ var DoctorCmd = &cobra.Command{
 				rep.Healthy = false
 				rep.Checks = append(rep.Checks, checkResult{Name: "api_connection", Status: "fail", Details: err.Error()})
 			} else {
-				if err := c.TestConnection(cmd.Context()); err != nil {
+				if testConnectionErr := c.TestConnection(cmd.Context()); testConnectionErr != nil {
 					rep.Healthy = false
-					rep.Checks = append(rep.Checks, checkResult{Name: "api_connection", Status: "fail", Details: err.Error()})
+					rep.Checks = append(rep.Checks, checkResult{Name: "api_connection", Status: "fail", Details: testConnectionErr.Error()})
 				} else {
 					rep.Checks = append(rep.Checks, checkResult{Name: "api_connection", Status: "ok", Details: "connected"})
 				}
@@ -114,7 +114,9 @@ var DoctorCmd = &cobra.Command{
 			for _, item := range rep.Checks {
 				rows = append(rows, []string{item.Name, item.Status, item.Details})
 			}
-			output.Table([]string{"CHECK", "STATUS", "DETAILS"}, rows)
+			if tableErr := output.Table([]string{"CHECK", "STATUS", "DETAILS"}, rows); tableErr != nil {
+				return tableErr
+			}
 			if rep.Healthy {
 				output.Success("Doctor checks passed")
 			} else {

@@ -48,7 +48,7 @@ func (f failingWriter) Write(_ []byte) (int, error) {
 
 func TestWriterContinuesActivityCaptureWhenResponseWriterFailsInternal(t *testing.T) {
 	appender := &recordingAppender{}
-	writer := NewWriter(context.Background(), appender, "activity-1", failingWriter{}, "Pulling image")
+	writer := NewWriter(t.Context(), appender, "activity-1", failingWriter{}, "Pulling image")
 
 	n, err := writer.Write([]byte("Downloading layer\n"))
 	require.NoError(t, err)
@@ -66,7 +66,7 @@ func TestWriterContinuesActivityCaptureWhenResponseWriterFailsInternal(t *testin
 
 func TestWriterRecordsLogAndErrorFramesVerbatimInternal(t *testing.T) {
 	appender := &recordingAppender{}
-	writer := NewWriter(context.Background(), appender, "activity-1", io.Discard, "Deploying project")
+	writer := NewWriter(t.Context(), appender, "activity-1", io.Discard, "Deploying project")
 
 	_, err := writer.Write([]byte("{\"log\":\"Container web-1  Created\"}\n{\"error\":\"Error response from daemon: conflict\"}\n"))
 	require.NoError(t, err)
@@ -103,7 +103,7 @@ func (g *gatedAppender) AppendMessages(ctx context.Context, activityID string, r
 // AppendMessages call, in order, rather than one call per line.
 func TestWriterBatchesQueuedLinesIntoOneAppendInternal(t *testing.T) {
 	appender := &gatedAppender{started: make(chan struct{}), release: make(chan struct{})}
-	writer := NewWriter(context.Background(), appender, "activity-1", io.Discard, "Pulling image")
+	writer := NewWriter(t.Context(), appender, "activity-1", io.Discard, "Pulling image")
 
 	_, err := writer.Write([]byte("layer 0\n"))
 	require.NoError(t, err)
@@ -116,8 +116,8 @@ func TestWriterBatchesQueuedLinesIntoOneAppendInternal(t *testing.T) {
 	// The drain goroutine is stalled inside the first append; everything
 	// written now queues up behind it.
 	for i := 1; i < 10; i++ {
-		_, err := writer.Write(fmt.Appendf(nil, "layer %d\n", i))
-		require.NoError(t, err)
+		_, writeErr := writer.Write(fmt.Appendf(nil, "layer %d\n", i))
+		require.NoError(t, writeErr)
 	}
 	close(appender.release)
 
@@ -134,7 +134,7 @@ func TestWriterBatchesQueuedLinesIntoOneAppendInternal(t *testing.T) {
 }
 
 func TestWriterReturnsWrappedWriteErrorWithoutActivityInternal(t *testing.T) {
-	writer := NewWriter(context.Background(), nil, "", failingWriter{}, "Pulling image")
+	writer := NewWriter(t.Context(), nil, "", failingWriter{}, "Pulling image")
 
 	_, err := writer.Write([]byte("Downloading layer\n"))
 	require.ErrorContains(t, err, "client disconnected")
@@ -151,7 +151,7 @@ var (
 // queue before exiting, since the lines queued at cancellation are usually
 // the ones explaining it.
 func TestWriterPersistsQueuedLinesAfterCancelInternal(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	appender := &gatedAppender{started: make(chan struct{}), release: make(chan struct{})}
 	writer := NewWriter(ctx, appender, "activity-1", io.Discard, "Pulling image")
 
@@ -166,8 +166,8 @@ func TestWriterPersistsQueuedLinesAfterCancelInternal(t *testing.T) {
 	// The drain goroutine is stalled inside the first append; these queue up
 	// behind it and are still pending when the context is cancelled.
 	for i := 1; i < 10; i++ {
-		_, err := writer.Write(fmt.Appendf(nil, "layer %d\n", i))
-		require.NoError(t, err)
+		_, writeErr := writer.Write(fmt.Appendf(nil, "layer %d\n", i))
+		require.NoError(t, writeErr)
 	}
 	cancel()
 	close(appender.release)

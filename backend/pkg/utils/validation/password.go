@@ -104,7 +104,14 @@ func ValidateCredentialTargetChange(
 
 	slices.Sort(missingFields)
 	if len(missingFields) == 1 {
-		return common.Classify(common.ErrValidation, &base.FieldError{Field: missingFields[0], Err: fmt.Errorf("Changing %s requires re-entering the %s", targetName, missingFields[0])}) //nolint:staticcheck // Preserve the existing error message.
+		//nolint:staticcheck // Preserve the existing error message.
+		return common.Classify(common.ErrValidation,
+			&base.FieldError{
+				Field: missingFields[0],
+				Err: fmt.Errorf("Changing %s requires re-entering the %s",
+					targetName,
+					missingFields[0]),
+			})
 	}
 
 	return common.NewAPIErrorWithDetails(

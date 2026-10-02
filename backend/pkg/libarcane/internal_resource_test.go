@@ -1,7 +1,6 @@
 package libarcane
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -67,7 +66,8 @@ func TestInspectCurrentArcaneContainer_FallsBackToLabelWhenHostnameIsSidecar(t *
 		case strings.HasSuffix(r.URL.Path, "/containers/json"):
 			_, _ = w.Write([]byte(`[{"Id":"arcane123","Names":["/arcane"],"State":"running","Labels":{"com.getarcaneapp.arcane":"true"}}]`))
 		case strings.HasSuffix(r.URL.Path, "/containers/arcane123/json"):
-			_, _ = w.Write([]byte(`{"Id":"arcane123","Name":"/arcane","State":{"Running":true},"HostConfig":{"NetworkMode":"container:sidecar456"},"Config":{"Labels":{"com.getarcaneapp.arcane":"true"}}}`))
+			_, _ = w.Write([]byte("{\"Id\":\"arcane123\",\"Name\":\"/arcane\",\"State\":{\"Running\":true},\"HostConfig\":{\"NetworkMode\":\"container:s" +
+				"idecar456\"},\"Config\":{\"Labels\":{\"com.getarcaneapp.arcane\":\"true\"}}}"))
 		case strings.HasSuffix(r.URL.Path, "/json"):
 			_, _ = w.Write([]byte(`{"Id":"sidecar456","Name":"/ts-arcane","State":{"Running":true},"Config":{"Labels":{}}}`))
 		default:
@@ -75,7 +75,7 @@ func TestInspectCurrentArcaneContainer_FallsBackToLabelWhenHostnameIsSidecar(t *
 		}
 	})
 
-	got, err := InspectCurrentArcaneContainer(context.Background(), dockerClient)
+	got, err := InspectCurrentArcaneContainer(t.Context(), dockerClient)
 	require.NoError(t, err)
 	assert.Equal(t, "arcane123", got.ID)
 }
@@ -91,7 +91,8 @@ func TestInspectCurrentArcaneContainer_KeepsUnlabeledHitOverUnrelatedLabeledInst
 		case strings.HasSuffix(r.URL.Path, "/containers/json"):
 			_, _ = w.Write([]byte(`[{"Id":"other789","Names":["/arcane-other"],"State":"running","Labels":{"com.getarcaneapp.arcane":"true"}}]`))
 		case strings.HasSuffix(r.URL.Path, "/containers/other789/json"):
-			_, _ = w.Write([]byte(`{"Id":"other789","Name":"/arcane-other","State":{"Running":true},"HostConfig":{"NetworkMode":"bridge"},"Config":{"Labels":{"com.getarcaneapp.arcane":"true"}}}`))
+			_, _ = w.Write([]byte("{\"Id\":\"other789\",\"Name\":\"/arcane-other\",\"State\":{\"Running\":true},\"HostConfig\":{\"NetworkMode\":\"bridge" +
+				"\"},\"Config\":{\"Labels\":{\"com.getarcaneapp.arcane\":\"true\"}}}"))
 		case strings.HasSuffix(r.URL.Path, "/json"):
 			_, _ = w.Write([]byte(`{"Id":"custom123","Name":"/arcane-custom","State":{"Running":true},"Config":{"Labels":{}}}`))
 		default:
@@ -99,7 +100,7 @@ func TestInspectCurrentArcaneContainer_KeepsUnlabeledHitOverUnrelatedLabeledInst
 		}
 	})
 
-	got, err := InspectCurrentArcaneContainer(context.Background(), dockerClient)
+	got, err := InspectCurrentArcaneContainer(t.Context(), dockerClient)
 	require.NoError(t, err)
 	assert.Equal(t, "custom123", got.ID)
 }

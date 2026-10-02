@@ -1,7 +1,6 @@
 package upgrade
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -153,7 +152,7 @@ func TestRefreshRecreatedContainerLabelsInternalPreservesLabelsWhenTargetInspect
 	}
 
 	got := refreshRecreatedContainerLabelsInternal(
-		context.Background(),
+		t.Context(),
 		dockerClient,
 		containerLabels,
 		"sha256:old-image",
@@ -194,7 +193,7 @@ func TestRefreshRecreatedContainerLabelsInternalPreservesOverridesWhenPreviousIn
 	}
 
 	got := refreshRecreatedContainerLabelsInternal(
-		context.Background(),
+		t.Context(),
 		dockerClient,
 		containerLabels,
 		"sha256:old-image",

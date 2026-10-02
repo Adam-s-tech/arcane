@@ -227,7 +227,15 @@ func TestParseSecurityOpts(t *testing.T) {
 		{name: "single", value: "label=disable", want: []string{"label=disable"}},
 		{name: "comma separated", value: "label=disable,label=type:container_runtime_t", want: []string{"label=disable", "label=type:container_runtime_t"}},
 		{name: "newline separated", value: "label=disable\nlabel=type:container_runtime_t", want: []string{"label=disable", "label=type:container_runtime_t"}},
-		{name: "mixed whitespace", value: " label=disable,\n\n  label=type:container_runtime_t \r\n privileged=true ", want: []string{"label=disable", "label=type:container_runtime_t", "privileged=true"}},
+		{
+			name:  "mixed whitespace",
+			value: " label=disable,\n\n  label=type:container_runtime_t \r\n privileged=true ",
+			want: []string{
+				"label=disable",
+				"label=type:container_runtime_t",
+				"privileged=true",
+			},
+		},
 	}
 
 	for _, tt := range tests {

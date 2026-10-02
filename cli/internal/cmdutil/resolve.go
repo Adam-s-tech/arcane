@@ -114,16 +114,16 @@ func (ref ResourceRef[D, S]) Resolve(ctx context.Context, c *client.Client, iden
 	if ref.IDOf != nil {
 		identifierLower := strings.ToLower(trimmed)
 		if LooksLikeIDPrefix(identifierLower) {
-			fallbackMatches, err := ref.fallbackByIDPrefixInternal(ctx, c, identifierLower)
-			if err != nil {
-				return nil, false, err
+			fallbackMatches, fallbackByIDPrefixErr := ref.fallbackByIDPrefixInternal(ctx, c, identifierLower)
+			if fallbackByIDPrefixErr != nil {
+				return nil, false, fallbackByIDPrefixErr
 			}
-			selected, err := ref.selectCandidateInternal(fallbackMatches, trimmed, allowPrompt)
-			if err != nil {
-				return nil, false, err
+			fallbackCandidate, fallbackByIDPrefixErr := ref.selectCandidateInternal(fallbackMatches, trimmed, allowPrompt)
+			if fallbackByIDPrefixErr != nil {
+				return nil, false, fallbackByIDPrefixErr
 			}
-			if selected != nil {
-				return ref.Promote(*selected), false, nil
+			if fallbackCandidate != nil {
+				return ref.Promote(*fallbackCandidate), false, nil
 			}
 		}
 	}
@@ -145,12 +145,12 @@ func (ref ResourceRef[D, S]) fetchByIdentifierInternal(ctx context.Context, c *c
 
 	if resp.StatusCode == http.StatusOK {
 		var result base.ApiResponse[D]
-		if err := json.Unmarshal(body, &result); err != nil {
-			return nil, false, fmt.Errorf("failed to parse %s response: %w", ref.Singular, err)
+		if unmarshalErr := json.Unmarshal(body, &result); unmarshalErr != nil {
+			return nil, false, fmt.Errorf("failed to parse %s response: %w", ref.Singular, unmarshalErr)
 		}
 		if ref.Validate != nil {
-			if err := ref.Validate(result.Data, identifier); err != nil {
-				return nil, false, err
+			if validateErr := ref.Validate(result.Data, identifier); validateErr != nil {
+				return nil, false, validateErr
 			}
 		}
 		return &result.Data, true, nil
@@ -244,8 +244,8 @@ func (ref ResourceRef[D, S]) listItemsInternal(ctx context.Context, c *client.Cl
 	}
 
 	var result base.Paginated[S]
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse %s response: %w", ref.Plural, err)
+	if unmarshalErr := json.Unmarshal(body, &result); unmarshalErr != nil {
+		return nil, fmt.Errorf("failed to parse %s response: %w", ref.Plural, unmarshalErr)
 	}
 	return result.Data, nil
 }

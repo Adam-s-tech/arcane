@@ -46,10 +46,10 @@ func DownloadFileFromContainer(
 		cleanup()
 		return nil, 0, fmt.Errorf("failed to read tar stream: %w", err)
 	}
-	if err := validateDownloadHeaderInternal(hdr); err != nil {
+	if validateDownloadHeaderErr := validateDownloadHeaderInternal(hdr); validateDownloadHeaderErr != nil {
 		_ = reader.Close()
 		cleanup()
-		return nil, 0, err
+		return nil, 0, validateDownloadHeaderErr
 	}
 
 	return &cleanupReadCloserInternal{

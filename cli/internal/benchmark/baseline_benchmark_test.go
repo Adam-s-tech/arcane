@@ -1,7 +1,6 @@
 package benchmark
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -48,9 +47,9 @@ func BenchmarkClientListMediumPayload(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		resp, err := c.Get(context.Background(), "/api/environments/0/containers?limit=200")
-		if err != nil {
-			require.FailNowf(b, "benchmark request failed", "request: %v", err)
+		resp, getErr := c.Get(b.Context(), "/api/environments/0/containers?limit=200")
+		if getErr != nil {
+			require.FailNowf(b, "benchmark request failed", "request: %v", getErr)
 		}
 		_ = resp.Body.Close()
 	}

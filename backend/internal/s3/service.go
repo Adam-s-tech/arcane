@@ -145,8 +145,8 @@ func (s *S3DestinationService) CreateS3Destination(ctx context.Context, input ba
 	}
 	destination := &S3Destination{}
 	applyS3ConfigurationInternal(destination, configuration, encryptedSecret)
-	if err := s.db.WithContext(ctx).Create(destination).Error; err != nil {
-		return nil, fmt.Errorf("failed to create S3 destination: %w", err)
+	if createDestinationErr := s.db.WithContext(ctx).Create(destination).Error; createDestinationErr != nil {
+		return nil, fmt.Errorf("failed to create S3 destination: %w", createDestinationErr)
 	}
 	dto := destination.ToDTO()
 	return &dto, nil
@@ -191,8 +191,8 @@ func (s *S3DestinationService) UpdateS3Destination(ctx context.Context, id strin
 		}
 	}
 	applyS3ConfigurationInternal(destination, configuration, encryptedSecret)
-	if err := s.db.WithContext(ctx).Save(destination).Error; err != nil {
-		return nil, fmt.Errorf("failed to update S3 destination: %w", err)
+	if updateDestinationErr := s.db.WithContext(ctx).Save(destination).Error; updateDestinationErr != nil {
+		return nil, fmt.Errorf("failed to update S3 destination: %w", updateDestinationErr)
 	}
 	dto := destination.ToDTO()
 	return &dto, nil
@@ -211,12 +211,12 @@ func (s *S3DestinationService) DeleteS3Destination(ctx context.Context, id strin
 		return fmt.Errorf("%w: remove it from backup configurations and retained backups first", ErrS3DestinationInUse)
 	}
 	if s.checkRemoteReferences != nil {
-		if err := s.checkRemoteReferences(ctx, id); err != nil {
-			return fmt.Errorf("%w: %s", ErrS3DestinationInUse, err.Error())
+		if checkRemoteReferencesErr := s.checkRemoteReferences(ctx, id); checkRemoteReferencesErr != nil {
+			return fmt.Errorf("%w: %s", ErrS3DestinationInUse, checkRemoteReferencesErr.Error())
 		}
 	}
-	if err := s.db.WithContext(ctx).Delete(destination).Error; err != nil {
-		return fmt.Errorf("failed to delete S3 destination: %w", err)
+	if deleteDestinationErr := s.db.WithContext(ctx).Delete(destination).Error; deleteDestinationErr != nil {
+		return fmt.Errorf("failed to delete S3 destination: %w", deleteDestinationErr)
 	}
 	return nil
 }
@@ -294,8 +294,8 @@ func (s *S3DestinationService) SyncS3Destinations(ctx context.Context, destinati
 			changed = true
 		}
 		if changed {
-			if err := s.db.WithContext(ctx).Save(destination).Error; err != nil {
-				return fmt.Errorf("failed to sync S3 destination %s: %w", configuration.ID, err)
+			if syncDestinationErr := s.db.WithContext(ctx).Save(destination).Error; syncDestinationErr != nil {
+				return fmt.Errorf("failed to sync S3 destination %s: %w", configuration.ID, syncDestinationErr)
 			}
 		}
 		syncedIDs[configuration.ID] = struct{}{}
@@ -345,8 +345,8 @@ func (s *S3DestinationService) TestS3Destination(ctx context.Context, id string,
 		return err
 	}
 	if input != nil {
-		if err := normalization.Normalize(input); err != nil {
-			return err
+		if normalizeErr := normalization.Normalize(input); normalizeErr != nil {
+			return normalizeErr
 		}
 		updated := destinationConfigurationInternal("", *input)
 		updated.ID = configuration.ID

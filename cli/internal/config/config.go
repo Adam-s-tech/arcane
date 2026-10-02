@@ -163,16 +163,16 @@ func Load() (*types.Config, error) {
 	v.SetDefault("default_environment", "0")
 	v.SetDefault("federated_audience", "")
 	v.SetDefault("log_level", "info")
-	if err := v.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	if readInConfigErr := v.ReadInConfig(); readInConfigErr != nil {
+		return nil, fmt.Errorf("failed to parse config file: %w", readInConfigErr)
 	}
 
 	var cfg types.Config
-	if err := v.Unmarshal(&cfg, func(dc *mapstructure.DecoderConfig) {
+	if unmarshalErr := v.Unmarshal(&cfg, func(dc *mapstructure.DecoderConfig) {
 		dc.TagName = "mapstructure"
 		dc.WeaklyTypedInput = true
-	}); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+	}); unmarshalErr != nil {
+		return nil, fmt.Errorf("failed to unmarshal config: %w", unmarshalErr)
 	}
 	normalized := normalizeConfig(&cfg)
 
@@ -192,8 +192,8 @@ func Save(c *types.Config) error {
 
 	// Ensure the config directory exists
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("failed to create config directory: %w", err)
+	if mkdirAllErr := os.MkdirAll(dir, 0o700); mkdirAllErr != nil {
+		return fmt.Errorf("failed to create config directory: %w", mkdirAllErr)
 	}
 
 	cfg := normalizeConfig(c)
@@ -234,11 +234,11 @@ func Save(c *types.Config) error {
 		v.Set(fmt.Sprintf("pagination.resources.%s.limit", resource), rc.Limit)
 	}
 
-	if err := v.WriteConfigAs(path); err != nil {
-		return fmt.Errorf("failed to write config file: %w", err)
+	if writeConfigAsErr := v.WriteConfigAs(path); writeConfigAsErr != nil {
+		return fmt.Errorf("failed to write config file: %w", writeConfigAsErr)
 	}
-	if err := os.Chmod(path, 0o600); err != nil {
-		return fmt.Errorf("failed to set config permissions: %w", err)
+	if chmodErr := os.Chmod(path, 0o600); chmodErr != nil {
+		return fmt.Errorf("failed to set config permissions: %w", chmodErr)
 	}
 
 	configCache.Set(path, cfg)
@@ -269,8 +269,8 @@ func InitDefaultFile() (bool, error) {
 	}
 
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return false, fmt.Errorf("failed to create config directory: %w", err)
+	if mkdirAllErr := os.MkdirAll(dir, 0o700); mkdirAllErr != nil {
+		return false, fmt.Errorf("failed to create config directory: %w", mkdirAllErr)
 	}
 
 	v := viper.New()
@@ -288,11 +288,11 @@ func InitDefaultFile() (bool, error) {
 		v.Set(fmt.Sprintf("pagination.resources.%s.limit", resource), defaultPaginationInitLimit)
 	}
 
-	if err := v.WriteConfigAs(path); err != nil {
-		return false, fmt.Errorf("failed to write config file: %w", err)
+	if writeConfigAsErr := v.WriteConfigAs(path); writeConfigAsErr != nil {
+		return false, fmt.Errorf("failed to write config file: %w", writeConfigAsErr)
 	}
-	if err := os.Chmod(path, 0o600); err != nil {
-		return false, fmt.Errorf("failed to set config permissions: %w", err)
+	if chmodErr := os.Chmod(path, 0o600); chmodErr != nil {
+		return false, fmt.Errorf("failed to set config permissions: %w", chmodErr)
 	}
 
 	invalidateCache()
@@ -326,15 +326,15 @@ func BackupFile() (backupPath string, moved bool, err error) {
 			return "", false, fmt.Errorf("backup path is a directory: %s", backupPath)
 		}
 		rotatedPath := fmt.Sprintf("%s.%s", backupPath, time.Now().UTC().Format("20060102150405"))
-		if err := os.Rename(backupPath, rotatedPath); err != nil {
-			return "", false, fmt.Errorf("failed to rotate existing backup %s: %w", backupPath, err)
+		if renameErr := os.Rename(backupPath, rotatedPath); renameErr != nil {
+			return "", false, fmt.Errorf("failed to rotate existing backup %s: %w", backupPath, renameErr)
 		}
 	} else if !os.IsNotExist(backupErr) {
 		return "", false, fmt.Errorf("failed to stat backup path: %w", backupErr)
 	}
 
-	if err := os.Rename(path, backupPath); err != nil {
-		return "", false, fmt.Errorf("failed to move config to backup: %w", err)
+	if backupConfigErr := os.Rename(path, backupPath); backupConfigErr != nil {
+		return "", false, fmt.Errorf("failed to move config to backup: %w", backupConfigErr)
 	}
 
 	invalidateCache()

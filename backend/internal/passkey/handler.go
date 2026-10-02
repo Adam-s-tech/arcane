@@ -356,7 +356,14 @@ func (h *PasskeyHandler) getLoginAvailabilityInternal(ctx context.Context, _ *st
 	if err != nil {
 		return nil, passkeyHTTPErrorInternal(err)
 	}
-	return &handlerutil.Out[authtypes.PasskeyLoginAvailability]{Body: base.ApiResponse[authtypes.PasskeyLoginAvailability]{Success: true, Data: authtypes.PasskeyLoginAvailability{Available: available}}}, nil
+	return &handlerutil.Out[authtypes.PasskeyLoginAvailability]{
+		Body: base.ApiResponse[authtypes.PasskeyLoginAvailability]{
+			Success: true,
+			Data: authtypes.PasskeyLoginAvailability{
+				Available: available,
+			},
+		},
+	}, nil
 }
 
 func (h *PasskeyHandler) BeginPasskeyLogin(ctx context.Context, _ *struct{}) (*handlerutil.Out[passkeyBeginResponse], error) {
@@ -550,8 +557,8 @@ func (h *PasskeyHandler) DeletePasskey(ctx context.Context, input *DeletePasskey
 	if err != nil {
 		return nil, huma.Error500InternalServerError("failed to check OIDC status")
 	}
-	if err := h.passkeyService.DeletePasskey(ctx, userModel.ID, input.ID, sessionID, input.StepUpToken, oidcEnabled); err != nil {
-		return nil, passkeyHTTPErrorInternal(err)
+	if deletePasskeyErr := h.passkeyService.DeletePasskey(ctx, userModel.ID, input.ID, sessionID, input.StepUpToken, oidcEnabled); deletePasskeyErr != nil {
+		return nil, passkeyHTTPErrorInternal(deletePasskeyErr)
 	}
 	return &handlerutil.Out[base.MessageResponse]{Body: base.ApiResponse[base.MessageResponse]{Success: true, Data: base.MessageResponse{Message: "Passkey deleted"}}}, nil
 }
@@ -592,7 +599,7 @@ func (h *PasskeyHandler) PasswordStepUp(ctx context.Context, input *PasswordStep
 	if strings.TrimSpace(userModel.PasswordHash) == "" {
 		return nil, huma.Error400BadRequest("this account has no local password")
 	}
-	if err := h.userService.ValidatePassword(userModel.PasswordHash, input.Body.Password); err != nil {
+	if validatePasswordErr := h.userService.ValidatePassword(userModel.PasswordHash, input.Body.Password); validatePasswordErr != nil {
 		return nil, huma.Error401Unauthorized("password is incorrect")
 	}
 	grant, err := h.passkeyService.CreatePasswordStepUpGrant(ctx, userModel.ID, sessionID)
@@ -631,8 +638,8 @@ func (h *PasskeyHandler) DisableMFA(ctx context.Context, input *MFASettingsInput
 	if err != nil {
 		return nil, err
 	}
-	if err := h.passkeyService.DisableMFA(ctx, userModel.ID, sessionID, input.StepUpToken); err != nil {
-		return nil, passkeyHTTPErrorInternal(err)
+	if disableMFAErr := h.passkeyService.DisableMFA(ctx, userModel.ID, sessionID, input.StepUpToken); disableMFAErr != nil {
+		return nil, passkeyHTTPErrorInternal(disableMFAErr)
 	}
 	h.authService.InvalidateUserTokenCache(userModel.ID)
 	return &handlerutil.Out[base.MessageResponse]{Body: base.ApiResponse[base.MessageResponse]{Success: true, Data: base.MessageResponse{Message: "Passkey MFA disabled"}}}, nil

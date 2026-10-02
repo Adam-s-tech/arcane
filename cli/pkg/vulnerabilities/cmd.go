@@ -357,8 +357,8 @@ var unignoreCmd = &cobra.Command{
 			return err
 		}
 
-		if _, err := c.DeleteJSON[struct{}](cmd.Context(), types.VulnerabilityIgnore(c.EnvID(), args[0])); err != nil {
-			return fmt.Errorf("failed to remove ignore record: %w", err)
+		if _, deleteIgnoreErr := c.DeleteJSON[struct{}](cmd.Context(), types.VulnerabilityIgnore(c.EnvID(), args[0])); deleteIgnoreErr != nil {
+			return fmt.Errorf("failed to remove ignore record: %w", deleteIgnoreErr)
 		}
 
 		output.Success("Ignore record %s removed", args[0])

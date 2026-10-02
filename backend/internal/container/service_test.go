@@ -292,7 +292,7 @@ func TestContainerServiceCommitContainerCallsDockerAPIInternal(t *testing.T) {
 		nil,
 	)
 
-	out, err := svc.CommitContainer(context.Background(), "container-1", containertypes.CommitRequest{
+	out, err := svc.CommitContainer(t.Context(), "container-1", containertypes.CommitRequest{
 		Repository: "registry.example.com/team/app",
 		Tag:        "snapshot",
 		Comment:    "manual snapshot",
@@ -310,7 +310,7 @@ func TestContainerServiceCommitContainerCallsDockerAPIInternal(t *testing.T) {
 	}, gotRequest)
 
 	var evt event.Event
-	require.NoError(t, db.WithContext(context.Background()).Where("type = ?", event.EventTypeImageCommit).First(&evt).Error)
+	require.NoError(t, db.WithContext(t.Context()).Where("type = ?", event.EventTypeImageCommit).First(&evt).Error)
 	require.Equal(t, "container-1", *evt.ResourceID)
 }
 
@@ -339,7 +339,7 @@ func TestContainerServiceCommitContainerOmitsReferenceWhenRepositoryEmptyInterna
 		nil,
 	)
 
-	out, err := svc.CommitContainer(context.Background(), "container-1", containertypes.CommitRequest{
+	out, err := svc.CommitContainer(t.Context(), "container-1", containertypes.CommitRequest{
 		Tag: "latest",
 	}, common.SystemUser)
 	require.NoError(t, err)
@@ -352,9 +352,9 @@ func TestContainerServiceCommitContainerOmitsReferenceWhenRepositoryEmptyInterna
 	}, gotRequest)
 }
 
-func newGroupedContainerSummary(name, project string) containertypes.Summary {
+func newGroupedContainerSummary(name, localProject string) containertypes.Summary {
 	labels := map[string]string{}
-	labels["com.docker.compose.project"] = cmp.Or(project, labels["com.docker.compose.project"])
+	labels["com.docker.compose.project"] = cmp.Or(localProject, labels["com.docker.compose.project"])
 
 	return containertypes.Summary{
 		ID:     name,
@@ -400,7 +400,7 @@ func setupProjectTestDBInternal(t *testing.T) *database.DB {
 	return &database.DB{DB: db}
 }
 
-var dockerAPIVersionPrefixInternal = regexp.MustCompile(`^/v[0-9]+\.[0-9]+`)
+var dockerAPIVersionPrefixInternal = regexp.MustCompile(`^/v\d+\.\d+`)
 
 func TestApplyEditPreservesUnmanagedSettingsInternal(t *testing.T) {
 	cfg := container.Config{
@@ -582,12 +582,46 @@ func TestRecreateContainerDaemonCorrelationInternal(t *testing.T) {
 	t.Cleanup(server.Close)
 	dockerClient := newTestDockerClientInternal(t, server)
 	svc := NewContainerService(events, nil, nil, nil, nil)
-	info := container.InspectResponse{ID: "old-id", Name: "/web", State: &container.State{Running: true}, Config: &container.Config{Image: "app:latest"}, HostConfig: &container.HostConfig{}}
-	id, err := svc.recreateContainerInternal(t.Context(), dockerClient, info, "redeploy", "web", info.Config, info.HostConfig, nil, "1.41", event.EventTypeContainerDeploy, common.SystemUser)
+	info := container.InspectResponse{
+		ID:         "old-id",
+		Name:       "/web",
+		State:      &container.State{Running: true},
+		Config:     &container.Config{Image: "app:latest"},
+		HostConfig: &container.HostConfig{},
+	}
+	id, err := svc.recreateContainerInternal(
+		t.Context(),
+		dockerClient,
+		info,
+		"redeploy",
+		"web",
+		info.Config,
+		info.HostConfig,
+		nil,
+		"1.41",
+		event.EventTypeContainerDeploy,
+		common.SystemUser,
+	)
 	require.NoError(t, err)
 	require.Equal(t, "new-id", id)
 	require.Len(t, observed, 5)
-	require.Equal(t, []string{"/containers/old-id/rename", "/containers/old-id/stop", "/containers/create", "/containers/new-id/start", "/containers/old-id"}, []string{<-observed, <-observed, <-observed, <-observed, <-observed})
+	require.Equal(
+		t,
+		[]string{
+			"/containers/old-id/rename",
+			"/containers/old-id/stop",
+			"/containers/create",
+			"/containers/new-id/start",
+			"/containers/old-id",
+		},
+		[]string{
+			<-observed,
+			<-observed,
+			<-observed,
+			<-observed,
+			<-observed,
+		},
+	)
 	require.True(t, events.ShouldSuppressDaemonEvent("container", "old-id", "", ""))
 	require.True(t, events.ShouldSuppressDaemonEvent("container", "new-id", "", ""))
 }
@@ -643,11 +677,30 @@ func TestContainerServiceGetContainerProcessesInternal(t *testing.T) {
 		wantErr    func(error) bool
 	}{
 		{
-			name:       "docker snapshot",
-			status:     http.StatusOK,
-			body:       `{"Titles":["PID","USER","%CPU","%MEM","ELAPSED","CMD"],"Processes":[["1","root","0.0","0.1","01:02:03","nginx: master process nginx -g daemon off;"],["29","nginx","0.0","0.1","01:02:03","nginx: worker process"]]}`,
+			name:   "docker snapshot",
+			status: http.StatusOK,
+			body: "{\"Titles\":[\"PID\",\"USER\",\"%CPU\",\"%MEM\",\"ELAPSED\",\"CMD\"],\"Processes\":[[\"1\",\"root\",\"0.0\",\"0.1\",\"01:02:0" +
+				"3\",\"nginx: master process nginx -g daemon off;\"],[\"29\",\"nginx\",\"0.0\",\"0.1\",\"01:02:03\",\"nginx: worker" +
+				" process\"]]}",
 			wantTitles: []string{"PID", "USER", "%CPU", "%MEM", "ELAPSED", "CMD"},
-			wantRows:   [][]string{{"1", "root", "0.0", "0.1", "01:02:03", "nginx: master process nginx -g daemon off;"}, {"29", "nginx", "0.0", "0.1", "01:02:03", "nginx: worker process"}},
+			wantRows: [][]string{
+				{
+					"1",
+					"root",
+					"0.0",
+					"0.1",
+					"01:02:03",
+					"nginx: master process nginx -g daemon off;",
+				},
+				{
+					"29",
+					"nginx",
+					"0.0",
+					"0.1",
+					"01:02:03",
+					"nginx: worker process",
+				},
+			},
 		},
 		{name: "empty", status: http.StatusOK, body: `{}`, wantTitles: []string{}, wantRows: [][]string{}},
 		{name: "not found", status: http.StatusNotFound, body: `{"message":"No such container: container-1"}`, wantErr: errdefs.IsNotFound},
@@ -686,7 +739,7 @@ func TestContainerServiceGetContainerProcessesInternal(t *testing.T) {
 			t.Cleanup(server.Close)
 			svc := NewContainerService(nil, docker.NewDockerClientService(t.Context(), nil, nil, nil).WithClient(newTestDockerClientInternal(t, server)), nil, nil, nil)
 
-			processes, err := svc.GetContainerProcesses(context.Background(), "container-1")
+			processes, err := svc.GetContainerProcesses(t.Context(), "container-1")
 			wantArgs := []string{strings.Join(containerProcessesPsArgs[0], " ")}
 			if tt.fallback != nil {
 				wantArgs = append(wantArgs, strings.Join(containerProcessesPsArgs[1], " "))
@@ -712,7 +765,7 @@ func TestContainerServiceGetContainerProcessesPropagatesContextInternal(t *testi
 	t.Cleanup(server.Close)
 	svc := NewContainerService(nil, docker.NewDockerClientService(t.Context(), nil, nil, nil).WithClient(newTestDockerClientInternal(t, server)), nil, nil, nil)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 	defer cancel()
 	_, err := svc.GetContainerProcesses(ctx, "container-1")
 	require.ErrorIs(t, err, context.DeadlineExceeded)

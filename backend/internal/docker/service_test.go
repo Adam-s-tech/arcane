@@ -47,7 +47,7 @@ func TestNewDockerClient_PinsEffectiveAPIVersion(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server := newDockerPingTestServerInternal(t, tt.pingAPIVersion)
 
-			cli, err := newDockerClientInternal(context.Background(), server.URL)
+			cli, err := newDockerClientInternal(t.Context(), server.URL)
 			require.NoError(t, err)
 			t.Cleanup(func() {
 				_ = cli.Close()
@@ -62,15 +62,15 @@ func TestNewDockerClient_PinsEffectiveAPIVersion(t *testing.T) {
 
 func TestDockerClientService_GetClientReturnsCachedClientUntilRefresh(t *testing.T) {
 	server := newDockerPingTestServerInternal(t, "1.41")
-	svc := newDockerClientServiceForTestInternal(server.URL)
+	svc := newDockerClientServiceForTestInternal(t, server.URL)
 
-	firstClient, err := svc.GetClient(context.Background())
+	firstClient, err := svc.GetClient(t.Context())
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		_ = firstClient.Close()
 	})
 
-	secondClient, err := svc.GetClient(context.Background())
+	secondClient, err := svc.GetClient(t.Context())
 	require.NoError(t, err)
 
 	assert.Same(t, firstClient, secondClient)
@@ -83,9 +83,9 @@ func TestDockerClientService_RefreshClientRecreatesCachedClientAfterAPIVersionCh
 	server := newDockerPingTestServerWithVersionInternal(t, func() string {
 		return apiVersion.Load().(string)
 	})
-	svc := newDockerClientServiceForTestInternal(server.URL)
+	svc := newDockerClientServiceForTestInternal(t, server.URL)
 
-	firstClient, err := svc.GetClient(context.Background())
+	firstClient, err := svc.GetClient(t.Context())
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		_ = firstClient.Close()
@@ -94,7 +94,7 @@ func TestDockerClientService_RefreshClientRecreatesCachedClientAfterAPIVersionCh
 
 	apiVersion.Store("1.42")
 
-	err = svc.RefreshClient(context.Background())
+	err = svc.RefreshClient(t.Context())
 	require.NoError(t, err)
 	secondClient := svc.Client
 	t.Cleanup(func() {
@@ -113,21 +113,21 @@ func TestDockerClientService_RefreshClientClosesOldCachedClientWhenReplaced(t *t
 		}
 	})
 	newServer := newDockerPingTestServerInternal(t, "1.42")
-	svc := newDockerClientServiceForTestInternal(oldServer.URL)
+	svc := newDockerClientServiceForTestInternal(t, oldServer.URL)
 
-	firstClient, err := svc.GetClient(context.Background())
+	firstClient, err := svc.GetClient(t.Context())
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		_ = firstClient.Close()
 	})
 
-	_, err = firstClient.Ping(context.Background(), client.PingOptions{})
+	_, err = firstClient.Ping(t.Context(), client.PingOptions{})
 	require.NoError(t, err)
 	closedBeforeReplace := oldServerClosedConnections.Load()
 
 	svc.config.DockerHost = newServer.URL
 
-	err = svc.RefreshClient(context.Background())
+	err = svc.RefreshClient(t.Context())
 	require.NoError(t, err)
 	secondClient := svc.Client
 	t.Cleanup(func() {
@@ -155,9 +155,9 @@ func TestDockerClientService_RefreshClientProbeFailureKeepsCachedClient(t *testi
 		w.Header().Set("Api-Version", "1.41")
 		w.WriteHeader(http.StatusOK)
 	})
-	svc := newDockerClientServiceForTestInternal(server.URL)
+	svc := newDockerClientServiceForTestInternal(t, server.URL)
 
-	firstClient, err := svc.GetClient(context.Background())
+	firstClient, err := svc.GetClient(t.Context())
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		_ = firstClient.Close()
@@ -165,7 +165,7 @@ func TestDockerClientService_RefreshClientProbeFailureKeepsCachedClient(t *testi
 
 	failProbe.Store(true)
 
-	err = svc.RefreshClient(context.Background())
+	err = svc.RefreshClient(t.Context())
 	require.Error(t, err)
 	assert.Same(t, firstClient, svc.Client)
 	assert.Equal(t, "1.41", svc.clientVersion)
@@ -212,7 +212,7 @@ func TestDockerClientService_EventActorStopCancelsAndJoinsStreamInternal(t *test
 		}
 	})
 
-	service := newDockerClientServiceForTestInternal(server.URL)
+	service := newDockerClientServiceForTestInternal(t, server.URL)
 	t.Cleanup(service.Close)
 
 	eventsCh, unsubscribe := service.EventBus().Subscribe(events.ImageEventType)
@@ -234,7 +234,7 @@ func TestDockerClientService_EventActorStopCancelsAndJoinsStreamInternal(t *test
 	default:
 	}
 
-	stopCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	stopCtx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
 	require.NoError(t, stop(stopCtx))
 	require.Eventually(t, func() bool {
@@ -275,12 +275,12 @@ func TestCountImageUsage_NoImages(t *testing.T) {
 	assert.Equal(t, imagetypes.UsageCounts{}, counts)
 }
 
-func newDockerClientServiceForTestInternal(host string) *DockerClientService {
-	return NewDockerClientService(context.Background(), nil, &config.Config{DockerHost: host}, nil)
+func newDockerClientServiceForTestInternal(t *testing.T, host string) *DockerClientService {
+	return NewDockerClientService(t.Context(), nil, &config.Config{DockerHost: host}, nil)
 }
 
 func dockerTestPathInternal(path string) string {
-	return regexp.MustCompile(`^/v[0-9]+\.[0-9]+`).ReplaceAllString(path, "")
+	return regexp.MustCompile(`^/v\d+\.\d+`).ReplaceAllString(path, "")
 }
 
 func newDockerPingTestServerInternal(t *testing.T, apiVersion string) *httptest.Server {

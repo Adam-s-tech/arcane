@@ -21,7 +21,7 @@ import (
 
 func TestDetachFromHTTPContextInternal(t *testing.T) {
 	t.Run("survives parent cancellation", func(t *testing.T) {
-		parent, parentCancel := context.WithCancel(context.Background())
+		parent, parentCancel := context.WithCancel(t.Context())
 		detached, detachedCancel := detachFromHTTPContextInternal(parent, defaultComposeTimeout)
 		defer detachedCancel()
 
@@ -38,7 +38,7 @@ func TestDetachFromHTTPContextInternal(t *testing.T) {
 
 	t.Run("preserves context values", func(t *testing.T) {
 		type testKey struct{}
-		parent := context.WithValue(context.Background(), testKey{}, "hello")
+		parent := context.WithValue(t.Context(), testKey{}, "hello")
 		detached, cancel := detachFromHTTPContextInternal(parent, defaultComposeTimeout)
 		defer cancel()
 
@@ -46,7 +46,7 @@ func TestDetachFromHTTPContextInternal(t *testing.T) {
 	})
 
 	t.Run("has its own deadline", func(t *testing.T) {
-		detached, cancel := detachFromHTTPContextInternal(context.Background(), defaultComposeTimeout)
+		detached, cancel := detachFromHTTPContextInternal(t.Context(), defaultComposeTimeout)
 		defer cancel()
 
 		deadline, ok := detached.Deadline()
@@ -55,7 +55,7 @@ func TestDetachFromHTTPContextInternal(t *testing.T) {
 	})
 
 	t.Run("survives parent deadline expiry", func(t *testing.T) {
-		parent, parentCancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+		parent, parentCancel := context.WithTimeout(t.Context(), 1*time.Millisecond)
 		defer parentCancel()
 
 		time.Sleep(5 * time.Millisecond) // ensure parent deadline has passed
@@ -71,7 +71,7 @@ func TestDetachFromHTTPContextInternal(t *testing.T) {
 	})
 
 	t.Run("deadline scales with requested timeout", func(t *testing.T) {
-		detached, cancel := detachFromHTTPContextInternal(context.Background(), 2*time.Hour)
+		detached, cancel := detachFromHTTPContextInternal(t.Context(), 2*time.Hour)
 		defer cancel()
 
 		deadline, ok := detached.Deadline()
@@ -80,7 +80,7 @@ func TestDetachFromHTTPContextInternal(t *testing.T) {
 	})
 
 	t.Run("app lifecycle context cancels detached work on shutdown", func(t *testing.T) {
-		appCtx, cancelApp := context.WithCancel(utils.WithAppLifecycleContext(context.Background()))
+		appCtx, cancelApp := context.WithCancel(utils.WithAppLifecycleContext(t.Context()))
 		detached, detachedCancel := detachFromHTTPContextInternal(appCtx, defaultComposeTimeout)
 		defer detachedCancel()
 
@@ -93,10 +93,10 @@ func TestDetachFromHTTPContextInternal(t *testing.T) {
 func TestComposeStopSkipsWhenNoServicesSpecified(t *testing.T) {
 	t.Setenv("DOCKER_HOST", "tcp://127.0.0.1:9")
 
-	err := ComposeStop(context.Background(), &composetypes.Project{Name: "test"}, nil)
+	err := ComposeStop(t.Context(), &composetypes.Project{Name: "test"}, nil)
 	require.NoError(t, err)
 
-	err = ComposeStop(context.Background(), &composetypes.Project{Name: "test"}, []string{})
+	err = ComposeStop(t.Context(), &composetypes.Project{Name: "test"}, []string{})
 	require.NoError(t, err)
 }
 
@@ -152,7 +152,7 @@ func TestListGlobalComposeContainersUsesProvidedClient(t *testing.T) {
 
 	// The bogus dockerHost proves the provided client wins over the
 	// fallback host.
-	containers, err := ListGlobalComposeContainers(context.Background(), apiClient, "tcp://unused.example.com:2375")
+	containers, err := ListGlobalComposeContainers(t.Context(), apiClient, "tcp://unused.example.com:2375")
 	require.NoError(t, err)
 	require.Len(t, containers, 1)
 	require.Equal(t, "abc123", containers[0].ID)

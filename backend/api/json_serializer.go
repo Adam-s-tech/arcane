@@ -28,8 +28,8 @@ func (jsonV2Serializer) Serialize(c *echo.Context, value any, indent string) err
 func (jsonV2Serializer) Deserialize(c *echo.Context, value any) error {
 	err := json.UnmarshalRead(c.Request().Body, value, jsonV2APIOptions)
 	if err == nil {
-		if err := normalization.Normalize(value); err != nil {
-			return echo.NewHTTPError(http.StatusUnprocessableEntity, err.Error()).Wrap(err)
+		if normalizeErr := normalization.Normalize(value); normalizeErr != nil {
+			return echo.NewHTTPError(http.StatusUnprocessableEntity, normalizeErr.Error()).Wrap(normalizeErr)
 		}
 		return nil
 	}

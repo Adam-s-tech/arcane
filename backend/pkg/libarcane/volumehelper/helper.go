@@ -106,7 +106,11 @@ func ResolveHelperImage(ctx context.Context, dockerClient *client.Client, toolsI
 func ResolveArcaneRuntimeImage(ctx context.Context, dockerClient *client.Client) mo.Option[RuntimeImage] {
 	hostname, _ := os.Hostname()
 	if hostname != "" {
-		if inspect, err := compat.ContainerInspectWithCompatibility(ctx, dockerClient, hostname, client.ContainerInspectOptions{}); err == nil && inspect.Container.Config != nil && strings.TrimSpace(inspect.Container.Config.Image) != "" {
+		if inspect,
+			err := compat.ContainerInspectWithCompatibility(ctx,
+			dockerClient,
+			hostname,
+			client.ContainerInspectOptions{}); err == nil && inspect.Container.Config != nil && strings.TrimSpace(inspect.Container.Config.Image) != "" {
 			return mo.Some(buildRuntimeImageInternal(inspect.Container.Config.Image, inspect.Container.Config.Entrypoint, inspect.Container.Config.Cmd, "hostname"))
 		}
 	}

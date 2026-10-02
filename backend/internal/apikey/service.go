@@ -156,12 +156,12 @@ func (s *ApiKeyService) BackfillApiKeyPermissions(ctx context.Context) error {
 				return err
 			}
 			for _, p := range perms {
-				if err := tx.Create(&role.ApiKeyPermission{
+				if createKeyPermissionErr := tx.Create(&role.ApiKeyPermission{
 					ApiKeyID:      key.ID,
 					Permission:    p,
 					EnvironmentID: key.EnvironmentID,
-				}).Error; err != nil {
-					return fmt.Errorf("failed to seed api key permission: %w", err)
+				}).Error; createKeyPermissionErr != nil {
+					return fmt.Errorf("failed to seed api key permission: %w", createKeyPermissionErr)
 				}
 			}
 			slog.InfoContext(ctx, "Backfilled missing permissions for bootstrap api key", "api_key_id", key.ID, "perm_count", len(perms), "env_id", key.EnvironmentID)
@@ -355,8 +355,8 @@ func (s *ApiKeyService) CreateApiKey(ctx context.Context, userID string, callerP
 	}
 	if s.roleService != nil {
 		grants := toApiKeyPermissionRowsInternal(created.ID, req.Permissions)
-		if err := s.roleService.SetApiKeyPermissions(ctx, created.ID, grants); err != nil {
-			return nil, fmt.Errorf("failed to persist api key permissions: %w", err)
+		if setApiKeyPermissionsErr := s.roleService.SetApiKeyPermissions(ctx, created.ID, grants); setApiKeyPermissionsErr != nil {
+			return nil, fmt.Errorf("failed to persist api key permissions: %w", setApiKeyPermissionsErr)
 		}
 		// Re-load the just-persisted grants into the response DTO so the
 		// frontend doesn't see `"permissions": null` on a successful create.
@@ -375,16 +375,16 @@ func (s *ApiKeyService) validateGrantsAgainstOwnerInternal(ctx context.Context, 
 	if s.roleService == nil || len(grants) == 0 {
 		return nil
 	}
-	user, err := s.userService.GetUserByID(ctx, ownerID)
+	localUser, err := s.userService.GetUserByID(ctx, ownerID)
 	if err != nil {
 		return fmt.Errorf("load owner for permission validation: %w", err)
 	}
-	ps, err := s.roleService.ResolvePermissions(ctx, user)
+	ps, err := s.roleService.ResolvePermissions(ctx, localUser)
 	if err != nil {
 		return fmt.Errorf("resolve owner permissions: %w", err)
 	}
-	if err := validateGrantsAgainstPermissionSetInternal(ps, grants); err != nil {
-		return fmt.Errorf("owner's roles do not allow this grant: %w", err)
+	if validateGrantsAgainstPermissionSetErr := validateGrantsAgainstPermissionSetInternal(ps, grants); validateGrantsAgainstPermissionSetErr != nil {
+		return fmt.Errorf("owner's roles do not allow this grant: %w", validateGrantsAgainstPermissionSetErr)
 	}
 	return nil
 }
@@ -473,8 +473,8 @@ func (s *ApiKeyService) createAPIKeyWithRawKey(
 		EnvironmentID: environmentID,
 		ExpiresAt:     req.ExpiresAt,
 	}
-	if err := s.db.WithContext(ctx).Create(ak).Error; err != nil {
-		return nil, fmt.Errorf("failed to create API key: %w", err)
+	if createAPIKeyErr := s.db.WithContext(ctx).Create(ak).Error; createAPIKeyErr != nil {
+		return nil, fmt.Errorf("failed to create API key: %w", createAPIKeyErr)
 	}
 	// A just-minted environment key is about to be linked as the
 	// environment's pairing key, so present it as bootstrap already.
@@ -570,9 +570,9 @@ func (s *ApiKeyService) getDefaultAdminUser(ctx context.Context) (*common.User, 
 	// The username is mutable and not proof of provenance — never mint the
 	// managed full-permission key onto an account that isn't a global admin.
 	if s.roleService != nil {
-		perms, err := s.roleService.ResolvePermissions(ctx, adminUser)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve default admin permissions: %w", err)
+		perms, resolvePermissionsErr := s.roleService.ResolvePermissions(ctx, adminUser)
+		if resolvePermissionsErr != nil {
+			return nil, fmt.Errorf("failed to resolve default admin permissions: %w", resolvePermissionsErr)
 		}
 		if !perms.IsGlobalAdmin() {
 			slog.WarnContext(ctx, "User is not a global admin, skipping default admin API key reconciliation", "username", defaultAdminUsername)
@@ -655,8 +655,8 @@ func (s *ApiKeyService) createManagedDefaultAdminAPIKey(tx *gorm.DB, userID, raw
 		ManagedBy:   new(managedByAdminBootstrap),
 		UserID:      &userID,
 	}
-	if err := tx.Create(ak).Error; err != nil {
-		return fmt.Errorf("failed to create managed API key: %w", err)
+	if createManagedKeyErr := tx.Create(ak).Error; createManagedKeyErr != nil {
+		return fmt.Errorf("failed to create managed API key: %w", createManagedKeyErr)
 	}
 	return nil
 }
@@ -679,20 +679,20 @@ func (s *ApiKeyService) reconcileManagedAPIKeys(tx *gorm.DB, userID, rawKey stri
 
 	matchingIndex := s.findMatchingManagedAPIKey(rawKey, managedKeys)
 	if matchingIndex >= 0 {
-		if err := s.updateMatchingManagedAPIKey(tx, managedKeys[matchingIndex].ID); err != nil {
-			return nil, err
+		if updateMatchingManagedAPIKeyErr := s.updateMatchingManagedAPIKey(tx, managedKeys[matchingIndex].ID); updateMatchingManagedAPIKeyErr != nil {
+			return nil, updateMatchingManagedAPIKeyErr
 		}
 		deleteIDs := managedAPIKeyDeleteIDsInternal(managedKeys, matchingIndex)
-		if err := s.deleteManagedAPIKeysByIDs(tx, deleteIDs); err != nil {
-			return nil, err
+		if deleteManagedAPIKeysByIDsErr := s.deleteManagedAPIKeysByIDs(tx, deleteIDs); deleteManagedAPIKeysByIDsErr != nil {
+			return nil, deleteManagedAPIKeysByIDsErr
 		}
 		// The kept key's metadata changed too; its cached copy is stale.
 		return append(deleteIDs, managedKeys[matchingIndex].ID), nil
 	}
 
 	deleteIDs := managedAPIKeyDeleteIDsInternal(managedKeys, -1)
-	if err := s.deleteManagedAPIKeysByIDs(tx, deleteIDs); err != nil {
-		return nil, err
+	if deleteRemovedManagedKeysErr := s.deleteManagedAPIKeysByIDs(tx, deleteIDs); deleteRemovedManagedKeysErr != nil {
+		return nil, deleteRemovedManagedKeysErr
 	}
 
 	return deleteIDs, s.createManagedDefaultAdminAPIKey(tx, userID, rawKey)
@@ -707,12 +707,12 @@ func (s *ApiKeyService) ReconcileDefaultAdminAPIKey(ctx context.Context, rawKey 
 	}
 
 	var affectedIDs []string
-	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	if transactionErr := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		affectedIDs, err = s.reconcileManagedAPIKeys(tx, adminUser.ID, rawKey)
 		return err
-	}); err != nil {
+	}); transactionErr != nil {
 		// Rolled back: the DB is unchanged, so cached entries are still valid.
-		return err
+		return transactionErr
 	}
 	s.invalidateValidatedKeysInternal(affectedIDs...)
 	return nil
@@ -751,8 +751,8 @@ func (s *ApiKeyService) CreateEnvironmentApiKey(ctx context.Context, environment
 				EnvironmentID: &environmentID,
 			}
 		}
-		if err := s.roleService.SetApiKeyPermissions(ctx, created.ID, grants); err != nil {
-			return nil, fmt.Errorf("failed to persist environment bootstrap key permissions: %w", err)
+		if setApiKeyPermissionsErr := s.roleService.SetApiKeyPermissions(ctx, created.ID, grants); setApiKeyPermissionsErr != nil {
+			return nil, fmt.Errorf("failed to persist environment bootstrap key permissions: %w", setApiKeyPermissionsErr)
 		}
 		// Re-load grants into the response DTO so callers see the seeded
 		// permissions immediately, not null.
@@ -991,8 +991,8 @@ func (s *ApiKeyService) DeleteApiKey(ctx context.Context, id string) error {
 }
 
 func (s *ApiKeyService) ValidateApiKey(ctx context.Context, rawKey string) (*common.User, error) {
-	user, _, err := s.ValidateApiKeyWithID(ctx, rawKey)
-	return user, err
+	localUser, _, err := s.ValidateApiKeyWithID(ctx, rawKey)
+	return localUser, err
 }
 
 // ValidateApiKeyWithID is like ValidateApiKey but additionally returns the
@@ -1007,12 +1007,12 @@ func (s *ApiKeyService) ValidateApiKeyWithID(ctx context.Context, rawKey string)
 		return nil, nil, ErrApiKeyInvalid
 	}
 
-	user, err := s.userService.GetUserByID(ctx, *apiKey.UserID)
+	localUser, err := s.userService.GetUserByID(ctx, *apiKey.UserID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get user for API key: %w", err)
 	}
 
-	return user, apiKey, nil
+	return localUser, apiKey, nil
 }
 
 func (s *ApiKeyService) GetEnvironmentByApiKey(ctx context.Context, rawKey string) (*string, error) {
@@ -1047,12 +1047,12 @@ func (s *ApiKeyService) validateRawAPIKeyInternal(ctx context.Context, rawKey st
 	// publish below, the generation will have moved and the publish is dropped.
 	gen := s.cacheGen.Load()
 	var apiKeys []ApiKey
-	if err := s.db.WithContext(ctx).Where("key_prefix = ?", keyPrefix).Find(&apiKeys).Error; err != nil {
-		return nil, fmt.Errorf("failed to find API keys: %w", err)
+	if findAPIKeysErr := s.db.WithContext(ctx).Where("key_prefix = ?", keyPrefix).Find(&apiKeys).Error; findAPIKeysErr != nil {
+		return nil, fmt.Errorf("failed to find API keys: %w", findAPIKeysErr)
 	}
 
 	for _, apiKey := range apiKeys {
-		if err := s.validateApiKeyHash(apiKey.KeyHash, rawKey); err == nil {
+		if validateApiKeyHashErr := s.validateApiKeyHash(apiKey.KeyHash, rawKey); validateApiKeyHashErr == nil {
 			if apiKey.ExpiresAt != nil && apiKey.ExpiresAt.Before(time.Now()) {
 				return nil, ErrApiKeyExpired
 			}

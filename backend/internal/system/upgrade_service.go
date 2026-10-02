@@ -46,7 +46,7 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 )
 
-var upgradeLogNameInternal = regexp.MustCompile(`^arcane-upgrade-[0-9]+\.log$`)
+var upgradeLogNameInternal = regexp.MustCompile(`^arcane-upgrade-\d+\.log$`)
 
 type SystemUpgradeService struct {
 	upgrading       atomic.Bool
@@ -127,13 +127,13 @@ func (s *SystemUpgradeService) TriggerUpgradeAsync(ctx context.Context, user com
 	if err != nil {
 		return err
 	}
-	settings := s.settingsService.GetSettingsConfig()
-	runTimeout := timeouts.GetDuration(settings.DockerImagePullTimeout.AsInt(), timeouts.DefaultDockerImagePull) + time.Minute
+	localSettings := s.settingsService.GetSettingsConfig()
+	runTimeout := timeouts.GetDuration(localSettings.DockerImagePullTimeout.AsInt(), timeouts.DefaultDockerImagePull) + time.Minute
 	runCtx, cancel := context.WithTimeout(utils.ActivityRuntimeContext(ctx, nil), runTimeout)
 	go func() {
 		defer cancel()
-		if _, err := s.runPreparedUpgradeInternal(runCtx, prepared); err != nil {
-			slog.Error("Background self-upgrade failed", "error", err, "targetImage", prepared.targetImage)
+		if _, runPreparedUpgradeErr := s.runPreparedUpgradeInternal(runCtx, prepared); runPreparedUpgradeErr != nil {
+			slog.Error("Background self-upgrade failed", "error", runPreparedUpgradeErr, "targetImage", prepared.targetImage)
 		}
 	}()
 	return nil
@@ -192,8 +192,8 @@ func (s *SystemUpgradeService) prepareUpgradeInternal(ctx context.Context, user 
 		"method":        "cli",
 		"targetImage":   targetImage,
 	}
-	if err := s.eventService.LogUserEvent(ctx, event.EventTypeSystemUpgrade, user.ID, user.Username, metadata); err != nil {
-		slog.Warn("Failed to log upgrade event", "error", err)
+	if logUserEventErr := s.eventService.LogUserEvent(ctx, event.EventTypeSystemUpgrade, user.ID, user.Username, metadata); logUserEventErr != nil {
+		slog.Warn("Failed to log upgrade event", "error", logUserEventErr)
 	}
 
 	return &preparedUpgradeInternal{
@@ -224,8 +224,8 @@ func (s *SystemUpgradeService) runPreparedUpgradeInternal(ctx context.Context, p
 	// Pull the upgrader image first to ensure it exists
 	slog.Info("Pulling upgrader image", "image", upgraderImage)
 
-	settings := s.settingsService.GetSettingsConfig()
-	pullCtx, pullCancel := context.WithTimeout(ctx, timeouts.GetDuration(settings.DockerImagePullTimeout.AsInt(), timeouts.DefaultDockerImagePull))
+	localSettings := s.settingsService.GetSettingsConfig()
+	pullCtx, pullCancel := context.WithTimeout(ctx, timeouts.GetDuration(localSettings.DockerImagePullTimeout.AsInt(), timeouts.DefaultDockerImagePull))
 	defer pullCancel()
 
 	pullReader, err := dockerClient.ImagePull(pullCtx, upgraderImage, client.ImagePullOptions{})
@@ -236,9 +236,9 @@ func (s *SystemUpgradeService) runPreparedUpgradeInternal(ctx context.Context, p
 		return "", fmt.Errorf("pull upgrader image: %w", err)
 	}
 	// Drain and validate the JSON stream to complete the pull.
-	if err := dockerutils.RenderJSONMessageStream(pullReader, io.Discard); err != nil {
+	if renderJSONMessageStreamErr := dockerutils.RenderJSONMessageStream(pullReader, io.Discard); renderJSONMessageStreamErr != nil {
 		_ = pullReader.Close()
-		return "", fmt.Errorf("failed to complete upgrader image pull: %w", err)
+		return "", fmt.Errorf("failed to complete upgrader image pull: %w", renderJSONMessageStreamErr)
 	}
 	if closeErr := pullReader.Close(); closeErr != nil {
 		slog.Warn("Failed to close upgrader image pull reader", "error", closeErr)
@@ -262,8 +262,8 @@ func (s *SystemUpgradeService) runPreparedUpgradeInternal(ctx context.Context, p
 			return projects.GetHostPathForContainerPath(ctx, dockerClient, containerPath)
 		},
 		func() bool {
-			_, err := cgroup.CurrentContainerID()
-			return err == nil
+			_, currentContainerIDErr := cgroup.CurrentContainerID()
+			return currentContainerIDErr == nil
 		},
 		func(ctx context.Context, inspect *container.InspectResponse, dockerHost string) string {
 			return dockerutils.SelectDockerHostReachableNetworkMode(ctx, dockerClient, inspect, dockerHost)
@@ -333,9 +333,9 @@ func (s *SystemUpgradeService) runPreparedUpgradeInternal(ctx context.Context, p
 	}
 
 	// Start the upgrader container - it will run the upgrade and auto-remove
-	if _, err := dockerClient.ContainerStart(ctx, resp.ID, client.ContainerStartOptions{}); err != nil {
+	if _, containerStartErr := dockerClient.ContainerStart(ctx, resp.ID, client.ContainerStartOptions{}); containerStartErr != nil {
 		_, _ = dockerClient.ContainerRemove(ctx, resp.ID, client.ContainerRemoveOptions{Force: true})
-		return "", fmt.Errorf("start upgrader container: %w", err)
+		return "", fmt.Errorf("start upgrader container: %w", containerStartErr)
 	}
 
 	slog.Info("Upgrade container started", "upgraderId", resp.ID[:12], "upgraderName", upgraderName)
@@ -423,12 +423,12 @@ func resolveSelfUpgradeTargetImageInternal(currentImageRef string, info *version
 			return "", errors.New("image is digest-pinned but no newest digest could be resolved; refusing an upgrade that could not move it")
 		}
 		targetDigest := digest.Digest(newestDigest)
-		if err := targetDigest.Validate(); err != nil {
-			return "", fmt.Errorf("resolved newest digest %q is not a valid digest: %w", newestDigest, err)
+		if validateErr := targetDigest.Validate(); validateErr != nil {
+			return "", fmt.Errorf("resolved newest digest %q is not a valid digest: %w", newestDigest, validateErr)
 		}
-		withDigest, err := ref.WithDigest(named, targetDigest)
-		if err != nil {
-			return "", fmt.Errorf("build target reference for %q: %w", named.Name(), err)
+		withDigest, withDigestErr := ref.WithDigest(named, targetDigest)
+		if withDigestErr != nil {
+			return "", fmt.Errorf("build target reference for %q: %w", named.Name(), withDigestErr)
 		}
 		return withDigest.String(), nil
 	}
@@ -689,8 +689,8 @@ func (s *SystemUpgradeService) StartUpdateAll(ctx context.Context, user common.U
 	job.Status = EnvironmentUpdateJobStatusRunning
 	job.Results = append(EnvironmentUpdateResults{managerResult}, remoteResults...)
 
-	if err := s.db.WithContext(ctx).Create(job).Error; err != nil {
-		return nil, fmt.Errorf("create update-all job: %w", err)
+	if createUpgradeJobErr := s.db.WithContext(ctx).Create(job).Error; createUpgradeJobErr != nil {
+		return nil, fmt.Errorf("create update-all job: %w", createUpgradeJobErr)
 	}
 
 	slog.InfoContext(ctx, "Update-all started; upgrading agents first", "jobId", job.ID, "user", user.Username)
@@ -787,16 +787,16 @@ func (s *SystemUpgradeService) runAgentsPhaseInternal(ctx context.Context, jobID
 		// the row currently being processed.
 		idx := upsertPendingResultInternal(job, remote.ID, remote.Name)
 		job.Results[idx].Status = EnvironmentUpdateResultStatusUpdating
-		if err := s.persistUpdateAllJobInternal(ctx, job); err != nil {
-			slog.WarnContext(ctx, "update-all: failed to persist updating status", "jobId", job.ID, "environmentId", remote.ID, "error", err)
+		if persistUpdateAllJobErr := s.persistUpdateAllJobInternal(ctx, job); persistUpdateAllJobErr != nil {
+			slog.WarnContext(ctx, "update-all: failed to persist updating status", "jobId", job.ID, "environmentId", remote.ID, "error", persistUpdateAllJobErr)
 		}
 
 		result := job.Results[idx]
 		s.upgradeAgentInternal(ctx, env, remote.ID, &result)
 		job.Results[idx] = result
 
-		if err := s.persistUpdateAllJobInternal(ctx, job); err != nil {
-			slog.WarnContext(ctx, "update-all: failed to persist progress", "jobId", job.ID, "environmentId", remote.ID, "error", err)
+		if saveRemoteProgressErr := s.persistUpdateAllJobInternal(ctx, job); saveRemoteProgressErr != nil {
+			slog.WarnContext(ctx, "update-all: failed to persist progress", "jobId", job.ID, "environmentId", remote.ID, "error", saveRemoteProgressErr)
 		}
 	}
 
@@ -811,8 +811,8 @@ func (s *SystemUpgradeService) runAgentsPhaseInternal(ctx context.Context, jobID
 		}
 	}
 	job.Status = EnvironmentUpdateJobStatusPendingRestart
-	if err := s.persistUpdateAllJobInternal(ctx, job); err != nil {
-		slog.WarnContext(ctx, "update-all: failed to persist pending_restart before manager upgrade", "jobId", job.ID, "error", err)
+	if savePendingRestartErr := s.persistUpdateAllJobInternal(ctx, job); savePendingRestartErr != nil {
+		slog.WarnContext(ctx, "update-all: failed to persist pending_restart before manager upgrade", "jobId", job.ID, "error", savePendingRestartErr)
 	}
 
 	// Snapshot whether the manager was already on the newest image BEFORE triggering:
@@ -967,17 +967,17 @@ func (s *SystemUpgradeService) waitForUpgraderExitInternal(ctx context.Context, 
 			return upgraderExitCodeLostInternal, 0
 		}
 		return upgraderExitSucceededInternal, 0
-	case err, ok := <-wait.Error:
+	case waitUpgraderErr, ok := <-wait.Error:
 		// The upgrader runs with AutoRemove, so a fast run can be gone before the wait
 		// is acknowledged. It exited, but the code went with it — a failed upgrade must
 		// not be mistaken for a clean no-op, so report the ambiguity rather than a code.
-		if cerrdefs.IsNotFound(err) {
+		if cerrdefs.IsNotFound(waitUpgraderErr) {
 			return upgraderExitCodeLostInternal, 0
 		}
-		if !ok || err == nil {
+		if !ok || waitUpgraderErr == nil {
 			slog.WarnContext(ctx, "update-all: upgrader wait ended without a status", "upgraderId", upgraderID)
 		} else {
-			slog.WarnContext(ctx, "update-all: failed waiting for upgrader container", "upgraderId", upgraderID, "error", err)
+			slog.WarnContext(ctx, "update-all: failed waiting for upgrader container", "upgraderId", upgraderID, "error", waitUpgraderErr)
 		}
 		return upgraderExitUnobservedInternal, 0
 	case <-waitCtx.Done():
@@ -1041,9 +1041,9 @@ func (s *SystemUpgradeService) upgradeAgentInternal(ctx context.Context, env *en
 	var triggerBody []byte
 	if managerInfo := s.versionService.GetAppVersionInfo(ctx); managerInfo != nil {
 		if newest := strings.TrimSpace(managerInfo.NewestVersion); newest != "" {
-			body, err := json.Marshal(TriggerUpgradeBody{TargetVersion: newest})
-			if err != nil {
-				slog.WarnContext(ctx, "update-all: failed to marshal trigger body", "environmentId", envID, "error", err)
+			body, marshalErr := json.Marshal(TriggerUpgradeBody{TargetVersion: newest})
+			if marshalErr != nil {
+				slog.WarnContext(ctx, "update-all: failed to marshal trigger body", "environmentId", envID, "error", marshalErr)
 			} else {
 				info.NewestVersion = newest
 				triggerBody = body
@@ -1061,9 +1061,9 @@ func (s *SystemUpgradeService) upgradeAgentInternal(ctx context.Context, env *en
 		result.Error = truncateUpdateAllErrorInternal(err)
 		return
 	}
-	if err := resp.RequireSuccess(); err != nil {
+	if requireSuccessErr := resp.RequireSuccess(); requireSuccessErr != nil {
 		result.Status = EnvironmentUpdateResultStatusFailed
-		result.Error = truncateUpdateAllErrorInternal(err)
+		result.Error = truncateUpdateAllErrorInternal(requireSuccessErr)
 		return
 	}
 
@@ -1359,7 +1359,11 @@ func (s *SystemUpgradeService) PruneUpgradeLogs(ctx context.Context, dataDir str
 	if err != nil {
 		return 0, fmt.Errorf("open upgrade log directory: %w", err)
 	}
-	defer root.Close()
+	defer func() {
+		if closeErr := root.Close(); closeErr != nil {
+			slog.WarnContext(ctx, "Failed to close upgrade log directory", "error", closeErr)
+		}
+	}()
 	entries, err := fs.ReadDir(root.FS(), ".")
 	if err != nil {
 		return 0, fmt.Errorf("read upgrade log directory: %w", err)
@@ -1369,26 +1373,26 @@ func (s *SystemUpgradeService) PruneUpgradeLogs(ctx context.Context, dataDir str
 	removed := 0
 	var failures []error
 	for _, entry := range entries {
-		if err := ctx.Err(); err != nil {
-			return removed, errors.Join(append(failures, err)...)
+		if cancellationErr := ctx.Err(); cancellationErr != nil {
+			return removed, errors.Join(append(failures, cancellationErr)...)
 		}
 		if !upgradeLogNameInternal.MatchString(entry.Name()) {
 			continue
 		}
-		info, err := root.Lstat(entry.Name())
-		if errors.Is(err, os.ErrNotExist) {
+		info, lstatErr := root.Lstat(entry.Name())
+		if errors.Is(lstatErr, os.ErrNotExist) {
 			continue
 		}
-		if err != nil {
-			failures = append(failures, fmt.Errorf("inspect upgrade log %s: %w", entry.Name(), err))
+		if lstatErr != nil {
+			failures = append(failures, fmt.Errorf("inspect upgrade log %s: %w", entry.Name(), lstatErr))
 			continue
 		}
 		if !info.Mode().IsRegular() || !info.ModTime().Before(cutoff) {
 			continue
 		}
-		if err := root.Remove(entry.Name()); err != nil {
-			if !errors.Is(err, os.ErrNotExist) {
-				failures = append(failures, fmt.Errorf("remove upgrade log %s: %w", entry.Name(), err))
+		if removeErr := root.Remove(entry.Name()); removeErr != nil {
+			if !errors.Is(removeErr, os.ErrNotExist) {
+				failures = append(failures, fmt.Errorf("remove upgrade log %s: %w", entry.Name(), removeErr))
 			}
 			continue
 		}

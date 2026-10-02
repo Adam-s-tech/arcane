@@ -41,12 +41,17 @@ func New(jobPrefix, admissionScope string) *Registry {
 // SetScheduler injects the job scheduler, the admission gate and the app
 // lifecycle context. The lifecycle context is what scheduled runs execute on,
 // so they outlive the request or bootstrap goroutine that registered them.
-func (r *Registry) SetScheduler(ctx context.Context, scheduler schedulertypes.DynamicScheduler, admissionGate *runs.Admission) error { //nolint:contextcheck // scheduled runs must capture the app lifecycle context, not request contexts
+//
+//nolint:contextcheck // scheduled runs must capture the app lifecycle context, not request contexts
+func (r *Registry) SetScheduler(ctx context.Context,
+	scheduler schedulertypes.DynamicScheduler,
+	admissionGate *runs.Admission,
+) error {
 	if scheduler == nil || admissionGate == nil {
 		return fmt.Errorf("%s scheduler dependencies unavailable", r.admissionScope)
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		ctx = context.Background() //nolint:forbidigo // Fallback preserves the existing nil-context contract when no lifecycle was injected.
 	}
 	r.lifecycleCtx = ctx
 	r.scheduler = scheduler
@@ -70,14 +75,22 @@ func (r *Registry) Context(ctx context.Context) context.Context {
 	if ctx != nil {
 		return context.WithoutCancel(ctx)
 	}
-	return context.Background()
+	return context.Background() //nolint:forbidigo // Fallback preserves the existing nil-context contract when no lifecycle was injected.
 }
 
 // JobName returns the scheduler job name for entityID.
 func (r *Registry) JobName(entityID string) string { return r.jobPrefix + entityID }
 
 // Register adds (or replaces) the dynamic job for entityID.
-func (r *Registry) Register(ctx context.Context, entityID string, schedule func(context.Context) string, run func(context.Context) (schedulertypes.Outcome, error), reconcile ...func(context.Context, schedulertypes.Run) (schedulertypes.Outcome, error)) {
+func (r *Registry) Register(ctx context.Context,
+	entityID string,
+	schedule func(context.Context) string,
+	run func(context.Context) (schedulertypes.Outcome,
+		error),
+	reconcile ...func(context.Context,
+		schedulertypes.Run) (schedulertypes.Outcome,
+		error),
+) {
 	if r.scheduler == nil {
 		return
 	}

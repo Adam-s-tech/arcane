@@ -48,13 +48,13 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/oidcjwk"
 )
 
-func provideActivityModuleInternal(service *activity.ActivityService, environment *environment.EnvironmentService) *activity.Module {
+func provideActivityModuleInternal(service *activity.ActivityService, localEnvironment *environment.EnvironmentService) *activity.Module {
 	return activity.New(service, activity.EnvironmentDependencies{
-		ProxyJSONRequest:               environment.ProxyJSONRequest,
-		ListActiveRemoteEnvironments:   environment.ListActiveRemoteEnvironments,
-		GetActiveRemoteEnvironment:     environment.GetActiveRemoteEnvironmentSnapshot,
-		ProxyJSONRequestForEnvironment: environment.ProxyJSONRequestForEnvironment,
-		ResolveEnvironmentName:         environment.ResolveEnvironmentName,
+		ProxyJSONRequest:               localEnvironment.ProxyJSONRequest,
+		ListActiveRemoteEnvironments:   localEnvironment.ListActiveRemoteEnvironments,
+		GetActiveRemoteEnvironment:     localEnvironment.GetActiveRemoteEnvironmentSnapshot,
+		ProxyJSONRequestForEnvironment: localEnvironment.ProxyJSONRequestForEnvironment,
+		ResolveEnvironmentName:         localEnvironment.ResolveEnvironmentName,
 	})
 }
 
@@ -62,11 +62,23 @@ func provideImageUpdateModuleInternal(service *imageupdate.ImageUpdateService, i
 	return imageupdate.New(service, imageService.GetUpdateInfoByImageRefs)
 }
 
-func provideSettingsModuleInternal(service *settings.SettingsService, search *settings.SettingsSearchService, environment *environment.EnvironmentService, cfg *config.Config) *settings.Module {
-	return settings.New(service, search, environment.ProxyJSONRequest, cfg)
+func provideSettingsModuleInternal(service *settings.SettingsService, search *settings.SettingsSearchService, localEnvironment *environment.EnvironmentService, cfg *config.Config) *settings.Module {
+	return settings.New(service, search, localEnvironment.ProxyJSONRequest, cfg)
 }
 
-func provideBackupEngineInternal(ctx context.Context, lc fx.Lifecycle, admission *runs.Admission, imageService *image.ImageService, runtime *francis.Runtime, coordinator *runs.Coordinator, roles *role.RoleService, cfg *config.Config) (*backup.Engine, error) {
+func provideBackupEngineInternal(
+	ctx context.Context,
+	lc fx.Lifecycle,
+	admission *runs.Admission,
+	imageService *image.ImageService,
+	runtime *francis.Runtime,
+	coordinator *runs.Coordinator,
+	roles *role.RoleService,
+	cfg *config.Config,
+) (
+	*backup.Engine,
+	error,
+) {
 	engine := backup.NewEngine(ctx, admission, imageService)
 	if err := engine.Register(runtime); err != nil {
 		return nil, err
@@ -101,8 +113,8 @@ func provideActorRuntimeInternal(appCtx context.Context, cfg *config.Config, set
 		return nil, err
 	}
 	lc.Append(fx.Hook{OnStart: func(ctx context.Context) error {
-		if err := runtime.ConfigureIdentity(cfg.EncryptionKey, settingsService.GetSettingsConfig().InstanceID.Value); err != nil {
-			return err
+		if configureIdentityErr := runtime.ConfigureIdentity(cfg.EncryptionKey, settingsService.GetSettingsConfig().InstanceID.Value); configureIdentityErr != nil {
+			return configureIdentityErr
 		}
 		return runtime.Start(ctx, appCtx, func(err error) { slog.ErrorContext(appCtx, "Francis host failed", "error", err); cancelApp() })
 	}, OnStop: runtime.Stop})
@@ -119,18 +131,31 @@ func provideRunCoordinatorInternal(runtime *francis.Runtime, store *kv.KVService
 
 func provideAdmissionGateInternal(runtime *francis.Runtime) (*runs.Admission, error) {
 	admission := runs.NewAdmission(runtime.Service(), uuid.New().String())
-	return admission, admission.Register(runtime)
+	if err := admission.Register(runtime); err != nil {
+		return nil, err
+	}
+	return admission, nil
 }
 
 func provideTunnelRegistryInternal(lc fx.Lifecycle) *edge.TunnelRegistry {
-	registry := edge.NewTunnelRegistry()
-	edge.SetDefaultRegistry(registry)
-	lc.Append(fx.Hook{OnStop: func(ctx context.Context) error { defer edge.ClearDefaultRegistry(registry); return registry.Stop(ctx) }})
-	return registry
+	localRegistry := edge.NewTunnelRegistry()
+	edge.SetDefaultRegistry(localRegistry)
+	lc.Append(fx.Hook{OnStop: func(ctx context.Context) error {
+		defer edge.ClearDefaultRegistry(localRegistry)
+		return localRegistry.Stop(ctx)
+	}})
+	return localRegistry
 }
 
-func provideDockerClientServiceInternal(ctx context.Context, lc fx.Lifecycle, db *database.DB, cfg *config.Config, settings *settings.SettingsService, eventService *event.EventService) *docker.DockerClientService {
-	service := docker.NewDockerClientService(ctx, db, cfg, settings, bus.WithDroppedEventCallback(func(message events.Message) {
+func provideDockerClientServiceInternal(
+	ctx context.Context,
+	lc fx.Lifecycle,
+	db *database.DB,
+	cfg *config.Config,
+	localSettings *settings.SettingsService,
+	eventService *event.EventService,
+) *docker.DockerClientService {
+	service := docker.NewDockerClientService(ctx, db, cfg, localSettings, bus.WithDroppedEventCallback(func(message events.Message) {
 		// Overflow is recovered synchronously, applying backpressure instead of losing log entries.
 		eventService.RecordDockerEvent(ctx, message)
 	}))
@@ -174,36 +199,60 @@ func provideDockerClientServiceInternal(ctx context.Context, lc fx.Lifecycle, db
 	return service
 }
 
-func provideVersionServiceInternal(httpClient *http.Client, cfg *config.Config, registry *registry.ContainerRegistryService, docker *docker.DockerClientService, imageUpdate *imageupdate.ImageUpdateService, settingsService *settings.SettingsService) *version.VersionService {
-	return version.NewVersionService(httpClient, cfg.UpdateCheckDisabled, config.Version, config.Revision, registry, docker, imageUpdate, settingsService)
+func provideVersionServiceInternal(
+	httpClient *http.Client,
+	cfg *config.Config,
+	localRegistry *registry.ContainerRegistryService,
+	localDocker *docker.DockerClientService,
+	imageUpdate *imageupdate.ImageUpdateService,
+	settingsService *settings.SettingsService,
+) *version.VersionService {
+	return version.NewVersionService(httpClient, cfg.UpdateCheckDisabled, config.Version, config.Revision, localRegistry, localDocker, imageUpdate, settingsService)
 }
 
 func provideGitRepositoryServiceInternal(db *database.DB, cfg *config.Config, eventService *event.EventService, settingsService *settings.SettingsService) *gitrepo.GitRepositoryService {
 	return gitrepo.NewGitRepositoryService(db, cfg.GitWorkDir, eventService, settingsService)
 }
 
-func provideS3ModuleInternal(service *s3domain.S3DestinationService, environment *environment.EnvironmentService) *s3domain.Module {
-	return s3domain.New(service, environment.SyncS3DestinationsToRemoteEnvironments)
+func provideS3ModuleInternal(service *s3domain.S3DestinationService, localEnvironment *environment.EnvironmentService) *s3domain.Module {
+	return s3domain.New(service, localEnvironment.SyncS3DestinationsToRemoteEnvironments)
 }
 
-func provideS3ServiceInternal(db *database.DB, environment *environment.EnvironmentService) *s3domain.S3DestinationService {
-	return s3domain.NewS3DestinationService(db, environment.CheckS3DestinationReferences)
+func provideS3ServiceInternal(db *database.DB, localEnvironment *environment.EnvironmentService) *s3domain.S3DestinationService {
+	return s3domain.NewS3DestinationService(db, localEnvironment.CheckS3DestinationReferences)
 }
 
 func provideAuthModuleInternal(service *auth.AuthService, userService *user.UserService, settingsService *settings.SettingsService, passkeyService *passkey.PasskeyService) *auth.Module {
 	return auth.New(service, userService, settingsService, passkeyService.BeginMFAAuthentication)
 }
 
-func provideContainerRegistryServiceInternal(db *database.DB, docker *docker.DockerClientService, kv *kv.KVService, settings *settings.SettingsService) *registry.ContainerRegistryService {
-	return registry.NewContainerRegistryService(db, func(ctx context.Context) (registry.RegistryDaemonClient, error) { return docker.GetClient(ctx) }, kv, settings)
+func provideContainerRegistryServiceInternal(
+	db *database.DB,
+	localDocker *docker.DockerClientService,
+	kvService *kv.KVService,
+	settingsService *settings.SettingsService,
+) *registry.ContainerRegistryService {
+	return registry.NewContainerRegistryService(db, func(ctx context.Context) (registry.RegistryDaemonClient, error) { return localDocker.GetClient(ctx) }, kvService, settingsService)
 }
 
-func provideContainerRegistryModuleInternal(service *registry.ContainerRegistryService, environment *environment.EnvironmentService) *registry.Module {
-	return registry.New(service, environment.SyncRegistriesToRemoteEnvironments)
+func provideContainerRegistryModuleInternal(service *registry.ContainerRegistryService, localEnvironment *environment.EnvironmentService) *registry.Module {
+	return registry.New(service, localEnvironment.SyncRegistriesToRemoteEnvironments)
 }
 
-func provideProjectServiceInternal(db *database.DB, settings *settings.SettingsService, event *event.EventService, image *image.ImageService, docker *docker.DockerClientService, build *build.BuildService, lifecycleService *project.LifecycleService, kv *kv.KVService, registry *registry.ContainerRegistryService, environment *environment.EnvironmentService, cfg *config.Config) *project.ProjectService {
-	return project.NewProjectService(db, settings, event, image, docker, build, lifecycleService, registry, cfg, kv, environment.GetEnabledRegistryCredentials)
+func provideProjectServiceInternal(
+	db *database.DB,
+	localSettings *settings.SettingsService,
+	localEvent *event.EventService,
+	localImage *image.ImageService,
+	localDocker *docker.DockerClientService,
+	localBuild *build.BuildService,
+	lifecycleService *project.LifecycleService,
+	localKv *kv.KVService,
+	localRegistry *registry.ContainerRegistryService,
+	localEnvironment *environment.EnvironmentService,
+	cfg *config.Config,
+) *project.ProjectService {
+	return project.NewProjectService(db, localSettings, localEvent, localImage, localDocker, localBuild, lifecycleService, localRegistry, cfg, localKv, localEnvironment.GetEnabledRegistryCredentials)
 }
 
 // updaterServiceParams includes actor registration and worker lifecycle dependencies.
@@ -231,19 +280,46 @@ type updaterServiceParams struct {
 }
 
 func provideUpdaterServiceInternal(p updaterServiceParams) (*updater.UpdaterService, error) {
-	service, err := updater.NewUpdaterService(p.DB, p.Settings, p.Docker, p.Project, p.ImageUpdate, p.Registry, p.Event, p.Image, p.Notification, p.SystemUpgrade, p.Activity, p.Config, p.Coordinator, p.Admission, p.Roles)
+	service, err := updater.NewUpdaterService(
+		p.DB,
+		p.Settings,
+		p.Docker,
+		p.Project,
+		p.ImageUpdate,
+		p.Registry,
+		p.Event,
+		p.Image,
+		p.Notification,
+		p.SystemUpgrade,
+		p.Activity,
+		p.Config,
+		p.Coordinator,
+		p.Admission,
+		p.Roles,
+	)
 	if err != nil {
 		return nil, err
 	}
-	if err := service.RegisterActors(p.ActorRuntime); err != nil {
-		return nil, err
+	if registerActorsErr := service.RegisterActors(p.ActorRuntime); registerActorsErr != nil {
+		return nil, registerActorsErr
 	}
-	p.Lifecycle.Append(fx.Hook{OnStart: func(context.Context) error { return service.Start(p.Context) }, OnStop: service.Stop}) //nolint:contextcheck // Workers inherit the application lifetime after startup returns.
+	p.Lifecycle.Append(
+		fx.Hook{
+			OnStart: func(
+				context.Context,
+			) error {
+				return service.Start(
+					p.Context,
+				)
+			},
+			OnStop: service.Stop,
+		},
+	) //nolint:contextcheck // Workers inherit the application lifetime after startup returns.
 	return service, nil
 }
 
-func provideUserModuleInternal(service *user.UserService, auth *auth.AuthService, settingsService *settings.SettingsService) *user.Module {
-	return user.New(service, auth.InvalidateUserTokenCache, settingsService)
+func provideUserModuleInternal(service *user.UserService, localAuth *auth.AuthService, settingsService *settings.SettingsService) *user.Module {
+	return user.New(service, localAuth.InvalidateUserTokenCache, settingsService)
 }
 
 func provideJWKSetManagerInternal(ctx context.Context, lc fx.Lifecycle) *oidcjwk.KeySetManager {
@@ -252,15 +328,31 @@ func provideJWKSetManagerInternal(ctx context.Context, lc fx.Lifecycle) *oidcjwk
 	return manager
 }
 
-func provideAuthMiddlewareInternal(authService *auth.AuthService, apiKey *apikey.ApiKeyService, env *environment.EnvironmentService, role *role.RoleService, cfg *config.Config) *auth.AuthMiddleware {
+func provideAuthMiddlewareInternal(
+	authService *auth.AuthService,
+	apiKey *apikey.ApiKeyService,
+	env *environment.EnvironmentService,
+	localRole *role.RoleService,
+	cfg *config.Config,
+) *auth.AuthMiddleware {
 	return auth.NewAuthMiddleware(authService, cfg).
 		WithApiKeyValidator(apiKey).
 		WithEnvironmentAccessTokenResolver(env).
-		WithPermissionResolver(role)
+		WithPermissionResolver(localRole)
 }
 
-func provideFilesystemWatcherJobInternal(ctx context.Context, lc fx.Lifecycle, project *project.ProjectService, template *template.TemplateService, settings *settings.SettingsService, cfg *config.Config) (*scheduler.FilesystemWatcherJob, error) {
-	job, err := scheduler.NewFilesystemWatcherJob(ctx, project, template, settings, cfg.ProjectScanMaxDepth)
+func provideFilesystemWatcherJobInternal(
+	ctx context.Context,
+	lc fx.Lifecycle,
+	localProject *project.ProjectService,
+	localTemplate *template.TemplateService,
+	localSettings *settings.SettingsService,
+	cfg *config.Config,
+) (
+	*scheduler.FilesystemWatcherJob,
+	error,
+) {
+	job, err := scheduler.NewFilesystemWatcherJob(ctx, localProject, localTemplate, localSettings, cfg.ProjectScanMaxDepth)
 	if err != nil {
 		return nil, err
 	}
@@ -295,11 +387,11 @@ func provideFilesystemWatcherJobInternal(ctx context.Context, lc fx.Lifecycle, p
 			return nil
 		},
 		OnStop: func(stopCtx context.Context) error {
-			var err error
+			var stopWorkerErr error
 			if stop != nil {
-				err = stop(stopCtx)
+				stopWorkerErr = stop(stopCtx)
 			}
-			return errors.Join(err, job.Stop(stopCtx))
+			return errors.Join(stopWorkerErr, job.Stop(stopCtx))
 		},
 	})
 	return job, nil

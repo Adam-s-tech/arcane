@@ -2,7 +2,6 @@ package git
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"sync"
@@ -161,12 +160,12 @@ func TestDirectoryHistoryAndCommitDiff(t *testing.T) {
 			target := filepath.Join(repoPath, filepath.FromSlash(name))
 			require.NoError(t, os.MkdirAll(filepath.Dir(target), 0o755))
 			require.NoError(t, os.WriteFile(target, []byte(content), 0o644))
-			_, err := worktree.Add(name)
-			require.NoError(t, err)
+			_, addErr := worktree.Add(name)
+			require.NoError(t, addErr)
 		}
 		signature := &object.Signature{Name: "Arcane", Email: "arcane@localhost", When: time.Now()}
-		hash, err := worktree.Commit(message, &gogit.CommitOptions{Author: signature, Committer: signature})
-		require.NoError(t, err)
+		hash, commitErr := worktree.Commit(message, &gogit.CommitOptions{Author: signature, Committer: signature})
+		require.NoError(t, commitErr)
 		return hash.String()
 	}
 
@@ -204,5 +203,5 @@ func TestDirectoryHistory_LimitsAndMissingHead(t *testing.T) {
 
 	_, _, err = gitClient.CommitDiff(ctx, repoPath, "0000000000000000000000000000000000000000", "backups/app")
 	require.Error(t, err)
-	assert.False(t, errors.Is(err, context.Canceled))
+	assert.NotErrorIs(t, err, context.Canceled)
 }

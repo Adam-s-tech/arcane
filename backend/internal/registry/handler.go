@@ -287,8 +287,8 @@ func (h *ContainerRegistryHandler) TestRegistry(ctx context.Context, input *Test
 
 	// ECR registries use a different auth flow: generate a temporary token via AWS API.
 	if reg.RegistryType == "ecr" {
-		if err := h.registryService.TestECRRegistry(ctx, reg); err != nil {
-			return nil, huma.Error400BadRequest("Registry test failed: " + err.Error())
+		if testECRRegistryErr := h.registryService.TestECRRegistry(ctx, reg); testECRRegistryErr != nil {
+			return nil, huma.Error400BadRequest("Registry test failed: " + testECRRegistryErr.Error())
 		}
 		return &handlerutil.Out[base.MessageResponse]{
 			Body: base.ApiResponse[base.MessageResponse]{
@@ -305,8 +305,8 @@ func (h *ContainerRegistryHandler) TestRegistry(ctx context.Context, input *Test
 		return nil, huma.Error500InternalServerError("Failed to decrypt token: " + err.Error())
 	}
 
-	if err := h.registryService.TestRegistry(ctx, reg.URL, reg.Username, decryptedToken); err != nil {
-		return nil, huma.Error400BadRequest("Registry test failed: " + err.Error())
+	if testRegistryErr := h.registryService.TestRegistry(ctx, reg.URL, reg.Username, decryptedToken); testRegistryErr != nil {
+		return nil, huma.Error400BadRequest("Registry test failed: " + testRegistryErr.Error())
 	}
 
 	noCredentials := strings.TrimSpace(reg.Username) == "" && strings.TrimSpace(decryptedToken) == ""

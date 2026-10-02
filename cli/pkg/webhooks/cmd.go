@@ -77,7 +77,9 @@ var listCmd = &cobra.Command{
 			}
 		}
 
-		output.Table(headers, rows)
+		if tableErr := output.Table(headers, rows); tableErr != nil {
+			return tableErr
+		}
 		output.Showing(len(result.Data), int64(len(result.Data)), "webhooks")
 		return nil
 	},
@@ -140,8 +142,8 @@ var updateCmd = &cobra.Command{
 		}
 
 		req := webhook.UpdateInput{Enabled: updateEnabled}
-		if _, err := c.DoJSON[base.ApiResponse[any]](cmd.Context(), http.MethodPatch, types.Webhook(c.EnvID(), args[0]), req); err != nil {
-			return fmt.Errorf("failed to update webhook: %w", err)
+		if _, updateWebhookErr := c.DoJSON[base.ApiResponse[any]](cmd.Context(), http.MethodPatch, types.Webhook(c.EnvID(), args[0]), req); updateWebhookErr != nil {
+			return fmt.Errorf("failed to update webhook: %w", updateWebhookErr)
 		}
 
 		if jsonOutput {
@@ -180,8 +182,8 @@ var deleteCmd = &cobra.Command{
 			return err
 		}
 
-		if _, err := c.DeleteJSON[any](cmd.Context(), types.Webhook(c.EnvID(), args[0])); err != nil {
-			return fmt.Errorf("failed to delete webhook: %w", err)
+		if _, deleteWebhookErr := c.DeleteJSON[any](cmd.Context(), types.Webhook(c.EnvID(), args[0])); deleteWebhookErr != nil {
+			return fmt.Errorf("failed to delete webhook: %w", deleteWebhookErr)
 		}
 
 		output.Success("Webhook %s deleted successfully", args[0])

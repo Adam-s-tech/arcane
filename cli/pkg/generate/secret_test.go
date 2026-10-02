@@ -71,8 +71,8 @@ func TestSecretDefaultBase64(t *testing.T) {
 	require.NotContains(t, out, "JWT_SECRET",
 		"JWT_SECRET is no longer emitted, got: %q", out)
 
-	if b, err := base64.StdEncoding.DecodeString(encVal); err != nil {
-		require.FailNowf(t, "unexpected failure", "ENCRYPTION_KEY is not valid base64: %v (value=%q)", err, encVal)
+	if b, decodeStringErr := base64.StdEncoding.DecodeString(encVal); decodeStringErr != nil {
+		require.FailNowf(t, "unexpected failure", "ENCRYPTION_KEY is not valid base64: %v (value=%q)", decodeStringErr, encVal)
 	} else if len(b) != 32 {
 		require.Len(t, b, 32,
 			"ENCRYPTION_KEY decoded length != 32 bytes: %d", len(b))
@@ -123,8 +123,8 @@ func TestSecretAllFormatContainsSections(t *testing.T) {
 	require.NotContains(t, out, "JWT_SECRET",
 		"JWT_SECRET is no longer emitted, got: %q", out)
 
-	if b, err := hex.DecodeString(strings.TrimSpace(hexEnc)); err != nil {
-		require.FailNowf(t, "unexpected failure", "ENCRYPTION_KEY hex decode failed: %v", err)
+	if b, decodeStringErr := hex.DecodeString(strings.TrimSpace(hexEnc)); decodeStringErr != nil {
+		require.FailNowf(t, "unexpected failure", "ENCRYPTION_KEY hex decode failed: %v", decodeStringErr)
 	} else if len(b) != 32 {
 		require.Len(t, b, 32,
 			"ENCRYPTION_KEY hex decoded length != 32: %d", len(b))

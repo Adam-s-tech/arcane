@@ -240,7 +240,15 @@ type UploadBackupInput struct {
 }
 
 // RegisterVolumes registers volume management routes using Huma.
-func RegisterVolumes(api huma.API, dockerService *docker.DockerClientService, volumeService *VolumeService, activityService *activity.ActivityService, environmentService *environment.EnvironmentService, uploadService *upload.UploadService, appCtx handlerutil.ActivityAppContext) {
+func RegisterVolumes(
+	api huma.API,
+	dockerService *docker.DockerClientService,
+	volumeService *VolumeService,
+	activityService *activity.ActivityService,
+	environmentService *environment.EnvironmentService,
+	uploadService *upload.UploadService,
+	appCtx handlerutil.ActivityAppContext,
+) {
 	h := &VolumeHandler{
 		volumeService:      volumeService,
 		dockerService:      dockerService,
@@ -471,7 +479,9 @@ func RegisterVolumes(api huma.API, dockerService *docker.DockerClientService, vo
 		Method:      http.MethodPost,
 		Path:        "/environments/{id}/volumes/{volumeName}/backups/upload",
 		Summary:     "Upload and restore volume backup",
-		Description: "Restore a volume from a complete chunked upload session containing a tar.gz backup archive. multipart/form-data bodies are still accepted for backward compatibility; that form is deprecated and will be removed in a future release.",
+		Description: "Restore a volume from a complete chunked upload session containing a tar.gz backup archive. " +
+			"multipart/form-data bodies are still accepted for backward compatibility; that form is deprecated " +
+			"and will be removed in a future release.",
 		Tags:        []string{"Volume Backup"},
 		Security:    handlerutil.DefaultOperationSecurity(),
 		Middlewares: upload.LegacyMultipartMiddleware(api, h.uploadService, uploadtypes.KindVolumeBackup),
@@ -505,7 +515,15 @@ func (h *VolumeHandler) GetBackupPolicy(ctx context.Context, input *GetVolumeBac
 			return nil, huma.Error500InternalServerError("environment service not available")
 		}
 		remotePath := fmt.Sprintf("/api/environments/0/volumes/%s/backup-policy", url.PathEscape(input.VolumeName))
-		response, err := handlerutil.RemoteJSONProxy(h.environmentService.ProxyJSONRequest).JSON[base.ApiResponse[volumetypes.BackupPolicyCollection]](ctx, input.EnvironmentID, http.MethodGet, remotePath, nil)
+		response, err := handlerutil.RemoteJSONProxy(
+			h.environmentService.ProxyJSONRequest,
+		).JSON[base.ApiResponse[volumetypes.BackupPolicyCollection]](
+			ctx,
+			input.EnvironmentID,
+			http.MethodGet,
+			remotePath,
+			nil,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -565,7 +583,15 @@ func (h *VolumeHandler) UpdateBackupPolicy(ctx context.Context, input *UpdateVol
 			}
 			remotePath := fmt.Sprintf("/api/environments/0/volumes/%s/backup-policy", url.PathEscape(input.VolumeName))
 			var proxyErr error
-			remoteResponse, proxyErr = handlerutil.RemoteJSONProxy(h.environmentService.ProxyJSONRequest).JSON[base.ApiResponse[volumetypes.BackupPolicyCollection]](activityCtx, input.EnvironmentID, http.MethodPut, remotePath, input.Body)
+			remoteResponse, proxyErr = handlerutil.RemoteJSONProxy(
+				h.environmentService.ProxyJSONRequest,
+			).JSON[base.ApiResponse[volumetypes.BackupPolicyCollection]](
+				activityCtx,
+				input.EnvironmentID,
+				http.MethodPut,
+				remotePath,
+				input.Body,
+			)
 			if proxyErr != nil {
 				errorStatus = http.StatusBadGateway
 			}

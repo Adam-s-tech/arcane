@@ -44,8 +44,8 @@ func (s *JobService) deliverRemoteInternal(ctx context.Context, run st.Run) (st.
 		return s.acknowledgeRemoteInternal(ctx, run, runPath, *run.RemoteOutcome)
 	}
 	var catalog jobschedule.JobListResponse
-	if err := s.environment.ProxyJSONRequest(ctx, run.EnvironmentID, http.MethodGet, "/api/environments/0/jobs", nil, &catalog); err != nil {
-		return remoteFailureInternal(err)
+	if proxyJSONRequestErr := s.environment.ProxyJSONRequest(ctx, run.EnvironmentID, http.MethodGet, "/api/environments/0/jobs", nil, &catalog); proxyJSONRequestErr != nil {
+		return remoteFailureInternal(proxyJSONRequestErr)
 	}
 	if !catalog.DurableRuns {
 		return st.Outcome{Status: st.Failed, Message: "Upgrade required: agent does not support durable job runs"}, nil
@@ -165,8 +165,8 @@ func (s *JobService) ListRemoteJobs(ctx context.Context, environmentID string) (
 		if err != nil {
 			return nil, err
 		}
-		if err := s.store.Set(ctx, key, string(raw)); err != nil {
-			return nil, err
+		if setErr := s.store.Set(ctx, key, string(raw)); setErr != nil {
+			return nil, setErr
 		}
 	} else {
 		var status *remenv.StatusError
@@ -178,8 +178,8 @@ func (s *JobService) ListRemoteJobs(ctx context.Context, environmentID string) (
 			return nil, err
 		}
 		if found {
-			if err := json.Unmarshal([]byte(raw), &catalog); err != nil {
-				return nil, err
+			if unmarshalErr := json.Unmarshal([]byte(raw), &catalog); unmarshalErr != nil {
+				return nil, unmarshalErr
 			}
 		} else {
 			catalog.IsAgent = true
@@ -207,14 +207,14 @@ func (s *JobService) RetryRemoteRun(ctx context.Context, environmentID, jobID, r
 	if err != nil {
 		return run, err
 	}
-	if err := s.authorizeRunInternal(ctx, run); err != nil {
-		return run, err
+	if authorizeRunErr := s.authorizeRunInternal(ctx, run); authorizeRunErr != nil {
+		return run, authorizeRunErr
 	}
 	if run.Resolution != nil && run.Resolution.ResolvedBy == common.SystemUser.Username {
 		var remote st.Run
 		path := "/api/environments/0/jobs/" + url.PathEscape(jobID) + "/runs/" + url.PathEscape(runID)
-		if err := s.environment.ProxyJSONRequest(ctx, environmentID, http.MethodGet, path, nil, &remote); err != nil {
-			return run, err
+		if proxyJSONRequestErr := s.environment.ProxyJSONRequest(ctx, environmentID, http.MethodGet, path, nil, &remote); proxyJSONRequestErr != nil {
+			return run, proxyJSONRequestErr
 		}
 		if remote.ID != runID || remote.JobID != jobID || remote.EnvironmentID != "0" || remote.Status != st.Failed {
 			return run, errors.New("upgrade the agent before retrying a legacy settled run")
@@ -294,8 +294,8 @@ func (s *JobService) admitRemoteInternal(ctx context.Context, run st.Run, catalo
 	}
 	path := "/api/environments/0/jobs/" + url.PathEscape(run.JobID) + "/run"
 	var accepted jobschedule.JobRunResponse
-	if err := s.environment.ProxyJSONRequest(ctx, run.EnvironmentID, http.MethodPost, path, body, &accepted); err != nil {
-		return st.Run{}, err
+	if proxyJSONRequestErr := s.environment.ProxyJSONRequest(ctx, run.EnvironmentID, http.MethodPost, path, body, &accepted); proxyJSONRequestErr != nil {
+		return st.Run{}, proxyJSONRequestErr
 	}
 	if accepted.RunID != run.ID {
 		return st.Run{}, errors.New("Agent returned an inconsistent delivery receipt") //nolint:staticcheck // Preserve the existing error message.

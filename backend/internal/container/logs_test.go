@@ -2,7 +2,6 @@ package container
 
 import (
 	"bytes"
-	"context"
 	"encoding/binary"
 	"io"
 	"net/http"
@@ -66,7 +65,7 @@ func TestContainerServiceDownloadLogsDemultiplexesNonTTYInternal(t *testing.T) {
 	var gotQuery url.Values
 	svc := newLogsTestServiceInternal(t, false, frames.Bytes(), &gotQuery)
 
-	reader, filename, err := svc.DownloadLogs(context.Background(), "container-1")
+	reader, filename, err := svc.DownloadLogs(t.Context(), "container-1")
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = reader.Close() })
 
@@ -88,7 +87,7 @@ func TestContainerServiceDownloadLogsPassesTTYOutputThroughInternal(t *testing.T
 	var gotQuery url.Values
 	svc := newLogsTestServiceInternal(t, true, []byte("raw tty line\r\nno trailing newline"), &gotQuery)
 
-	reader, filename, err := svc.DownloadLogs(context.Background(), "container-1")
+	reader, filename, err := svc.DownloadLogs(t.Context(), "container-1")
 	require.NoError(t, err)
 
 	content, err := io.ReadAll(reader)

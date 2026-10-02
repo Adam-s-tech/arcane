@@ -85,8 +85,8 @@ func (h *WebSocketHandler) DiagnosticsStream(c *echo.Context) error {
 		return nil
 	}
 	defer func() {
-		if err := conn.CloseNow(); err != nil {
-			slog.Debug("Failed to close diagnostics websocket connection", "error", err)
+		if closeNowErr := conn.CloseNow(); closeNowErr != nil {
+			slog.Debug("Failed to close diagnostics websocket connection", "error", closeNowErr)
 		}
 	}()
 
@@ -132,8 +132,8 @@ func (h *WebSocketHandler) ServerLogsStream(c *echo.Context) error {
 		return nil
 	}
 	defer func() {
-		if err := conn.CloseNow(); err != nil {
-			slog.Debug("Failed to close server logs websocket connection", "error", err)
+		if closeNowErr := conn.CloseNow(); closeNowErr != nil {
+			slog.Debug("Failed to close server logs websocket connection", "error", closeNowErr)
 		}
 	}()
 

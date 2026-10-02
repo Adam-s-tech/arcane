@@ -179,11 +179,11 @@ func generateEdgeMTLSBundleInternal(outDir, envID, appURL string) (*edgeMTLSPath
 		ClientCertPath: filepath.Join(outDir, "agent.crt"),
 		ClientKeyPath:  filepath.Join(outDir, "agent.key"),
 	}
-	if err := writeCertificateBundleInternal(paths.CACertPath, paths.CAKeyPath, caDER, caKey); err != nil {
-		return nil, err
+	if writeCertificateBundleErr := writeCertificateBundleInternal(paths.CACertPath, paths.CAKeyPath, caDER, caKey); writeCertificateBundleErr != nil {
+		return nil, writeCertificateBundleErr
 	}
-	if err := writeCertificateBundleInternal(paths.ClientCertPath, paths.ClientKeyPath, clientDER, clientKey); err != nil {
-		return nil, err
+	if writeClientBundleErr := writeCertificateBundleInternal(paths.ClientCertPath, paths.ClientKeyPath, clientDER, clientKey); writeClientBundleErr != nil {
+		return nil, writeClientBundleErr
 	}
 
 	return paths, nil
@@ -224,8 +224,8 @@ func generateServerTLSBundleInternal(outDir, commonName string, hosts []string, 
 		CertPath: filepath.Join(outDir, certName),
 		KeyPath:  filepath.Join(outDir, keyName),
 	}
-	if err := writeCertificateBundleInternal(paths.CertPath, paths.KeyPath, certDER, privateKey); err != nil {
-		return nil, err
+	if writeCertificateBundleErr := writeCertificateBundleInternal(paths.CertPath, paths.KeyPath, certDER, privateKey); writeCertificateBundleErr != nil {
+		return nil, writeCertificateBundleErr
 	}
 	return paths, nil
 }
@@ -372,11 +372,11 @@ func writeCertificateBundleInternal(certPath, keyPath string, certDER []byte, pr
 	if err != nil {
 		return fmt.Errorf("failed to marshal private key: %w", err)
 	}
-	if err := writePEMFileInternal(certPath, "CERTIFICATE", certDER, 0o644); err != nil {
-		return err
+	if writePEMFileErr := writePEMFileInternal(certPath, "CERTIFICATE", certDER, 0o644); writePEMFileErr != nil {
+		return writePEMFileErr
 	}
-	if err := writePEMFileInternal(keyPath, "PRIVATE KEY", keyDER, 0o600); err != nil {
-		return err
+	if writePrivateKeyErr := writePEMFileInternal(keyPath, "PRIVATE KEY", keyDER, 0o600); writePrivateKeyErr != nil {
+		return writePrivateKeyErr
 	}
 	return nil
 }

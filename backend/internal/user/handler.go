@@ -178,8 +178,8 @@ func (h *UserHandler) CreateUser(ctx context.Context, input *CreateUserInput) (*
 	input.Body.Email = normalizedEmail
 
 	passwordPolicy := h.passwordPolicyInternal(ctx)
-	if err := validation.ValidatePasswordPolicy(input.Body.Password, passwordPolicy); err != nil {
-		return nil, handlerutil.Error400BadRequestWithType(err.Error(), validation.PasswordPolicyProblemType(passwordPolicy))
+	if validatePasswordPolicyErr := validation.ValidatePasswordPolicy(input.Body.Password, passwordPolicy); validatePasswordPolicyErr != nil {
+		return nil, handlerutil.Error400BadRequestWithType(validatePasswordPolicyErr.Error(), validation.PasswordPolicyProblemType(passwordPolicy))
 	}
 
 	hashedPassword, err := h.userService.HashPassword(input.Body.Password)
@@ -255,9 +255,9 @@ func (h *UserHandler) UpdateUser(ctx context.Context, input *UpdateUserInput) (*
 	input.Body.Email = normalizedEmail
 
 	if input.Body.Username != nil {
-		normalizedUsername, err := normalizeUsernameInternal(*input.Body.Username)
-		if err != nil {
-			return nil, huma.Error400BadRequest(err.Error())
+		normalizedUsername, normalizeUsernameErr := normalizeUsernameInternal(*input.Body.Username)
+		if normalizeUsernameErr != nil {
+			return nil, huma.Error400BadRequest(normalizeUsernameErr.Error())
 		}
 		userModel.Username = normalizedUsername
 	}
@@ -283,11 +283,11 @@ func (h *UserHandler) UpdateUser(ctx context.Context, input *UpdateUserInput) (*
 
 	if input.Body.Password != nil && *input.Body.Password != "" {
 		passwordPolicy := h.passwordPolicyInternal(ctx)
-		if err := validation.ValidatePasswordPolicy(*input.Body.Password, passwordPolicy); err != nil {
-			return nil, handlerutil.Error400BadRequestWithType(err.Error(), validation.PasswordPolicyProblemType(passwordPolicy))
+		if validatePasswordPolicyErr := validation.ValidatePasswordPolicy(*input.Body.Password, passwordPolicy); validatePasswordPolicyErr != nil {
+			return nil, handlerutil.Error400BadRequestWithType(validatePasswordPolicyErr.Error(), validation.PasswordPolicyProblemType(passwordPolicy))
 		}
-		hashedPassword, err := h.userService.HashPassword(*input.Body.Password)
-		if err != nil {
+		hashedPassword, hashPasswordErr := h.userService.HashPassword(*input.Body.Password)
+		if hashPasswordErr != nil {
 			return nil, huma.Error500InternalServerError("Failed to hash password")
 		}
 		userModel.PasswordHash = hashedPassword

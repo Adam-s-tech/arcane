@@ -61,53 +61,53 @@ func (s *ProjectService) UpdateProjectTag(ctx context.Context, projectID, name s
 
 	var projectModel Project
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&projectModel, "id = ?", projectID).Error; err != nil {
-			return fmt.Errorf("find project for tag update: %w", err)
+		if findProjectErr := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&projectModel, "id = ?", projectID).Error; findProjectErr != nil {
+			return fmt.Errorf("find project for tag update: %w", findProjectErr)
 		}
 
 		var composeCount int64
-		if err := tx.Model(&ProjectTag{}).
+		if countComposeTagsErr := tx.Model(&ProjectTag{}).
 			Where("project_id = ? AND name = ? AND source = ?", projectID, normalized, projecttypes.TagSourceCompose).
-			Count(&composeCount).Error; err != nil {
-			return fmt.Errorf("check Compose tag source: %w", err)
+			Count(&composeCount).Error; countComposeTagsErr != nil {
+			return fmt.Errorf("check Compose tag source: %w", countComposeTagsErr)
 		}
 		if composeCount > 0 {
 			return errComposeTagReadOnly
 		}
 
 		if !attached {
-			if err := tx.Where("project_id = ? AND name = ? AND source = ?", projectID, normalized, projecttypes.TagSourceUI).
-				Delete(&ProjectTag{}).Error; err != nil {
-				return fmt.Errorf("detach UI project tag: %w", err)
+			if detachTagErr := tx.Where("project_id = ? AND name = ? AND source = ?", projectID, normalized, projecttypes.TagSourceUI).
+				Delete(&ProjectTag{}).Error; detachTagErr != nil {
+				return fmt.Errorf("detach UI project tag: %w", detachTagErr)
 			}
 			return nil
 		}
 
 		var existing int64
-		if err := tx.Model(&ProjectTag{}).
+		if countExistingTagsErr := tx.Model(&ProjectTag{}).
 			Where("project_id = ? AND name = ? AND source = ?", projectID, normalized, projecttypes.TagSourceUI).
-			Count(&existing).Error; err != nil {
-			return fmt.Errorf("check UI tag source: %w", err)
+			Count(&existing).Error; countExistingTagsErr != nil {
+			return fmt.Errorf("check UI tag source: %w", countExistingTagsErr)
 		}
 		if existing > 0 {
 			return nil
 		}
 		var count int64
-		if err := tx.Model(&ProjectTag{}).
+		if countUITagsErr := tx.Model(&ProjectTag{}).
 			Where("project_id = ? AND source = ?", projectID, projecttypes.TagSourceUI).
-			Count(&count).Error; err != nil {
-			return fmt.Errorf("count UI project tags: %w", err)
+			Count(&count).Error; countUITagsErr != nil {
+			return fmt.Errorf("count UI project tags: %w", countUITagsErr)
 		}
 		if count >= projectpkg.ProjectTagsPerSourceLimit {
 			return fmt.Errorf("a project cannot have more than %d UI tags", projectpkg.ProjectTagsPerSourceLimit)
 		}
-		resolvedColor, err := resolveProjectTagColorInternal(tx, normalized, normalizedColor)
-		if err != nil {
-			return err
+		resolvedColor, resolveProjectTagColorErr := resolveProjectTagColorInternal(tx, normalized, normalizedColor)
+		if resolveProjectTagColorErr != nil {
+			return resolveProjectTagColorErr
 		}
 		row := ProjectTag{ProjectID: projectID, Name: normalized, Source: string(projecttypes.TagSourceUI), Color: string(resolvedColor)}
-		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error; err != nil {
-			return fmt.Errorf("attach UI project tag: %w", err)
+		if attachTagErr := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error; attachTagErr != nil {
+			return fmt.Errorf("attach UI project tag: %w", attachTagErr)
 		}
 		return nil
 	})
@@ -127,11 +127,11 @@ func (s *ProjectService) reconcileComposeProjectTagsInternal(ctx context.Context
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var projectModel Project
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id").First(&projectModel, "id = ?", projectID).Error; err != nil {
-			return fmt.Errorf("find project for Compose tag reconciliation: %w", err)
+		if findProjectErr := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id").First(&projectModel, "id = ?", projectID).Error; findProjectErr != nil {
+			return fmt.Errorf("find project for Compose tag reconciliation: %w", findProjectErr)
 		}
-		if err := tx.Where("project_id = ? AND source = ?", projectID, projecttypes.TagSourceCompose).Delete(&ProjectTag{}).Error; err != nil {
-			return fmt.Errorf("clear Compose project tags: %w", err)
+		if clearComposeTagsErr := tx.Where("project_id = ? AND source = ?", projectID, projecttypes.TagSourceCompose).Delete(&ProjectTag{}).Error; clearComposeTagsErr != nil {
+			return fmt.Errorf("clear Compose project tags: %w", clearComposeTagsErr)
 		}
 		if len(normalized) == 0 {
 			return nil
@@ -140,8 +140,8 @@ func (s *ProjectService) reconcileComposeProjectTagsInternal(ctx context.Context
 		for _, tag := range normalized {
 			rows = append(rows, ProjectTag{ProjectID: projectID, Name: tag.Name, Source: string(projecttypes.TagSourceCompose), Color: string(tag.Color)})
 		}
-		if err := tx.Create(&rows).Error; err != nil {
-			return fmt.Errorf("replace Compose project tags: %w", err)
+		if replaceComposeTagsErr := tx.Create(&rows).Error; replaceComposeTagsErr != nil {
+			return fmt.Errorf("replace Compose project tags: %w", replaceComposeTagsErr)
 		}
 		return nil
 	})

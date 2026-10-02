@@ -105,7 +105,7 @@ func TestDurableBackupShutdownKeepsInterruptedEvidenceInternal(t *testing.T) {
 		previous, ok := jobcontext.Run(ctx)
 		require.True(t, ok)
 		require.Len(t, previous.Outcome.Targets, 1)
-		require.Equal(t, `{"backupId":"frozen"}`, string(previous.Outcome.Targets[0].RecoveryData))
+		require.JSONEq(t, `{"backupId":"frozen"}`, string(previous.Outcome.Targets[0].RecoveryData))
 		close(resumed)
 		return nil
 	})

@@ -61,8 +61,8 @@ func (s *VolumeService) GetVolumeWorkspace(ctx context.Context, volumeName strin
 		return nil, err
 	}
 	defer cleanup()
-	if err := s.requireVolumeHelperACFSInternal(ctx, volumeName, containerID); err != nil {
-		return nil, err
+	if requireVolumeHelperACFSErr := s.requireVolumeHelperACFSInternal(ctx, volumeName, containerID); requireVolumeHelperACFSErr != nil {
+		return nil, requireVolumeHelperACFSErr
 	}
 	slog.DebugContext(ctx, "volume workspace helper acquired", "volume", volumeName, "container_id", containerID, "duration", time.Since(helperStartedAt))
 
@@ -71,7 +71,22 @@ func (s *VolumeService) GetVolumeWorkspace(ctx context.Context, volumeName strin
 	if err != nil {
 		return nil, err
 	}
-	slog.DebugContext(ctx, "volume workspace tree scan completed", "volume", volumeName, "file_count", len(workspace.Files), "truncated", workspace.FileTreeTruncated, "duration", time.Since(scanStartedAt))
+	slog.DebugContext(
+		ctx,
+		"volume workspace tree scan completed",
+		"volume",
+		volumeName,
+		"file_count",
+		len(
+			workspace.Files,
+		),
+		"truncated",
+		workspace.FileTreeTruncated,
+		"duration",
+		time.Since(
+			scanStartedAt,
+		),
+	)
 	return workspace, nil
 }
 
@@ -241,8 +256,8 @@ func (s *VolumeService) GetVolumeWorkspaceFile(ctx context.Context, volumeName, 
 		return nil, err
 	}
 	defer cleanup()
-	if err := s.requireVolumeHelperACFSInternal(ctx, volumeName, containerID); err != nil {
-		return nil, err
+	if requireVolumeHelperACFSErr := s.requireVolumeHelperACFSInternal(ctx, volumeName, containerID); requireVolumeHelperACFSErr != nil {
+		return nil, requireVolumeHelperACFSErr
 	}
 	stdout, stderr, err := s.execInContainerInternal(ctx, containerID, "", []string{
 		"acfs", "stat", "--root", "/volume", "--path", "/" + rel,
@@ -251,8 +266,8 @@ func (s *VolumeService) GetVolumeWorkspaceFile(ctx context.Context, volumeName, 
 		return nil, classifyVolumeWorkspaceExecErrorInternal(err, stderr, "inspect volume workspace file")
 	}
 	var statResponse acfstypes.StatResponse
-	if err := json.Unmarshal([]byte(stdout), &statResponse); err != nil {
-		return nil, fmt.Errorf("parse volume workspace stat: %w", err)
+	if unmarshalErr := json.Unmarshal([]byte(stdout), &statResponse); unmarshalErr != nil {
+		return nil, fmt.Errorf("parse volume workspace stat: %w", unmarshalErr)
 	}
 	if statResponse.Version != acfstypes.ProtocolVersion {
 		return nil, fmt.Errorf("unsupported acfs protocol %d", statResponse.Version)
@@ -314,9 +329,9 @@ func (s *VolumeService) DownloadVolumeWorkspaceFile(ctx context.Context, volumeN
 		cleanup()
 		unlock()
 	}
-	if err := s.requireVolumeHelperACFSInternal(ctx, volumeName, containerID); err != nil {
+	if requireVolumeHelperACFSErr := s.requireVolumeHelperACFSInternal(ctx, volumeName, containerID); requireVolumeHelperACFSErr != nil {
 		cleanupAndUnlock()
-		return nil, 0, err
+		return nil, 0, requireVolumeHelperACFSErr
 	}
 	return s.startVolumeWorkspaceReadInternal(ctx, containerID, rel, 0, cleanupAndUnlock)
 }
@@ -603,7 +618,18 @@ tar -cf "$archive" "./$entry"
 printf 'present\0'`
 )
 
-func (s *VolumeService) UpdateVolumeWorkspace(ctx context.Context, volumeName string, manifest volumetypes.WorkspaceUpdateManifest, uploads map[int][]byte, user common.User) (*workspacetypes.Workspace, error) {
+func (
+	s *VolumeService,
+) UpdateVolumeWorkspace(
+	ctx context.Context,
+	volumeName string,
+	manifest volumetypes.WorkspaceUpdateManifest,
+	uploads map[int][]byte,
+	user common.User,
+) (
+	*workspacetypes.Workspace,
+	error,
+) {
 	totalStartedAt := time.Now()
 	defer func() {
 		slog.DebugContext(ctx, "volume workspace update completed", "volume", volumeName, "file_change_count", len(manifest.FileChanges), "total_duration", time.Since(totalStartedAt))
@@ -638,8 +664,8 @@ func (s *VolumeService) UpdateVolumeWorkspace(ctx context.Context, volumeName st
 		return nil, err
 	}
 	defer cleanup()
-	if err := s.requireVolumeHelperACFSInternal(ctx, volumeName, containerID); err != nil {
-		return nil, err
+	if requireVolumeHelperACFSErr := s.requireVolumeHelperACFSInternal(ctx, volumeName, containerID); requireVolumeHelperACFSErr != nil {
+		return nil, requireVolumeHelperACFSErr
 	}
 	slog.DebugContext(ctx, "volume workspace mutation helper acquired", "volume", volumeName, "container_id", containerID, "dedicated", needsBackups, "duration", time.Since(helperStartedAt))
 
@@ -648,9 +674,24 @@ func (s *VolumeService) UpdateVolumeWorkspace(ctx context.Context, volumeName st
 	if err != nil {
 		return nil, err
 	}
-	slog.DebugContext(ctx, "volume workspace revision tree scan completed", "volume", volumeName, "file_count", len(current.Files), "truncated", current.FileTreeTruncated, "duration", time.Since(revisionScanStartedAt))
-	if err := validateVolumeWorkspaceRevisionInternal(manifest.FileTreeRevision, current.FileTreeRevision); err != nil {
-		return nil, err
+	slog.DebugContext(
+		ctx,
+		"volume workspace revision tree scan completed",
+		"volume",
+		volumeName,
+		"file_count",
+		len(
+			current.Files,
+		),
+		"truncated",
+		current.FileTreeTruncated,
+		"duration",
+		time.Since(
+			revisionScanStartedAt,
+		),
+	)
+	if validateVolumeWorkspaceRevisionErr := validateVolumeWorkspaceRevisionInternal(manifest.FileTreeRevision, current.FileTreeRevision); validateVolumeWorkspaceRevisionErr != nil {
+		return nil, validateVolumeWorkspaceRevisionErr
 	}
 
 	stagingStartedAt := time.Now()
@@ -671,8 +712,8 @@ func (s *VolumeService) UpdateVolumeWorkspace(ctx context.Context, volumeName st
 		return nil, common.Classify(common.ErrVolumeWorkspaceBadRequest, err)
 	}
 	for _, relativePath := range scope {
-		if err := s.validateVolumeWorkspacePathInternal(ctx, containerID, relativePath, true); err != nil {
-			return nil, err
+		if validateVolumeWorkspacePathErr := s.validateVolumeWorkspacePathInternal(ctx, containerID, relativePath, true); validateVolumeWorkspacePathErr != nil {
+			return nil, validateVolumeWorkspacePathErr
 		}
 	}
 	backup, err := s.backupVolumeWorkspaceScopeInternal(ctx, containerID, scope)
@@ -682,7 +723,7 @@ func (s *VolumeService) UpdateVolumeWorkspace(ctx context.Context, volumeName st
 	slog.DebugContext(ctx, "volume workspace backup completed", "volume", volumeName, "scope_count", len(scope), "duration", time.Since(backupStartedAt))
 
 	applyStartedAt := time.Now()
-	if err := s.applyVolumeWorkspaceChangesInternal(
+	if applyVolumeWorkspaceChangesErr := s.applyVolumeWorkspaceChangesInternal(
 		ctx,
 		dockerClient,
 		containerID,
@@ -691,8 +732,8 @@ func (s *VolumeService) UpdateVolumeWorkspace(ctx context.Context, volumeName st
 		stagedFiles,
 		identity,
 		func() error { return s.restoreVolumeWorkspaceScopeInternal(ctx, containerID, backup) },
-	); err != nil {
-		return nil, err
+	); applyVolumeWorkspaceChangesErr != nil {
+		return nil, applyVolumeWorkspaceChangesErr
 	}
 	slog.DebugContext(ctx, "volume workspace changes applied", "volume", volumeName, "file_change_count", len(manifest.FileChanges), "duration", time.Since(applyStartedAt))
 
@@ -701,7 +742,22 @@ func (s *VolumeService) UpdateVolumeWorkspace(ctx context.Context, volumeName st
 	if err != nil {
 		return nil, err
 	}
-	slog.DebugContext(ctx, "volume workspace final tree scan completed", "volume", volumeName, "file_count", len(workspace.Files), "truncated", workspace.FileTreeTruncated, "duration", time.Since(finalScanStartedAt))
+	slog.DebugContext(
+		ctx,
+		"volume workspace final tree scan completed",
+		"volume",
+		volumeName,
+		"file_count",
+		len(
+			workspace.Files,
+		),
+		"truncated",
+		workspace.FileTreeTruncated,
+		"duration",
+		time.Since(
+			finalScanStartedAt,
+		),
+	)
 
 	if s.eventService != nil {
 		metadata := database.JSON{"action": "workspace_update", "fileChangeCount": len(manifest.FileChanges)}
@@ -768,7 +824,16 @@ func (s *VolumeService) resolveVolumeWorkspaceWriteIdentityInternal(ctx context.
 		// Consumers disagree; picking either would depend on Docker's list order, so defer to
 		// the volume root's owner instead.
 		if identity.execUser != parsed.execUser {
-			slog.WarnContext(ctx, "volume consumers declare conflicting users; using volume root owner for workspace writes", "volume", volumeName, "identity", identity.execUser, "conflicting_identity", parsed.execUser)
+			slog.WarnContext(
+				ctx,
+				"volume consumers declare conflicting users; using volume root owner for workspace writes",
+				"volume",
+				volumeName,
+				"identity",
+				identity.execUser,
+				"conflicting_identity",
+				parsed.execUser,
+			)
 			identity = volumeWorkspaceWriteIdentityInternal{}
 			break
 		}
@@ -801,7 +866,19 @@ type volumeWorkspaceStagedContentInternal struct {
 	size    int64
 }
 
-func (s *VolumeService) stageVolumeWorkspaceChangesInternal(ctx context.Context, dockerClient *client.Client, containerID string, changes []volumetypes.WorkspaceFileChange, uploads map[int][]byte, identity volumeWorkspaceWriteIdentityInternal) (map[int]volumeWorkspaceStagedFileInternal, error) {
+func (
+	s *VolumeService,
+) stageVolumeWorkspaceChangesInternal(
+	ctx context.Context,
+	dockerClient *client.Client,
+	containerID string,
+	changes []volumetypes.WorkspaceFileChange,
+	uploads map[int][]byte,
+	identity volumeWorkspaceWriteIdentityInternal,
+) (
+	map[int]volumeWorkspaceStagedFileInternal,
+	error,
+) {
 	if _, _, err := s.execInContainerInternal(ctx, containerID, "", []string{"sh", "-c", "rm -rf -- /tmp/arcane-workspace && mkdir -p -- /tmp/arcane-workspace"}); err != nil {
 		return nil, fmt.Errorf("prepare volume workspace staging directory: %w", err)
 	}
@@ -904,12 +981,12 @@ func (s *VolumeService) executeVolumeWorkspaceACFSBatchInternal(
 		return fmt.Errorf("encode volume workspace apply manifest: %w", err)
 	}
 	manifestName := fmt.Sprintf("manifest-%d.json", startIndex)
-	if err := s.copyVolumeWorkspaceFilesToContainerInternal(ctx, dockerClient, containerID, []volumeWorkspaceStagedContentInternal{{
+	if copyVolumeWorkspaceFilesToContainerErr := s.copyVolumeWorkspaceFilesToContainerInternal(ctx, dockerClient, containerID, []volumeWorkspaceStagedContentInternal{{
 		name:    manifestName,
 		content: io.NopCloser(bytes.NewReader(manifestContent)),
 		size:    int64(len(manifestContent)),
-	}}, identity); err != nil {
-		return err
+	}}, identity); copyVolumeWorkspaceFilesToContainerErr != nil {
+		return copyVolumeWorkspaceFilesToContainerErr
 	}
 
 	stdout, stderr, err := s.execInContainerInternal(ctx, containerID, identity.execUser, []string{
@@ -919,8 +996,8 @@ func (s *VolumeService) executeVolumeWorkspaceACFSBatchInternal(
 		return classifyVolumeWorkspaceExecErrorInternal(err, stderr, "apply volume workspace changes")
 	}
 	var response acfstypes.ApplyResponse
-	if err := json.Unmarshal([]byte(stdout), &response); err != nil {
-		return fmt.Errorf("parse volume workspace apply response: %w", err)
+	if unmarshalErr := json.Unmarshal([]byte(stdout), &response); unmarshalErr != nil {
+		return fmt.Errorf("parse volume workspace apply response: %w", unmarshalErr)
 	}
 	if response.Version != acfstypes.ProtocolVersion || response.Applied != len(applyChanges) {
 		return errors.New("invalid volume workspace apply response")
@@ -1016,7 +1093,15 @@ func validateVolumeWorkspaceFileChangeInternal(change volumetypes.WorkspaceFileC
 	return nil
 }
 
-func (s *VolumeService) copyVolumeWorkspaceFilesToContainerInternal(ctx context.Context, dockerClient *client.Client, containerID string, contents []volumeWorkspaceStagedContentInternal, identity volumeWorkspaceWriteIdentityInternal) error {
+func (
+	s *VolumeService,
+) copyVolumeWorkspaceFilesToContainerInternal(
+	ctx context.Context,
+	dockerClient *client.Client,
+	containerID string,
+	contents []volumeWorkspaceStagedContentInternal,
+	identity volumeWorkspaceWriteIdentityInternal,
+) error {
 	pipeReader, pipeWriter := io.Pipe()
 	archiveDone := make(chan error, 1)
 	go func() {
@@ -1073,8 +1158,8 @@ func (s *VolumeService) createVolumeWorkspaceMutationContainerInternal(ctx conte
 	if err != nil {
 		return "", nil, fmt.Errorf("create volume workspace helper: %w", err)
 	}
-	if _, err := dockerClient.ContainerStart(ctx, resp.ID, client.ContainerStartOptions{}); err != nil {
-		startErr := fmt.Errorf("start volume workspace helper: %w", err)
+	if _, containerStartErr := dockerClient.ContainerStart(ctx, resp.ID, client.ContainerStartOptions{}); containerStartErr != nil {
+		startErr := fmt.Errorf("start volume workspace helper: %w", containerStartErr)
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeouts.DefaultDockerAPI)
 		defer cancel()
 		if _, cleanupErr := dockerClient.ContainerRemove(cleanupCtx, resp.ID, volumehelper.RemoveOptions()); cleanupErr != nil && !cerrdefs.IsNotFound(cleanupErr) {
@@ -1097,9 +1182,9 @@ func volumeWorkspaceBackupScopeInternal(changes []volumetypes.WorkspaceFileChang
 		paths = append(paths, rel)
 		switch change.Operation {
 		case volumetypes.FileOpRename:
-			newName, err := kit.ValidateFileName(change.NewName)
-			if err != nil {
-				return nil, err
+			newName, validateFileNameErr := kit.ValidateFileName(change.NewName)
+			if validateFileNameErr != nil {
+				return nil, validateFileNameErr
 			}
 			paths = append(paths, path.Join(path.Dir(rel), newName))
 		case volumetypes.FileOpMove:
@@ -1223,8 +1308,8 @@ func (s *VolumeService) restoreVolumeWorkspaceFileInternal(ctx context.Context, 
 		return common.Classify(common.ErrVolumeWorkspaceNotFound, err)
 	}
 	var backup VolumeBackup
-	if err := s.db.WithContext(ctx).Where("id = ?", backupID).First(&backup).Error; err != nil {
-		return common.Classify(common.ErrVolumeWorkspaceNotFound, err)
+	if loadBackupErr := s.db.WithContext(ctx).Where("id = ?", backupID).First(&backup).Error; loadBackupErr != nil {
+		return common.Classify(common.ErrVolumeWorkspaceNotFound, loadBackupErr)
 	}
 	if backup.VolumeName != volumeName {
 		return common.Classify(common.ErrVolumeWorkspaceForbidden, errors.New("backup does not belong to volume"))

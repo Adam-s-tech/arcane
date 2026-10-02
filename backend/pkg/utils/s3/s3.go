@@ -166,8 +166,8 @@ func (c Configuration) RusticEnvironment(rootParts ...string) []string {
 // TestConnection verifies upload, download, and delete access for a destination.
 func TestConnection(ctx context.Context, configuration Configuration) (err error) {
 	configuration = configuration.Normalized()
-	if err := configuration.Validate(true); err != nil {
-		return err
+	if validateErr := configuration.Validate(true); validateErr != nil {
+		return validateErr
 	}
 	client, err := newClientInternal(ctx, configuration)
 	if err != nil {
@@ -175,8 +175,8 @@ func TestConnection(ctx context.Context, configuration Configuration) (err error
 	}
 	payload := []byte(connectionTestPayload)
 	remoteKey := path.Join(configuration.Prefix, ".arcane-connection-test-"+uuid.New().String())
-	if err := putObjectInternal(ctx, client, configuration.Bucket, remoteKey, payload); err != nil {
-		return fmt.Errorf("failed to upload S3 connection test object: %w", err)
+	if putObjectErr := putObjectInternal(ctx, client, configuration.Bucket, remoteKey, payload); putObjectErr != nil {
+		return fmt.Errorf("failed to upload S3 connection test object: %w", putObjectErr)
 	}
 
 	deleted := false
@@ -196,8 +196,8 @@ func TestConnection(ctx context.Context, configuration Configuration) (err error
 	if !bytes.Equal(downloaded, payload) {
 		return errors.New("S3 connection test object contents did not match")
 	}
-	if err := deleteObjectInternal(ctx, client, configuration.Bucket, remoteKey); err != nil {
-		return fmt.Errorf("failed to delete S3 connection test object: %w", err)
+	if deleteObjectErr := deleteObjectInternal(ctx, client, configuration.Bucket, remoteKey); deleteObjectErr != nil {
+		return fmt.Errorf("failed to delete S3 connection test object: %w", deleteObjectErr)
 	}
 	deleted = true
 	return nil
@@ -214,28 +214,28 @@ func CheckRepository(ctx context.Context, configuration Configuration, root, sna
 		return backuptypes.RepositoryObservation{}, fmt.Errorf("failed to configure S3 repository check: %w", err)
 	}
 	configKey := path.Join(configuration.Prefix, root, "config")
-	if err := checkBackupObjectInternal(ctx, client, configuration.Bucket, configKey); err != nil {
-		if isMissingResourceInternal(err, "NoSuchBucket") {
+	if checkBackupObjectErr := checkBackupObjectInternal(ctx, client, configuration.Bucket, configKey); checkBackupObjectErr != nil {
+		if isMissingResourceInternal(checkBackupObjectErr, "NoSuchBucket") {
 			return backuptypes.RepositoryObservation{Reason: RepositoryReasonMissingBucket}, nil
 		}
-		if isMissingResourceInternal(err, "NoSuchKey") {
+		if isMissingResourceInternal(checkBackupObjectErr, "NoSuchKey") {
 			return backuptypes.RepositoryObservation{Reason: RepositoryReasonMissingRepository}, nil
 		}
-		return backuptypes.RepositoryObservation{}, err
+		return backuptypes.RepositoryObservation{}, checkBackupObjectErr
 	}
 	result := backuptypes.RepositoryObservation{Available: true}
 	if snapshotID == "" {
 		return result, nil
 	}
 	snapshotKey := path.Join(configuration.Prefix, root, "snapshots", snapshotID)
-	if err := checkBackupObjectInternal(ctx, client, configuration.Bucket, snapshotKey); err != nil {
-		if isMissingResourceInternal(err, "NoSuchKey") {
+	if checkBackupObjectErr2 := checkBackupObjectInternal(ctx, client, configuration.Bucket, snapshotKey); checkBackupObjectErr2 != nil {
+		if isMissingResourceInternal(checkBackupObjectErr2, "NoSuchKey") {
 			return result, nil
 		}
-		if isMissingResourceInternal(err, "NoSuchBucket") {
+		if isMissingResourceInternal(checkBackupObjectErr2, "NoSuchBucket") {
 			return backuptypes.RepositoryObservation{Reason: RepositoryReasonMissingBucket}, nil
 		}
-		return backuptypes.RepositoryObservation{}, err
+		return backuptypes.RepositoryObservation{}, checkBackupObjectErr2
 	}
 	result.SnapshotAvailable = true
 	return result, nil
@@ -268,9 +268,9 @@ func ListRepositoryRoots(ctx context.Context, configuration Configuration, root 
 		Delimiter: aws.String("/"),
 	})
 	for paginator.HasMorePages() {
-		page, err := paginator.NextPage(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to list S3 repository roots: %w", err)
+		page, nextPageErr := paginator.NextPage(ctx)
+		if nextPageErr != nil {
+			return nil, fmt.Errorf("failed to list S3 repository roots: %w", nextPageErr)
 		}
 		for _, commonPrefix := range page.CommonPrefixes {
 			if commonPrefix.Prefix == nil {

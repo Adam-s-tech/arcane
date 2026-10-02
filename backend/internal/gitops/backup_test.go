@@ -104,7 +104,7 @@ func setupGitOpsBackupTestServiceInternal(t *testing.T) *backupTestEnvInternal {
 	t.Helper()
 	installBackupTestTransportInternal()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupGitOpsProjectTestDBInternal(t)
 	require.NoError(t, db.AutoMigrate(&projectpkg.GitOpsSync{}, &projectpkg.ProjectTag{}, &gitrepo.GitRepository{}, &environment.Environment{}))
 
@@ -190,27 +190,27 @@ func (e *backupTestEnvInternal) reloadInternal(t *testing.T, id string) *project
 }
 
 // checkoutRemoteInternal clones the backup branch so the pushed tree can be inspected.
-func (e *backupTestEnvInternal) checkoutRemoteInternal(t *testing.T, branch string) string {
+func (e *backupTestEnvInternal) checkoutRemoteInternal(t *testing.T) string {
 	t.Helper()
-	repoPath, err := e.remote.Clone(t.Context(), e.repoURL, branch, git.AuthConfig{AuthType: "none"})
+	repoPath, err := e.remote.Clone(t.Context(), e.repoURL, "main", git.AuthConfig{AuthType: "none"})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = e.remote.Cleanup(repoPath) })
 	return repoPath
 }
 
-func (e *backupTestEnvInternal) remoteHeadInternal(t *testing.T, branch string) string {
+func (e *backupTestEnvInternal) remoteHeadInternal(t *testing.T) string {
 	t.Helper()
-	head, exists, err := e.remote.RemoteBranchHead(t.Context(), e.repoURL, branch, git.AuthConfig{AuthType: "none"})
+	head, exists, err := e.remote.RemoteBranchHead(t.Context(), e.repoURL, "main", git.AuthConfig{AuthType: "none"})
 	require.NoError(t, err)
 	require.True(t, exists)
 	return head
 }
 
 // pushRemoteCommitInternal commits directly to the branch as another writer.
-func (e *backupTestEnvInternal) pushRemoteCommitInternal(t *testing.T, branch, message string, files map[string]string) {
+func (e *backupTestEnvInternal) pushRemoteCommitInternal(t *testing.T, message string, files map[string]string) {
 	t.Helper()
 	auth := git.AuthConfig{AuthType: "none"}
-	checkout, err := e.remote.CheckoutForWrite(t.Context(), e.repoURL, branch, auth)
+	checkout, err := e.remote.CheckoutForWrite(t.Context(), e.repoURL, "main", auth)
 	require.NoError(t, err)
 	defer func() { _ = e.remote.Cleanup(checkout.RepoPath) }()
 
@@ -240,10 +240,10 @@ func TestGitOpsBackup_FirstRunPushesSelectedFiles(t *testing.T) {
 	assert.False(t, stored.BackupConflict)
 	assert.Nil(t, stored.BackupFailureReason)
 	require.NotNil(t, stored.LastSyncCommit)
-	assert.Equal(t, env.remoteHeadInternal(t, "main"), *stored.LastSyncCommit)
+	assert.Equal(t, env.remoteHeadInternal(t), *stored.LastSyncCommit)
 	require.NotNil(t, stored.LastBackupSnapshot)
 
-	repoPath := env.checkoutRemoteInternal(t, "main")
+	repoPath := env.checkoutRemoteInternal(t)
 	composeBytes, err := os.ReadFile(filepath.Join(repoPath, "backups", "demo", "compose.yaml"))
 	require.NoError(t, err)
 	assert.Contains(t, string(composeBytes), "nginx:1.27-alpine")
@@ -259,13 +259,13 @@ func TestGitOpsBackup_FirstRunPushesSelectedFiles(t *testing.T) {
 func TestGitOpsBackup_UnchangedContentMakesNoNewCommit(t *testing.T) {
 	env := setupGitOpsBackupTestServiceInternal(t)
 	syncRecord := env.createBackupInternal(t, gitops.CreateSyncRequest{})
-	firstHead := env.remoteHeadInternal(t, "main")
+	firstHead := env.remoteHeadInternal(t)
 
 	result, err := env.service.PerformSync(t.Context(), "0", syncRecord.ID, common.SystemUser)
 	require.NoError(t, err)
 	assert.True(t, result.Success)
 	assert.Contains(t, result.Message, "already contains")
-	assert.Equal(t, firstHead, env.remoteHeadInternal(t, "main"))
+	assert.Equal(t, firstHead, env.remoteHeadInternal(t))
 
 	stored := env.reloadInternal(t, syncRecord.ID)
 	require.NotNil(t, stored.LastSyncStatus)
@@ -279,7 +279,7 @@ func TestGitOpsBackup_AddsAndRemovesFilesAndKeepsUnrelatedRemoteFiles(t *testing
 	writeBackupProjectFileInternal(t, env.projectPath, "config/extra.conf", "extra = 1\n")
 	syncRecord := env.createBackupInternal(t, gitops.CreateSyncRequest{BackupPaths: []string{"compose.yaml", "config"}})
 
-	env.pushRemoteCommitInternal(t, "main", "unrelated docs", map[string]string{"docs/readme.md": "docs\n"})
+	env.pushRemoteCommitInternal(t, "unrelated docs", map[string]string{"docs/readme.md": "docs\n"})
 
 	require.NoError(t, os.Remove(filepath.Join(env.projectPath, "config", "extra.conf")))
 	writeBackupProjectFileInternal(t, env.projectPath, "scripts/run.sh", "#!/bin/sh\necho hi\n")
@@ -293,7 +293,7 @@ func TestGitOpsBackup_AddsAndRemovesFilesAndKeepsUnrelatedRemoteFiles(t *testing
 	require.NoError(t, err)
 	require.True(t, result.Success)
 
-	repoPath := env.checkoutRemoteInternal(t, "main")
+	repoPath := env.checkoutRemoteInternal(t)
 	assert.FileExists(t, filepath.Join(repoPath, "backups", "demo", "scripts", "run.sh"))
 	assert.FileExists(t, filepath.Join(repoPath, "backups", "demo", "config", "app.conf"))
 	assert.FileExists(t, filepath.Join(repoPath, "docs", "readme.md"))
@@ -319,7 +319,7 @@ func TestGitOpsBackup_EnvFilesOnlyIncludedWhenListedExplicitly(t *testing.T) {
 
 			env.createBackupInternal(t, gitops.CreateSyncRequest{BackupPaths: test.paths})
 
-			repoPath := env.checkoutRemoteInternal(t, "main")
+			repoPath := env.checkoutRemoteInternal(t)
 			assert.FileExists(t, filepath.Join(repoPath, "backups", "demo", "compose.yaml"))
 			assert.FileExists(t, filepath.Join(repoPath, "backups", "demo", "config", "app.conf"))
 			assert.NoFileExists(t, filepath.Join(repoPath, "backups", "demo", "config", ".env"))
@@ -337,7 +337,7 @@ func TestGitOpsBackup_RemoteEditConflictsThenResolvesWithArcane(t *testing.T) {
 	env := setupGitOpsBackupTestServiceInternal(t)
 	syncRecord := env.createBackupInternal(t, gitops.CreateSyncRequest{})
 
-	env.pushRemoteCommitInternal(t, "main", "edited backup outside arcane", map[string]string{
+	env.pushRemoteCommitInternal(t, "edited backup outside arcane", map[string]string{
 		"backups/demo/compose.yaml": "services:\n  app:\n    image: tampered\n",
 	})
 	writeBackupProjectFileInternal(t, env.projectPath, "compose.yaml", "services:\n  app:\n    image: nginx:1.28-alpine\n")
@@ -368,7 +368,7 @@ func TestGitOpsBackup_RemoteEditConflictsThenResolvesWithArcane(t *testing.T) {
 	assert.Nil(t, resolved.BackupFailureReason)
 	assert.Equal(t, gitops.BackupStateBackedUp, resolved.BackupState())
 
-	repoPath := env.checkoutRemoteInternal(t, "main")
+	repoPath := env.checkoutRemoteInternal(t)
 	composeBytes, err := os.ReadFile(filepath.Join(repoPath, "backups", "demo", "compose.yaml"))
 	require.NoError(t, err)
 	assert.Contains(t, string(composeBytes), "nginx:1.28-alpine")
@@ -376,7 +376,7 @@ func TestGitOpsBackup_RemoteEditConflictsThenResolvesWithArcane(t *testing.T) {
 
 func TestGitOpsBackup_OccupiedDestinationNeedsAttention(t *testing.T) {
 	env := setupGitOpsBackupTestServiceInternal(t)
-	env.pushRemoteCommitInternal(t, "main", "pre-existing files", map[string]string{
+	env.pushRemoteCommitInternal(t, "pre-existing files", map[string]string{
 		"backups/demo/unrelated.txt": "not an arcane backup\n",
 	})
 
@@ -393,7 +393,7 @@ func TestGitOpsBackup_OccupiedDestinationNeedsAttention(t *testing.T) {
 func TestGitOpsBackup_AdoptsMatchingRemoteWithoutSnapshot(t *testing.T) {
 	env := setupGitOpsBackupTestServiceInternal(t)
 	syncRecord := env.createBackupInternal(t, gitops.CreateSyncRequest{})
-	head := env.remoteHeadInternal(t, "main")
+	head := env.remoteHeadInternal(t)
 
 	require.NoError(t, env.db.Model(&projectpkg.GitOpsSync{}).Where("id = ?", syncRecord.ID).
 		Update("last_backup_snapshot", nil).Error)
@@ -401,7 +401,7 @@ func TestGitOpsBackup_AdoptsMatchingRemoteWithoutSnapshot(t *testing.T) {
 	result, err := env.service.PerformSync(t.Context(), "0", syncRecord.ID, common.SystemUser)
 	require.NoError(t, err)
 	assert.True(t, result.Success)
-	assert.Equal(t, head, env.remoteHeadInternal(t, "main"))
+	assert.Equal(t, head, env.remoteHeadInternal(t))
 
 	stored := env.reloadInternal(t, syncRecord.ID)
 	assert.False(t, stored.BackupConflict)
@@ -412,14 +412,14 @@ func TestGitOpsBackup_SucceedsOnTopOfAnotherWritersCommit(t *testing.T) {
 	env := setupGitOpsBackupTestServiceInternal(t)
 	syncRecord := env.createBackupInternal(t, gitops.CreateSyncRequest{})
 
-	env.pushRemoteCommitInternal(t, "main", "other writer", map[string]string{"other/notes.txt": "notes\n"})
+	env.pushRemoteCommitInternal(t, "other writer", map[string]string{"other/notes.txt": "notes\n"})
 	writeBackupProjectFileInternal(t, env.projectPath, "compose.yaml", "services:\n  app:\n    image: nginx:1.29-alpine\n")
 
 	result, err := env.service.PerformSync(t.Context(), "0", syncRecord.ID, common.SystemUser)
 	require.NoError(t, err)
 	require.True(t, result.Success)
 
-	repoPath := env.checkoutRemoteInternal(t, "main")
+	repoPath := env.checkoutRemoteInternal(t)
 	assert.FileExists(t, filepath.Join(repoPath, "other", "notes.txt"))
 	composeBytes, err := os.ReadFile(filepath.Join(repoPath, "backups", "demo", "compose.yaml"))
 	require.NoError(t, err)
@@ -525,7 +525,7 @@ func TestGitOpsBackup_CreateWithoutProjectIsRejected(t *testing.T) {
 func TestGitOpsBackup_SaveSignalMarksPendingAndRunsAfterDebounce(t *testing.T) {
 	env := setupGitOpsBackupTestServiceInternal(t)
 	syncRecord := env.createBackupInternal(t, gitops.CreateSyncRequest{})
-	firstHead := env.remoteHeadInternal(t, "main")
+	firstHead := env.remoteHeadInternal(t)
 
 	env.service.backups.debounce = 50 * time.Millisecond
 	env.service.SubscribeProjectFileChanges(t.Context())
@@ -538,7 +538,7 @@ func TestGitOpsBackup_SaveSignalMarksPendingAndRunsAfterDebounce(t *testing.T) {
 		return err == nil && exists && head != firstHead
 	}, 5*time.Second, 25*time.Millisecond)
 	require.Positive(t, env.scheduler.submitCount())
-	require.NotEqual(t, firstHead, env.remoteHeadInternal(t, "main"))
+	require.NotEqual(t, firstHead, env.remoteHeadInternal(t))
 
 	require.Eventually(t, func() bool {
 		stored := env.reloadInternal(t, syncRecord.ID)
@@ -554,7 +554,7 @@ func TestGitOpsBackup_SaveSignalMarksPendingAndRunsAfterDebounce(t *testing.T) {
 func TestGitOpsBackup_SaveSignalOnlyMarksPendingWhenAutoSyncIsOff(t *testing.T) {
 	env := setupGitOpsBackupTestServiceInternal(t)
 	syncRecord := env.createBackupInternal(t, gitops.CreateSyncRequest{})
-	head := env.remoteHeadInternal(t, "main")
+	head := env.remoteHeadInternal(t)
 
 	autoSync := false
 	_, err := env.service.UpdateSync(t.Context(), "0", syncRecord.ID, gitops.UpdateSyncRequest{AutoSync: &autoSync}, common.SystemUser)
@@ -571,7 +571,7 @@ func TestGitOpsBackup_SaveSignalOnlyMarksPendingWhenAutoSyncIsOff(t *testing.T) 
 	}, 5*time.Second, 25*time.Millisecond)
 
 	time.Sleep(300 * time.Millisecond)
-	assert.Equal(t, head, env.remoteHeadInternal(t, "main"))
+	assert.Equal(t, head, env.remoteHeadInternal(t))
 
 	stored := env.reloadInternal(t, syncRecord.ID)
 	assert.True(t, stored.BackupPending)
@@ -608,9 +608,9 @@ func TestGitOpsBackup_DeletingProjectRemovesBackupSync(t *testing.T) {
 
 func TestGitOpsDeploy_LinksExistingProject(t *testing.T) {
 	env := setupGitOpsBackupTestServiceInternal(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	remoteCompose := "services:\n  app:\n    image: nginx:1.28-alpine\n"
-	env.pushRemoteCommitInternal(t, "main", "seed", map[string]string{"apps/demo/compose.yaml": remoteCompose})
+	env.pushRemoteCommitInternal(t, "seed", map[string]string{"apps/demo/compose.yaml": remoteCompose})
 	writeBackupProjectFileInternal(t, env.projectPath, ".env", "TOKEN=keep-me\n")
 
 	created, err := env.service.CreateSync(ctx, "0", gitops.CreateSyncRequest{
@@ -649,7 +649,7 @@ func TestGitOpsDeploy_LinksExistingProject(t *testing.T) {
 
 func TestGitOpsImport_ForwardsDeployAndLifecycleFields(t *testing.T) {
 	env := setupGitOpsBackupTestServiceInternal(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	require.NoError(t, env.service.settingsService.SetStringSetting(ctx, "lifecycleEnabled", "true"))
 
 	resp, err := env.service.ImportSyncs(ctx, "0", []gitops.ImportGitOpsSyncRequest{

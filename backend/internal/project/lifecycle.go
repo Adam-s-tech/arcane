@@ -89,7 +89,13 @@ type LifecycleService struct {
 // infrastructure. The Docker client is obtained lazily on each hook run via
 // dockerService.GetClient so reconnects are transparent. Runner image pulls go
 // through imageService so configured registry credentials apply.
-func NewLifecycleService(db *database.DB, settingsService *settings.SettingsService, eventService *event.EventService, dockerService *docker.DockerClientService, imageService *image.ImageService) *LifecycleService {
+func NewLifecycleService(
+	db *database.DB,
+	settingsService *settings.SettingsService,
+	eventService *event.EventService,
+	dockerService *docker.DockerClientService,
+	imageService *image.ImageService,
+) *LifecycleService {
 	return &LifecycleService{
 		db:              db,
 		settingsService: settingsService,
@@ -222,8 +228,8 @@ func (s *LifecycleService) runScriptInContainerInternal(
 		return "", "", 0, fmt.Errorf("failed to connect to Docker: %w", dErr)
 	}
 
-	if err := s.ensureRunnerImageInternal(ctx, dockerClient, runnerImage, actor); err != nil {
-		return "", "", 0, fmt.Errorf("failed to ensure runner image %s: %w", runnerImage, err)
+	if ensureRunnerImageErr := s.ensureRunnerImageInternal(ctx, dockerClient, runnerImage, actor); ensureRunnerImageErr != nil {
+		return "", "", 0, fmt.Errorf("failed to ensure runner image %s: %w", runnerImage, ensureRunnerImageErr)
 	}
 
 	// Resolve the workspace mount. When Arcane runs inside a container whose
@@ -298,8 +304,8 @@ func (s *LifecycleService) runScriptInContainerInternal(
 
 	startCtx, startCancel := context.WithTimeout(ctx, timeouts.GetDuration(apiTimeoutSec, timeouts.DefaultDockerAPI))
 	defer startCancel()
-	if _, err := dockerClient.ContainerStart(startCtx, containerID, client.ContainerStartOptions{}); err != nil {
-		return "", "", 0, fmt.Errorf("start lifecycle container: %w", err)
+	if _, containerStartErr := dockerClient.ContainerStart(startCtx, containerID, client.ContainerStartOptions{}); containerStartErr != nil {
+		return "", "", 0, fmt.Errorf("start lifecycle container: %w", containerStartErr)
 	}
 
 	logsCtx, logsCancel := context.WithCancel(ctx)
@@ -357,8 +363,8 @@ func (s *LifecycleService) runScriptInContainerInternal(
 // pulling it on a miss. The pull is delegated to the image service so the
 // configured registry credentials (and its anonymous retry) apply, bounded by
 // the dockerImagePullTimeout setting so operators on slow networks can tune it.
-func (s *LifecycleService) ensureRunnerImageInternal(ctx context.Context, dockerClient *client.Client, image string, actor common.User) error {
-	if _, err := dockerClient.ImageInspect(ctx, image); err == nil {
+func (s *LifecycleService) ensureRunnerImageInternal(ctx context.Context, dockerClient *client.Client, imageName string, actor common.User) error {
+	if _, err := dockerClient.ImageInspect(ctx, imageName); err == nil {
 		return nil
 	}
 	if s.imageService == nil {
@@ -369,11 +375,11 @@ func (s *LifecycleService) ensureRunnerImageInternal(ctx context.Context, docker
 	pullCtx, pullCancel := context.WithTimeout(ctx, timeouts.GetDuration(pullTimeoutSec, timeouts.DefaultDockerImagePull))
 	defer pullCancel()
 
-	if err := s.imageService.PullImage(pullCtx, image, io.Discard, actor, nil); err != nil {
+	if err := s.imageService.PullImage(pullCtx, imageName, io.Discard, actor, nil); err != nil {
 		if errors.Is(pullCtx.Err(), context.DeadlineExceeded) {
-			return fmt.Errorf("runner image pull timed out for %s (increase dockerImagePullTimeout setting if needed)", image)
+			return fmt.Errorf("runner image pull timed out for %s (increase dockerImagePullTimeout setting if needed)", imageName)
 		}
-		return fmt.Errorf("pull runner image %s: %w", image, err)
+		return fmt.Errorf("pull runner image %s: %w", imageName, err)
 	}
 	return nil
 }

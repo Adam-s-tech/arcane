@@ -86,7 +86,14 @@ type ImageUpdateWatcher struct {
 	stoppedOnce            sync.Once
 }
 
-func NewImageUpdateWatcher(cfg *config.Config, imageUpdateService *imageupdate.ImageUpdateService, settingsService *settings.SettingsService, environmentService *environment.EnvironmentService, dockerService *docker.DockerClientService, projectService *project.ProjectService) (*ImageUpdateWatcher, error) {
+func NewImageUpdateWatcher(cfg *config.Config,
+	imageUpdateService *imageupdate.ImageUpdateService,
+	settingsService *settings.SettingsService,
+	environmentService *environment.EnvironmentService,
+	dockerService *docker.DockerClientService,
+	projectService *project.ProjectService) (*ImageUpdateWatcher,
+	error,
+) {
 	if imageUpdateService == nil || settingsService == nil || environmentService == nil || dockerService == nil || projectService == nil {
 		return nil, errors.New("image update watcher dependencies unavailable")
 	}
@@ -94,7 +101,24 @@ func NewImageUpdateWatcher(cfg *config.Config, imageUpdateService *imageupdate.I
 	if cfg != nil {
 		location = cfg.GetLocation()
 	}
-	return &ImageUpdateWatcher{imageUpdateService: imageUpdateService, settingsService: settingsService, environmentService: environmentService, dockerService: dockerService, projectService: projectService, location: location, debounce: imageUpdateWatcherDebounce, backfillRetry: imageUpdateWatcherBackfillRetry, metadataReady: make(chan struct{}), started: make(chan struct{}), stopped: make(chan struct{}), trigger: make(chan struct{}, 1), scheduleRefresh: make(chan struct{}, 1)}, nil
+	return &ImageUpdateWatcher{
+			imageUpdateService: imageUpdateService,
+			settingsService:    settingsService,
+			environmentService: environmentService,
+			dockerService:      dockerService,
+			projectService:     projectService,
+			location:           location,
+			debounce:           imageUpdateWatcherDebounce,
+			backfillRetry:      imageUpdateWatcherBackfillRetry,
+			metadataReady:      make(chan struct{}),
+			started:            make(chan struct{}),
+			stopped:            make(chan struct{}),
+			trigger: make(chan struct{},
+				1),
+			scheduleRefresh: make(chan struct{},
+				1),
+		},
+		nil
 }
 
 func (w *ImageUpdateWatcher) Name() string { return "image-polling" }
@@ -130,7 +154,7 @@ func (w *ImageUpdateWatcher) runEventLoopInternal(runCtx context.Context) error 
 		return errors.New("docker event bus unavailable")
 	}
 	eventCh, unsubscribe := eventBus.Subscribe(events.ImageEventType, bus.WithSubscriberBuffer(16))
-	defer func() { unsubscribe() }()
+	defer unsubscribe()
 	reconnect := time.NewTicker(5 * time.Second)
 	defer reconnect.Stop()
 	timer := time.NewTimer(time.Hour)
@@ -342,9 +366,9 @@ func (w *ImageUpdateWatcher) RunNow(ctx context.Context) (err error) {
 	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
 	for {
-		current, err := coordinator.Get(ctx, run.EnvironmentID, run.JobID, run.ID)
-		if err != nil {
-			return err
+		current, getErr := coordinator.Get(ctx, run.EnvironmentID, run.JobID, run.ID)
+		if getErr != nil {
+			return getErr
 		}
 		if current.Status.Terminal() || current.Status == schedulertypes.NeedsAttention {
 			if current.Status == schedulertypes.Succeeded {

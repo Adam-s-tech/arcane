@@ -52,7 +52,7 @@ func variableScope(allEnvironments bool, environmentIDs []string) string {
 	return strings.Join(environmentIDs, ",")
 }
 
-func printSyncStatuses(statuses []env.EnvironmentSyncStatus) {
+func printSyncStatuses(statuses []env.EnvironmentSyncStatus) error {
 	headers := []string{"ENVIRONMENT ID", "NAME", "STATUS", "LAST SYNCED", "ERROR"}
 	rows := make([][]string, len(statuses))
 	for i, status := range statuses {
@@ -69,7 +69,7 @@ func printSyncStatuses(statuses []env.EnvironmentSyncStatus) {
 			syncError,
 		}
 	}
-	output.Table(headers, rows)
+	return output.Table(headers, rows)
 }
 
 func printMutationResult(result env.GlobalVariableMutationResponse, message string) error {
@@ -123,7 +123,9 @@ var listCmd = &cobra.Command{
 			}
 		}
 
-		output.Table(headers, rows)
+		if tableErr := output.Table(headers, rows); tableErr != nil {
+			return tableErr
+		}
 		fmt.Printf("\nTotal: %d variables\n", len(result.Data))
 		return nil
 	},
@@ -255,8 +257,7 @@ var syncCmd = &cobra.Command{
 			return cmdutil.PrintJSON(result.Data)
 		}
 
-		printSyncStatuses(result.Data)
-		return nil
+		return printSyncStatuses(result.Data)
 	},
 }
 

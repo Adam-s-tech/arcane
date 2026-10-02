@@ -1,7 +1,6 @@
 package volume
 
 import (
-	"context"
 	"encoding/json/v2"
 	"testing"
 	"time"
@@ -32,7 +31,7 @@ func TestListBackupsPaginatedByManagementTypeInternal(t *testing.T) {
 	}
 	service := &VolumeService{db: &database.DB{DB: gormDB}}
 
-	systemRows, page, err := service.ListBackupsPaginated(context.Background(), "app", pagination.QueryParams{
+	systemRows, page, err := service.ListBackupsPaginated(t.Context(), "app", pagination.QueryParams{
 		Filters: map[string]string{"type": "system"},
 	})
 	require.NoError(t, err)
@@ -40,7 +39,7 @@ func TestListBackupsPaginatedByManagementTypeInternal(t *testing.T) {
 	require.Len(t, systemRows, 1)
 	require.Equal(t, backuptypes.ManagementTypeSystem, systemRows[0].Type)
 
-	volumeRows, page, err := service.ListBackupsPaginated(context.Background(), "app", pagination.QueryParams{
+	volumeRows, page, err := service.ListBackupsPaginated(t.Context(), "app", pagination.QueryParams{
 		Filters: map[string]string{"type": "volume"},
 	})
 	require.NoError(t, err)

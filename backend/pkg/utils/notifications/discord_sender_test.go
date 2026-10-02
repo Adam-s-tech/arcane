@@ -1,7 +1,7 @@
 package notifications
 
 import (
-	"fmt"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -273,10 +273,10 @@ func TestSendDiscord_ValidConfiguration(t *testing.T) {
 // Helper function to extract validation logic for testing
 func validateDiscordConfig(config DiscordConfig) error {
 	if config.WebhookID == "" {
-		return fmt.Errorf("discord webhook ID is empty")
+		return errors.New("discord webhook ID is empty")
 	}
 	if config.Token == "" {
-		return fmt.Errorf("discord token is empty")
+		return errors.New("discord token is empty")
 	}
 	return nil
 }

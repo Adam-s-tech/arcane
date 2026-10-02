@@ -121,7 +121,9 @@ var getCmd = &cobra.Command{
 			for i, p := range result.Data.Permissions {
 				rows[i] = []string{p}
 			}
-			output.Table([]string{"PERMISSION"}, rows)
+			if tableErr := output.Table([]string{"PERMISSION"}, rows); tableErr != nil {
+				return tableErr
+			}
 		}
 		return nil
 	},
@@ -205,8 +207,8 @@ var updateCmd = &cobra.Command{
 			return fmt.Errorf("failed to update role: %w", err)
 		}
 		defer func() { _ = resp.Body.Close() }()
-		if err := cmdutil.EnsureSuccessStatus(resp); err != nil {
-			return fmt.Errorf("failed to update role: %w", err)
+		if ensureSuccessStatusErr := cmdutil.EnsureSuccessStatus(resp); ensureSuccessStatusErr != nil {
+			return fmt.Errorf("failed to update role: %w", ensureSuccessStatusErr)
 		}
 
 		output.Success("Role updated")
@@ -240,8 +242,8 @@ var deleteCmd = &cobra.Command{
 			return fmt.Errorf("failed to delete role: %w", err)
 		}
 		defer func() { _ = resp.Body.Close() }()
-		if err := cmdutil.EnsureSuccessStatus(resp); err != nil {
-			return fmt.Errorf("failed to delete role: %w", err)
+		if ensureSuccessStatusErr := cmdutil.EnsureSuccessStatus(resp); ensureSuccessStatusErr != nil {
+			return fmt.Errorf("failed to delete role: %w", ensureSuccessStatusErr)
 		}
 		output.Success("Role deleted")
 		return nil
@@ -275,7 +277,9 @@ var permissionsCmd = &cobra.Command{
 			for i, a := range group.Actions {
 				rows[i] = []string{a.Permission, a.Label, a.Description}
 			}
-			output.Table([]string{"PERMISSION", "LABEL", "DESCRIPTION"}, rows)
+			if tableErr := output.Table([]string{"PERMISSION", "LABEL", "DESCRIPTION"}, rows); tableErr != nil {
+				return tableErr
+			}
 		}
 		return nil
 	},
@@ -314,15 +318,17 @@ var assignmentsCmd = &cobra.Command{
 			}
 			rows[i] = []string{a.RoleID, scope, a.Source, a.CreatedAt.Format("2006-01-02 15:04")}
 		}
-		output.Table([]string{"ROLE", "SCOPE", "SOURCE", "CREATED"}, rows)
-		return nil
+		return output.Table([]string{"ROLE", "SCOPE", "SOURCE", "CREATED"}, rows)
 	},
 }
 
 var assignCmd = &cobra.Command{
 	Use:   "assign <user-id>",
 	Short: "Replace a user's manual role assignments",
-	Long:  "Replace every MANUAL role assignment on the user with the set passed via --role. OIDC-sourced assignments are left untouched — manage those via OIDC role mappings.\n\nEach --role flag accepts `<roleId>[:<envId>]`. Omit the env id for a global assignment. Pass --role multiple times to assign more than one role. Pass --role \"\" (empty) once to clear every manual assignment.",
+	Long: "Replace every MANUAL role assignment on the user with the set passed via --role. OIDC-sourced assignments are " +
+		"left untouched — manage those via OIDC role mappings.\n\nEach --role flag accepts `<roleId>[:<envId>]`. Omit " +
+		"the env id for a global assignment. Pass --role multiple times to assign more than one role. Pass --role \"\" " +
+		"(empty) once to clear every manual assignment.",
 
 	Example: `  arcane admin roles assign u_123 --role role_editor:env_prod --role role_viewer
   arcane admin roles assign u_123 --role role_admin

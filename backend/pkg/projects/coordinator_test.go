@@ -118,7 +118,7 @@ func TestCoordinatorUpdateServicesScopesDependents(t *testing.T) {
 			"dormant": {Name: "dormant", Image: "example.com/dormant:1", Pid: "service:app"},
 		},
 	}
-	err := coordinator.UpdateServices(context.Background(), projecttypes.ComposeServiceUpdate{
+	err := coordinator.UpdateServices(t.Context(), projecttypes.ComposeServiceUpdate{
 		Project:           model,
 		Services:          []string{"app"},
 		Dependents:        []string{"sidecar"},

@@ -1,7 +1,6 @@
 package recovery
 
 import (
-	"context"
 	"path/filepath"
 	"testing"
 	"time"
@@ -49,7 +48,7 @@ func newRestoredDatabaseForTestInternal(t *testing.T, runIDs ...string) (string,
 func TestFinalizeRestoredBackupInternal(t *testing.T) {
 	databaseURL, dsn := newRestoredDatabaseForTestInternal(t, "older", "selected")
 
-	require.NoError(t, finalizeRestoredBackupInternal(context.Background(), databaseURL, "selected", "activity-1", recoverytypes.RestoreRequest{
+	require.NoError(t, finalizeRestoredBackupInternal(t.Context(), databaseURL, "selected", "activity-1", recoverytypes.RestoreRequest{
 		BackupID: "request-id", RemoteSnapshotID: "snapshot-1", S3DestinationID: "destination-1", Size: 1234,
 		ProjectsSetting: "/srv/projects",
 		SafetyBackup: &recoverytypes.SafetyBackup{
@@ -84,7 +83,7 @@ func TestFinalizeRestoredBackupInternal(t *testing.T) {
 func TestFinalizeRestoredBackupInternalFallsBackForLegacyManifest(t *testing.T) {
 	databaseURL, dsn := newRestoredDatabaseForTestInternal(t, "older", "newest")
 
-	require.NoError(t, finalizeRestoredBackupInternal(context.Background(), databaseURL, "", "", recoverytypes.RestoreRequest{BackupID: "missing-discovery-id"}))
+	require.NoError(t, finalizeRestoredBackupInternal(t.Context(), databaseURL, "", "", recoverytypes.RestoreRequest{BackupID: "missing-discovery-id"}))
 
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	require.NoError(t, err)
@@ -97,6 +96,6 @@ func TestFinalizeRestoredBackupInternalFallsBackForLegacyManifest(t *testing.T) 
 }
 
 func TestRunStagesInternalRejectsStagesWithoutDestination(t *testing.T) {
-	err := runStagesInternal(context.Background(), nil, recoverytypes.RestoreRequest{}, []recoverytypes.RestoreStage{{SourcePath: "/data"}})
+	err := runStagesInternal(t.Context(), nil, recoverytypes.RestoreRequest{}, []recoverytypes.RestoreStage{{SourcePath: "/data"}})
 	require.ErrorContains(t, err, "restore stage for /data has no destination")
 }

@@ -68,7 +68,7 @@ func newGitOpsAdmissionGateForTestInternal(t testing.TB) *runs.Admission {
 func setupGitOpsSyncDirectoryTestService(t *testing.T) (*GitOpsSyncService, *database.DB, string) {
 	t.Helper()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupGitOpsProjectTestDBInternal(t)
 	require.NoError(t, db.AutoMigrate(&projectpkg.GitOpsSync{}))
 
@@ -145,7 +145,7 @@ func TestApplyLifecycleFieldsToSyncInternal_UsesExplicitPreDeployTimeout(t *test
 }
 
 func TestGitOpsSyncService_GetSyncByID_ReturnsNotFoundError(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, _, _ := setupGitOpsSyncDirectoryTestService(t)
 
 	_, err := svc.GetSyncByID(ctx, "0", "missing-sync")
@@ -154,7 +154,7 @@ func TestGitOpsSyncService_GetSyncByID_ReturnsNotFoundError(t *testing.T) {
 }
 
 func TestGitOpsSyncService_CleanupOrphanedSyncsOnStartup_DeletesOnlyOrphans(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, db, _ := setupGitOpsSyncDirectoryTestService(t)
 	require.NoError(t, db.AutoMigrate(&environment.Environment{}))
 
@@ -206,7 +206,7 @@ func TestGitOpsSyncService_CleanupOrphanedSyncsOnStartup_DeletesOnlyOrphans(t *t
 }
 
 func TestGitOpsSyncService_RegisterAutoSyncJobsOnStartup_SkipsOrphans(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, db, _ := setupGitOpsSyncDirectoryTestService(t)
 	require.NoError(t, db.AutoMigrate(&environment.Environment{}))
 
@@ -246,7 +246,7 @@ func TestGitOpsSyncService_RegisterAutoSyncJobsOnStartup_SkipsOrphans(t *testing
 }
 
 func TestGitOpsSyncService_DeleteSync_DeletesStaleProjectReference(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, db, _ := setupGitOpsSyncDirectoryTestService(t)
 	missingProjectID := "missing-project"
 
@@ -273,7 +273,7 @@ func TestGitOpsSyncService_DeleteSync_DeletesStaleProjectReference(t *testing.T)
 // corrupt/env-mismatched sync is still deletable via the API: the request env ("0")
 // does not match the row's env ("5"), yet the delete must succeed and stop the job.
 func TestGitOpsSyncService_DeleteSync_SucceedsWhenEnvironmentMismatched(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, db, _ := setupGitOpsSyncDirectoryTestService(t)
 	scheduler := &gitOpsSyncTestSchedulerInternal{}
 	require.NoError(t, svc.SetScheduler(ctx, scheduler, newGitOpsAdmissionGateForTestInternal(t)))
@@ -298,7 +298,7 @@ func TestGitOpsSyncService_DeleteSync_SucceedsWhenEnvironmentMismatched(t *testi
 // TestGitOpsSyncService_DeleteSync_ClearsOrphanedManagedFlag verifies the managed
 // flag is cleared keyed on the sync id even when the sync's ProjectID is nil.
 func TestGitOpsSyncService_DeleteSync_ClearsOrphanedManagedFlag(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, db, _ := setupGitOpsSyncDirectoryTestService(t)
 
 	syncID := "sync-orphan-flag"
@@ -330,12 +330,13 @@ func TestGitOpsSyncService_DeleteSync_ClearsOrphanedManagedFlag(t *testing.T) {
 // run whose row no longer exists (e.g. deleted out-of-band via raw SQL) unregisters
 // its own job instead of firing forever.
 func TestGitOpsSyncService_RunScheduledSync_UnregistersMissingSync(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, _, _ := setupGitOpsSyncDirectoryTestService(t)
 	scheduler := &gitOpsSyncTestSchedulerInternal{}
 	require.NoError(t, svc.SetScheduler(ctx, scheduler, newGitOpsAdmissionGateForTestInternal(t)))
 
-	svc.runScheduledSyncInternal(ctx, "0", "ghost-sync")
+	_, scheduledSyncErr := svc.runScheduledSyncInternal(ctx, "0", "ghost-sync")
+	require.NoError(t, scheduledSyncErr)
 
 	assert.Contains(t, scheduler.removed, entityjobs.GitOpsSyncJobPrefix+"ghost-sync")
 }
@@ -344,7 +345,7 @@ func TestGitOpsSyncService_RunScheduledSync_UnregistersMissingSync(t *testing.T)
 // startup sweep removes leaked gitops scratch dirs (hidden and legacy name-embedded
 // forms) while leaving real project directories untouched.
 func TestGitOpsSyncService_CleanupLeakedScratchDirsOnStartup_RemovesOrphans(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, _, projectsDir := setupGitOpsSyncDirectoryTestService(t)
 
 	mkdir := func(name string) string {
@@ -373,7 +374,7 @@ func TestGitOpsSyncService_CleanupLeakedScratchDirsOnStartup_RemovesOrphans(t *t
 // TestGitOpsSyncService_CleanupLeakedCloneDirsOnStartup_RemovesAll verifies the
 // startup sweep purges leaked git clone scratch dirs from the git work dir.
 func TestGitOpsSyncService_CleanupLeakedCloneDirsOnStartup_RemovesAll(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, _, _ := setupGitOpsSyncDirectoryTestService(t)
 
 	workDir := t.TempDir()
@@ -405,14 +406,14 @@ func TestGitOpsSyncService_CleanupLeakedCloneDirsOnStartup_NilRepoServiceIsNoop(
 	svc, _, _ := setupGitOpsSyncDirectoryTestService(t)
 	svc.repoService = nil
 
-	require.NoError(t, svc.CleanupLeakedCloneDirsOnStartup(context.Background()))
+	require.NoError(t, svc.CleanupLeakedCloneDirsOnStartup(t.Context()))
 }
 
 // TestGitOpsSyncService_SyncProjectDirectory_RefusesDuplicateOnNameCollision verifies a
 // directory sync refuses to create a "-N" sibling when its target name is already taken
 // by a non-adoptable directory; instead it errors as a broken binding and disables auto-sync.
 func TestGitOpsSyncService_SyncProjectDirectory_RefusesDuplicateOnNameCollision(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, db, projectsDir := setupGitOpsSyncDirectoryTestService(t)
 
 	// Occupy the target name with a dir that is NOT an adoptable GitOps project
@@ -451,7 +452,7 @@ func TestGitOpsSyncService_SyncProjectDirectory_RefusesDuplicateOnNameCollision(
 // single-file-sync analogue of the directory refuse: a name collision on create is a
 // broken binding, not a "-N" duplicate.
 func TestGitOpsSyncService_GetOrCreateProject_RefusesDuplicateOnNameCollision(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, db, projectsDir := setupGitOpsSyncDirectoryTestService(t)
 	require.NoError(t, svc.SetScheduler(ctx, &gitOpsSyncTestSchedulerInternal{}, newGitOpsAdmissionGateForTestInternal(t)))
 
@@ -481,7 +482,7 @@ func TestGitOpsSyncService_GetOrCreateProject_RefusesDuplicateOnNameCollision(t 
 }
 
 func TestGitOpsSyncService_SyncProjectDirectory_CreatesProjectPreservingRepoLayout(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, db, _ := setupGitOpsSyncDirectoryTestService(t)
 
 	sync := &projectpkg.GitOpsSync{
@@ -556,11 +557,11 @@ services:
 	assert.Equal(t, "$pbkdf2-sha512$310000$XXX", parsedEnv["QUOTED_SECRET"])
 
 	_, statErr := os.Stat(filepath.Join(project.Path, "compose.yaml"))
-	assert.ErrorIs(t, statErr, os.ErrNotExist)
+	require.ErrorIs(t, statErr, os.ErrNotExist)
 }
 
 func TestGitOpsSyncService_SyncProjectDirectory_UpdatesProjectAndCleansOldSyncedFiles(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, db, projectsDir := setupGitOpsSyncDirectoryTestService(t)
 
 	projectPath := filepath.Join(projectsDir, "demo-project")
@@ -664,7 +665,7 @@ services:
 // git still flows into the effective .env. This is the core regression test
 // for https://github.com/getarcaneapp/arcane/issues/2476.
 func TestGitOpsSyncService_SyncProjectDirectory_PreservesEnvOverrideAndAddsNewGitKey(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, db, projectsDir := setupGitOpsSyncDirectoryTestService(t)
 
 	projectPath := filepath.Join(projectsDir, "demo-project")
@@ -757,7 +758,7 @@ func TestGitOpsSyncService_SyncProjectDirectory_PreservesEnvOverrideAndAddsNewGi
 // merge step reads it, or a local-only key would be silently dropped instead
 // of migrated into project.env.
 func TestGitOpsSyncService_SyncProjectDirectory_MigratesLegacyTrackedEnvOnFirstSyncAfterUpgrade(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, db, projectsDir := setupGitOpsSyncDirectoryTestService(t)
 
 	projectPath := filepath.Join(projectsDir, "demo-project")
@@ -828,7 +829,7 @@ func TestGitOpsSyncService_SyncProjectDirectory_MigratesLegacyTrackedEnvOnFirstS
 // are dropped from the raw sync write, never tracked in syncedFiles, and the actual
 // .env.git/project.env on disk are still produced solely by the merge.
 func TestGitOpsSyncService_SyncProjectDirectory_IgnoresCommittedReservedEnvFiles(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, db, _ := setupGitOpsSyncDirectoryTestService(t)
 
 	sync := &projectpkg.GitOpsSync{
@@ -886,7 +887,7 @@ func TestGitOpsSyncService_SyncProjectDirectory_IgnoresCommittedReservedEnvFiles
 }
 
 func TestGitOpsSyncService_DirectorySync_RealWalkWithNestedConfig(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, db, _ := setupGitOpsSyncDirectoryTestService(t)
 	svc.repoService = &gitrepo.GitRepositoryService{Client: git.NewClient("")}
 
@@ -948,7 +949,7 @@ func TestGitOpsSyncService_DirectorySync_RealWalkWithNestedConfig(t *testing.T) 
 }
 
 func TestGitOpsSyncService_DirectorySync_OverwritesExistingDirectoryAtFilePath(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, db, projectsDir := setupGitOpsSyncDirectoryTestService(t)
 	svc.repoService = &gitrepo.GitRepositoryService{Client: git.NewClient("")}
 
@@ -1023,7 +1024,7 @@ func TestGitOpsSyncService_DirectorySync_OverwritesExistingDirectoryAtFilePath(t
 }
 
 func TestGitOpsSyncService_CreateDirectorySyncProjectInternal_RollsBackProjectOnUpdateFailure(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, db, projectsDir := setupGitOpsSyncDirectoryTestService(t)
 
 	sync := &projectpkg.GitOpsSync{
@@ -1073,7 +1074,7 @@ func TestGitOpsSyncService_CreateDirectorySyncProjectInternal_RollsBackProjectOn
 	assert.Nil(t, storedSync.ProjectID)
 
 	_, statErr := os.Stat(filepath.Join(projectsDir, "demo-project"))
-	assert.ErrorIs(t, statErr, os.ErrNotExist)
+	require.ErrorIs(t, statErr, os.ErrNotExist)
 }
 
 // TestGitOpsSyncService_UpdateDirectorySyncProjectInternal_RollsBackScopedChangesOnUpdateFailure
@@ -1082,7 +1083,7 @@ func TestGitOpsSyncService_CreateDirectorySyncProjectInternal_RollsBackProjectOn
 // sync touched (in place, keeping inodes) while unrelated files are never copied,
 // rewritten or pruned.
 func TestGitOpsSyncService_UpdateDirectorySyncProjectInternal_RollsBackScopedChangesOnUpdateFailure(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, db, projectsDir := setupGitOpsSyncDirectoryTestService(t)
 
 	projectPath := filepath.Join(projectsDir, "demo-project")
@@ -1198,7 +1199,7 @@ func TestGitOpsSyncService_UpdateDirectorySyncProjectInternal_RollsBackScopedCha
 	require.NoError(t, err)
 	assert.Equal(t, "A=1\n", string(envBytes))
 	_, statErr := os.Lstat(filepath.Join(projectPath, projects.GitSourceEnvFileName))
-	assert.ErrorIs(t, statErr, os.ErrNotExist)
+	require.ErrorIs(t, statErr, os.ErrNotExist)
 
 	// Unrelated files were left alone.
 	keepAfter, err := os.Stat(filepath.Join(projectPath, "keep.txt"))
@@ -1240,7 +1241,7 @@ func TestProjectsRemoveStaleComposeFiles_RemovesStaleCustomComposeFiles(t *testi
 }
 
 func TestGitOpsSyncService_GetDirectorySyncProjectInternal_RelinksManagedProjectWhenProjectIDStale(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, db, projectsDir := setupGitOpsSyncDirectoryTestService(t)
 
 	projectPath := filepath.Join(projectsDir, "Radarr-3")
@@ -1283,7 +1284,7 @@ func TestGitOpsSyncService_GetDirectorySyncProjectInternal_RelinksManagedProject
 }
 
 func TestGitOpsSyncService_GetDirectorySyncProjectInternal_RecoversUniqueDirectoryCandidate(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, db, projectsDir := setupGitOpsSyncDirectoryTestService(t)
 
 	projectPath := filepath.Join(projectsDir, "Radarr-3")
@@ -1322,7 +1323,7 @@ func TestGitOpsSyncService_GetDirectorySyncProjectInternal_RecoversUniqueDirecto
 }
 
 func TestGitOpsSyncService_ReconcileDirectorySyncProjectsOnStartup_SkipsAmbiguousDuplicates(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, db, projectsDir := setupGitOpsSyncDirectoryTestService(t)
 
 	for _, dirName := range []string{"Radarr-3", "Radarr-30"} {
@@ -1357,7 +1358,7 @@ func TestGitOpsSyncService_ReconcileDirectorySyncProjectsOnStartup_SkipsAmbiguou
 }
 
 func TestGitOpsSyncService_SyncProjectDirectory_FailsWhenBoundProjectMissing(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, db, projectsDir := setupGitOpsSyncDirectoryTestService(t)
 	testScheduler := &gitOpsSyncTestSchedulerInternal{}
 	require.NoError(t, svc.SetScheduler(ctx, testScheduler, newGitOpsAdmissionGateForTestInternal(t)))
@@ -1412,7 +1413,7 @@ func TestGitOpsSyncService_SyncProjectDirectory_FailsWhenBoundProjectMissing(t *
 }
 
 func TestGitOpsSyncService_SyncProjectDirectory_DisablesAutoSyncWhenBoundProjectRecoveryAmbiguous(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, db, projectsDir := setupGitOpsSyncDirectoryTestService(t)
 	testScheduler := &gitOpsSyncTestSchedulerInternal{}
 	require.NoError(t, svc.SetScheduler(ctx, testScheduler, newGitOpsAdmissionGateForTestInternal(t)))
@@ -1467,7 +1468,7 @@ func TestGitOpsSyncService_SyncProjectDirectory_DisablesAutoSyncWhenBoundProject
 }
 
 func TestGitOpsSyncService_GetOrCreateProjectInternal_FailsWhenBoundProjectMissing(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, db, projectsDir := setupGitOpsSyncDirectoryTestService(t)
 	testScheduler := &gitOpsSyncTestSchedulerInternal{}
 	require.NoError(t, svc.SetScheduler(ctx, testScheduler, newGitOpsAdmissionGateForTestInternal(t)))
@@ -1542,7 +1543,7 @@ func TestBuildSwarmStackDeployRequestInternal(t *testing.T) {
 				Files:            files,
 				Prune:            true,
 				WithRegistryAuth: true,
-				WorkingDir:       filepath.Join("/tmp/repo", "deploy/swarm"),
+				WorkingDir:       filepath.Join(string(filepath.Separator), "tmp", "repo", "deploy", "swarm"),
 			},
 		},
 		{
@@ -1569,7 +1570,7 @@ func TestBuildSwarmStackDeployRequestInternal(t *testing.T) {
 				Files:            []swarmtypes.SyncFile{},
 				Prune:            true,
 				WithRegistryAuth: true,
-				WorkingDir:       filepath.Join("/tmp/repo", "stacks"),
+				WorkingDir:       filepath.Join(string(filepath.Separator), "tmp", "repo", "stacks"),
 			},
 		},
 	}
@@ -1583,7 +1584,7 @@ func TestBuildSwarmStackDeployRequestInternal(t *testing.T) {
 }
 
 func TestGitOpsSyncService_GetEnvironmentSyncLimits(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupGitOpsProjectTestDBInternal(t)
 	settingsSvc, err := newGitOpsSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -1602,7 +1603,7 @@ func TestGitOpsSyncService_GetEnvironmentSyncLimits(t *testing.T) {
 }
 
 func TestGitOpsSyncService_GetEffectiveSyncLimits(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	t.Setenv("GIT_SYNC_MAX_FILES", "")
 	t.Setenv("GIT_SYNC_MAX_TOTAL_SIZE_MB", "")
 	t.Setenv("GIT_SYNC_MAX_BINARY_SIZE_MB", "")
@@ -1707,7 +1708,7 @@ func TestGitOpsSyncService_GetEffectiveSyncLimits(t *testing.T) {
 // the rule checks under test.
 func setupLifecycleValidationService(t *testing.T) (*GitOpsSyncService, context.Context) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, _, _ := setupGitOpsSyncDirectoryTestService(t)
 	require.NoError(t, svc.settingsService.SetStringSetting(ctx, "lifecycleEnabled", "true"))
 	return svc, ctx
@@ -1720,7 +1721,7 @@ func TestValidateLifecycleConfig_AllNilNoError(t *testing.T) {
 
 func TestValidateLifecycleConfig_RejectsWhenGloballyDisabled(t *testing.T) {
 	svc, _, _ := setupGitOpsSyncDirectoryTestService(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	// lifecycleEnabled defaults to false; do not enable.
 	err := svc.validateLifecycleConfigInternal(ctx, nil, lifecycleConfigInputInternal{
 		scriptPath:  new("scripts/deploy.sh"),
@@ -1944,13 +1945,13 @@ func TestRedeployAfterSyncFailedError_FormatAndUnwrap(t *testing.T) {
 	err := common.Classify(common.ErrRedeployAfterSyncFailed, fmt.Errorf("redeploy failed: %w", cause))
 
 	require.Equal(t, "redeploy failed: pre-deploy hook bombed", err.Error())
-	require.True(t, errors.Is(err, cause), "Unwrap should expose the cause for errors.Is")
+	require.ErrorIs(t, err, cause, "Unwrap should expose the cause for errors.Is")
 
 	require.ErrorIs(t, err, common.ErrRedeployAfterSyncFailed)
 }
 
 func TestMarkSyncRedeployFailedInternal_PersistsErrorOnSyncRow(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, db, _ := setupGitOpsSyncDirectoryTestService(t)
 	// Event logging requires a real event.EventService; the shared setup leaves it
 	// nil since most tests don't exercise the event path.

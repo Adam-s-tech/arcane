@@ -73,11 +73,11 @@ func PlanRename(ctx context.Context, dockerClient *client.Client, oldName, newNa
 	if err != nil {
 		return nil, fmt.Errorf("inspect source volume %s: %w", oldName, err)
 	}
-	if err := EnsureRenameSourceDetached(ctx, dockerClient, oldName); err != nil {
-		return nil, err
+	if ensureRenameSourceDetachedErr := EnsureRenameSourceDetached(ctx, dockerClient, oldName); ensureRenameSourceDetachedErr != nil {
+		return nil, ensureRenameSourceDetachedErr
 	}
-	if err := EnsureRenameTargetAbsent(ctx, dockerClient, newName); err != nil {
-		return nil, err
+	if ensureRenameTargetAbsentErr := EnsureRenameTargetAbsent(ctx, dockerClient, newName); ensureRenameTargetAbsentErr != nil {
+		return nil, ensureRenameTargetAbsentErr
 	}
 
 	entry := volumetypes.RenameEntry{
@@ -111,13 +111,13 @@ func (m *dockerProjectVolumeRenameMigrationInternal) Apply(ctx context.Context) 
 	}
 
 	for _, entry := range m.entries {
-		if err := createProjectRenamedVolumeInternal(ctx, dockerClient, entry); err != nil {
-			return errors.Join(err, m.rollbackCreatedTargetsInternal(ctx, dockerClient))
+		if createProjectRenamedVolumeErr := createProjectRenamedVolumeInternal(ctx, dockerClient, entry); createProjectRenamedVolumeErr != nil {
+			return errors.Join(createProjectRenamedVolumeErr, m.rollbackCreatedTargetsInternal(ctx, dockerClient))
 		}
 		m.createdNew = append(m.createdNew, entry)
 
-		if err := copyProjectVolumeDataInternal(ctx, dockerClient, copyRuntime, entry.OldName, entry.NewName); err != nil {
-			return errors.Join(fmt.Errorf("copy volume data from %s to %s: %w", entry.OldName, entry.NewName, err), m.rollbackCreatedTargetsInternal(ctx, dockerClient))
+		if copyProjectVolumeDataErr := copyProjectVolumeDataInternal(ctx, dockerClient, copyRuntime, entry.OldName, entry.NewName); copyProjectVolumeDataErr != nil {
+			return errors.Join(fmt.Errorf("copy volume data from %s to %s: %w", entry.OldName, entry.NewName, copyProjectVolumeDataErr), m.rollbackCreatedTargetsInternal(ctx, dockerClient))
 		}
 	}
 
@@ -302,8 +302,8 @@ func removeProjectVolumeHelperContainersInternal(ctx context.Context, dockerClie
 		if !isProjectVolumeHelperContainerInternal(c) || !containerSummaryMountsVolumeInternal(c, volumeName) {
 			continue
 		}
-		if _, err := dockerClient.ContainerRemove(ctx, c.ID, volumehelper.RemoveOptions()); err != nil && !cerrdefs.IsNotFound(err) {
-			removeErr = errors.Join(removeErr, fmt.Errorf("remove helper container %s: %w", c.ID, err))
+		if _, containerRemoveErr := dockerClient.ContainerRemove(ctx, c.ID, volumehelper.RemoveOptions()); containerRemoveErr != nil && !cerrdefs.IsNotFound(containerRemoveErr) {
+			removeErr = errors.Join(removeErr, fmt.Errorf("remove helper container %s: %w", c.ID, containerRemoveErr))
 		}
 	}
 	return removeErr
@@ -387,7 +387,14 @@ func copyProjectVolumeDataInternal(ctx context.Context, dockerClient *client.Cli
 	return nil
 }
 
-func createProjectVolumeCopyHolderContainerInternal(ctx context.Context, dockerClient *client.Client, copyRuntime projectVolumeCopyRuntimeInternal, volumeName string, readOnly bool) (string, func(), error) {
+func createProjectVolumeCopyHolderContainerInternal(ctx context.Context,
+	dockerClient *client.Client,
+	copyRuntime projectVolumeCopyRuntimeInternal,
+	volumeName string,
+	readOnly bool) (string,
+	func(),
+	error,
+) {
 	bind := volumeName + ":" + projectVolumeCopyMountPathInternal
 	if readOnly {
 		bind += ":ro"
@@ -414,8 +421,8 @@ func createProjectVolumeCopyHolderContainerInternal(ctx context.Context, dockerC
 	cleanup := func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 		defer cancel()
-		if _, err := dockerClient.ContainerRemove(cleanupCtx, resp.ID, volumehelper.RemoveOptions()); err != nil && !cerrdefs.IsNotFound(err) {
-			slog.WarnContext(cleanupCtx, "failed to remove volume copy holder", "containerID", resp.ID, "error", err)
+		if _, containerRemoveErr := dockerClient.ContainerRemove(cleanupCtx, resp.ID, volumehelper.RemoveOptions()); containerRemoveErr != nil && !cerrdefs.IsNotFound(containerRemoveErr) {
+			slog.WarnContext(cleanupCtx, "failed to remove volume copy holder", "containerID", resp.ID, "error", containerRemoveErr)
 		}
 	}
 

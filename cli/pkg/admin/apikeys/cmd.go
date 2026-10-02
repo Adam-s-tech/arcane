@@ -149,9 +149,9 @@ var createCmd = &cobra.Command{
 			createReq.Description = &description
 		}
 		if expiresAtRaw, _ := cmd.Flags().GetString("expires-at"); expiresAtRaw != "" {
-			parsed, err := time.Parse(time.RFC3339, expiresAtRaw)
-			if err != nil {
-				return fmt.Errorf("invalid --expires-at format (use RFC3339): %w", err)
+			parsed, parseErr := time.Parse(time.RFC3339, expiresAtRaw)
+			if parseErr != nil {
+				return fmt.Errorf("invalid --expires-at format (use RFC3339): %w", parseErr)
 			}
 			createReq.ExpiresAt = &parsed
 		}
@@ -257,7 +257,9 @@ var getCmd = &cobra.Command{
 				}
 				rows[i] = []string{g.Permission, scope}
 			}
-			output.Table([]string{"PERMISSION", "SCOPE"}, rows)
+			if tableErr := output.Table([]string{"PERMISSION", "SCOPE"}, rows); tableErr != nil {
+				return tableErr
+			}
 		}
 		return nil
 	},
@@ -282,16 +284,16 @@ var updateCmd = &cobra.Command{
 			req.Description = &apikeyUpdateDescription
 		}
 		if cmd.Flags().Changed("expires-at") && apikeyUpdateExpiresAt != "" {
-			parsedTime, err := time.Parse(time.RFC3339, apikeyUpdateExpiresAt)
-			if err != nil {
-				return fmt.Errorf("invalid expires-at format (use RFC3339): %w", err)
+			parsedTime, parseErr := time.Parse(time.RFC3339, apikeyUpdateExpiresAt)
+			if parseErr != nil {
+				return fmt.Errorf("invalid expires-at format (use RFC3339): %w", parseErr)
 			}
 			req.ExpiresAt = &parsedTime
 		}
 		if cmd.Flags().Changed("permission") {
-			grants, err := parsePermissionGrantsInternal(apikeyUpdatePermissions)
-			if err != nil {
-				return err
+			grants, parsePermissionGrantsErr := parsePermissionGrantsInternal(apikeyUpdatePermissions)
+			if parsePermissionGrantsErr != nil {
+				return parsePermissionGrantsErr
 			}
 			// Allow `--permission ""` once to clear all grants. Otherwise
 			// the parsed slice replaces the key's permission set entirely.

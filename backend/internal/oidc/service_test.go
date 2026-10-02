@@ -14,7 +14,7 @@ import (
 )
 
 func TestValidateMobileRedirectURI(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	s := &OidcService{
 		config: &config.Config{
 			OidcMobileRedirectUris: "arcane-mobile://oidc-callback, arcane-mobile://oauth",
@@ -45,7 +45,7 @@ func TestValidateMobileRedirectURI(t *testing.T) {
 }
 
 func TestGetMobileRedirectAllowlistTrimsWhitespace(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	s := &OidcService{
 		config: &config.Config{
 			OidcMobileRedirectUris: "  arcane-mobile://a  ,arcane-mobile://b ,, arcane-mobile://c",
@@ -65,7 +65,7 @@ func TestGetMobileRedirectAllowlistTrimsWhitespace(t *testing.T) {
 }
 
 func TestGetMobileRedirectAllowlistUsesSettings(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	settingsService, err := newSettingsServiceForTestInternal(t, ctx, db)
 
@@ -73,9 +73,9 @@ func TestGetMobileRedirectAllowlistUsesSettings(t *testing.T) {
 		"settings.NewSettingsService: %v", err)
 	{
 
-		err := settingsService.UpdateSetting(ctx, "oidcMobileRedirectUris", "arcane-mobile://db-callback")
-		require.NoError(t, err,
-			"UpdateSetting: %v", err)
+		updateSettingErr := settingsService.UpdateSetting(ctx, "oidcMobileRedirectUris", "arcane-mobile://db-callback")
+		require.NoError(t, updateSettingErr,
+			"UpdateSetting: %v", updateSettingErr)
 	}
 
 	s := &OidcService{
@@ -86,14 +86,14 @@ func TestGetMobileRedirectAllowlistUsesSettings(t *testing.T) {
 	}
 	{
 
-		err := s.ValidateMobileRedirectURI(ctx, "arcane-mobile://db-callback")
-		require.NoError(t, err,
-			"ValidateMobileRedirectURI db value: %v", err)
+		validateMobileRedirectURIErr := s.ValidateMobileRedirectURI(ctx, "arcane-mobile://db-callback")
+		require.NoError(t, validateMobileRedirectURIErr,
+			"ValidateMobileRedirectURI db value: %v", validateMobileRedirectURIErr)
 	}
 	{
 
-		err := s.ValidateMobileRedirectURI(ctx, "arcane-mobile://config-callback")
-		require.Error(t, err,
+		validateMobileRedirectURIErr2 := s.ValidateMobileRedirectURI(ctx, "arcane-mobile://config-callback")
+		require.Error(t, validateMobileRedirectURIErr2,
 			"ValidateMobileRedirectURI config fallback should fail when DB setting is configured")
 	}
 }
@@ -112,7 +112,7 @@ func newSettingsServiceForTestInternal(t testing.TB, ctx context.Context, db *da
 	t.Helper()
 	svc, err := settings.NewSettingsService(ctx, db)
 	if err == nil {
-		t.Cleanup(func() { require.NoError(t, svc.Stop(context.Background())) })
+		t.Cleanup(func() { require.NoError(t, svc.Stop(context.WithoutCancel(t.Context()))) })
 	}
 	return svc, err
 }

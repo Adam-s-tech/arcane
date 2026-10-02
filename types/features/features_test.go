@@ -14,8 +14,14 @@ func TestRegistry(t *testing.T) {
 		wantFound  bool
 		want       features.Definition
 	}{
-		{name: "known feature", id: features.VulnerabilityManagement, wantFound: true, want: features.Definition{ID: features.VulnerabilityManagement, SettingKey: "featureVulnerabilityManagementEnabled", DefaultEnabled: true}},
-		{name: "returned definitions are independent", id: features.VulnerabilityManagement, mutateCopy: true, wantFound: true, want: features.Definition{ID: features.VulnerabilityManagement, SettingKey: "featureVulnerabilityManagementEnabled", DefaultEnabled: true}},
+		{
+			name: "known feature", id: features.VulnerabilityManagement, wantFound: true,
+			want: features.Definition{ID: features.VulnerabilityManagement, SettingKey: "featureVulnerabilityManagementEnabled", DefaultEnabled: true},
+		},
+		{
+			name: "returned definitions are independent", id: features.VulnerabilityManagement, mutateCopy: true, wantFound: true,
+			want: features.Definition{ID: features.VulnerabilityManagement, SettingKey: "featureVulnerabilityManagementEnabled", DefaultEnabled: true},
+		},
 		{name: "swarm defaults off", id: features.Swarm, wantFound: true, want: features.Definition{ID: features.Swarm, SettingKey: "featureSwarmEnabled", DefaultEnabled: false}},
 		{name: "unknown feature", id: features.ID("unknown")},
 	}

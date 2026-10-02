@@ -54,7 +54,7 @@ func TestEnvironmentMiddleware_ReturnsBadGatewayForEdgeResourcesWithoutTunnel(t 
 		return c.JSON(http.StatusOK, map[string]any{"success": true})
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/environments/env-edge/containers", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/environments/env-edge/containers", http.NoBody)
 	recorder := httptest.NewRecorder()
 
 	router.ServeHTTP(recorder, req)
@@ -75,7 +75,7 @@ func TestEnvironmentMiddleware_ProxiesDashboardResourcesForRemoteEnvironments(t 
 		return c.JSON(http.StatusOK, map[string]any{"success": true})
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/environments/env-edge/dashboard", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/environments/env-edge/dashboard", http.NoBody)
 	recorder := httptest.NewRecorder()
 
 	router.ServeHTTP(recorder, req)
@@ -96,7 +96,7 @@ func TestEnvironmentMiddleware_KeepsEdgeManagementEndpointsLocal(t *testing.T) {
 		return c.JSON(http.StatusOK, map[string]any{"success": true})
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/environments/env-edge/settings", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/environments/env-edge/settings", http.NoBody)
 	recorder := httptest.NewRecorder()
 
 	router.ServeHTTP(recorder, req)
@@ -117,7 +117,7 @@ func TestEnvironmentMiddleware_KeepsEdgeMTLSDownloadEndpointsLocal(t *testing.T)
 		return c.JSON(http.StatusOK, map[string]any{"success": true})
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/environments/env-edge/deployment/mtls/bundle", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/environments/env-edge/deployment/mtls/bundle", http.NoBody)
 	recorder := httptest.NewRecorder()
 
 	router.ServeHTTP(recorder, req)
@@ -138,7 +138,7 @@ func TestEnvironmentMiddleware_KeepsNotificationEndpointsLocal(t *testing.T) {
 		return c.JSON(http.StatusOK, map[string]any{"success": true})
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/environments/env-edge/notifications/settings", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/environments/env-edge/notifications/settings", http.NoBody)
 	recorder := httptest.NewRecorder()
 
 	router.ServeHTTP(recorder, req)
@@ -181,7 +181,7 @@ func TestEnvironmentMiddleware_KeepsWebhookEndpointsLocal(t *testing.T) {
 				return c.JSON(http.StatusOK, map[string]any{"success": true})
 			})
 
-			req := httptest.NewRequest(tt.method, tt.path, nil)
+			req := httptest.NewRequest(tt.method, tt.path, http.NoBody)
 			recorder := httptest.NewRecorder()
 
 			router.ServeHTTP(recorder, req)
@@ -220,7 +220,7 @@ func TestEnvironmentMiddleware_KeepsActivityEndpointsLocal(t *testing.T) {
 				return c.JSON(http.StatusOK, map[string]any{"success": true})
 			})
 
-			req := httptest.NewRequest(tt.method, tt.path, nil)
+			req := httptest.NewRequest(tt.method, tt.path, http.NoBody)
 			recorder := httptest.NewRecorder()
 
 			router.ServeHTTP(recorder, req)
@@ -264,7 +264,7 @@ func TestEnvironmentMiddleware_LocalEnvironmentSkipsProxyPermissionCheck(t *test
 		return c.JSON(http.StatusOK, map[string]any{"success": true})
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/environments/0/containers", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/environments/0/containers", http.NoBody)
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, req)
 
@@ -276,7 +276,7 @@ func TestEnvironmentMiddleware_ProxyWebSocketRejectsEdgeTargetsWithoutTunnel(t *
 	middleware := newTestEnvironmentMiddleware()
 	e := echo.New()
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/environments/env-edge/ws/system/stats", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/environments/env-edge/ws/system/stats", http.NoBody)
 	c := e.NewContext(req, recorder)
 
 	_ = middleware.proxyWebSocket(c, "edge://oracle-1/api/environments/0/ws/system/stats", nil, "env-edge")
@@ -289,7 +289,7 @@ func TestEnvironmentMiddleware_ProxyHTTPRejectsEdgeTargetsWithoutTunnel(t *testi
 	middleware := newTestEnvironmentMiddleware()
 	e := echo.New()
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/environments/env-edge/containers", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/environments/env-edge/containers", http.NoBody)
 	c := e.NewContext(req, recorder)
 
 	_ = middleware.proxyHTTP(c, "edge://oracle-1/api/environments/0/containers", nil)
@@ -302,7 +302,7 @@ func TestEnvironmentMiddleware_CreateProxyRequest_RejectsInvalidProxyTarget(t *t
 	middleware := newTestEnvironmentMiddleware()
 	e := echo.New()
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/environments/env-edge/containers", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/environments/env-edge/containers", http.NoBody)
 	c := e.NewContext(req, recorder)
 
 	_, err := middleware.createProxyRequest(c, "ftp://example.com/containers", nil)
@@ -321,7 +321,7 @@ func TestEnvironmentMiddleware_KeepsNodeAgentDeploymentCreationLocal(t *testing.
 		return c.JSON(http.StatusOK, map[string]any{"success": true})
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/environments/env-edge/swarm/nodes/node-1/agent/deployment", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/environments/env-edge/swarm/nodes/node-1/agent/deployment", http.NoBody)
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, req)
 
@@ -382,7 +382,7 @@ func TestEnvironmentMiddleware_ForwardsResolvedIconCatalogHeaderOnly(t *testing.
 				return c.JSON(http.StatusOK, map[string]any{"success": true})
 			})
 
-			req := httptest.NewRequest(http.MethodPost, "/api/environments/env-remote/containers/container-1/update", nil)
+			req := httptest.NewRequest(http.MethodPost, "/api/environments/env-remote/containers/container-1/update", http.NoBody)
 			req.Header.Set(HeaderUpdateInitiatorID, "spoofed")
 			req.Header.Set(HeaderUpdateInitiatorName, "spoofed")
 			if tt.clientSupplied != "" {

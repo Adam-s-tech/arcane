@@ -1,7 +1,6 @@
 package event
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -78,7 +77,7 @@ func TestCreateEventRequestJSONOmitempty(t *testing.T) {
 }
 
 func TestEventService_LogEventsPersistOptionalPointers(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEventServiceTestDB(t)
 	svc := NewEventService(db, nil, nil)
 
@@ -152,7 +151,7 @@ func TestCloneEventMetadataInternal(t *testing.T) {
 }
 
 func TestEventService_LogErrorEvent_DoesNotMutateInputMetadata(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEventServiceTestDB(t)
 	svc := NewEventService(db, nil, nil)
 
@@ -182,7 +181,7 @@ func TestEventService_LogErrorEvent_DoesNotMutateInputMetadata(t *testing.T) {
 }
 
 func TestEventService_CreateEvent_ForwardsToManagerAPIInAgentMode(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEventServiceTestDB(t)
 
 	requests := make(chan CreateEventRequest, 1)
@@ -243,7 +242,7 @@ func TestEventService_CreateEvent_ForwardsToManagerAPIInAgentMode(t *testing.T) 
 }
 
 func TestEventService_CreateEvent_NormalizesActor(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEventServiceTestDB(t)
 	svc := NewEventService(db, nil, nil)
 
@@ -290,7 +289,7 @@ func TestEventService_CreateEvent_NormalizesActor(t *testing.T) {
 }
 
 func TestEventService_GetEventSeverityCounts(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEventServiceTestDB(t)
 	svc := NewEventService(db, nil, nil)
 
@@ -315,7 +314,7 @@ func TestEventService_GetEventSeverityCounts(t *testing.T) {
 }
 
 func TestEventService_ListEventsPaginated_TypeCategoryFilter(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEventServiceTestDB(t)
 	svc := NewEventService(db, nil, nil)
 
@@ -351,7 +350,17 @@ func TestIngestAgentEventAuthenticatedEnvironment(t *testing.T) {
 		t.Run("payload environment "+supplied, func(t *testing.T) {
 			db := setupEventServiceTestDB(t)
 			svc := NewEventService(db, nil, nil)
-			req, ok := mapDaemonEventInternal(events.Message{Type: events.ContainerEventType, Action: events.ActionStart, Actor: events.Actor{ID: "container-id", Attributes: map[string]string{"name": "web", "com.docker.compose.project": "demo"}}})
+			req, ok := mapDaemonEventInternal(events.Message{
+				Type:   events.ContainerEventType,
+				Action: events.ActionStart,
+				Actor: events.Actor{
+					ID: "container-id",
+					Attributes: map[string]string{
+						"name":                       "web",
+						"com.docker.compose.project": "demo",
+					},
+				},
+			})
 			require.True(t, ok)
 			req.EnvironmentID = &supplied
 			recorded, err := svc.IngestAgentEvent(t.Context(), " remote-environment ", req)
@@ -405,7 +414,19 @@ func TestDaemonEventForwardingPreservesMetadata(t *testing.T) {
 	defer server.Close()
 	db := setupEventServiceTestDB(t)
 	svc := NewEventService(db, &config.Config{AgentMode: true, AgentToken: "agent-token", ManagerApiUrl: server.URL}, server.Client())
-	message := events.Message{Type: events.ContainerEventType, Action: events.ActionDie, TimeNano: 123, Actor: events.Actor{ID: "container-id", Attributes: map[string]string{"name": "web", "exitCode": "137", "signal": "9"}}}
+	message := events.Message{
+		Type:     events.ContainerEventType,
+		Action:   events.ActionDie,
+		TimeNano: 123,
+		Actor: events.Actor{
+			ID: "container-id",
+			Attributes: map[string]string{
+				"name":     "web",
+				"exitCode": "137",
+				"signal":   "9",
+			},
+		},
+	}
 	req, ok := mapDaemonEventInternal(message)
 	require.True(t, ok)
 	svc.RecordDockerEvent(t.Context(), message)

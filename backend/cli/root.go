@@ -31,7 +31,7 @@ var rootCmd = &cobra.Command{
 }
 
 func Execute() {
-	ctx := signals.SignalContext(context.Background())
+	ctx := signals.SignalContext(context.Background()) //nolint:forbidigo // Process entry point creates the signal-controlled application context.
 
 	err := rootCmd.ExecuteContext(ctx)
 	if err != nil {

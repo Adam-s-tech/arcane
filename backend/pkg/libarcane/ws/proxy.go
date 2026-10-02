@@ -69,12 +69,12 @@ func ProxyHTTP(w http.ResponseWriter, r *http.Request, remoteWS string, header h
 	go func() {
 		defer func() { errc <- struct{}{} }()
 		for {
-			mt, msg, err := clientConn.Read(pumpCtx)
-			if err != nil {
-				relayCloseInternal(remoteConn, err)
+			mt, msg, readErr := clientConn.Read(pumpCtx)
+			if readErr != nil {
+				relayCloseInternal(remoteConn, readErr)
 				return
 			}
-			if err := remoteConn.Write(pumpCtx, mt, msg); err != nil {
+			if writeErr := remoteConn.Write(pumpCtx, mt, msg); writeErr != nil {
 				return
 			}
 		}
@@ -84,12 +84,12 @@ func ProxyHTTP(w http.ResponseWriter, r *http.Request, remoteWS string, header h
 	go func() {
 		defer func() { errc <- struct{}{} }()
 		for {
-			mt, msg, err := remoteConn.Read(pumpCtx)
-			if err != nil {
-				relayCloseInternal(clientConn, err)
+			mt, msg, readErr := remoteConn.Read(pumpCtx)
+			if readErr != nil {
+				relayCloseInternal(clientConn, readErr)
 				return
 			}
-			if err := clientConn.Write(pumpCtx, mt, msg); err != nil {
+			if writeErr := clientConn.Write(pumpCtx, mt, msg); writeErr != nil {
 				return
 			}
 		}

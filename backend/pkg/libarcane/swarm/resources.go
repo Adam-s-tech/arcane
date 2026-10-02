@@ -163,8 +163,8 @@ func ensureSwarmNetworksInternal(ctx context.Context, dockerClient *dockerclient
 			IPAM:       convertIPAMInternal(cfg.Ipam),
 		}
 
-		if _, err := dockerClient.NetworkCreate(ctx, networkName, createOpts); err != nil {
-			return nil, fmt.Errorf("failed to create network %s: %w", networkName, err)
+		if _, networkCreateErr := dockerClient.NetworkCreate(ctx, networkName, createOpts); networkCreateErr != nil {
+			return nil, fmt.Errorf("failed to create network %s: %w", networkName, networkCreateErr)
 		}
 	}
 

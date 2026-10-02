@@ -1,7 +1,6 @@
 package admin
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -39,9 +38,9 @@ func newResetPasswordTestDBInternal(t *testing.T) *database.DB {
 	return db
 }
 
-func createGlobalAdminInternal(t *testing.T, db *database.DB) (*common.User, *role.RoleService, *user.UserService) {
+func createGlobalAdminInternal(t *testing.T, db *database.DB) (*common.User, *user.UserService) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	roleService := role.NewRoleService(db)
 	require.NoError(t, roleService.EnsureBuiltInRoles(ctx))
 	userService := user.NewUserService(db, roleService)
@@ -58,13 +57,13 @@ func createGlobalAdminInternal(t *testing.T, db *database.DB) (*common.User, *ro
 		{RoleID: authz.BuiltInRoleAdmin},
 	}))
 
-	return adminUser, roleService, userService
+	return adminUser, userService
 }
 
 func TestResetPasswordInternalResetsPasswordAndRevokesSessions(t *testing.T) {
 	db := newResetPasswordTestDBInternal(t)
-	ctx := context.Background()
-	adminUser, _, userService := createGlobalAdminInternal(t, db)
+	ctx := t.Context()
+	adminUser, userService := createGlobalAdminInternal(t, db)
 	sessionService := session.NewSessionService(db)
 	firstSession, _, err := sessionService.CreateSession(ctx, adminUser.ID, time.Now().Add(time.Hour), auth.SessionMeta{})
 	require.NoError(t, err)
@@ -89,10 +88,10 @@ func TestResetPasswordInternalResetsPasswordAndRevokesSessions(t *testing.T) {
 
 func TestResetPasswordInternalRollsBackWhenSessionRevocationFails(t *testing.T) {
 	db := newResetPasswordTestDBInternal(t)
-	ctx := context.Background()
-	adminUser, _, userService := createGlobalAdminInternal(t, db)
+	ctx := t.Context()
+	adminUser, userService := createGlobalAdminInternal(t, db)
 	sessionService := session.NewSessionService(db)
-	session, _, err := sessionService.CreateSession(ctx, adminUser.ID, time.Now().Add(time.Hour), auth.SessionMeta{})
+	localSession, _, err := sessionService.CreateSession(ctx, adminUser.ID, time.Now().Add(time.Hour), auth.SessionMeta{})
 	require.NoError(t, err)
 	require.NoError(t, db.Exec(`
 		CREATE TRIGGER fail_user_session_revocation
@@ -111,15 +110,15 @@ func TestResetPasswordInternalRollsBackWhenSessionRevocationFails(t *testing.T) 
 	require.NoError(t, err)
 	require.NoError(t, userService.ValidatePassword(unchangedUser.PasswordHash, "old-password"))
 	require.True(t, unchangedUser.RequiresPasswordChange)
-	unchangedSession, err := sessionService.GetSessionByID(ctx, session.ID)
+	unchangedSession, err := sessionService.GetSessionByID(ctx, localSession.ID)
 	require.NoError(t, err)
 	require.Nil(t, unchangedSession.RevokedAt)
 }
 
 func TestResetPasswordInternalRejectsNonAdmin(t *testing.T) {
 	db := newResetPasswordTestDBInternal(t)
-	ctx := context.Background()
-	_, _, userService := createGlobalAdminInternal(t, db)
+	ctx := t.Context()
+	_, userService := createGlobalAdminInternal(t, db)
 	passwordHash, err := userService.HashPassword("old-password")
 	require.NoError(t, err)
 	nonAdmin, err := userService.CreateUser(ctx, &common.User{

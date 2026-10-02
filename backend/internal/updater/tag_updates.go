@@ -136,22 +136,31 @@ func (s *UpdaterService) CheckProjectUpdates(ctx context.Context, projectID stri
 		}
 		records = append(records, s.checkProjectServiceInternal(ctx, projectID, service))
 	}
-	if err := s.deps.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("project_id = ?", projectID).Delete(&imageupdate.ImageUpdateRecord{}).Error; err != nil {
-			return err
+	if transactionErr := s.deps.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if deleteProjectUpdatesErr := tx.Where("project_id = ?", projectID).Delete(&imageupdate.ImageUpdateRecord{}).Error; deleteProjectUpdatesErr != nil {
+			return deleteProjectUpdatesErr
 		}
 		if len(records) == 0 {
 			return nil
 		}
 		return tx.Create(&records).Error
-	}); err != nil {
-		return nil, fmt.Errorf("save project update checks: %w", err)
+	}); transactionErr != nil {
+		return nil, fmt.Errorf("save project update checks: %w", transactionErr)
 	}
 	return project.BuildConfiguredUpdateInfo(projectID, details.Services, nil, records), nil
 }
 
 func (s *UpdaterService) checkProjectServiceInternal(ctx context.Context, projectID string, service composetypes.ServiceConfig) imageupdate.ImageUpdateRecord {
-	record := imageupdate.ImageUpdateRecord{ID: "project::" + projectID + "::" + service.Name, ProjectID: projectID, ServiceName: service.Name, PolicyKey: imageref.UpdatePolicyKey(service.Image, service.Labels), CheckTime: time.Now().UTC()}
+	record := imageupdate.ImageUpdateRecord{
+		ID:          "project::" + projectID + "::" + service.Name,
+		ProjectID:   projectID,
+		ServiceName: service.Name,
+		PolicyKey: imageref.UpdatePolicyKey(
+			service.Image,
+			service.Labels,
+		),
+		CheckTime: time.Now().UTC(),
+	}
 	parsed, err := refs.NormalizeReference(service.Image)
 	if err != nil {
 		record.LastError = new(err.Error())

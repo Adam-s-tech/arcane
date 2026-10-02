@@ -177,9 +177,9 @@ var destroyCmd = &cobra.Command{
 			if display == "" {
 				display = resolved.ID
 			}
-			confirmed, err := cmdutil.Confirm(cmd, fmt.Sprintf("Are you sure you want to destroy project %s? This will remove all containers!", display))
-			if err != nil {
-				return err
+			confirmed, confirmErr := cmdutil.Confirm(cmd, fmt.Sprintf("Are you sure you want to destroy project %s? This will remove all containers!", display))
+			if confirmErr != nil {
+				return confirmErr
 			}
 			if !confirmed {
 				fmt.Println("Cancelled")
@@ -195,8 +195,8 @@ var destroyCmd = &cobra.Command{
 			return fmt.Errorf("failed to destroy project: %w", err)
 		}
 		defer func() { _ = resp.Body.Close() }()
-		if err := cmdutil.EnsureSuccessStatus(resp); err != nil {
-			return fmt.Errorf("failed to destroy project: %w", err)
+		if ensureSuccessStatusErr := cmdutil.EnsureSuccessStatus(resp); ensureSuccessStatusErr != nil {
+			return fmt.Errorf("failed to destroy project: %w", ensureSuccessStatusErr)
 		}
 
 		output.Success("Project %s destroyed successfully", resolved.Name)
@@ -222,9 +222,9 @@ var getCmd = &cobra.Command{
 		}
 
 		if !complete {
-			result, err := c.GetJSON[project.Details](cmd.Context(), types.Project(c.EnvID(), resolved.ID))
-			if err != nil {
-				return fmt.Errorf("failed to get project: %w", err)
+			result, getProjectErr := c.GetJSON[project.Details](cmd.Context(), types.Project(c.EnvID(), resolved.ID))
+			if getProjectErr != nil {
+				return fmt.Errorf("failed to get project: %w", getProjectErr)
 			}
 			resolved = &result.Data
 		}
@@ -361,12 +361,12 @@ func runProjectStreamAction(cmd *cobra.Command, identifier string, cfg projectSt
 		return fmt.Errorf("%s: %w", cfg.failureMessage, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if err := cmdutil.EnsureSuccessStatus(resp); err != nil {
-		return fmt.Errorf("%s: %w", cfg.failureMessage, err)
+	if ensureSuccessStatusErr := cmdutil.EnsureSuccessStatus(resp); ensureSuccessStatusErr != nil {
+		return fmt.Errorf("%s: %w", cfg.failureMessage, ensureSuccessStatusErr)
 	}
 
-	if err := printOperationStreamInternal(resp.Body); err != nil {
-		return fmt.Errorf("%s: %w", cfg.failureMessage, err)
+	if printOperationStreamErr := printOperationStreamInternal(resp.Body); printOperationStreamErr != nil {
+		return fmt.Errorf("%s: %w", cfg.failureMessage, printOperationStreamErr)
 	}
 
 	output.Success(cfg.successMessage, resolved.Name)
@@ -429,9 +429,9 @@ var createCmd = &cobra.Command{
 		}
 
 		if createEnvFile != "" {
-			envBytes, err := os.ReadFile(createEnvFile)
-			if err != nil {
-				return fmt.Errorf("failed to read env file: %w", err)
+			envBytes, readFileErr := os.ReadFile(createEnvFile)
+			if readFileErr != nil {
+				return fmt.Errorf("failed to read env file: %w", readFileErr)
 			}
 			body.EnvContent = new(string(envBytes))
 		}
@@ -449,14 +449,14 @@ var createCmd = &cobra.Command{
 		}
 		var requestBody bytes.Buffer
 		writer := multipart.NewWriter(&requestBody)
-		if err := writer.WriteField("project", string(projectJSON)); err != nil {
-			return fmt.Errorf("failed to write project configuration: %w", err)
+		if writeFieldErr := writer.WriteField("project", string(projectJSON)); writeFieldErr != nil {
+			return fmt.Errorf("failed to write project configuration: %w", writeFieldErr)
 		}
-		if err := writer.WriteField("manifest", string(manifestJSON)); err != nil {
-			return fmt.Errorf("failed to write project workspace manifest: %w", err)
+		if writeManifestErr := writer.WriteField("manifest", string(manifestJSON)); writeManifestErr != nil {
+			return fmt.Errorf("failed to write project workspace manifest: %w", writeManifestErr)
 		}
-		if err := writer.Close(); err != nil {
-			return fmt.Errorf("failed to finalize project request: %w", err)
+		if closeErr := writer.Close(); closeErr != nil {
+			return fmt.Errorf("failed to finalize project request: %w", closeErr)
 		}
 
 		resp, err := c.RequestRaw(cmd.Context(), http.MethodPost, types.Projects(c.EnvID()), &requestBody, map[string]string{"Content-Type": writer.FormDataContentType()})
@@ -464,13 +464,13 @@ var createCmd = &cobra.Command{
 			return fmt.Errorf("failed to create project: %w", err)
 		}
 		defer func() { _ = resp.Body.Close() }()
-		if err := cmdutil.EnsureSuccessStatus(resp); err != nil {
-			return fmt.Errorf("failed to create project: %w", err)
+		if ensureSuccessStatusErr := cmdutil.EnsureSuccessStatus(resp); ensureSuccessStatusErr != nil {
+			return fmt.Errorf("failed to create project: %w", ensureSuccessStatusErr)
 		}
 
 		var result base.ApiResponse[project.CreateReponse]
-		if err := cmdutil.DecodeJSON(resp, &result); err != nil {
-			return err
+		if decodeJSONErr := cmdutil.DecodeJSON(resp, &result); decodeJSONErr != nil {
+			return decodeJSONErr
 		}
 
 		if jsonOutput {
@@ -510,17 +510,17 @@ var updateCmd = &cobra.Command{
 		}
 
 		if cmd.Flags().Changed("file") {
-			composeBytes, err := os.ReadFile(updateFile)
-			if err != nil {
-				return fmt.Errorf("failed to read compose file: %w", err)
+			composeBytes, readFileErr := os.ReadFile(updateFile)
+			if readFileErr != nil {
+				return fmt.Errorf("failed to read compose file: %w", readFileErr)
 			}
 			body.ComposeContent = new(string(composeBytes))
 		}
 
 		if cmd.Flags().Changed("env-file") {
-			envBytes, err := os.ReadFile(updateEnvFile)
-			if err != nil {
-				return fmt.Errorf("failed to read env file: %w", err)
+			envBytes, readEnvFileErr := os.ReadFile(updateEnvFile)
+			if readEnvFileErr != nil {
+				return fmt.Errorf("failed to read env file: %w", readEnvFileErr)
 			}
 			body.EnvContent = new(string(envBytes))
 		}
@@ -585,18 +585,18 @@ var updateIncludesCmd = &cobra.Command{
 		}
 		var requestBody bytes.Buffer
 		writer := multipart.NewWriter(&requestBody)
-		if err := writer.WriteField("manifest", string(manifestJSON)); err != nil {
-			return fmt.Errorf("failed to write workspace manifest: %w", err)
+		if writeFieldErr := writer.WriteField("manifest", string(manifestJSON)); writeFieldErr != nil {
+			return fmt.Errorf("failed to write workspace manifest: %w", writeFieldErr)
 		}
 		filePart, err := writer.CreateFormFile("files", filepath.Base(includesFile))
 		if err != nil {
 			return fmt.Errorf("failed to create workspace upload: %w", err)
 		}
-		if _, err := filePart.Write(content); err != nil {
-			return fmt.Errorf("failed to write workspace upload: %w", err)
+		if _, writeErr := filePart.Write(content); writeErr != nil {
+			return fmt.Errorf("failed to write workspace upload: %w", writeErr)
 		}
-		if err := writer.Close(); err != nil {
-			return fmt.Errorf("failed to finalize workspace upload: %w", err)
+		if closeErr := writer.Close(); closeErr != nil {
+			return fmt.Errorf("failed to finalize workspace upload: %w", closeErr)
 		}
 
 		resp, err := c.RequestRaw(cmd.Context(), http.MethodPut, types.ProjectWorkspace(c.EnvID(), resolved.ID), &requestBody, map[string]string{"Content-Type": writer.FormDataContentType()})
@@ -604,14 +604,14 @@ var updateIncludesCmd = &cobra.Command{
 			return fmt.Errorf("failed to update include file: %w", err)
 		}
 		defer func() { _ = resp.Body.Close() }()
-		if err := cmdutil.EnsureSuccessStatus(resp); err != nil {
-			return fmt.Errorf("failed to update include file: %w", err)
+		if ensureSuccessStatusErr := cmdutil.EnsureSuccessStatus(resp); ensureSuccessStatusErr != nil {
+			return fmt.Errorf("failed to update include file: %w", ensureSuccessStatusErr)
 		}
 
 		if jsonOutput {
 			var result base.ApiResponse[workspacetypes.Workspace]
-			if err := cmdutil.DecodeJSON(resp, &result); err != nil {
-				return err
+			if decodeJSONErr := cmdutil.DecodeJSON(resp, &result); decodeJSONErr != nil {
+				return decodeJSONErr
 			}
 			return cmdutil.PrintJSON(result.Data)
 		}

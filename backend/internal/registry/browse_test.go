@@ -37,7 +37,7 @@ func createBrowseTestRegistryInternal(t *testing.T, db *database.DB, registryURL
 		require.NoError(t, err)
 		record.Token = encryptedToken
 	}
-	require.NoError(t, db.WithContext(context.Background()).Create(record).Error)
+	require.NoError(t, db.WithContext(t.Context()).Create(record).Error)
 	return record.ID
 }
 
@@ -95,7 +95,7 @@ func TestContainerRegistryService_ListRepositoriesInternal(t *testing.T) {
 
 	db := setupContainerRegistryTestDBInternal(t)
 	svc := NewContainerRegistryService(db, nil, nil, nil)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	id := createBrowseTestRegistryInternal(t, db, host, "", "")
 	repositories, page, err := svc.ListRepositories(ctx, id, browseParamsInternal(""))
@@ -124,7 +124,7 @@ func TestContainerRegistryService_ListRepositoryTagsSingleImageInternal(t *testi
 	svc := NewContainerRegistryService(db, nil, nil, nil)
 	id := createBrowseTestRegistryInternal(t, db, host, "", "")
 
-	tags, page, err := svc.ListRepositoryTags(context.Background(), id, "team/api", pagination.QueryParams{Start: 0, Limit: 1})
+	tags, page, err := svc.ListRepositoryTags(t.Context(), id, "team/api", pagination.QueryParams{Start: 0, Limit: 1})
 	require.NoError(t, err)
 	assert.EqualValues(t, 2, page.TotalItems)
 	require.Len(t, tags, 1)
@@ -168,7 +168,7 @@ func TestContainerRegistryService_ListRepositoryTagsIndexInternal(t *testing.T) 
 	svc := NewContainerRegistryService(db, nil, nil, nil)
 	id := createBrowseTestRegistryInternal(t, db, host, "", "")
 
-	tags, _, err := svc.ListRepositoryTags(context.Background(), id, "team/api", browseParamsInternal(""))
+	tags, _, err := svc.ListRepositoryTags(t.Context(), id, "team/api", browseParamsInternal(""))
 	require.NoError(t, err)
 	require.Len(t, tags, 1)
 
@@ -194,7 +194,7 @@ func TestContainerRegistryService_DeleteRepositoryTagInternal(t *testing.T) {
 	db := setupContainerRegistryTestDBInternal(t)
 	svc := NewContainerRegistryService(db, nil, nil, nil)
 	id := createBrowseTestRegistryInternal(t, db, host, "", "")
-	ctx := context.Background()
+	ctx := t.Context()
 
 	digest, err := svc.DeleteRepositoryTag(ctx, id, "team/api", "1.0")
 	require.NoError(t, err)
@@ -229,7 +229,7 @@ func TestContainerRegistryService_BrowseUsesStoredCredentialsInternal(t *testing
 
 	db := setupContainerRegistryTestDBInternal(t)
 	svc := NewContainerRegistryService(db, nil, nil, nil)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	id := createBrowseTestRegistryInternal(t, db, host, "robot", "secret")
 	repositories, _, err := svc.ListRepositories(ctx, id, browseParamsInternal(""))

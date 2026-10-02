@@ -197,8 +197,8 @@ func RenderGenericPayloadTemplate(config GenericConfig, title, message string, v
 	}
 
 	var rendered bytes.Buffer
-	if err := tmpl.Execute(&rendered, genericTemplateDataInternal(config, title, message, vars)); err != nil {
-		return "", fmt.Errorf("failed to render webhook payload template: %w", err)
+	if executeErr := tmpl.Execute(&rendered, genericTemplateDataInternal(config, title, message, vars)); executeErr != nil {
+		return "", fmt.Errorf("failed to render webhook payload template: %w", executeErr)
 	}
 	return rendered.String(), nil
 }
@@ -323,8 +323,8 @@ func sendGenericTemplatedInternal(config GenericConfig, shoutrrrURL, templateID 
 		return fmt.Errorf("failed to initialize shoutrrr Generic service: %w", err)
 	}
 
-	if err := service.SetTemplateString(templateID, config.PayloadTemplate); err != nil {
-		return fmt.Errorf("invalid webhook payload template: %w", err)
+	if setTemplateStringErr := service.SetTemplateString(templateID, config.PayloadTemplate); setTemplateStringErr != nil {
+		return fmt.Errorf("invalid webhook payload template: %w", setTemplateStringErr)
 	}
 
 	// Shoutrrr renders the registered template over the send params, remapping
@@ -337,8 +337,8 @@ func sendGenericTemplatedInternal(config GenericConfig, shoutrrrURL, templateID 
 		params[key] = jsonEscapeString(value)
 	}
 
-	if err := service.Send(jsonEscapeString(message), &params); err != nil {
-		return fmt.Errorf("failed to send Generic webhook message via shoutrrr: %w", err)
+	if sendErr := service.Send(jsonEscapeString(message), &params); sendErr != nil {
+		return fmt.Errorf("failed to send Generic webhook message via shoutrrr: %w", sendErr)
 	}
 	return nil
 }

@@ -87,8 +87,8 @@ func CollectFiles(ctx context.Context, root string, selection []string, opts Col
 			return nil, fmt.Errorf("%s is a symbolic link: %w", selected, ErrSelectionInvalid)
 		}
 		if !entry.IsDirectory {
-			if err := c.addInternal(ctx, entry); err != nil {
-				return nil, err
+			if addErr := c.addInternal(ctx, entry); addErr != nil {
+				return nil, addErr
 			}
 			continue
 		}
@@ -170,16 +170,16 @@ func ParseSigningKey(armored, passphrase string) (*openpgp.Entity, error) {
 			if passphrase == "" {
 				return nil, errors.New("signing key is protected by a passphrase")
 			}
-			if err := entity.PrivateKey.Decrypt([]byte(passphrase)); err != nil {
-				return nil, fmt.Errorf("signing key passphrase is incorrect: %w", err)
+			if decryptErr := entity.PrivateKey.Decrypt([]byte(passphrase)); decryptErr != nil {
+				return nil, fmt.Errorf("signing key passphrase is incorrect: %w", decryptErr)
 			}
 		}
 		for _, subkey := range entity.Subkeys {
 			if subkey.PrivateKey == nil || !subkey.PrivateKey.Encrypted {
 				continue
 			}
-			if err := subkey.PrivateKey.Decrypt([]byte(passphrase)); err != nil {
-				return nil, fmt.Errorf("signing key passphrase is incorrect: %w", err)
+			if decryptErr2 := subkey.PrivateKey.Decrypt([]byte(passphrase)); decryptErr2 != nil {
+				return nil, fmt.Errorf("signing key passphrase is incorrect: %w", decryptErr2)
 			}
 		}
 		return entity, nil
@@ -257,13 +257,13 @@ func (c *Client) initEmptyCheckoutInternal(url, branch string) (*WriteCheckout, 
 		_ = os.RemoveAll(repoPath)
 		return nil, fmt.Errorf("failed to initialize checkout: %w", err)
 	}
-	if _, err := repo.CreateRemote(&config.RemoteConfig{Name: "origin", URLs: []string{url}}); err != nil {
+	if _, createRemoteErr := repo.CreateRemote(&config.RemoteConfig{Name: "origin", URLs: []string{url}}); createRemoteErr != nil {
 		_ = os.RemoveAll(repoPath)
-		return nil, fmt.Errorf("failed to configure remote: %w", err)
+		return nil, fmt.Errorf("failed to configure remote: %w", createRemoteErr)
 	}
-	if err := repo.Storer.SetReference(plumbing.NewSymbolicReference(plumbing.HEAD, plumbing.NewBranchReferenceName(branch))); err != nil {
+	if setReferenceErr := repo.Storer.SetReference(plumbing.NewSymbolicReference(plumbing.HEAD, plumbing.NewBranchReferenceName(branch))); setReferenceErr != nil {
 		_ = os.RemoveAll(repoPath)
-		return nil, fmt.Errorf("failed to select branch: %w", err)
+		return nil, fmt.Errorf("failed to select branch: %w", setReferenceErr)
 	}
 	return &WriteCheckout{RepoPath: repoPath, Branch: branch, url: url, repo: repo}, nil
 }
@@ -283,9 +283,9 @@ func (c *Client) checkoutNewBranchInternal(ctx context.Context, url, branch stri
 		_ = c.Cleanup(repoPath)
 		return nil, fmt.Errorf("failed to open worktree: %w", err)
 	}
-	if err := worktree.Checkout(&git.CheckoutOptions{Branch: plumbing.NewBranchReferenceName(branch), Create: true}); err != nil {
+	if checkoutErr := worktree.Checkout(&git.CheckoutOptions{Branch: plumbing.NewBranchReferenceName(branch), Create: true}); checkoutErr != nil {
 		_ = c.Cleanup(repoPath)
-		return nil, fmt.Errorf("failed to create branch %s: %w", branch, err)
+		return nil, fmt.Errorf("failed to create branch %s: %w", branch, checkoutErr)
 	}
 	return &WriteCheckout{RepoPath: repoPath, Branch: branch, url: url, repo: repo}, nil
 }
@@ -302,8 +302,8 @@ func (c *Client) CommitAndPush(ctx context.Context, checkout *WriteCheckout, req
 	if err != nil {
 		return "", false, fmt.Errorf("failed to open worktree: %w", err)
 	}
-	if err := stageCommitFilesInternal(ctx, checkout, worktree, req); err != nil {
-		return "", false, err
+	if stageCommitFilesErr := stageCommitFilesInternal(ctx, checkout, worktree, req); stageCommitFilesErr != nil {
+		return "", false, stageCommitFilesErr
 	}
 
 	signature := &object.Signature{Name: req.AuthorName, Email: req.AuthorEmail, When: time.Now()}
@@ -314,8 +314,8 @@ func (c *Client) CommitAndPush(ctx context.Context, checkout *WriteCheckout, req
 		}
 		return "", false, fmt.Errorf("failed to commit: %w", err)
 	}
-	if err := c.pushBranchInternal(ctx, checkout, hash.String(), auth); err != nil {
-		return "", false, err
+	if pushBranchErr := c.pushBranchInternal(ctx, checkout, hash.String(), auth); pushBranchErr != nil {
+		return "", false, pushBranchErr
 	}
 	checkout.HeadCommit = hash.String()
 	checkout.BranchExists = true
@@ -373,11 +373,11 @@ func (c *Client) pushBranchInternal(ctx context.Context, checkout *WriteCheckout
 	if authMethod != nil {
 		pushOptions.Auth = authMethod
 	}
-	if err := checkout.repo.PushContext(ctx, pushOptions); err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
-		if isPushRejectedInternal(err) {
-			return fmt.Errorf("%s: %w", err.Error(), ErrPushRejected)
+	if pushContextErr := checkout.repo.PushContext(ctx, pushOptions); pushContextErr != nil && !errors.Is(pushContextErr, git.NoErrAlreadyUpToDate) {
+		if isPushRejectedInternal(pushContextErr) {
+			return fmt.Errorf("%s: %w", pushContextErr.Error(), ErrPushRejected)
 		}
-		return fmt.Errorf("failed to push: %w", err)
+		return fmt.Errorf("failed to push: %w", pushContextErr)
 	}
 
 	remoteHead, exists, err := c.RemoteBranchHead(ctx, checkout.url, checkout.Branch, auth)
@@ -438,19 +438,19 @@ func (c *Client) DirectoryHistory(ctx context.Context, repoPath, directory strin
 
 	entries := make([]HistoryEntry, 0, max(limit, 0))
 	for {
-		if err := ctx.Err(); err != nil {
-			return nil, err
+		if errErr := ctx.Err(); errErr != nil {
+			return nil, errErr
 		}
-		commit, err := iter.Next()
-		if err != nil {
-			if errors.Is(err, io.EOF) {
+		commit, nextErr := iter.Next()
+		if nextErr != nil {
+			if errors.Is(nextErr, io.EOF) {
 				break
 			}
-			return nil, fmt.Errorf("failed to iterate history: %w", err)
+			return nil, fmt.Errorf("failed to iterate history: %w", nextErr)
 		}
-		files, err := commitDirectoryFilesInternal(commit, prefix)
-		if err != nil {
-			return nil, err
+		files, nextErr := commitDirectoryFilesInternal(commit, prefix)
+		if nextErr != nil {
+			return nil, nextErr
 		}
 		entries = append(entries, historyEntryInternal(commit, files))
 		if limit > 0 && len(entries) >= limit {
@@ -494,9 +494,9 @@ func (c *Client) CommitDiff(ctx context.Context, repoPath, commitHash, directory
 			continue
 		}
 		files = append(files, relative)
-		single, err := commitFilePatchInternal(commit, name)
-		if err != nil {
-			return HistoryEntry{}, nil, err
+		single, commitFilePatchErr := commitFilePatchInternal(commit, name)
+		if commitFilePatchErr != nil {
+			return HistoryEntry{}, nil, commitFilePatchErr
 		}
 		diffs = append(diffs, FileDiff{Path: relative, Patch: single})
 	}
@@ -599,9 +599,9 @@ func commitFilePatchInternal(commit *object.Commit, name string) (string, error)
 		if change.From.Name != name && change.To.Name != name {
 			continue
 		}
-		patch, err := change.Patch()
-		if err != nil {
-			return "", fmt.Errorf("failed to build patch for %s: %w", name, err)
+		patch, patchErr := change.Patch()
+		if patchErr != nil {
+			return "", fmt.Errorf("failed to build patch for %s: %w", name, patchErr)
 		}
 		return patch.String(), nil
 	}

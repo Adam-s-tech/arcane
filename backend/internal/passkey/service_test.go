@@ -1,7 +1,6 @@
 package passkey
 
 import (
-	"context"
 	"testing"
 	"time"
 	"uuid"
@@ -71,7 +70,7 @@ func createPasskeyTestCredential(t *testing.T, db *database.DB, service *Passkey
 func TestPasskeyService_BeginPasskeyLoginStoresAndConsumesCeremony(t *testing.T) {
 	db := newPasskeyServiceTestDB(t)
 	service := newPasskeyServiceForTest(t, db)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	challenge, err := service.BeginPasskeyLogin(ctx)
 	require.NoError(t, err)
@@ -133,10 +132,10 @@ func TestPasskeyService_LoginAvailability(t *testing.T) {
 func TestPasskeyService_FirstEnrollmentUsesActiveSession(t *testing.T) {
 	db := newPasskeyServiceTestDB(t)
 	service := newPasskeyServiceForTest(t, db)
-	ctx := context.Background()
+	ctx := t.Context()
 	user := createPasskeyTestUser(t, db, "first-enrollment-user")
 	sessionService := session.NewSessionService(db)
-	session, _, err := sessionService.CreateSession(ctx, user.ID, time.Now().Add(time.Hour), auth.SessionMeta{})
+	localSession, _, err := sessionService.CreateSession(ctx, user.ID, time.Now().Add(time.Hour), auth.SessionMeta{})
 	require.NoError(t, err)
 
 	capabilities, err := service.GetCapabilities(ctx, user.ID, false)
@@ -145,7 +144,7 @@ func TestPasskeyService_FirstEnrollmentUsesActiveSession(t *testing.T) {
 	require.True(t, capabilities.CanEnrollWithActiveSession)
 	require.False(t, capabilities.RequiresStepUp)
 
-	challenge, err := service.BeginRegistration(ctx, user.ID, session.ID, "")
+	challenge, err := service.BeginRegistration(ctx, user.ID, localSession.ID, "")
 	require.NoError(t, err)
 	require.NotEmpty(t, challenge.CeremonyID)
 	require.NotNil(t, challenge.Options)
@@ -157,7 +156,7 @@ func TestPasskeyService_FirstEnrollmentUsesActiveSession(t *testing.T) {
 	require.False(t, capabilities.CanEnrollWithActiveSession)
 	require.True(t, capabilities.RequiresStepUp)
 
-	_, err = service.BeginRegistration(ctx, user.ID, session.ID, "")
+	_, err = service.BeginRegistration(ctx, user.ID, localSession.ID, "")
 	require.ErrorIs(t, err, ErrPasskeyStepUpRequired)
 }
 
@@ -174,33 +173,33 @@ func TestPasskeyService_DefaultPasskeyNameUsesAAGUIDCatalog(t *testing.T) {
 func TestPasskeyService_PasswordStepUpGrantIsBoundToActiveSessionAndReusableUntilExpiry(t *testing.T) {
 	db := newPasskeyServiceTestDB(t)
 	service := newPasskeyServiceForTest(t, db)
-	ctx := context.Background()
+	ctx := t.Context()
 	user := createPasskeyTestUser(t, db, "step-up-user")
 	sessionService := session.NewSessionService(db)
-	session, _, err := sessionService.CreateSession(ctx, user.ID, time.Now().Add(time.Hour), auth.SessionMeta{})
+	localSession, _, err := sessionService.CreateSession(ctx, user.ID, time.Now().Add(time.Hour), auth.SessionMeta{})
 	require.NoError(t, err)
 
 	_, err = service.CreatePasswordStepUpGrant(ctx, user.ID, "missing-session")
 	require.ErrorIs(t, err, ErrPasskeyStepUpRequired)
 
-	grant, err := service.CreatePasswordStepUpGrant(ctx, user.ID, session.ID)
+	grant, err := service.CreatePasswordStepUpGrant(ctx, user.ID, localSession.ID)
 	require.NoError(t, err)
 	require.NotEmpty(t, grant.Token)
 	require.True(t, grant.ExpiresAt.After(time.Now()))
 
-	require.NoError(t, service.VerifyStepUpToken(ctx, user.ID, session.ID, grant.Token))
-	require.NoError(t, service.VerifyStepUpToken(ctx, user.ID, session.ID, grant.Token))
+	require.NoError(t, service.VerifyStepUpToken(ctx, user.ID, localSession.ID, grant.Token))
+	require.NoError(t, service.VerifyStepUpToken(ctx, user.ID, localSession.ID, grant.Token))
 	require.ErrorIs(t, service.VerifyStepUpToken(ctx, user.ID, "other-session", grant.Token), ErrPasskeyStepUpRequired)
 
-	require.NoError(t, sessionService.RevokeSession(ctx, session.ID))
-	_, err = service.CreatePasswordStepUpGrant(ctx, user.ID, session.ID)
+	require.NoError(t, sessionService.RevokeSession(ctx, localSession.ID))
+	_, err = service.CreatePasswordStepUpGrant(ctx, user.ID, localSession.ID)
 	require.ErrorIs(t, err, ErrPasskeyStepUpRequired)
 }
 
 func TestPasskeyService_RecoveryCodeConsumptionIsAtomicAndSingleUse(t *testing.T) {
 	db := newPasskeyServiceTestDB(t)
 	service := newPasskeyServiceForTest(t, db)
-	ctx := context.Background()
+	ctx := t.Context()
 	user := createPasskeyTestUser(t, db, "recovery-user")
 
 	codes, rows, err := generateRecoveryCodeRowsInternal(user.ID)
@@ -246,7 +245,7 @@ func TestPasskeyService_RecoveryCodeConsumptionIsAtomicAndSingleUse(t *testing.T
 func TestPasskeyService_EnableAndDisableMFAManagesCodesAndSessions(t *testing.T) {
 	db := newPasskeyServiceTestDB(t)
 	service := newPasskeyServiceForTest(t, db)
-	ctx := context.Background()
+	ctx := t.Context()
 	user := createPasskeyTestUser(t, db, "mfa-user")
 	createPasskeyTestCredential(t, db, service, user.ID, "mfa-passkey")
 	sessionService := session.NewSessionService(db)
@@ -289,7 +288,7 @@ func TestPasskeyService_EnableAndDisableMFAManagesCodesAndSessions(t *testing.T)
 func TestPasskeyService_ResetMFARevokesSessionsAndPreservesPasskeys(t *testing.T) {
 	db := newPasskeyServiceTestDB(t)
 	service := newPasskeyServiceForTest(t, db)
-	ctx := context.Background()
+	ctx := t.Context()
 	user := createPasskeyTestUser(t, db, "reset-user")
 	user.PasskeyMFAEnabled = true
 	require.NoError(t, db.Save(user).Error)

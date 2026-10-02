@@ -24,7 +24,7 @@ func newProxyAuthzMiddleware(matcher *authz.PermissionMatcher) *EnvironmentMiddl
 
 func newProxyRequestContext(method, path string) *echo.Context {
 	e := echo.New()
-	req := httptest.NewRequest(method, path, nil)
+	req := httptest.NewRequest(method, path, http.NoBody)
 	return e.NewContext(req, httptest.NewRecorder())
 }
 

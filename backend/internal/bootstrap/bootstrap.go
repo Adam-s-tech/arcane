@@ -78,8 +78,8 @@ func Bootstrap(ctx context.Context) error {
 	}
 	defer func() {
 		cancelApp()
-		if err := db.Close(); err != nil {
-			slog.Error("Error closing database", "error", err)
+		if closeErr := db.Close(); closeErr != nil {
+			slog.Error("Error closing database", "error", closeErr)
 		}
 	}()
 
@@ -87,8 +87,8 @@ func Bootstrap(ctx context.Context) error {
 
 	startCtx, cancelStart := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancelStart()
-	if err := app.Start(startCtx); err != nil {
-		return fmt.Errorf("start application: %w", err)
+	if startErr := app.Start(startCtx); startErr != nil {
+		return fmt.Errorf("start application: %w", startErr)
 	}
 
 	select {
@@ -100,8 +100,8 @@ func Bootstrap(ctx context.Context) error {
 
 	stopCtx, cancelStop := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 	defer cancelStop()
-	if err := app.Stop(stopCtx); err != nil {
-		return fmt.Errorf("stop application: %w", err)
+	if stopErr := app.Stop(stopCtx); stopErr != nil {
+		return fmt.Errorf("stop application: %w", stopErr)
 	}
 
 	slog.InfoContext(context.WithoutCancel(appCtx), "Arcane shutdown complete")
@@ -139,8 +139,8 @@ func applicationOptions(appCtx context.Context, cfg *config.Config, db *database
 // ENCRYPTION_KEY is an unprefixed passphrase shorter than 32 characters in
 // production. crypto derives a key from any non-empty passphrase, so this
 // preserves the historical fail-fast rejection of low-entropy production keys.
-func isWeakProductionEncryptionKeyInternal(encryptionKey, environment string, agentMode bool) bool {
-	if environment != "production" || agentMode {
+func isWeakProductionEncryptionKeyInternal(encryptionKey, localEnvironment string, agentMode bool) bool {
+	if localEnvironment != "production" || agentMode {
 		return false
 	}
 	key := strings.TrimSpace(encryptionKey)
@@ -439,7 +439,7 @@ func handleAgentBootstrapPairing(ctx context.Context, cfg *config.Config, httpCl
 	reqCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, pairURL, nil)
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, pairURL, http.NoBody)
 	if err != nil {
 		return fmt.Errorf("failed to create pairing request: %w", err)
 	}

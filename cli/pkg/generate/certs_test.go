@@ -85,8 +85,8 @@ func TestGenerateTLSCommandOverwritesCertificateAtomically(t *testing.T) {
 
 	cmd.SetArgs([]string{"tls", "--out-dir", outDir, "--common-name", "localhost", "--host", "localhost", "--cert-name", "server.crt", "--key-name", "server.key"})
 	_, err = captureOutput(func() error {
-		_, err := cmd.ExecuteC()
-		return err
+		_, executeCErr := cmd.ExecuteC()
+		return executeCErr
 	})
 
 	require.NoError(t, err,

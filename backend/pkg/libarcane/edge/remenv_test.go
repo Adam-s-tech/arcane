@@ -100,12 +100,12 @@ func TestCopyRequestHeaders_SkipsExpectedHeaders(t *testing.T) {
 func TestSetAuthHeader_ForwardsAPIKeyAndAuthorization(t *testing.T) {
 	e := echo.New()
 	w := httptest.NewRecorder()
-	req0 := httptest.NewRequest(http.MethodGet, "http://example.com", nil)
+	req0 := httptest.NewRequest(http.MethodGet, "http://example.com", http.NoBody)
 	req0.Header.Set(HeaderAPIKey, "api-token")
 	req0.Header.Set(HeaderAuthorization, "Bearer auth")
 	c := e.NewContext(req0, w)
 
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://remote", nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://remote", http.NoBody)
 	require.NoError(t, err)
 
 	SetAuthHeader(req, c)
@@ -116,11 +116,11 @@ func TestSetAuthHeader_ForwardsAPIKeyAndAuthorization(t *testing.T) {
 func TestSetAuthHeader_UsesCookieTokenWhenNoAuthorization(t *testing.T) {
 	e := echo.New()
 	w := httptest.NewRecorder()
-	req0 := httptest.NewRequest(http.MethodGet, "http://example.com", nil)
+	req0 := httptest.NewRequest(http.MethodGet, "http://example.com", http.NoBody)
 	req0.AddCookie(&http.Cookie{Name: "token", Value: "cookie-token"})
 	c := e.NewContext(req0, w)
 
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://remote", nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://remote", http.NoBody)
 	require.NoError(t, err)
 
 	SetAuthHeader(req, c)
@@ -128,7 +128,7 @@ func TestSetAuthHeader_UsesCookieTokenWhenNoAuthorization(t *testing.T) {
 }
 
 func TestSetAgentToken(t *testing.T) {
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://remote", nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://remote", http.NoBody)
 	require.NoError(t, err)
 
 	SetAgentToken(req, nil)
@@ -142,7 +142,7 @@ func TestSetAgentToken(t *testing.T) {
 }
 
 func TestSetForwardedHeaders(t *testing.T) {
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://remote", nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://remote", http.NoBody)
 	require.NoError(t, err)
 
 	SetForwardedHeaders(req, "1.2.3.4", "example.com")
@@ -204,7 +204,7 @@ func TestGetSkipHeaders_ContainsExpectedEntries(t *testing.T) {
 func TestBuildWebSocketHeaders_UsesAuthorizationHeaderAndAddsAgentToken(t *testing.T) {
 	e := echo.New()
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "http://example.com", nil)
+	req := httptest.NewRequest(http.MethodGet, "http://example.com", http.NoBody)
 	req.Header.Set(HeaderAPIKey, "api-key")
 	req.Header.Set(HeaderAuthorization, "Bearer auth")
 	req.Header.Set(HeaderCookie, "session=abc")
@@ -222,7 +222,7 @@ func TestBuildWebSocketHeaders_UsesAuthorizationHeaderAndAddsAgentToken(t *testi
 func TestBuildWebSocketHeaders_UsesCookieTokenAsBearer(t *testing.T) {
 	e := echo.New()
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "http://example.com", nil)
+	req := httptest.NewRequest(http.MethodGet, "http://example.com", http.NoBody)
 	req.AddCookie(&http.Cookie{Name: "token", Value: "cookie-token"})
 	c := e.NewContext(req, w)
 
@@ -233,7 +233,7 @@ func TestBuildWebSocketHeaders_UsesCookieTokenAsBearer(t *testing.T) {
 func TestBuildWebSocketHeaders_ForwardsCookieHeaderWhenNoAuthPresent(t *testing.T) {
 	e := echo.New()
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "http://example.com", nil)
+	req := httptest.NewRequest(http.MethodGet, "http://example.com", http.NoBody)
 	req.Header.Set(HeaderCookie, "session=abc")
 	c := e.NewContext(req, w)
 
@@ -275,15 +275,15 @@ func newTestRemenvClientInternal(timeout time.Duration) *remenv.Client {
 				return nil
 			}
 
-			return fmt.Errorf("edge agent is not connected (no active tunnel)")
+			return errors.New("edge agent is not connected (no active tunnel)")
 		},
 		DoFunc: func(ctx context.Context, envID, method, path string, headers map[string]string, body []byte) (*remenv.Response, error) {
 			tunnel, ok := GetRegistry().Get(envID).Get()
 			if !ok {
-				return nil, fmt.Errorf("no active tunnel for environment %s", envID)
+				return nil, errors.New("no active tunnel for environment " + envID)
 			}
 			if tunnel.Conn.IsClosed() {
-				return nil, fmt.Errorf("tunnel for environment %s is closed", envID)
+				return nil, errors.New("tunnel for environment " + envID + " is closed")
 			}
 
 			statusCode, respHeaders, respBody, err := ProxyRequest(ctx, tunnel, method, path, "", headers, body)
@@ -319,7 +319,7 @@ func TestRemenvClient_EdgeWithTunnel(t *testing.T) {
 
 	client := newTestRemenvClientInternal(1 * time.Second)
 
-	resp, err := client.Do(context.Background(), remenv.Request{
+	resp, err := client.Do(t.Context(), remenv.Request{
 		EnvironmentID: envID,
 		IsEdge:        true,
 		Method:        http.MethodGet,
@@ -336,7 +336,7 @@ func TestRemenvClient_EdgeWithTunnel(t *testing.T) {
 func TestRemenvClient_EdgeNoTunnel(t *testing.T) {
 	client := newTestRemenvClientInternal(1 * time.Second)
 
-	_, err := client.Do(context.Background(), remenv.Request{
+	_, err := client.Do(t.Context(), remenv.Request{
 		EnvironmentID: "env-edge-missing",
 		IsEdge:        true,
 		Method:        http.MethodGet,
@@ -350,7 +350,7 @@ func TestRemenvClient_EdgeNoTunnel(t *testing.T) {
 }
 
 func TestRemenvClient_EdgeWithGRPCTunnel(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 
 	envID := "env-edge-grpc-1"
 	GetRegistry().Unregister(envID)
@@ -390,9 +390,9 @@ func TestRemenvClient_EdgeWithGRPCTunnel(t *testing.T) {
 
 	agentErrCh := make(chan error, 1)
 	go func() {
-		msg, err := stream.Recv()
-		if err != nil {
-			agentErrCh <- err
+		msg, recvErr := stream.Recv()
+		if recvErr != nil {
+			agentErrCh <- recvErr
 			return
 		}
 
@@ -423,10 +423,10 @@ func TestRemenvClient_EdgeWithGRPCTunnel(t *testing.T) {
 			return
 		}
 
-		if err := stream.Send(&tunnelpb.AgentMessage{Payload: &tunnelpb.AgentMessage_CommandAck{CommandAck: &tunnelpb.CommandAck{
+		if sendErr := stream.Send(&tunnelpb.AgentMessage{Payload: &tunnelpb.AgentMessage_CommandAck{CommandAck: &tunnelpb.CommandAck{
 			CommandId: req.GetCommandId(),
-		}}}); err != nil {
-			agentErrCh <- err
+		}}}); sendErr != nil {
+			agentErrCh <- sendErr
 			return
 		}
 

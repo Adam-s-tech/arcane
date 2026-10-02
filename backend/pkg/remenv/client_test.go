@@ -56,7 +56,7 @@ func TestClientDo_DirectHTTPSuccess(t *testing.T) {
 	defer server.Close()
 
 	client := NewClient(server.Client(), nil)
-	resp, err := client.Do(context.Background(), Request{
+	resp, err := client.Do(t.Context(), Request{
 		Method:  http.MethodPost,
 		URL:     server.URL + "/api/registries/sync",
 		Path:    "/api/registries/sync",
@@ -89,7 +89,7 @@ func TestClientDo_EdgeUsesTunnelTransport(t *testing.T) {
 		},
 	})
 
-	resp, err := client.Do(context.Background(), Request{
+	resp, err := client.Do(t.Context(), Request{
 		EnvironmentID: "env-edge-1",
 		IsEdge:        true,
 		Method:        http.MethodGet,
@@ -108,7 +108,7 @@ func TestClientDo_WrapsTransportErrors(t *testing.T) {
 		},
 	})
 
-	_, err := client.Do(context.Background(), Request{
+	_, err := client.Do(t.Context(), Request{
 		EnvironmentID: "env-edge-2",
 		IsEdge:        true,
 		Method:        http.MethodGet,

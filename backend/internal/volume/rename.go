@@ -61,31 +61,31 @@ func (s *VolumeService) RenameVolume(ctx context.Context, oldName, newName strin
 		s.logVolumeRenameErrorInternal(ctx, oldName, newName, user, "plan", err)
 		return nil, err
 	}
-	if err := migration.Apply(ctx); err != nil {
-		if cerrdefs.IsInvalidArgument(err) {
-			err = common.Classify(common.ErrBadRequest, err)
+	if applyErr := migration.Apply(ctx); applyErr != nil {
+		if cerrdefs.IsInvalidArgument(applyErr) {
+			applyErr = common.Classify(common.ErrBadRequest, applyErr)
 		}
-		s.logVolumeRenameErrorInternal(ctx, oldName, newName, user, "apply", err)
-		return nil, err
+		s.logVolumeRenameErrorInternal(ctx, oldName, newName, user, "apply", applyErr)
+		return nil, applyErr
 	}
 
-	if err := s.renameVolumeMetadataInternal(ctx, oldName, newName); err != nil {
+	if renameVolumeMetadataErr := s.renameVolumeMetadataInternal(ctx, oldName, newName); renameVolumeMetadataErr != nil {
 		rollbackErr := migration.Rollback(ctx)
-		combinedErr := errors.Join(fmt.Errorf("rename volume metadata: %w", err), rollbackErr)
+		combinedErr := errors.Join(fmt.Errorf("rename volume metadata: %w", renameVolumeMetadataErr), rollbackErr)
 		s.logVolumeRenameErrorInternal(ctx, oldName, newName, user, "metadata", combinedErr)
 		return nil, combinedErr
 	}
 
 	if committer, ok := migration.(volumetypes.Committer); ok {
-		if err := committer.Commit(ctx); err != nil {
-			if _, ok := errors.AsType[*volumetypes.SourceCleanupError](err); ok {
+		if commitErr := committer.Commit(ctx); commitErr != nil {
+			if _, localOk := errors.AsType[*volumetypes.SourceCleanupError](commitErr); localOk {
 				// The copy and metadata are committed; only removing the source
 				// failed, so the rename itself succeeded.
-				slog.WarnContext(ctx, "volume renamed but source volume could not be removed", "oldVolume", oldName, "newVolume", newName, "error", err.Error())
+				slog.WarnContext(ctx, "volume renamed but source volume could not be removed", "oldVolume", oldName, "newVolume", newName, "error", commitErr.Error())
 			} else {
 				metadataErr := s.renameVolumeMetadataInternal(ctx, newName, oldName)
 				rollbackErr := migration.Rollback(ctx)
-				combinedErr := errors.Join(err, metadataErr, rollbackErr)
+				combinedErr := errors.Join(commitErr, metadataErr, rollbackErr)
 				s.logVolumeRenameErrorInternal(ctx, oldName, newName, user, "commit", combinedErr)
 				return nil, combinedErr
 			}

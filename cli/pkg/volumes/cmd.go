@@ -153,9 +153,9 @@ var deleteCmd = &cobra.Command{
 		}
 
 		if !forceFlag {
-			confirmed, err := cmdutil.Confirm(cmd, fmt.Sprintf("Are you sure you want to delete volume %s?", resolved.Name))
-			if err != nil {
-				return err
+			confirmed, confirmErr := cmdutil.Confirm(cmd, fmt.Sprintf("Are you sure you want to delete volume %s?", resolved.Name))
+			if confirmErr != nil {
+				return confirmErr
 			}
 			if !confirmed {
 				fmt.Println("Cancelled")
@@ -172,8 +172,8 @@ var deleteCmd = &cobra.Command{
 			return fmt.Errorf("failed to delete volume: %w", err)
 		}
 		defer func() { _ = resp.Body.Close() }()
-		if err := cmdutil.EnsureSuccessStatus(resp); err != nil {
-			return fmt.Errorf("failed to delete volume: %w", err)
+		if ensureSuccessStatusErr := cmdutil.EnsureSuccessStatus(resp); ensureSuccessStatusErr != nil {
+			return fmt.Errorf("failed to delete volume: %w", ensureSuccessStatusErr)
 		}
 
 		output.Success("Volume %s deleted successfully", resolved.Name)
@@ -260,8 +260,8 @@ func runVolumeDataCommand(cmd *cobra.Command, cfg volumeDataCommandConfig) error
 	if !jsonOutput {
 		output.Header("%s", cfg.header)
 	}
-	if err := cmdutil.PrintJSON(result.Data); err != nil {
-		return fmt.Errorf("%s: %w", cfg.marshalMessage, err)
+	if printJSONErr := cmdutil.PrintJSON(result.Data); printJSONErr != nil {
+		return fmt.Errorf("%s: %w", cfg.marshalMessage, printJSONErr)
 	}
 	return nil
 }

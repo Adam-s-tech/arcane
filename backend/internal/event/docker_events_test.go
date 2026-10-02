@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/moby/moby/api/types/events"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	kit "go.getarcane.app/kit/pkg"
 	"go.getarcane.app/streams/bus"
@@ -54,14 +55,44 @@ func TestMapDaemonEventInternal(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			req, ok := mapDaemonEventInternal(events.Message{Type: tc.kind, Action: tc.action, Scope: "local", Actor: events.Actor{ID: "resource-id", Attributes: map[string]string{"name": "web", "image": "alpine", "exitCode": "0", "signal": "15", "com.docker.compose.project": "demo", "com.docker.compose.service": "web", "secret": "never-copy"}}})
+			req, ok := mapDaemonEventInternal(events.Message{
+				Type:   tc.kind,
+				Action: tc.action,
+				Scope:  "local",
+				Actor: events.Actor{
+					ID: "resource-id",
+					Attributes: map[string]string{
+						"name":                       "web",
+						"image":                      "alpine",
+						"exitCode":                   "0",
+						"signal":                     "15",
+						"com.docker.compose.project": "demo",
+						"com.docker.compose.service": "web",
+						"secret":                     "never-copy",
+					},
+				},
+			})
 			require.True(t, ok)
 			require.Equal(t, tc.want, req.Type)
 			require.Equal(t, "web", *req.ResourceName)
 			require.Equal(t, "0", *req.EnvironmentID)
 			require.Nil(t, req.UserID)
 			require.Nil(t, req.Username)
-			require.Equal(t, database.JSON{"source": "docker", "action": string(tc.action), "scope": "local", "name": "web", "image": "alpine", "exitCode": "0", "signal": "15", "composeProject": "demo", "composeService": "web"}, req.Metadata)
+			require.Equal(
+				t,
+				database.JSON{
+					"source":         "docker",
+					"action":         string(tc.action),
+					"scope":          "local",
+					"name":           "web",
+					"image":          "alpine",
+					"exitCode":       "0",
+					"signal":         "15",
+					"composeProject": "demo",
+					"composeService": "web",
+				},
+				req.Metadata,
+			)
 			severity := kit.Ternary(tc.action == events.ActionOOM, EventSeverityError, EventSeverityInfo)
 			if tc.action == events.ActionHealthStatusUnhealthy {
 				severity = EventSeverityWarning
@@ -71,7 +102,14 @@ func TestMapDaemonEventInternal(t *testing.T) {
 	}
 	for _, exitCode := range []string{"1", "137", ""} {
 		t.Run("die exit "+exitCode, func(t *testing.T) {
-			req, ok := mapDaemonEventInternal(events.Message{Type: events.ContainerEventType, Action: events.ActionDie, Actor: events.Actor{ID: "id", Attributes: map[string]string{"exitCode": exitCode}}})
+			req, ok := mapDaemonEventInternal(events.Message{
+				Type:   events.ContainerEventType,
+				Action: events.ActionDie,
+				Actor: events.Actor{
+					ID:         "id",
+					Attributes: map[string]string{"exitCode": exitCode},
+				},
+			})
 			require.True(t, ok)
 			require.Equal(t, EventSeverityWarning, req.Severity)
 			require.Equal(t, "id", *req.ResourceName)
@@ -90,7 +128,52 @@ func TestMapDaemonEventInternal(t *testing.T) {
 		action events.Action
 		id     string
 	}{
-		{"exec", events.ContainerEventType, "exec_create", "id"}, {"attach", events.ContainerEventType, "attach", "id"}, {"resize", events.ContainerEventType, "resize", "id"}, {"healthy", events.ContainerEventType, "health_status: healthy", "id"}, {"mount", events.VolumeEventType, "mount", "id"}, {"connect", events.NetworkEventType, "connect", "id"}, {"disconnect", events.NetworkEventType, "disconnect", "id"}, {"unknown action", events.ImageEventType, "unknown-image-action", "image-id"}, {"empty create", events.ContainerEventType, events.ActionCreate, ""},
+		{
+			"exec",
+			events.ContainerEventType,
+			"exec_create",
+			"id",
+		}, {
+			"attach",
+			events.ContainerEventType,
+			"attach",
+			"id",
+		}, {
+			"resize",
+			events.ContainerEventType,
+			"resize",
+			"id",
+		}, {
+			"healthy",
+			events.ContainerEventType,
+			"health_status: healthy",
+			"id",
+		}, {
+			"mount",
+			events.VolumeEventType,
+			"mount",
+			"id",
+		}, {
+			"connect",
+			events.NetworkEventType,
+			"connect",
+			"id",
+		}, {
+			"disconnect",
+			events.NetworkEventType,
+			"disconnect",
+			"id",
+		}, {
+			"unknown action",
+			events.ImageEventType,
+			"unknown-image-action",
+			"image-id",
+		}, {
+			"empty create",
+			events.ContainerEventType,
+			events.ActionCreate,
+			"",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, ok := mapDaemonEventInternal(events.Message{Type: tc.kind, Action: tc.action, Actor: events.Actor{ID: tc.id}})
@@ -129,7 +212,10 @@ func TestDaemonSuppressionAndFailureAllowLaterObservations(t *testing.T) {
 			svc.dockerCorrelation.now = func() time.Time { return now }
 			msg := events.Message{Type: events.ContainerEventType, Action: events.ActionStart, TimeNano: 123, Actor: events.Actor{ID: "web"}}
 			if failure {
-				require.NoError(t, db.Callback().Create().Before("gorm:create").Register("daemon_failure", func(tx *gorm.DB) { tx.AddError(errors.New("unavailable")) }))
+				require.NoError(t, db.Callback().Create().Before("gorm:create").Register("daemon_failure", func(tx *gorm.DB) {
+					failureErr := errors.New("unavailable")
+					require.ErrorIs(t, tx.AddError(failureErr), failureErr)
+				}))
 			}
 			if !failure {
 				svc.MarkDockerExpectation("container", "web", "")
@@ -154,7 +240,7 @@ func TestDockerEventSubscriptionsReadyAndStop(t *testing.T) {
 				db := setupEventServiceTestDB(t)
 				sqlDB, err := db.DB.DB()
 				require.NoError(t, err)
-				defer sqlDB.Close()
+				defer func() { assert.NoError(t, sqlDB.Close()) }()
 				sqlDB.SetMaxOpenConns(1)
 				svc := NewEventService(db, nil, nil)
 				var recovered, published atomic.Int64

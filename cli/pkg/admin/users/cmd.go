@@ -139,9 +139,9 @@ var createCmd = &cobra.Command{
 
 		if userCreatePassword == "" {
 			fmt.Print("Password: ")
-			bytePassword, err := term.ReadPassword(os.Stdin.Fd())
-			if err != nil {
-				return fmt.Errorf("failed to read password: %w", err)
+			bytePassword, readPasswordErr := term.ReadPassword(os.Stdin.Fd())
+			if readPasswordErr != nil {
+				return fmt.Errorf("failed to read password: %w", readPasswordErr)
 			}
 			userCreatePassword = string(bytePassword)
 			fmt.Println()
@@ -215,7 +215,9 @@ var getCmd = &cobra.Command{
 				}
 				rows[i] = []string{a.RoleID, env, a.Source}
 			}
-			output.Table([]string{"ROLE", "SCOPE", "SOURCE"}, rows)
+			if tableErr := output.Table([]string{"ROLE", "SCOPE", "SOURCE"}, rows); tableErr != nil {
+				return tableErr
+			}
 		}
 		return nil
 	},
@@ -285,8 +287,8 @@ var deleteCmd = &cobra.Command{
 			return fmt.Errorf("failed to delete user: %w", err)
 		}
 		defer func() { _ = resp.Body.Close() }()
-		if err := cmdutil.EnsureSuccessStatus(resp); err != nil {
-			return fmt.Errorf("failed to delete user: %w", err)
+		if ensureSuccessStatusErr := cmdutil.EnsureSuccessStatus(resp); ensureSuccessStatusErr != nil {
+			return fmt.Errorf("failed to delete user: %w", ensureSuccessStatusErr)
 		}
 
 		output.Success("User deleted successfully")

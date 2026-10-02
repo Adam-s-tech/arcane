@@ -75,11 +75,11 @@ func deliverDiscord(ctx context.Context, config database.JSON, c Content) error 
 	if discordConfig.WebhookID == "" || discordConfig.Token == "" {
 		return errors.New("discord webhook ID or token not configured")
 	}
-	if err := DecryptStringCredential(&discordConfig.Token); err != nil {
-		return err
+	if decryptStringCredentialErr := DecryptStringCredential(&discordConfig.Token); decryptStringCredentialErr != nil {
+		return decryptStringCredentialErr
 	}
-	if err := SendDiscord(ctx, discordConfig, c.Text[MessageFormatMarkdown]); err != nil {
-		return fmt.Errorf("failed to send Discord notification: %w", err)
+	if sendDiscordErr := SendDiscord(ctx, discordConfig, c.Text[MessageFormatMarkdown]); sendDiscordErr != nil {
+		return fmt.Errorf("failed to send Discord notification: %w", sendDiscordErr)
 	}
 	return nil
 }
@@ -95,16 +95,16 @@ func deliverEmail(ctx context.Context, config database.JSON, c Content) error {
 	if len(emailConfig.ToAddresses) == 0 {
 		return errors.New("no recipient email addresses configured")
 	}
-	if _, err := mail.ParseAddress(emailConfig.FromAddress); err != nil {
-		return fmt.Errorf("invalid from address: %w", err)
+	if _, parseAddressErr := mail.ParseAddress(emailConfig.FromAddress); parseAddressErr != nil {
+		return fmt.Errorf("invalid from address: %w", parseAddressErr)
 	}
 	for _, addr := range emailConfig.ToAddresses {
-		if _, err := mail.ParseAddress(addr); err != nil {
-			return fmt.Errorf("invalid to address %s: %w", addr, err)
+		if _, parseAddressErr2 := mail.ParseAddress(addr); parseAddressErr2 != nil {
+			return fmt.Errorf("invalid to address %s: %w", addr, parseAddressErr2)
 		}
 	}
-	if err := DecryptStringCredential(&emailConfig.SMTPPassword); err != nil {
-		return err
+	if decryptStringCredentialErr := DecryptStringCredential(&emailConfig.SMTPPassword); decryptStringCredentialErr != nil {
+		return decryptStringCredentialErr
 	}
 	if c.RenderEmail == nil {
 		return errors.New("email rendering not configured for this notification")
@@ -113,8 +113,8 @@ func deliverEmail(ctx context.Context, config database.JSON, c Content) error {
 	if err != nil {
 		return err
 	}
-	if err := SendEmail(ctx, emailConfig, subject, htmlBody); err != nil {
-		return fmt.Errorf("failed to send email: %w", err)
+	if sendEmailErr := SendEmail(ctx, emailConfig, subject, htmlBody); sendEmailErr != nil {
+		return fmt.Errorf("failed to send email: %w", sendEmailErr)
 	}
 	return nil
 }
@@ -130,12 +130,12 @@ func deliverTelegram(ctx context.Context, config database.JSON, c Content) error
 	if len(telegramConfig.ChatIDs) == 0 {
 		return errors.New("no telegram chat IDs configured")
 	}
-	if err := DecryptStringCredential(&telegramConfig.BotToken); err != nil {
-		return err
+	if decryptStringCredentialErr := DecryptStringCredential(&telegramConfig.BotToken); decryptStringCredentialErr != nil {
+		return decryptStringCredentialErr
 	}
 	telegramConfig.ParseMode = cmp.Or(telegramConfig.ParseMode, "HTML")
-	if err := SendTelegram(ctx, telegramConfig, c.Text[MessageFormatHTML]); err != nil {
-		return fmt.Errorf("failed to send Telegram notification: %w", err)
+	if sendTelegramErr := SendTelegram(ctx, telegramConfig, c.Text[MessageFormatHTML]); sendTelegramErr != nil {
+		return fmt.Errorf("failed to send Telegram notification: %w", sendTelegramErr)
 	}
 	return nil
 }
@@ -156,14 +156,14 @@ func deliverSignal(ctx context.Context, config database.JSON, c Content) error {
 	if hasBasicAuth && hasTokenAuth {
 		return errors.New("signal cannot use both basic auth and token authentication simultaneously")
 	}
-	if err := DecryptStringCredential(&signalConfig.Password); err != nil {
-		return err
+	if decryptStringCredentialErr := DecryptStringCredential(&signalConfig.Password); decryptStringCredentialErr != nil {
+		return decryptStringCredentialErr
 	}
-	if err := DecryptStringCredential(&signalConfig.Token); err != nil {
-		return err
+	if decryptStringCredentialErr2 := DecryptStringCredential(&signalConfig.Token); decryptStringCredentialErr2 != nil {
+		return decryptStringCredentialErr2
 	}
-	if err := SendSignal(ctx, signalConfig, c.Text[MessageFormatPlain]); err != nil {
-		return fmt.Errorf("failed to send Signal notification: %w", err)
+	if sendSignalErr := SendSignal(ctx, signalConfig, c.Text[MessageFormatPlain]); sendSignalErr != nil {
+		return fmt.Errorf("failed to send Signal notification: %w", sendSignalErr)
 	}
 	return nil
 }
@@ -173,8 +173,8 @@ func deliverSlack(ctx context.Context, config database.JSON, c Content) error {
 	if err != nil {
 		return err
 	}
-	if err := SendSlack(ctx, slackConfig, c.Text[MessageFormatSlack]); err != nil {
-		return fmt.Errorf("failed to send Slack notification: %w", err)
+	if sendSlackErr := SendSlack(ctx, slackConfig, c.Text[MessageFormatSlack]); sendSlackErr != nil {
+		return fmt.Errorf("failed to send Slack notification: %w", sendSlackErr)
 	}
 	return nil
 }
@@ -184,8 +184,8 @@ func deliverNtfy(ctx context.Context, config database.JSON, c Content) error {
 	if err != nil {
 		return err
 	}
-	if err := SendNtfy(ctx, ntfyConfig, c.Text[MessageFormatPlain]); err != nil {
-		return fmt.Errorf("failed to send Ntfy notification: %w", err)
+	if sendNtfyErr := SendNtfy(ctx, ntfyConfig, c.Text[MessageFormatPlain]); sendNtfyErr != nil {
+		return fmt.Errorf("failed to send Ntfy notification: %w", sendNtfyErr)
 	}
 	return nil
 }
@@ -206,8 +206,8 @@ func deliverPushover(ctx context.Context, config database.JSON, c Content) error
 	if pushoverConfig.Title == "" && c.DefaultTitle != "" {
 		pushoverConfig.Title = c.DefaultTitle
 	}
-	if err := SendPushover(ctx, pushoverConfig, c.Text[MessageFormatPlain]); err != nil {
-		return fmt.Errorf("failed to send Pushover notification: %w", err)
+	if sendPushoverErr := SendPushover(ctx, pushoverConfig, c.Text[MessageFormatPlain]); sendPushoverErr != nil {
+		return fmt.Errorf("failed to send Pushover notification: %w", sendPushoverErr)
 	}
 	return nil
 }
@@ -220,8 +220,8 @@ func deliverGotify(ctx context.Context, config database.JSON, c Content) error {
 	if gotifyConfig.Title == "" && c.DefaultTitle != "" {
 		gotifyConfig.Title = c.DefaultTitle
 	}
-	if err := SendGotify(ctx, gotifyConfig, c.Text[MessageFormatPlain]); err != nil {
-		return fmt.Errorf("failed to send Gotify notification: %w", err)
+	if sendGotifyErr := SendGotify(ctx, gotifyConfig, c.Text[MessageFormatPlain]); sendGotifyErr != nil {
+		return fmt.Errorf("failed to send Gotify notification: %w", sendGotifyErr)
 	}
 	return nil
 }
@@ -231,8 +231,8 @@ func deliverMatrix(ctx context.Context, config database.JSON, c Content) error {
 	if err != nil {
 		return err
 	}
-	if err := SendMatrix(ctx, matrixConfig, c.Text[MessageFormatPlain]); err != nil {
-		return fmt.Errorf("failed to send Matrix notification: %w", err)
+	if sendMatrixErr := SendMatrix(ctx, matrixConfig, c.Text[MessageFormatPlain]); sendMatrixErr != nil {
+		return fmt.Errorf("failed to send Matrix notification: %w", sendMatrixErr)
 	}
 	return nil
 }
@@ -245,11 +245,11 @@ func deliverGoogleChat(ctx context.Context, config database.JSON, c Content) err
 	if googleChatConfig.WebhookURL == "" {
 		return errors.New("google chat webhook URL not configured")
 	}
-	if err := DecryptStringCredential(&googleChatConfig.WebhookURL); err != nil {
-		return err
+	if decryptStringCredentialErr := DecryptStringCredential(&googleChatConfig.WebhookURL); decryptStringCredentialErr != nil {
+		return decryptStringCredentialErr
 	}
-	if err := SendGoogleChat(ctx, googleChatConfig, c.Text[MessageFormatPlain]); err != nil {
-		return fmt.Errorf("failed to send Google Chat notification: %w", err)
+	if sendGoogleChatErr := SendGoogleChat(ctx, googleChatConfig, c.Text[MessageFormatPlain]); sendGoogleChatErr != nil {
+		return fmt.Errorf("failed to send Google Chat notification: %w", sendGoogleChatErr)
 	}
 	return nil
 }
@@ -262,8 +262,8 @@ func deliverGeneric(ctx context.Context, config database.JSON, c Content) error 
 	if genericConfig.WebhookURL == "" {
 		return errors.New("webhook URL not configured")
 	}
-	if err := SendGenericWithTitle(ctx, genericConfig, c.Title, c.Text[MessageFormatPlain], c.Vars); err != nil {
-		return fmt.Errorf("failed to send Generic webhook notification: %w", err)
+	if sendGenericWithTitleErr := SendGenericWithTitle(ctx, genericConfig, c.Title, c.Text[MessageFormatPlain], c.Vars); sendGenericWithTitleErr != nil {
+		return fmt.Errorf("failed to send Generic webhook notification: %w", sendGenericWithTitleErr)
 	}
 	return nil
 }

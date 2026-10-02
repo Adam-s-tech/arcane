@@ -101,8 +101,8 @@ var deleteCmd = &cobra.Command{
 			return err
 		}
 
-		if _, err := c.DeleteJSON[base.MessageResponse](cmd.Context(), types.Event(args[0])); err != nil {
-			return fmt.Errorf("failed to delete event: %w", err)
+		if _, deleteEventErr := c.DeleteJSON[base.MessageResponse](cmd.Context(), types.Event(args[0])); deleteEventErr != nil {
+			return fmt.Errorf("failed to delete event: %w", deleteEventErr)
 		}
 
 		output.Success("Event deleted successfully")

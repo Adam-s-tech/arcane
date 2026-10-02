@@ -35,13 +35,37 @@ func TestLegacyImportSurvivesRestartAndDeduplicates(t *testing.T) {
 	sqlDB.SetMaxOpenConns(1)
 	t.Cleanup(func() { require.NoError(t, sqlDB.Close()) })
 	store := kv.NewKVService(&database.DB{DB: db})
-	legacy := st.QueueRecord{JobID: "legacy", EnvironmentID: "0", Runs: []st.Run{{ID: uuid.New().String(), JobID: "legacy", EnvironmentID: "0", Trigger: "manual", Status: st.Succeeded, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}}}
+	legacy := st.QueueRecord{
+		JobID:         "legacy",
+		EnvironmentID: "0",
+		Runs: []st.Run{{
+			ID:            uuid.New().String(),
+			JobID:         "legacy",
+			EnvironmentID: "0",
+			Trigger:       "manual",
+			Status:        st.Succeeded,
+			CreatedAt:     time.Now().UTC(),
+			UpdatedAt:     time.Now().UTC(),
+		}},
+	}
 	legacy.Runs[0].ActivityID = legacy.Runs[0].ID
 	for _, jobID := range []string{"gitops-sync:first", "gitops-sync:second"} {
 		record := st.QueueRecord{JobID: jobID, EnvironmentID: "0", Schedule: "@every 5m", NextRun: time.Now().UTC().Add(time.Hour)}
 		for i := range 1600 {
 			created := time.Now().UTC().Add(-time.Duration(1600-i) * 5 * time.Minute)
-			record.Runs = append(record.Runs, st.Run{ID: uuid.New().String(), ActivityID: uuid.New().String(), JobID: jobID, EnvironmentID: "0", Trigger: "scheduled", Status: st.NeedsAttention, CreatedAt: created, UpdatedAt: created})
+			record.Runs = append(
+				record.Runs,
+				st.Run{
+					ID:            uuid.New().String(),
+					ActivityID:    uuid.New().String(),
+					JobID:         jobID,
+					EnvironmentID: "0",
+					Trigger:       "scheduled",
+					Status:        st.NeedsAttention,
+					CreatedAt:     created,
+					UpdatedAt:     created,
+				},
+			)
 		}
 		data, marshalErr := json.Marshal(record)
 		require.NoError(t, marshalErr)
@@ -169,8 +193,8 @@ func TestDuplicateDispatchAndCanceledDelivery(t *testing.T) {
 			q.Activate()
 			t.Cleanup(func() { require.NoError(t, q.Stop(context.WithoutCancel(t.Context()))) })
 			require.Eventually(t, func() bool {
-				info, err := q.service.GetJob(t.Context(), jobID)
-				return err == nil && info.Status.IsTerminal() || cancel && errors.Is(err, actor.ErrJobNotFound)
+				info, getJobErr := q.service.GetJob(t.Context(), jobID)
+				return getJobErr == nil && info.Status.IsTerminal() || cancel && errors.Is(getJobErr, actor.ErrJobNotFound)
 			}, 5*time.Second, 10*time.Millisecond)
 			persisted, err := q.Get(t.Context(), "0", run.JobID, run.ID)
 			require.NoError(t, err)
@@ -343,7 +367,7 @@ func TestLostDispatchAcknowledgementRetainsOneExecution(t *testing.T) {
 	require.Len(t, deliveries, 1)
 	once.Do(func() { close(finish) })
 	require.Eventually(t, func() bool {
-		stored, err := q.Get(t.Context(), "0", run.JobID, run.ID)
-		return err == nil && stored.Status == st.Succeeded
+		stored, getErr := q.Get(t.Context(), "0", run.JobID, run.ID)
+		return getErr == nil && stored.Status == st.Succeeded
 	}, 5*time.Second, 10*time.Millisecond)
 }

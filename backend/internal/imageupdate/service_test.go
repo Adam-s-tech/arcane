@@ -103,12 +103,12 @@ func setupImageUpdateRegistryTestDBInternal(t *testing.T) *database.DB {
 	return &database.DB{DB: db}
 }
 
-func createImageUpdateTestPullRegistryInternal(t *testing.T, db *database.DB, url, username, token string) {
+func createImageUpdateTestPullRegistryInternal(t *testing.T, db *database.DB, localUrl, username, token string) {
 	t.Helper()
 	encryptedToken, err := crypto.Encrypt(token)
 	require.NoError(t, err)
 	require.NoError(t, db.Create(&registry.ContainerRegistry{
-		URL:          url,
+		URL:          localUrl,
 		Username:     username,
 		Token:        encryptedToken,
 		Enabled:      true,
@@ -392,7 +392,7 @@ func newComposeBuildImageUpdateServiceInternal(t *testing.T) (*ImageUpdateServic
 func TestImageUpdateService_CheckImageUpdate_ComposeBuildSkipsRegistryWithRepoDigests(t *testing.T) {
 	svc, registryCalls := newComposeBuildImageUpdateServiceInternal(t)
 
-	result, err := svc.CheckImageUpdate(context.Background(), "test2:latest")
+	result, err := svc.CheckImageUpdate(t.Context(), "test2:latest")
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, UpdateTypeLocal, result.UpdateType)
@@ -415,7 +415,7 @@ func TestImageUpdateService_CheckMultipleImages_ComposeBuildSkipsRegistryWithRep
 		Enabled:  true,
 	}}
 
-	results, err := svc.CheckMultipleImages(context.Background(), []string{"test2:latest"}, credentials)
+	results, err := svc.CheckMultipleImages(t.Context(), []string{"test2:latest"}, credentials)
 	require.NoError(t, err)
 	result := results["test2:latest"]
 	require.NotNil(t, result)
@@ -437,7 +437,9 @@ func TestImageUpdateService_CheckMultipleImages_ComposeBuildMissingLocallySkipsR
 	dockerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/containers/json") {
 			w.Header().Set("Content-Type", "application/json")
-			require.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{}))
+			if !assert.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{})) {
+				return
+			}
 			return
 		}
 
@@ -459,7 +461,7 @@ func TestImageUpdateService_CheckMultipleImages_ComposeBuildMissingLocallySkipsR
 	eventService := event.NewEventService(db, nil, nil)
 	svc := NewImageUpdateService(db, nil, registryService, dockerService, eventService, nil, nil)
 
-	results, err := svc.CheckMultipleImages(context.Background(), []string{"test2:latest"}, nil)
+	results, err := svc.CheckMultipleImages(t.Context(), []string{"test2:latest"}, nil)
 	require.NoError(t, err)
 	result := results["test2:latest"]
 	require.NotNil(t, result)
@@ -477,7 +479,9 @@ func newArcaneLocalImageUpdateServiceInternal(t *testing.T, imageExists bool) (*
 	dockerServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/containers/json") {
 			w.Header().Set("Content-Type", "application/json")
-			require.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{}))
+			if !assert.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{})) {
+				return
+			}
 			return
 		}
 
@@ -522,7 +526,7 @@ func TestImageUpdateService_CheckImageUpdate_ArcaneLocalHostSkipsRegistry(t *tes
 		CheckTime:  time.Now(),
 	}).Error)
 
-	result, err := svc.CheckImageUpdate(context.Background(), "arcane.local/demo-2ab41b29/worker:latest")
+	result, err := svc.CheckImageUpdate(t.Context(), "arcane.local/demo-2ab41b29/worker:latest")
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, UpdateTypeLocal, result.UpdateType)
@@ -539,7 +543,7 @@ func TestImageUpdateService_CheckImageUpdate_ArcaneLocalHostSkipsRegistry(t *tes
 func TestImageUpdateService_CheckMultipleImages_ArcaneLocalMissingImageSkipsRegistry(t *testing.T) {
 	svc, registryCalls := newArcaneLocalImageUpdateServiceInternal(t, false)
 
-	results, err := svc.CheckMultipleImages(context.Background(), []string{"arcane.local/demo-2ab41b29/worker:latest"}, nil)
+	results, err := svc.CheckMultipleImages(t.Context(), []string{"arcane.local/demo-2ab41b29/worker:latest"}, nil)
 	require.NoError(t, err)
 	result := results["arcane.local/demo-2ab41b29/worker:latest"]
 	require.NotNil(t, result)
@@ -552,7 +556,7 @@ func TestImageUpdateService_CheckMultipleImages_ArcaneLocalMissingImageSkipsRegi
 func TestImageUpdateService_CheckMultipleImages_OtherDottedRegistryStillChecked(t *testing.T) {
 	svc, registryCalls := newArcaneLocalImageUpdateServiceInternal(t, false)
 
-	results, err := svc.CheckMultipleImages(context.Background(), []string{"registry.local/team/app:latest"}, nil)
+	results, err := svc.CheckMultipleImages(t.Context(), []string{"registry.local/team/app:latest"}, nil)
 	require.NoError(t, err)
 	result := results["registry.local/team/app:latest"]
 	require.NotNil(t, result)
@@ -565,7 +569,9 @@ func TestImageUpdateService_InspectLocalImageSnapshot_NoRepoDigestsRemainsLocal(
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/containers/json") {
 			w.Header().Set("Content-Type", "application/json")
-			require.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{}))
+			if !assert.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{})) {
+				return
+			}
 			return
 		}
 
@@ -584,7 +590,7 @@ func TestImageUpdateService_InspectLocalImageSnapshot_NoRepoDigestsRemainsLocal(
 	t.Cleanup(server.Close)
 
 	svc := &ImageUpdateService{dockerService: &docker.DockerClientService{Client: newImageUpdateTestDockerClientInternal(t, server)}}
-	snapshot, err := svc.inspectLocalImageSnapshotInternal(context.Background(), "local-only:latest", map[string]struct{}{})
+	snapshot, err := svc.inspectLocalImageSnapshotInternal(t.Context(), "local-only:latest", map[string]struct{}{})
 	require.NoError(t, err)
 	assert.True(t, snapshot.IsLocalBuild)
 	assert.Equal(t, "sha256:local-only-image", snapshot.PrimaryDigest)
@@ -600,10 +606,10 @@ func registryPingInternal(w http.ResponseWriter, r *http.Request) bool {
 }
 
 // writeManifestHeadInternal answers a manifest HEAD with the headers a client needs to trust the digest without a body.
-func writeManifestHeadInternal(w http.ResponseWriter, digest string) {
+func writeManifestHeadInternal(w http.ResponseWriter, localDigest string) {
 	w.Header().Set("Content-Type", "application/vnd.docker.distribution.manifest.v2+json")
 	w.Header().Set("Content-Length", "0")
-	w.Header().Set("Docker-Content-Digest", digest)
+	w.Header().Set("Docker-Content-Digest", localDigest)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -621,7 +627,9 @@ func newImageUpdateFallbackServer(t *testing.T, repositoryTag, localDigest, remo
 	return httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/containers/json") {
 			w.Header().Set("Content-Type", "application/json")
-			require.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{}))
+			if !assert.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{})) {
+				return
+			}
 			return
 		}
 
@@ -667,7 +675,9 @@ func newImageUpdateRegistryOnlyServer(t *testing.T, repositoryTag, remoteDigest 
 	return httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/containers/json") {
 			w.Header().Set("Content-Type", "application/json")
-			require.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{}))
+			if !assert.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{})) {
+				return
+			}
 			return
 		}
 
@@ -742,7 +752,7 @@ func TestImageUpdateService_GetImageRefByIDInternal_UsesContainerFallback(t *tes
 				dockerService: &docker.DockerClientService{Client: newImageUpdateTestDockerClientInternal(t, server)},
 			}
 
-			imageRef, err := svc.getImageRefByIDInternal(context.Background(), imageID)
+			imageRef, err := svc.getImageRefByIDInternal(t.Context(), imageID)
 			if tt.wantErr != "" {
 				require.Error(t, err)
 				require.ErrorContains(t, err, tt.wantErr)
@@ -763,7 +773,7 @@ func TestImageUpdateService_CheckImageUpdate_SkipsDigestPinnedReferenceInternal(
 	eventService := event.NewEventService(db, nil, nil)
 	svc := NewImageUpdateService(db, nil, nil, nil, eventService, nil, nil)
 
-	result, err := svc.CheckImageUpdate(context.Background(), imageRef)
+	result, err := svc.CheckImageUpdate(t.Context(), imageRef)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.False(t, result.HasUpdate)
@@ -786,7 +796,7 @@ func TestImageUpdateService_CheckMultipleImages_SkipsDigestPinnedReferenceIntern
 	require.NotNil(t, initialResults[imageRef])
 	assert.Empty(t, initialResults[imageRef].Error)
 
-	results, err := svc.CheckMultipleImages(context.Background(), []string{imageRef}, nil)
+	results, err := svc.CheckMultipleImages(t.Context(), []string{imageRef}, nil)
 	require.NoError(t, err)
 	require.Contains(t, results, imageRef)
 	require.NotNil(t, results[imageRef])
@@ -815,13 +825,13 @@ func TestImageUpdateService_CheckMultipleImages_SkippedDigestPinnedReferenceClea
 	}).Error)
 	svc := NewImageUpdateService(db, nil, nil, nil, nil, nil, nil)
 
-	results, err := svc.CheckMultipleImages(context.Background(), []string{imageRef}, nil)
+	results, err := svc.CheckMultipleImages(t.Context(), []string{imageRef}, nil)
 	require.NoError(t, err)
 	require.Contains(t, results, imageRef)
 	assert.Empty(t, results[imageRef].Error)
 
 	var saved ImageUpdateRecord
-	require.NoError(t, db.WithContext(context.Background()).Where("id = ?", recordID).First(&saved).Error)
+	require.NoError(t, db.WithContext(t.Context()).Where("id = ?", recordID).First(&saved).Error)
 	assert.False(t, saved.HasUpdate)
 	assert.Nil(t, saved.LastError)
 	assert.Equal(t, pinnedDigest, mo.PointerToOption(saved.CurrentDigest).OrEmpty())
@@ -843,14 +853,14 @@ func TestImageUpdateService_CheckMultipleImages_DigestPinnedTagPreservedWhenLoca
 	dockerService := &docker.DockerClientService{Client: newImageUpdateTestDockerClientInternal(t, server)}
 	svc := NewImageUpdateService(db, nil, nil, dockerService, nil, nil, nil)
 
-	results, err := svc.CheckMultipleImages(context.Background(), []string{imageRef}, nil)
+	results, err := svc.CheckMultipleImages(t.Context(), []string{imageRef}, nil)
 	require.NoError(t, err)
 	require.Contains(t, results, imageRef)
 	assert.False(t, results[imageRef].HasUpdate)
 	assert.Empty(t, results[imageRef].Error)
 
 	var saved ImageUpdateRecord
-	require.NoError(t, db.WithContext(context.Background()).Where("id = ?", "sha256:pinned-local-id").First(&saved).Error)
+	require.NoError(t, db.WithContext(t.Context()).Where("id = ?", "sha256:pinned-local-id").First(&saved).Error)
 	assert.Equal(t, "9", saved.Tag, "tag should come from the original tag@digest reference, not fall back to the RepoDigests-only placeholder")
 }
 
@@ -860,7 +870,9 @@ func newImageUpdateNoRepoTagsServer(t *testing.T, imageID, localDigest string) *
 	return httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/containers/json") {
 			w.Header().Set("Content-Type", "application/json")
-			require.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{}))
+			if !assert.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{})) {
+				return
+			}
 			return
 		}
 
@@ -903,7 +915,7 @@ func TestImageUpdateService_CheckImageUpdate_UsesRegistryFallback(t *testing.T) 
 	eventService := event.NewEventService(db, nil, nil)
 	svc := NewImageUpdateService(db, nil, registryService, dockerService, eventService, nil, nil)
 
-	result, err := svc.CheckImageUpdate(context.Background(), imageRef)
+	result, err := svc.CheckImageUpdate(t.Context(), imageRef)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.True(t, result.HasUpdate)
@@ -914,7 +926,7 @@ func TestImageUpdateService_CheckImageUpdate_UsesRegistryFallback(t *testing.T) 
 	assert.Equal(t, serverURL.Host, result.AuthRegistry)
 
 	var saved ImageUpdateRecord
-	require.NoError(t, db.WithContext(context.Background()).Where("id = ?", "sha256:local-image-id").First(&saved).Error)
+	require.NoError(t, db.WithContext(t.Context()).Where("id = ?", "sha256:local-image-id").First(&saved).Error)
 	assert.Equal(t, remoteDigest, mo.PointerToOption(saved.LatestDigest).OrEmpty())
 }
 
@@ -933,7 +945,8 @@ func TestImageUpdateService_CheckMultipleImages_UsesRegistryFallback(t *testing.
 	registryService := registry.NewContainerRegistryService(db, func(context.Context) (registry.RegistryDaemonClient, error) {
 		return &fakeRegistryDaemonClient{
 			distributionInspectFn: func(ctx context.Context, imageRef string, options client.DistributionInspectOptions) (client.DistributionInspectResult, error) {
-				return client.DistributionInspectResult{}, errors.New("error response from daemon: <html><body><h1>403 Forbidden</h1> Request forbidden by administrative rules. </body></html>")
+				return client.DistributionInspectResult{}, errors.New("error response from daemon: <html><body><h1>403 Forbidden</h1> Request forbidden by administrative r" +
+					"ules. </body></html>")
 			},
 		}, nil
 	}, nil, nil, server.Client())
@@ -942,7 +955,7 @@ func TestImageUpdateService_CheckMultipleImages_UsesRegistryFallback(t *testing.
 	eventService := event.NewEventService(db, nil, nil)
 	svc := NewImageUpdateService(db, nil, registryService, dockerService, eventService, nil, nil)
 
-	results, err := svc.CheckMultipleImages(context.Background(), []string{imageRef}, nil)
+	results, err := svc.CheckMultipleImages(t.Context(), []string{imageRef}, nil)
 	require.NoError(t, err)
 	require.Contains(t, results, imageRef)
 
@@ -955,7 +968,7 @@ func TestImageUpdateService_CheckMultipleImages_UsesRegistryFallback(t *testing.
 	assert.Equal(t, serverURL.Host, result.AuthRegistry)
 
 	var saved ImageUpdateRecord
-	require.NoError(t, db.WithContext(context.Background()).Where("id = ?", "sha256:local-image-id").First(&saved).Error)
+	require.NoError(t, db.WithContext(t.Context()).Where("id = ?", "sha256:local-image-id").First(&saved).Error)
 	assert.Equal(t, remoteDigest, mo.PointerToOption(saved.LatestDigest).OrEmpty())
 }
 
@@ -967,7 +980,7 @@ func TestImageUpdateService_CheckMultipleImagesCompletesActivityWhenRequestConte
 	svc := NewImageUpdateService(db, nil, nil, nil, nil, nil, activityService)
 
 	for range 5 {
-		require.NoError(t, svc.registryLimiter.Acquire(context.Background(), "docker.io"))
+		require.NoError(t, svc.registryLimiter.Acquire(t.Context(), "docker.io"))
 	}
 	defer func() {
 		for range 5 {
@@ -975,16 +988,16 @@ func TestImageUpdateService_CheckMultipleImagesCompletesActivityWhenRequestConte
 		}
 	}()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	errCh := make(chan error, 1)
 	go func() {
 		_, err := svc.CheckMultipleImages(ctx, []string{"nginx:latest"}, nil)
 		errCh <- err
 	}()
 
-	var activity activity.Activity
+	var localActivity activity.Activity
 	require.Eventually(t, func() bool {
-		return db.Where("type = ?", activitytypes.TypeImageUpdateCheck).First(&activity).Error == nil
+		return db.Where("type = ?", activitytypes.TypeImageUpdateCheck).First(&localActivity).Error == nil
 	}, time.Second, 10*time.Millisecond)
 
 	cancel()
@@ -997,13 +1010,13 @@ func TestImageUpdateService_CheckMultipleImagesCompletesActivityWhenRequestConte
 	}
 
 	require.Eventually(t, func() bool {
-		if err := db.First(&activity, "id = ?", activity.ID).Error; err != nil {
+		if err := db.First(&localActivity, "id = ?", localActivity.ID).Error; err != nil {
 			return false
 		}
-		return activity.Status == activitytypes.StatusFailed
+		return localActivity.Status == activitytypes.StatusFailed
 	}, time.Second, 10*time.Millisecond)
-	assert.Equal(t, "Image update check complete", activity.Step)
-	assert.Contains(t, activity.LatestMessage, "Image update check failed")
+	assert.Equal(t, "Image update check complete", localActivity.Step)
+	assert.Contains(t, localActivity.LatestMessage, "Image update check failed")
 }
 
 func TestImageUpdateService_CheckMultipleImagesTimesOutStalledRegistryCheckInternal(t *testing.T) {
@@ -1023,10 +1036,21 @@ func TestImageUpdateService_CheckMultipleImagesTimesOutStalledRegistryCheckInter
 		}, nil
 	}, nil, nil)
 
-	parentCtx, cancel := context.WithTimeout(context.Background(), 2500*time.Millisecond)
+	parentCtx, cancel := context.WithTimeout(t.Context(), 2500*time.Millisecond)
 	defer cancel()
 
-	svc := NewImageUpdateService(db, settingsService, registryService, &docker.DockerClientService{Client: newImageUpdateTestDockerClientInternal(t, dockerServer)}, nil, nil, activityService)
+	svc := NewImageUpdateService(
+		db,
+		settingsService,
+		registryService,
+		&docker.DockerClientService{Client: newImageUpdateTestDockerClientInternal(
+			t,
+			dockerServer,
+		)},
+		nil,
+		nil,
+		activityService,
+	)
 
 	start := time.Now()
 	results, err := svc.CheckMultipleImages(parentCtx, []string{"registry.example.com/team/app:1.2.3"}, nil)
@@ -1038,13 +1062,13 @@ func TestImageUpdateService_CheckMultipleImagesTimesOutStalledRegistryCheckInter
 	require.NotNil(t, results["registry.example.com/team/app:1.2.3"])
 	require.Contains(t, results["registry.example.com/team/app:1.2.3"].Error, context.DeadlineExceeded.Error())
 
-	var activity activity.Activity
-	require.NoError(t, db.Where("type = ?", activitytypes.TypeImageUpdateCheck).First(&activity).Error)
-	require.Equal(t, activitytypes.StatusFailed, activity.Status)
-	require.NotNil(t, activity.EndedAt)
-	require.NotNil(t, activity.DurationMs)
-	require.Equal(t, "Image update check complete", activity.Step)
-	require.Contains(t, activity.LatestMessage, "0 checked, 1 errors")
+	var localActivity activity.Activity
+	require.NoError(t, db.Where("type = ?", activitytypes.TypeImageUpdateCheck).First(&localActivity).Error)
+	require.Equal(t, activitytypes.StatusFailed, localActivity.Status)
+	require.NotNil(t, localActivity.EndedAt)
+	require.NotNil(t, localActivity.DurationMs)
+	require.Equal(t, "Image update check complete", localActivity.Step)
+	require.Contains(t, localActivity.LatestMessage, "0 checked, 1 errors")
 }
 
 func TestImageUpdateService_CheckMultipleImagesPanicMarksActivityFailedInternal(t *testing.T) {
@@ -1063,18 +1087,29 @@ func TestImageUpdateService_CheckMultipleImagesPanicMarksActivityFailedInternal(
 		}, nil
 	}, nil, nil)
 
-	svc := NewImageUpdateService(db, settingsService, registryService, &docker.DockerClientService{Client: newImageUpdateTestDockerClientInternal(t, dockerServer)}, nil, nil, activityService)
+	svc := NewImageUpdateService(
+		db,
+		settingsService,
+		registryService,
+		&docker.DockerClientService{Client: newImageUpdateTestDockerClientInternal(
+			t,
+			dockerServer,
+		)},
+		nil,
+		nil,
+		activityService,
+	)
 
-	_, err := svc.CheckMultipleImages(context.Background(), []string{"registry.example.com/team/app:1.2.3"}, nil)
+	_, err := svc.CheckMultipleImages(t.Context(), []string{"registry.example.com/team/app:1.2.3"}, nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "image update check panicked")
 	require.Contains(t, err.Error(), "registry check exploded")
 
-	var activity activity.Activity
-	require.NoError(t, db.Where("type = ?", activitytypes.TypeImageUpdateCheck).First(&activity).Error)
-	require.Equal(t, activitytypes.StatusFailed, activity.Status)
-	require.NotNil(t, activity.EndedAt)
-	require.Contains(t, activity.LatestMessage, "Image update check failed")
+	var localActivity activity.Activity
+	require.NoError(t, db.Where("type = ?", activitytypes.TypeImageUpdateCheck).First(&localActivity).Error)
+	require.Equal(t, activitytypes.StatusFailed, localActivity.Status)
+	require.NotNil(t, localActivity.EndedAt)
+	require.Contains(t, localActivity.LatestMessage, "Image update check failed")
 }
 
 func TestImageUpdateService_GetAllImageRefsUsesDockerAPITimeoutInternal(t *testing.T) {
@@ -1083,7 +1118,7 @@ func TestImageUpdateService_GetAllImageRefsUsesDockerAPITimeoutInternal(t *testi
 	server := newBlockedDockerAPIServerInternal(t, "/images/json")
 	svc := NewImageUpdateService(db, settingsService, nil, &docker.DockerClientService{Client: newImageUpdateTestDockerClientInternal(t, server)}, nil, nil, nil)
 
-	parentCtx, cancel := context.WithTimeout(context.Background(), 2500*time.Millisecond)
+	parentCtx, cancel := context.WithTimeout(t.Context(), 2500*time.Millisecond)
 	defer cancel()
 
 	start := time.Now()
@@ -1101,7 +1136,7 @@ func TestImageUpdateService_InspectLocalImageSnapshotUsesDockerAPITimeoutInterna
 	server := newBlockedDockerAPIServerInternal(t, "/images/")
 	svc := NewImageUpdateService(db, settingsService, nil, &docker.DockerClientService{Client: newImageUpdateTestDockerClientInternal(t, server)}, nil, nil, nil)
 
-	parentCtx, cancel := context.WithTimeout(context.Background(), 2500*time.Millisecond)
+	parentCtx, cancel := context.WithTimeout(t.Context(), 2500*time.Millisecond)
 	defer cancel()
 
 	start := time.Now()
@@ -1149,7 +1184,7 @@ func TestImageUpdateService_CheckMultipleImages_UsesDockerHubCredentialsOnFirstA
 	eventService := event.NewEventService(db, nil, nil)
 	svc := NewImageUpdateService(db, nil, registryService, dockerService, eventService, nil, nil)
 
-	results, err := svc.CheckMultipleImages(context.Background(), []string{"docker.io/library/registry:3"}, nil)
+	results, err := svc.CheckMultipleImages(t.Context(), []string{"docker.io/library/registry:3"}, nil)
 	require.NoError(t, err)
 	require.Contains(t, results, "docker.io/library/registry:3")
 
@@ -1188,7 +1223,7 @@ func TestImageUpdateService_CheckMultipleImages_ReportsNotPulledWhenLocalImageMi
 	eventService := event.NewEventService(db, nil, nil)
 	svc := NewImageUpdateService(db, nil, registryService, dockerService, eventService, nil, nil)
 
-	results, err := svc.CheckMultipleImages(context.Background(), []string{imageRef}, nil)
+	results, err := svc.CheckMultipleImages(t.Context(), []string{imageRef}, nil)
 	require.NoError(t, err)
 	require.Contains(t, results, imageRef)
 	require.NotNil(t, results[imageRef])
@@ -1198,8 +1233,8 @@ func TestImageUpdateService_CheckMultipleImages_ReportsNotPulledWhenLocalImageMi
 	assert.Equal(t, remoteDigest, results[imageRef].LatestDigest)
 
 	var saved ImageUpdateRecord
-	repository := fmt.Sprintf("%s/library/nginx", serverURL.Host)
-	require.NoError(t, db.WithContext(context.Background()).Where("id = ?", fmt.Sprintf("ref::%s@alpine", strings.ToLower(strings.TrimSpace(repository)))).First(&saved).Error)
+	repository := serverURL.Host + "/library/nginx"
+	require.NoError(t, db.WithContext(t.Context()).Where("id = ?", fmt.Sprintf("ref::%s@alpine", strings.ToLower(strings.TrimSpace(repository)))).First(&saved).Error)
 	assert.Equal(t, repository, saved.Repository)
 	assert.Equal(t, "alpine", saved.Tag)
 	assert.False(t, saved.HasUpdate)
@@ -1230,11 +1265,11 @@ func TestImageUpdateService_SaveUpdateResultWithSnapshotInternal_PersistsRegistr
 		ResponseTimeMs: 25,
 	}
 
-	require.NoError(t, svc.saveUpdateResultWithSnapshotInternal(context.Background(), imageRef, result, nil))
+	require.NoError(t, svc.saveUpdateResultWithSnapshotInternal(t.Context(), imageRef, result, nil))
 
 	var saved ImageUpdateRecord
-	repository := fmt.Sprintf("%s/library/nginx", serverURL.Host)
-	require.NoError(t, db.WithContext(context.Background()).Where("id = ?", fmt.Sprintf("ref::%s@alpine", strings.ToLower(strings.TrimSpace(repository)))).First(&saved).Error)
+	repository := serverURL.Host + "/library/nginx"
+	require.NoError(t, db.WithContext(t.Context()).Where("id = ?", fmt.Sprintf("ref::%s@alpine", strings.ToLower(strings.TrimSpace(repository)))).First(&saved).Error)
 	assert.Equal(t, repository, saved.Repository)
 	assert.Equal(t, "alpine", saved.Tag)
 	assert.True(t, saved.HasUpdate)
@@ -1291,25 +1326,25 @@ func TestImageUpdateService_MarkImageRefUpToDateAfterPull_ClearsMatchingRecordsA
 
 	svc := NewImageUpdateService(db, nil, nil, &docker.DockerClientService{Client: newImageUpdateTestDockerClientInternal(t, server)}, nil, nil, nil)
 
-	require.NoError(t, svc.MarkImageRefUpToDateAfterPull(context.Background(), imageRef))
+	require.NoError(t, svc.MarkImageRefUpToDateAfterPull(t.Context(), imageRef))
 
 	// Sha256 records for old images that other containers are still running must stay HasUpdate=true.
 	var fullRecord ImageUpdateRecord
-	require.NoError(t, db.WithContext(context.Background()).Where("id = ?", "sha256:old-full").First(&fullRecord).Error)
+	require.NoError(t, db.WithContext(t.Context()).Where("id = ?", "sha256:old-full").First(&fullRecord).Error)
 	assert.True(t, fullRecord.HasUpdate, "sha256 record for old image still in use must not be cleared")
 
 	var shortRecord ImageUpdateRecord
-	require.NoError(t, db.WithContext(context.Background()).Where("id = ?", "sha256:old-short").First(&shortRecord).Error)
+	require.NoError(t, db.WithContext(t.Context()).Where("id = ?", "sha256:old-short").First(&shortRecord).Error)
 	assert.True(t, shortRecord.HasUpdate, "sha256 record for old image still in use must not be cleared")
 
 	// Synthetic ref:: record must be cleared since a fresh image was pulled.
 	var synthRecord ImageUpdateRecord
-	require.NoError(t, db.WithContext(context.Background()).Where("id = ?", syntheticID).First(&synthRecord).Error)
+	require.NoError(t, db.WithContext(t.Context()).Where("id = ?", syntheticID).First(&synthRecord).Error)
 	assert.False(t, synthRecord.HasUpdate, "synthetic ref:: record must be cleared after pull")
 
 	// The newly pulled image record must be saved as up-to-date.
 	var currentRecord ImageUpdateRecord
-	require.NoError(t, db.WithContext(context.Background()).Where("id = ?", "sha256:local-image-id").First(&currentRecord).Error)
+	require.NoError(t, db.WithContext(t.Context()).Where("id = ?", "sha256:local-image-id").First(&currentRecord).Error)
 	assert.False(t, currentRecord.HasUpdate)
 	assert.Equal(t, repository, currentRecord.Repository)
 	assert.Equal(t, "1.2.3", currentRecord.Tag)
@@ -1492,7 +1527,7 @@ func TestImageUpdateService_NotificationSentReset(t *testing.T) {
 			digestChanged := mo.PointerToOption(existingRecord.LatestDigest).OrEmpty() != mo.PointerToOption(updateRecord.LatestDigest).OrEmpty()
 			versionChanged := mo.PointerToOption(existingRecord.LatestVersion).OrEmpty() != mo.PointerToOption(updateRecord.LatestVersion).OrEmpty()
 
-			updateRecord.NotificationSent = !stateChanged && !(updateRecord.HasUpdate && (digestChanged || versionChanged)) && existingRecord.NotificationSent
+			updateRecord.NotificationSent = !stateChanged && (!updateRecord.HasUpdate || (!digestChanged && !versionChanged)) && existingRecord.NotificationSent
 
 			// Save the updated record
 			err = db.Save(updateRecord).Error
@@ -1576,7 +1611,7 @@ func TestImageUpdateService_RateLimitErrorPreservesPreviousResult(t *testing.T) 
 
 // TestGetUnnotifiedUpdates tests retrieving updates that haven't been notified
 func TestImageUpdateService_GetUnnotifiedUpdates(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupImageUpdateTestDB(t)
 	svc := &ImageUpdateService{db: db}
 
@@ -1631,7 +1666,7 @@ func TestImageUpdateService_GetUnnotifiedUpdates(t *testing.T) {
 
 // TestMarkUpdatesAsNotified tests marking images as notified
 func TestImageUpdateService_MarkUpdatesAsNotified(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupImageUpdateTestDB(t)
 	svc := &ImageUpdateService{db: db}
 
@@ -1673,7 +1708,7 @@ func TestImageUpdateService_MarkUpdatesAsNotified(t *testing.T) {
 
 // TestMarkUpdatesAsNotified_EmptyList tests handling of empty ID list
 func TestImageUpdateService_MarkUpdatesAsNotified_EmptyList(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupImageUpdateTestDB(t)
 	svc := &ImageUpdateService{db: db}
 
@@ -1739,13 +1774,29 @@ func TestImageUpdateService_SendBatchNotifications_FiltersByUpdateCheckEligibili
 		{ID: "sha256:shared", Repository: "docker.io/test/shared", Tag: "latest", HasUpdate: true},
 		{ID: "sha256:pruned", Repository: "docker.io/test/ref-only", Tag: "2.0", HasUpdate: true},
 		{ID: "sha256:unused", Repository: "docker.io/test/unused", Tag: "latest", HasUpdate: true},
-		{ID: "container::install-excluded", ContainerID: "install-excluded", ImageID: "sha256:install-excluded", Repository: "docker.io/test/install-excluded", Tag: "latest", HasUpdate: true, UpdateType: UpdateTypeTag},
-		{ID: "container::unmonitored", ContainerID: "unmonitored", ImageID: "sha256:unmonitored", Repository: "docker.io/test/unmonitored", Tag: "latest", HasUpdate: true, UpdateType: UpdateTypeTag},
+		{
+			ID:          "container::install-excluded",
+			ContainerID: "install-excluded",
+			ImageID:     "sha256:install-excluded",
+			Repository:  "docker.io/test/install-excluded",
+			Tag:         "latest",
+			HasUpdate:   true,
+			UpdateType:  UpdateTypeTag,
+		},
+		{
+			ID:          "container::unmonitored",
+			ContainerID: "unmonitored",
+			ImageID:     "sha256:unmonitored",
+			Repository:  "docker.io/test/unmonitored",
+			Tag:         "latest",
+			HasUpdate:   true,
+			UpdateType:  UpdateTypeTag,
+		},
 		{ID: "container::gone", ContainerID: "gone", ImageID: "sha256:gone", Repository: "docker.io/test/gone", Tag: "latest", HasUpdate: true, UpdateType: UpdateTypeTag},
 	}
 	require.NoError(t, db.Create(&records).Error)
 
-	svc.SendBatchUpdateNotifications(context.Background())
+	require.NoError(t, svc.SendBatchUpdateNotifications(t.Context()))
 
 	require.EqualValues(t, 1, calls.Load(), "eligible records are delivered in one batch")
 	notified := map[string]bool{}
@@ -1766,7 +1817,7 @@ func TestImageUpdateService_SendBatchNotifications_FiltersByUpdateCheckEligibili
 	// Re-enabling monitoring lets the held-back records notify on the next flush.
 	containers[1].Labels = nil
 	svc.dockerService = newImageUpdateNotificationDockerServiceInternal(t, containers)
-	svc.SendBatchUpdateNotifications(context.Background())
+	require.NoError(t, svc.SendBatchUpdateNotifications(t.Context()))
 	require.EqualValues(t, 2, calls.Load())
 	var resumed ImageUpdateRecord
 	require.NoError(t, db.First(&resumed, "id = ?", "container::unmonitored").Error)
@@ -1782,7 +1833,7 @@ func TestImageUpdateService_SendBatchNotifications_UnresolvedEligibilityLeavesUn
 	svc := NewImageUpdateService(db, nil, nil, nil, nil, notif, nil)
 	require.NoError(t, db.Create(&ImageUpdateRecord{ID: "sha256:img", Repository: "test/repo", Tag: "latest", HasUpdate: true}).Error)
 
-	svc.SendBatchUpdateNotifications(context.Background())
+	require.ErrorContains(t, svc.SendBatchUpdateNotifications(t.Context()), "resolve update-check eligibility: docker service unavailable")
 
 	require.Zero(t, calls.Load(), "nothing is sent when eligibility cannot be resolved")
 	var reloaded ImageUpdateRecord
@@ -1828,10 +1879,10 @@ func TestImageUpdateService_SendBatchNotifications_DetachesCanceledContext(t *te
 	// canceled. Derive it from a lifecycle-marked parent to mirror production,
 	// where every request/scheduler ctx inherits the marker via the server
 	// BaseContext — the detach must work even then.
-	ctx, cancel := context.WithCancel(utils.WithAppLifecycleContext(context.Background()))
+	ctx, cancel := context.WithCancel(utils.WithAppLifecycleContext(t.Context()))
 	cancel()
 
-	svc.SendBatchUpdateNotifications(ctx)
+	require.NoError(t, svc.SendBatchUpdateNotifications(ctx))
 
 	// The provider being reached, and the record being marked notified, both prove
 	// GetUnnotifiedUpdates + the send + MarkUpdatesAsNotified ran despite the canceled
@@ -1863,13 +1914,13 @@ func TestImageUpdateService_SendBatchNotifications_NoEligibleProviders_LeavesUnn
 	}
 	require.NoError(t, db.Create(&rec).Error)
 
-	svc.SendBatchUpdateNotifications(context.Background())
+	require.NoError(t, svc.SendBatchUpdateNotifications(t.Context()))
 
 	var reloaded ImageUpdateRecord
 	require.NoError(t, db.First(&reloaded, "id = ?", "sha256:img-no-provider").Error)
 	assert.False(t, reloaded.NotificationSent)
 
-	unnotified, err := svc.GetUnnotifiedUpdates(context.Background())
+	unnotified, err := svc.GetUnnotifiedUpdates(t.Context())
 	require.NoError(t, err)
 	require.Contains(t, unnotified, "sha256:img-no-provider")
 }
@@ -1915,7 +1966,7 @@ func TestImageUpdateService_SendBatchNotifications_PartialFailureStillMarksNotif
 	}
 	require.NoError(t, db.Create(&rec).Error)
 
-	svc.SendBatchUpdateNotifications(context.Background())
+	require.NoError(t, svc.SendBatchUpdateNotifications(t.Context()))
 
 	var reloaded ImageUpdateRecord
 	require.NoError(t, db.First(&reloaded, "id = ?", "sha256:img-partial").Error)
@@ -1923,7 +1974,7 @@ func TestImageUpdateService_SendBatchNotifications_PartialFailureStillMarksNotif
 }
 
 func TestImageUpdateService_GetUpdateSummaryForImageIDs_FiltersToLiveImages(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupImageUpdateTestDB(t)
 	svc := &ImageUpdateService{db: db}
 	now := time.Now()
@@ -1974,7 +2025,7 @@ func TestImageUpdateService_GetUpdateSummaryForImageIDs_FiltersToLiveImages(t *t
 }
 
 func TestImageUpdateService_GetUpdateSummaryForImageIDs_EmptyLiveSet(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupImageUpdateTestDB(t)
 	svc := &ImageUpdateService{db: db}
 
@@ -2023,14 +2074,14 @@ func newImageUpdateTestSettingsServiceInternal(t *testing.T, registryTimeout, do
 	t.Helper()
 	t.Setenv("REGISTRY_TIMEOUT", registryTimeout)
 	t.Setenv("DOCKER_API_TIMEOUT", dockerAPITimeout)
-	ctx := context.Background()
+	ctx := t.Context()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&settings.SettingVariable{}))
 	dbWrap := &database.DB{DB: db}
 	service, err := settings.NewSettingsService(ctx, dbWrap)
 	if err == nil {
-		t.Cleanup(func() { require.NoError(t, service.Stop(context.Background())) })
+		t.Cleanup(func() { require.NoError(t, service.Stop(context.WithoutCancel(t.Context()))) })
 	}
 	require.NoError(t, err)
 	return service
@@ -2042,7 +2093,9 @@ func newBlockedDockerAPIServerInternal(t *testing.T, pathContains string) *httpt
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/containers/json") {
 			w.Header().Set("Content-Type", "application/json")
-			require.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{}))
+			if !assert.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{})) {
+				return
+			}
 			return
 		}
 
@@ -2154,7 +2207,7 @@ func TestImageUpdateService_GetAllImageRefsHonorsExclusiveContainerOptOutInterna
 		nil,
 	)
 
-	got, err := svc.getAllImageRefsInternal(context.Background(), 0)
+	got, err := svc.getAllImageRefsInternal(t.Context(), 0)
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{enabledRef, sharedRef, unusedRef, runningOnlyRef, stoppedOnlyRef, pinnedRef}, got)
@@ -2199,11 +2252,11 @@ func TestImageUpdateService_GetAllImageRefsAppliesLimitAfterOptOutFilteringInter
 		nil,
 	)
 
-	got, err := svc.getAllImageRefsInternal(context.Background(), 2)
+	got, err := svc.getAllImageRefsInternal(t.Context(), 2)
 	require.NoError(t, err)
 	assert.Equal(t, []string{enabledRef, unusedRef}, got)
 
-	got, err = svc.getAllImageRefsInternal(context.Background(), 3)
+	got, err = svc.getAllImageRefsInternal(t.Context(), 3)
 	require.NoError(t, err)
 	assert.Equal(t, []string{enabledRef, unusedRef, containerOnlyRef}, got)
 }
@@ -2253,7 +2306,7 @@ func TestImageUpdateService_GetAllImageRefsExcludesAliasesOfOptedOutImageInterna
 		nil,
 	)
 
-	got, err := svc.getAllImageRefsInternal(context.Background(), 0)
+	got, err := svc.getAllImageRefsInternal(t.Context(), 0)
 
 	require.NoError(t, err)
 	assert.NotContains(t, got, primaryRef)
@@ -2301,7 +2354,7 @@ func TestImageUpdateService_GetAllImageRefsKeepsImageSharedByEligibleContainerIn
 		nil,
 	)
 
-	got, err := svc.getAllImageRefsInternal(context.Background(), 0)
+	got, err := svc.getAllImageRefsInternal(t.Context(), 0)
 
 	require.NoError(t, err)
 	assert.Contains(t, got, imageRef)
@@ -2339,7 +2392,7 @@ func TestImageUpdateService_GetAllImageRefsFallsBackToRefWhenImageIDsDifferInter
 		nil,
 	)
 
-	got, err := svc.getAllImageRefsInternal(context.Background(), 0)
+	got, err := svc.getAllImageRefsInternal(t.Context(), 0)
 
 	require.NoError(t, err)
 	assert.NotContains(t, got, imageRef)
@@ -2384,7 +2437,7 @@ func TestImageUpdateService_GetAllImageRefsMergesIDAndReferenceEligibilityIntern
 		nil,
 	)
 
-	got, err := svc.getAllImageRefsInternal(context.Background(), 0)
+	got, err := svc.getAllImageRefsInternal(t.Context(), 0)
 
 	require.NoError(t, err)
 	assert.Contains(t, got, imageRef)
@@ -2424,7 +2477,7 @@ func TestImageUpdateService_GetAllImageRefsFallsBackWhenContainerDiscoveryFailsI
 		nil,
 	)
 
-	got, err := svc.getAllImageRefsInternal(context.Background(), 0)
+	got, err := svc.getAllImageRefsInternal(t.Context(), 0)
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{firstRef, secondRef}, got)
@@ -2451,7 +2504,16 @@ func TestFilterImageSummariesKeepsInstallExcludedContainersMonitoredInternal(t *
 		{ID: "c2", Names: []string{"/ui-excluded"}, ImageID: "sha256:ui-excluded", Image: uiExcludedRef},
 		{ID: "c3", Names: []string{"/unmonitored"}, ImageID: "sha256:unmonitored", Image: unmonitoredRef, Labels: map[string]string{strings.ToUpper(imageref.UpdateCheckLabel): "no"}},
 		{ID: "c4", Names: []string{"/shared-unmonitored"}, ImageID: "sha256:shared", Image: sharedRef, Labels: map[string]string{imageref.UpdateCheckLabel: "off"}},
-		{ID: "c5", Names: []string{"/shared-garbage-value"}, ImageID: "sha256:shared", Image: "docker.io/local/shared:latest", Labels: map[string]string{imageref.UpdateCheckLabel: "maybe", labels.LabelUpdater: "false"}},
+		{
+			ID:      "c5",
+			Names:   []string{"/shared-garbage-value"},
+			ImageID: "sha256:shared",
+			Image:   "docker.io/local/shared:latest",
+			Labels: map[string]string{
+				imageref.UpdateCheckLabel: "maybe",
+				labels.LabelUpdater:       "false",
+			},
+		},
 		{ID: "c6", Names: []string{"/unmonitored-only"}, ImageID: "sha256:pruned", Image: "local/unmonitored-only:1.0", Labels: map[string]string{imageref.UpdateCheckLabel: "0"}},
 	}
 
@@ -2484,7 +2546,9 @@ func TestContainerTagChecksPersistIndependentPoliciesInternal(t *testing.T) {
 		}
 		tagListings.Add(1)
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"name": "team/app", "tags": []string{"1.0.0", "1.1.0", "2.0.0"}}))
+		if !assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{"name": "team/app", "tags": []string{"1.0.0", "1.1.0", "2.0.0"}})) {
+			return
+		}
 	}))
 	defer registryServer.Close()
 	registryURL, err := url.Parse(registryServer.URL)
@@ -2499,12 +2563,51 @@ func TestContainerTagChecksPersistIndependentPoliciesInternal(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/containers/json"):
-			require.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{{ID: "one", Image: imageRef, ImageID: imageID, Labels: values["one"]}, {ID: "two", Image: imageRef, ImageID: imageID, Labels: values["two"]}}))
+			if !assert.NoError(
+				t,
+				json.NewEncoder(w).Encode([]dockertypescontainer.Summary{
+					{
+						ID:      "one",
+						Image:   imageRef,
+						ImageID: imageID,
+						Labels:  values["one"],
+					},
+					{
+						ID:      "two",
+						Image:   imageRef,
+						ImageID: imageID,
+						Labels:  values["two"],
+					},
+				}),
+			) {
+				return
+			}
 		case strings.Contains(r.URL.Path, "/images/"):
-			require.NoError(t, json.NewEncoder(w).Encode(dockertypesimage.InspectResponse{ID: imageID, RepoTags: []string{imageRef}, RepoDigests: []string{registryURL.Host + "/team/app@" + imageID}}))
+			if !assert.NoError(
+				t,
+				json.NewEncoder(w).Encode(dockertypesimage.InspectResponse{
+					ID:          imageID,
+					RepoTags:    []string{imageRef},
+					RepoDigests: []string{registryURL.Host + "/team/app@" + imageID},
+				}),
+			) {
+				return
+			}
 		case strings.Contains(r.URL.Path, "/containers/"):
 			id := kit.Ternary(strings.Contains(r.URL.Path, "/two/"), "two", "one")
-			require.NoError(t, json.NewEncoder(w).Encode(dockertypescontainer.InspectResponse{ID: id, Image: imageID, Config: &dockertypescontainer.Config{Image: imageRef, Labels: values[id]}}))
+			if !assert.NoError(
+				t,
+				json.NewEncoder(w).Encode(dockertypescontainer.InspectResponse{
+					ID:    id,
+					Image: imageID,
+					Config: &dockertypescontainer.Config{
+						Image:  imageRef,
+						Labels: values[id],
+					},
+				}),
+			) {
+				return
+			}
 		default:
 			t.Errorf("unexpected Docker request %s", r.URL.Path)
 			http.NotFound(w, r)
@@ -2582,7 +2685,9 @@ func TestContainerTagChecksSeparateMonitoringFromInstallationInternal(t *testing
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"name": "team/app", "tags": []string{"1.0.0", "1.1.0"}}))
+		if !assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{"name": "team/app", "tags": []string{"1.0.0", "1.1.0"}})) {
+			return
+		}
 	}))
 	defer registryServer.Close()
 	registryURL, err := url.Parse(registryServer.URL)
@@ -2598,14 +2703,29 @@ func TestContainerTagChecksSeparateMonitoringFromInstallationInternal(t *testing
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/containers/json"):
-			require.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{
+			if !assert.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{
 				{ID: "install-excluded", Names: []string{"/install-excluded"}, Image: imageRef, ImageID: imageID, Labels: values["install-excluded"]},
 				{ID: "unmonitored", Names: []string{"/unmonitored"}, Image: imageRef, ImageID: imageID, Labels: values["unmonitored"]},
-			}))
+			})) {
+				return
+			}
 		case strings.Contains(r.URL.Path, "/containers/"):
 			id := kit.Ternary(strings.Contains(r.URL.Path, "/unmonitored/"), "unmonitored", "install-excluded")
 			inspected = append(inspected, id)
-			require.NoError(t, json.NewEncoder(w).Encode(dockertypescontainer.InspectResponse{ID: id, Name: "/" + id, Image: imageID, Config: &dockertypescontainer.Config{Image: imageRef, Labels: values[id]}}))
+			if !assert.NoError(
+				t,
+				json.NewEncoder(w).Encode(dockertypescontainer.InspectResponse{
+					ID:    id,
+					Name:  "/" + id,
+					Image: imageID,
+					Config: &dockertypescontainer.Config{
+						Image:  imageRef,
+						Labels: values[id],
+					},
+				}),
+			) {
+				return
+			}
 		default:
 			t.Errorf("unexpected Docker request %s", r.URL.Path)
 			http.NotFound(w, r)
@@ -2621,7 +2741,21 @@ func TestContainerTagChecksSeparateMonitoringFromInstallationInternal(t *testing
 	svc := NewImageUpdateService(db, settingsService, registryService, &docker.DockerClientService{Client: newImageUpdateTestDockerClientInternal(t, dockerServer)}, nil, nil, nil)
 
 	pending := "1.1.0"
-	stale := ImageUpdateRecord{ID: "container::unmonitored", ContainerID: "unmonitored", ImageID: imageID, PolicyKey: imageref.UpdatePolicyKey(imageRef, values["unmonitored"]), Repository: registryURL.Host + "/team/app", Tag: "1.0.0", HasUpdate: true, UpdateType: UpdateTypeTag, LatestVersion: &pending, CheckTime: time.Now().UTC()}
+	stale := ImageUpdateRecord{
+		ID:          "container::unmonitored",
+		ContainerID: "unmonitored",
+		ImageID:     imageID,
+		PolicyKey: imageref.UpdatePolicyKey(
+			imageRef,
+			values["unmonitored"],
+		),
+		Repository:    registryURL.Host + "/team/app",
+		Tag:           "1.0.0",
+		HasUpdate:     true,
+		UpdateType:    UpdateTypeTag,
+		LatestVersion: &pending,
+		CheckTime:     time.Now().UTC(),
+	}
 	require.NoError(t, db.Create(&stale).Error)
 
 	checks, err := svc.checkContainerTagUpdatesInternal(t.Context(), []string{imageRef}, nil)
@@ -2664,7 +2798,9 @@ func TestContainerTagChecksUseRegistryTagTimeoutInternal(t *testing.T) {
 		{name: "listing slower than registry timeout succeeds within tag budget", tagTimeout: "30", respond: func(w http.ResponseWriter, _ *http.Request) {
 			time.Sleep(1300 * time.Millisecond)
 			w.Header().Set("Content-Type", "application/json")
-			require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"name": "team/app", "tags": []string{"1.0.0", "1.1.0"}}))
+			if !assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{"name": "team/app", "tags": []string{"1.0.0", "1.1.0"}})) {
+				return
+			}
 		}},
 		{name: "stalled listing fails at tag budget", tagTimeout: "1", respond: func(_ http.ResponseWriter, r *http.Request) {
 			<-r.Context().Done()
@@ -2693,11 +2829,27 @@ func TestContainerTagChecksUseRegistryTagTimeoutInternal(t *testing.T) {
 				w.Header().Set("Content-Type", "application/json")
 				switch {
 				case strings.HasSuffix(r.URL.Path, "/containers/json"):
-					require.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{{ID: "one", Image: imageRef, ImageID: imageID, Labels: autoLabels}}))
+					if !assert.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{{ID: "one", Image: imageRef, ImageID: imageID, Labels: autoLabels}})) {
+						return
+					}
 				case strings.Contains(r.URL.Path, "/images/"):
-					require.NoError(t, json.NewEncoder(w).Encode(dockertypesimage.InspectResponse{ID: imageID, RepoTags: []string{imageRef}}))
+					if !assert.NoError(t, json.NewEncoder(w).Encode(dockertypesimage.InspectResponse{ID: imageID, RepoTags: []string{imageRef}})) {
+						return
+					}
 				case strings.Contains(r.URL.Path, "/containers/"):
-					require.NoError(t, json.NewEncoder(w).Encode(dockertypescontainer.InspectResponse{ID: "one", Image: imageID, Config: &dockertypescontainer.Config{Image: imageRef, Labels: autoLabels}}))
+					if !assert.NoError(
+						t,
+						json.NewEncoder(w).Encode(dockertypescontainer.InspectResponse{
+							ID:    "one",
+							Image: imageID,
+							Config: &dockertypescontainer.Config{
+								Image:  imageRef,
+								Labels: autoLabels,
+							},
+						}),
+					) {
+						return
+					}
 				default:
 					http.NotFound(w, r)
 				}
@@ -2736,7 +2888,9 @@ func TestContainerTagChecksPersistResultsFinishedBeforeScanDeadlineInternal(t *t
 		case registryPingInternal(w, r):
 		case strings.HasSuffix(r.URL.Path, "/team/fast/tags/list"):
 			w.Header().Set("Content-Type", "application/json")
-			require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"name": "team/fast", "tags": []string{"1.0.0", "1.1.0"}}))
+			if !assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{"name": "team/fast", "tags": []string{"1.0.0", "1.1.0"}})) {
+				return
+			}
 		case strings.HasSuffix(r.URL.Path, "/team/slow/tags/list"):
 			// Stall until the scan deadline cancels the request.
 			<-r.Context().Done()
@@ -2757,14 +2911,30 @@ func TestContainerTagChecksPersistResultsFinishedBeforeScanDeadlineInternal(t *t
 		name := nameFor(r.URL.Path)
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/containers/json"):
-			require.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{
+			if !assert.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{
 				{ID: "fast", Image: imageRefs["fast"], ImageID: imageIDs["fast"], Labels: autoLabels},
 				{ID: "slow", Image: imageRefs["slow"], ImageID: imageIDs["slow"], Labels: autoLabels},
-			}))
+			})) {
+				return
+			}
 		case strings.Contains(r.URL.Path, "/images/"):
-			require.NoError(t, json.NewEncoder(w).Encode(dockertypesimage.InspectResponse{ID: imageIDs[name], RepoTags: []string{imageRefs[name]}}))
+			if !assert.NoError(t, json.NewEncoder(w).Encode(dockertypesimage.InspectResponse{ID: imageIDs[name], RepoTags: []string{imageRefs[name]}})) {
+				return
+			}
 		case strings.Contains(r.URL.Path, "/containers/"):
-			require.NoError(t, json.NewEncoder(w).Encode(dockertypescontainer.InspectResponse{ID: name, Image: imageIDs[name], Config: &dockertypescontainer.Config{Image: imageRefs[name], Labels: autoLabels}}))
+			if !assert.NoError(
+				t,
+				json.NewEncoder(w).Encode(dockertypescontainer.InspectResponse{
+					ID:    name,
+					Image: imageIDs[name],
+					Config: &dockertypescontainer.Config{
+						Image:  imageRefs[name],
+						Labels: autoLabels,
+					},
+				}),
+			) {
+				return
+			}
 		default:
 			http.NotFound(w, r)
 		}

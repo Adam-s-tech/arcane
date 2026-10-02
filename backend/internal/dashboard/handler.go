@@ -204,15 +204,15 @@ func (h *DashboardHandler) RunRemoteStreamPollers(ctx context.Context, ps *authz
 		})
 }
 
-func dashboardStreamEnvironmentVersionInternal(environment environment.Environment) string {
-	if environment.UpdatedAt == nil {
-		return environment.ID
+func dashboardStreamEnvironmentVersionInternal(localEnvironment environment.Environment) string {
+	if localEnvironment.UpdatedAt == nil {
+		return localEnvironment.ID
 	}
-	return environment.ID + ":" + environment.UpdatedAt.UTC().Format(time.RFC3339Nano)
+	return localEnvironment.ID + ":" + localEnvironment.UpdatedAt.UTC().Format(time.RFC3339Nano)
 }
 
-func (h *DashboardHandler) runRemoteDashboardStreamPollerInternal(ctx context.Context, environment environment.Environment, debugAllGood bool, publish func(dashboardtypes.StreamEvent)) {
-	environmentID := environment.ID
+func (h *DashboardHandler) runRemoteDashboardStreamPollerInternal(ctx context.Context, localEnvironment environment.Environment, debugAllGood bool, publish func(dashboardtypes.StreamEvent)) {
+	environmentID := localEnvironment.ID
 	// Tell the client this environment is covered before the first poll
 	// completes so it can hold skeletons instead of assuming no data exists.
 	publish(dashboardtypes.StreamEvent{
@@ -227,7 +227,7 @@ func (h *DashboardHandler) runRemoteDashboardStreamPollerInternal(ctx context.Co
 		pollCtx, cancelPoll := context.WithTimeout(ctx, dashboardStreamRemotePollTimeout)
 		defer cancelPoll()
 
-		currentEnvironment := environment
+		currentEnvironment := localEnvironment
 		if h.environmentService != nil {
 			var ok bool
 			currentEnvironment, ok = h.environmentService.GetActiveRemoteEnvironmentSnapshot(environmentID).Get()
@@ -290,7 +290,7 @@ func (h *DashboardHandler) runRemoteDashboardStreamPollerInternal(ctx context.Co
 // endpoint directly through the environment service so the raw remenv error
 // survives for classification (proxyRemoteJSONInternal would translate it
 // into a huma error first).
-func (h *DashboardHandler) fetchRemoteDashboardSnapshotInternal(ctx context.Context, environment environment.Environment, debugAllGood bool) (*dashboardtypes.Snapshot, error) {
+func (h *DashboardHandler) fetchRemoteDashboardSnapshotInternal(ctx context.Context, localEnvironment environment.Environment, debugAllGood bool) (*dashboardtypes.Snapshot, error) {
 	// The all-environments dashboard only reads the aggregate counters, so the
 	// agent is asked to leave the container/image tables out of the payload.
 	query := url.Values{"includeTables": {"false"}}
@@ -300,7 +300,7 @@ func (h *DashboardHandler) fetchRemoteDashboardSnapshotInternal(ctx context.Cont
 	path := "/api/environments/0/dashboard?" + query.Encode()
 
 	var out base.ApiResponse[dashboardtypes.Snapshot]
-	if err := h.environmentService.ProxyJSONRequestForEnvironment(ctx, environment, http.MethodGet, path, nil, &out); err != nil {
+	if err := h.environmentService.ProxyJSONRequestForEnvironment(ctx, localEnvironment, http.MethodGet, path, nil, &out); err != nil {
 		return nil, err
 	}
 	if !out.Success {
@@ -314,7 +314,7 @@ func (h *DashboardHandler) fetchRemoteDashboardSnapshotInternal(ctx context.Cont
 // agents have exposed for far longer than the aggregate dashboard endpoint.
 // Each piece is fetched independently so a partially compatible agent still
 // yields partial data; only when every piece fails is an error returned.
-func (h *DashboardHandler) fetchLegacyDashboardSnapshotInternal(ctx context.Context, environment environment.Environment) (*dashboardtypes.Snapshot, error) {
+func (h *DashboardHandler) fetchLegacyDashboardSnapshotInternal(ctx context.Context, localEnvironment environment.Environment) (*dashboardtypes.Snapshot, error) {
 	snapshot := &dashboardtypes.Snapshot{
 		ActionItems: dashboardtypes.ActionItems{Items: []dashboardtypes.ActionItem{}},
 	}
@@ -323,7 +323,7 @@ func (h *DashboardHandler) fetchLegacyDashboardSnapshotInternal(ctx context.Cont
 
 	attempted++
 	var containerCounts base.ApiResponse[containertypes.StatusCounts]
-	if err := h.environmentService.ProxyJSONRequestForEnvironment(ctx, environment, http.MethodGet, "/api/environments/0/containers/counts", nil, &containerCounts); err != nil {
+	if err := h.environmentService.ProxyJSONRequestForEnvironment(ctx, localEnvironment, http.MethodGet, "/api/environments/0/containers/counts", nil, &containerCounts); err != nil {
 		errs = append(errs, err)
 	} else {
 		snapshot.Containers.Counts = containerCounts.Data
@@ -338,7 +338,7 @@ func (h *DashboardHandler) fetchLegacyDashboardSnapshotInternal(ctx context.Cont
 
 	attempted++
 	var imageCounts base.ApiResponse[imagetypes.UsageCounts]
-	if err := h.environmentService.ProxyJSONRequestForEnvironment(ctx, environment, http.MethodGet, "/api/environments/0/images/counts", nil, &imageCounts); err != nil {
+	if err := h.environmentService.ProxyJSONRequestForEnvironment(ctx, localEnvironment, http.MethodGet, "/api/environments/0/images/counts", nil, &imageCounts); err != nil {
 		errs = append(errs, err)
 	} else {
 		snapshot.ImageUsageCounts = imageCounts.Data
@@ -346,7 +346,7 @@ func (h *DashboardHandler) fetchLegacyDashboardSnapshotInternal(ctx context.Cont
 
 	attempted++
 	var volumeCounts base.ApiResponse[volumetypes.UsageCounts]
-	if err := h.environmentService.ProxyJSONRequestForEnvironment(ctx, environment, http.MethodGet, "/api/environments/0/volumes/counts", nil, &volumeCounts); err != nil {
+	if err := h.environmentService.ProxyJSONRequestForEnvironment(ctx, localEnvironment, http.MethodGet, "/api/environments/0/volumes/counts", nil, &volumeCounts); err != nil {
 		errs = append(errs, err)
 	} else {
 		snapshot.VolumeUsageCounts = &volumeCounts.Data
@@ -354,7 +354,7 @@ func (h *DashboardHandler) fetchLegacyDashboardSnapshotInternal(ctx context.Cont
 
 	attempted++
 	var versionInfo versiontypes.Info
-	if err := h.environmentService.ProxyJSONRequestForEnvironment(ctx, environment, http.MethodGet, "/api/app-version", nil, &versionInfo); err != nil {
+	if err := h.environmentService.ProxyJSONRequestForEnvironment(ctx, localEnvironment, http.MethodGet, "/api/app-version", nil, &versionInfo); err != nil {
 		errs = append(errs, err)
 	} else {
 		snapshot.VersionInfo = &versionInfo

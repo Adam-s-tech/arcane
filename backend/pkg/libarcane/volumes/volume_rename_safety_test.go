@@ -1,7 +1,6 @@
 package volumes
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -43,7 +42,7 @@ func TestEnsureProjectRenameTargetVolumeAbsentInternal_ReturnsConflictWhenTarget
 
 	dockerClient := newTestDockerClientInternal(t, server)
 
-	err := EnsureRenameTargetAbsent(context.Background(), dockerClient, "web_data")
+	err := EnsureRenameTargetAbsent(t.Context(), dockerClient, "web_data")
 
 	var conflictErr *volumetypes.ProjectVolumeRenameConflictError
 	require.ErrorAs(t, err, &conflictErr)
@@ -72,7 +71,7 @@ func TestEnsureProjectRenameSourceVolumeDetachedInternal_ReturnsConflictWhenCont
 
 	dockerClient := newTestDockerClientInternal(t, server)
 
-	err := EnsureRenameSourceDetached(context.Background(), dockerClient, "nginx_data")
+	err := EnsureRenameSourceDetached(t.Context(), dockerClient, "nginx_data")
 
 	var inUseErr *volumetypes.ProjectVolumeRenameInUseError
 	require.ErrorAs(t, err, &inUseErr)
@@ -119,7 +118,7 @@ func TestGetProjectVolumeCopyRuntimeInternal_UsesArcaneAgentLabel(t *testing.T) 
 	}))
 	t.Cleanup(server.Close)
 
-	copyRuntime, err := getProjectVolumeCopyRuntimeInternal(context.Background(), newTestDockerClientInternal(t, server), volumehelper.ToolsImage(""))
+	copyRuntime, err := getProjectVolumeCopyRuntimeInternal(t.Context(), newTestDockerClientInternal(t, server), volumehelper.ToolsImage(""))
 
 	require.NoError(t, err)
 	require.Equal(t, "arcane-agent:local", copyRuntime.Image)
@@ -159,7 +158,7 @@ func TestDockerProjectVolumeRenameMigrationInternal_RollbackPreservesTargetWhenS
 		},
 	}
 
-	err := migration.Rollback(context.Background())
+	err := migration.Rollback(t.Context())
 
 	require.Error(t, err)
 	var preserved *volumetypes.TargetPreservedDuringRollbackError
@@ -217,7 +216,7 @@ func TestDockerProjectVolumeRenameMigrationInternal_RollbackCleansSafeTargetsWhe
 		},
 	}
 
-	err := migration.Rollback(context.Background())
+	err := migration.Rollback(t.Context())
 
 	require.Error(t, err)
 	var preserved *volumetypes.TargetPreservedDuringRollbackError
@@ -265,7 +264,7 @@ func TestDockerProjectVolumeRenameMigrationInternal_RollbackPreservesTargetWhenS
 		},
 	}
 
-	err := migration.Rollback(context.Background())
+	err := migration.Rollback(t.Context())
 
 	require.Error(t, err)
 	var preserved *volumetypes.TargetPreservedDuringRollbackError
@@ -315,7 +314,7 @@ func TestDockerProjectVolumeRenameMigrationInternal_RollbackPreservesTargetWhenT
 		},
 	}
 
-	err := migration.Rollback(context.Background())
+	err := migration.Rollback(t.Context())
 
 	require.Error(t, err)
 	var preserved *volumetypes.TargetPreservedDuringRollbackError
@@ -361,7 +360,7 @@ func TestDockerProjectVolumeRenameMigrationInternal_RollbackRemovesTargetsWhenSo
 		},
 	}
 
-	err := migration.Rollback(context.Background())
+	err := migration.Rollback(t.Context())
 
 	require.NoError(t, err)
 	require.True(t, targetRemoved.Load(), "rollback should remove copied targets while sources still exist")
@@ -395,7 +394,7 @@ func TestDockerProjectVolumeRenameMigrationInternal_RollbackPreservesRemovedOldT
 		},
 	}
 
-	err := migration.Rollback(context.Background())
+	err := migration.Rollback(t.Context())
 
 	require.Error(t, err)
 	var preserved *volumetypes.TargetPreservedDuringRollbackError
@@ -461,7 +460,7 @@ func TestDockerProjectVolumeRenameMigrationInternal_RollbackAfterPartialCommitCl
 		createdNew:   append([]volumetypes.RenameEntry(nil), entries...),
 	}
 
-	err := migration.Commit(context.Background())
+	err := migration.Commit(t.Context())
 
 	var cleanupErr *volumetypes.SourceCleanupError
 	require.ErrorAs(t, err, &cleanupErr)
@@ -470,7 +469,7 @@ func TestDockerProjectVolumeRenameMigrationInternal_RollbackAfterPartialCommitCl
 	require.Positive(t, secondSourceRemoveAttempts.Load())
 	require.Equal(t, []volumetypes.RenameEntry{entries[0]}, migration.removedOld)
 
-	err = migration.Rollback(context.Background())
+	err = migration.Rollback(t.Context())
 
 	require.Error(t, err)
 	var preserved *volumetypes.TargetPreservedDuringRollbackError
@@ -526,7 +525,7 @@ func TestDockerProjectVolumeRenameMigrationInternal_CommitPreflightsAllTargetsBe
 		},
 	}
 
-	err := migration.Commit(context.Background())
+	err := migration.Commit(t.Context())
 
 	var missingTarget *volumetypes.TargetMissingWithSourceError
 	require.ErrorAs(t, err, &missingTarget)

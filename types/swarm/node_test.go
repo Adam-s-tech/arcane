@@ -47,15 +47,15 @@ func TestNodeAgentStatusAmbiguousJSON(t *testing.T) {
 
 	var actual, expected any
 	{
-		err := json.Unmarshal(encoded, &actual)
-		require.NoError(t, err,
-			"unmarshal actual JSON: %v", err)
+		unmarshalErr := json.Unmarshal(encoded, &actual)
+		require.NoError(t, unmarshalErr,
+			"unmarshal actual JSON: %v", unmarshalErr)
 	}
 	{
 
-		err := json.Unmarshal([]byte(`{"state":"ambiguous","candidates":[{"environmentId":"env-1","environmentName":"worker-1","environmentType":"edge"}]}`), &expected)
-		require.NoError(t, err,
-			"unmarshal expected JSON: %v", err)
+		decodeExpectedErr := json.Unmarshal([]byte(`{"state":"ambiguous","candidates":[{"environmentId":"env-1","environmentName":"worker-1","environmentType":"edge"}]}`), &expected)
+		require.NoError(t, decodeExpectedErr,
+			"unmarshal expected JSON: %v", decodeExpectedErr)
 	}
 
 	require.True(t, reflect.DeepEqual(actual, expected),

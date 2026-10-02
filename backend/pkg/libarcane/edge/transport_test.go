@@ -216,7 +216,7 @@ func BenchmarkEdgeTunnelProxyRequest(b *testing.B) {
 func runProxyRequestBenchmark(b *testing.B, tunnel *AgentTunnel, payloadSize int) {
 	b.Helper()
 
-	ctx := context.Background()
+	ctx := b.Context()
 	body := make([]byte, payloadSize)
 	headers := map[string]string{
 		"Content-Type": "application/octet-stream",
@@ -245,7 +245,7 @@ func runProxyRequestBenchmark(b *testing.B, tunnel *AgentTunnel, payloadSize int
 func setupGRPCBenchmarkTunnel(b *testing.B, payloadSize int) (*AgentTunnel, func()) {
 	b.Helper()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(b.Context())
 	envID := fmt.Sprintf("bench-grpc-%d", time.Now().UnixNano())
 	GetRegistry().Unregister(envID)
 
@@ -275,22 +275,22 @@ func setupGRPCBenchmarkTunnel(b *testing.B, payloadSize int) (*AgentTunnel, func
 		require.FailNowf(b, "unexpected failure", "failed to open gRPC stream: %v", err)
 	}
 
-	if err := stream.Send(&tunnelpb.AgentMessage{
+	if sendErr := stream.Send(&tunnelpb.AgentMessage{
 		Payload: &tunnelpb.AgentMessage_Register{
 			Register: &tunnelpb.RegisterRequest{AgentToken: "valid-token"},
 		},
-	}); err != nil {
+	}); sendErr != nil {
 		_ = conn.Close()
 		cancel()
 		tunnelServer.WaitForCleanupDone()
-		require.FailNowf(b, "unexpected failure", "failed to send register message: %v", err)
+		require.FailNowf(b, "unexpected failure", "failed to send register message: %v", sendErr)
 	}
 
-	if _, err := stream.Recv(); err != nil {
+	if _, recvErr := stream.Recv(); recvErr != nil {
 		_ = conn.Close()
 		cancel()
 		tunnelServer.WaitForCleanupDone()
-		require.FailNowf(b, "unexpected failure", "failed to receive register response: %v", err)
+		require.FailNowf(b, "unexpected failure", "failed to receive register response: %v", recvErr)
 	}
 
 	responseBody := make([]byte, payloadSize)
@@ -298,15 +298,15 @@ func setupGRPCBenchmarkTunnel(b *testing.B, payloadSize int) (*AgentTunnel, func
 	go func() {
 		defer close(agentDone)
 		for {
-			msg, err := stream.Recv()
-			if err != nil {
+			msg, recvErr := stream.Recv()
+			if recvErr != nil {
 				return
 			}
 			req := msg.GetCommandRequest()
 			if req == nil {
 				continue
 			}
-			if err := stream.Send(&tunnelpb.AgentMessage{
+			if sendErr := stream.Send(&tunnelpb.AgentMessage{
 				Payload: &tunnelpb.AgentMessage_CommandComplete{
 					CommandComplete: &tunnelpb.CommandComplete{
 						CommandId: req.GetCommandId(),
@@ -314,7 +314,7 @@ func setupGRPCBenchmarkTunnel(b *testing.B, payloadSize int) (*AgentTunnel, func
 						Body:      responseBody,
 					},
 				},
-			}); err != nil {
+			}); sendErr != nil {
 				return
 			}
 		}
@@ -346,7 +346,7 @@ func setupWebSocketBenchmarkTunnel(b *testing.B, payloadSize int) (*AgentTunnel,
 
 		for {
 			var msg TunnelMessage
-			if err := wsjson.Read(r.Context(), conn, &msg); err != nil {
+			if readErr := wsjson.Read(r.Context(), conn, &msg); readErr != nil {
 				_ = conn.CloseNow()
 				return
 			}
@@ -361,7 +361,7 @@ func setupWebSocketBenchmarkTunnel(b *testing.B, payloadSize int) (*AgentTunnel,
 				Status: http.StatusOK,
 				Body:   responseBody,
 			}
-			if err := wsjson.Write(r.Context(), conn, resp); err != nil {
+			if writeErr := wsjson.Write(r.Context(), conn, resp); writeErr != nil {
 				_ = conn.CloseNow()
 				return
 			}
@@ -369,7 +369,7 @@ func setupWebSocketBenchmarkTunnel(b *testing.B, payloadSize int) (*AgentTunnel,
 	}))
 
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
-	conn, _, err := websocket.Dial(context.Background(), wsURL, nil)
+	conn, _, err := websocket.Dial(b.Context(), wsURL, nil)
 	if err != nil {
 		server.Close()
 		require.FailNowf(b, "unexpected failure", "failed to dial websocket server: %v", err)
@@ -380,8 +380,8 @@ func setupWebSocketBenchmarkTunnel(b *testing.B, payloadSize int) (*AgentTunnel,
 	go func() {
 		defer close(dispatchDone)
 		for {
-			msg, err := tunnel.Conn.Receive()
-			if err != nil {
+			msg, receiveErr := tunnel.Conn.Receive()
+			if receiveErr != nil {
 				return
 			}
 			if req, ok := tunnel.Pending.Load(msg.ID); ok {

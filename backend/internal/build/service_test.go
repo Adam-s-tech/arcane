@@ -42,7 +42,7 @@ func TestBuildService_ResolveBuildRequest_PassesThroughLocalContext(t *testing.T
 		Dockerfile: "Dockerfile",
 	}
 
-	resolvedReq, cleanup, err := svc.resolveBuildRequestInternal(context.Background(), req, nil, "")
+	resolvedReq, cleanup, err := svc.resolveBuildRequestInternal(t.Context(), req, nil, "")
 	require.NoError(t, err)
 	require.NotNil(t, cleanup)
 	assert.Equal(t, req, resolvedReq)
@@ -89,7 +89,7 @@ func TestBuildService_ResolveBuildRequest_ClonesRemoteGitContext(t *testing.T) {
 		Dockerfile: "Dockerfile",
 	}
 
-	resolvedReq, cleanup, err := svc.resolveBuildRequestInternal(context.Background(), req, nil, "manual")
+	resolvedReq, cleanup, err := svc.resolveBuildRequestInternal(t.Context(), req, nil, "manual")
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join(repoPath, "docker", "app"), resolvedReq.ContextDir)
 	require.NoError(t, cleanup())
@@ -121,7 +121,7 @@ func TestBuildService_ResolveBuildRequest_ProbesAndClonesRemoteGitContextWithout
 	}
 
 	resolvedReq, cleanup, err := svc.resolveBuildRequestInternal(
-		context.Background(),
+		t.Context(),
 		buildtypes.BuildRequest{ContextDir: "https://git.sr.ht/~jordanreger/nws-alerts#main:docker/app"},
 		nil,
 		"",
@@ -137,7 +137,7 @@ func TestBuildService_ResolveBuildRequest_RequiresGitRepositoryServiceForRemoteC
 	svc := &BuildService{}
 
 	_, cleanup, err := svc.resolveBuildRequestInternal(
-		context.Background(),
+		t.Context(),
 		buildtypes.BuildRequest{ContextDir: "https://github.com/getarcaneapp/arcane.git#main"},
 		nil,
 		"",
@@ -161,7 +161,7 @@ func TestBuildService_ResolveBuildRequest_RejectsNonGitHTTPContextViaProbeFailur
 	}
 
 	_, cleanup, err := svc.resolveBuildRequestInternal(
-		context.Background(),
+		t.Context(),
 		buildtypes.BuildRequest{ContextDir: "https://example.com/archive.tar.gz"},
 		nil,
 		"",
@@ -222,13 +222,13 @@ func TestBuildService_ResolveBuildRequest_UsesSavedGitCredentials(t *testing.T) 
 			gitCleanupFn: func(string) error { return nil },
 		}
 
-		_, cleanup, err := svc.resolveBuildRequestInternal(
-			context.Background(),
+		_, cleanup, resolveBuildRequestErr := svc.resolveBuildRequestInternal(
+			t.Context(),
 			buildtypes.BuildRequest{ContextDir: "https://github.com/getarcaneapp/private-build#main"},
 			nil,
 			"",
 		)
-		require.NoError(t, err)
+		require.NoError(t, resolveBuildRequestErr)
 		require.NoError(t, cleanup())
 	})
 
@@ -248,13 +248,13 @@ func TestBuildService_ResolveBuildRequest_UsesSavedGitCredentials(t *testing.T) 
 			gitCleanupFn: func(string) error { return nil },
 		}
 
-		_, cleanup, err := svc.resolveBuildRequestInternal(
-			context.Background(),
+		_, cleanup, resolveBuildRequestErr := svc.resolveBuildRequestInternal(
+			t.Context(),
 			buildtypes.BuildRequest{ContextDir: "git@github.com:getarcaneapp/private-ssh.git#main"},
 			nil,
 			"",
 		)
-		require.NoError(t, err)
+		require.NoError(t, resolveBuildRequestErr)
 		require.NoError(t, cleanup())
 	})
 }
@@ -287,12 +287,12 @@ func TestBuildService_BuildImage_PreservesRemoteSourceInHistory(t *testing.T) {
 		Load:       true,
 	}
 
-	_, err = svc.BuildImage(context.Background(), "0", req, nil, "manual", nil)
+	_, err = svc.BuildImage(t.Context(), "0", req, nil, "manual", nil)
 	require.NoError(t, err)
 	assert.Equal(t, repoPath, captured.ContextDir)
 
 	var record ImageBuild
-	require.NoError(t, db.WithContext(context.Background()).First(&record).Error)
+	require.NoError(t, db.WithContext(t.Context()).First(&record).Error)
 	assert.Equal(t, req.ContextDir, record.ContextDir)
 }
 
@@ -321,17 +321,17 @@ func TestBuildService_BuildImage_FailureRecordsHistoryAndEvent(t *testing.T) {
 		Load:       true,
 	}
 
-	_, err = svc.BuildImage(context.Background(), "0", req, nil, "web", user)
+	_, err = svc.BuildImage(t.Context(), "0", req, nil, "web", user)
 	require.ErrorIs(t, err, buildErr)
 
 	var record ImageBuild
-	require.NoError(t, db.WithContext(context.Background()).First(&record).Error)
+	require.NoError(t, db.WithContext(t.Context()).First(&record).Error)
 	assert.Equal(t, ImageBuildStatusFailed, record.Status)
 	require.NotNil(t, record.ErrorMessage)
 	assert.Contains(t, *record.ErrorMessage, "docker exporter")
 
 	var evt event.Event
-	require.NoError(t, db.WithContext(context.Background()).First(&evt, "type = ?", event.EventTypeImageError).Error)
+	require.NoError(t, db.WithContext(t.Context()).First(&evt, "type = ?", event.EventTypeImageError).Error)
 	assert.Equal(t, event.EventSeverityError, evt.Severity)
 	require.NotNil(t, evt.ResourceName)
 	assert.Equal(t, "arcane.local/demo:test", *evt.ResourceName)
@@ -377,11 +377,11 @@ func TestBuildService_BuildImage_FailureExporterErrorsAppearInOutputHistoryAndEv
 		Load:       true,
 	}
 
-	_, err = svc.BuildImage(context.Background(), "0", req, progress, "web", user)
+	_, err = svc.BuildImage(t.Context(), "0", req, progress, "web", user)
 	require.ErrorIs(t, err, buildErr)
 
 	var record ImageBuild
-	require.NoError(t, db.WithContext(context.Background()).First(&record).Error)
+	require.NoError(t, db.WithContext(t.Context()).First(&record).Error)
 	assert.Equal(t, ImageBuildStatusFailed, record.Status)
 	require.NotNil(t, record.Output)
 	assert.Contains(t, *record.Output, buildErr.Error())
@@ -389,7 +389,7 @@ func TestBuildService_BuildImage_FailureExporterErrorsAppearInOutputHistoryAndEv
 	assert.Contains(t, *record.ErrorMessage, "exporter \"image\"")
 
 	var evt event.Event
-	require.NoError(t, db.WithContext(context.Background()).First(&evt, "type = ?", event.EventTypeImageError).Error)
+	require.NoError(t, db.WithContext(t.Context()).First(&evt, "type = ?", event.EventTypeImageError).Error)
 	assert.Equal(t, event.EventSeverityError, evt.Severity)
 	require.NotNil(t, evt.ResourceName)
 	assert.Equal(t, "ghcr.io/getarcaneapp/arcane:test", *evt.ResourceName)
@@ -446,7 +446,7 @@ func TestBuildService_ListImageBuilds_OmitsOutputColumn(t *testing.T) {
 	svc := &BuildService{db: db}
 
 	output := "large build output"
-	require.NoError(t, db.WithContext(context.Background()).Create(&ImageBuild{
+	require.NoError(t, db.WithContext(t.Context()).Create(&ImageBuild{
 		ID:            "build-omit-output",
 		EnvironmentID: "0",
 		Status:        ImageBuildStatusSuccess,
@@ -454,7 +454,7 @@ func TestBuildService_ListImageBuilds_OmitsOutputColumn(t *testing.T) {
 		Output:        &output,
 	}).Error)
 
-	records, _, err := svc.ListImageBuildsByEnvironmentPaginated(context.Background(), "0", pagination.QueryParams{
+	records, _, err := svc.ListImageBuildsByEnvironmentPaginated(t.Context(), "0", pagination.QueryParams{
 		Limit: 10,
 	})
 	require.NoError(t, err)
@@ -462,7 +462,7 @@ func TestBuildService_ListImageBuilds_OmitsOutputColumn(t *testing.T) {
 	assert.Nil(t, records[0].Output)
 
 	// The detail endpoint must still return the stored output.
-	detail, err := svc.GetImageBuildByID(context.Background(), "0", "build-omit-output")
+	detail, err := svc.GetImageBuildByID(t.Context(), "0", "build-omit-output")
 	require.NoError(t, err)
 	require.NotNil(t, detail.Output)
 	assert.Equal(t, output, *detail.Output)
@@ -473,15 +473,15 @@ func setupBuildHistoryTestDB() (*database.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := db.AutoMigrate(&ImageBuild{}, &event.Event{}); err != nil {
-		return nil, err
+	if autoMigrateErr := db.AutoMigrate(&ImageBuild{}, &event.Event{}); autoMigrateErr != nil {
+		return nil, autoMigrateErr
 	}
 	return &database.DB{DB: db}, nil
 }
 
 func createTestGitRepository(t *testing.T, db *database.DB, repository gitrepo.GitRepository) {
 	t.Helper()
-	require.NoError(t, db.WithContext(context.Background()).Create(&repository).Error)
+	require.NoError(t, db.WithContext(t.Context()).Create(&repository).Error)
 }
 
 func encryptSecretForTest(t *testing.T, value string) string {

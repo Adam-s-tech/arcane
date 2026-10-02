@@ -14,7 +14,9 @@ import (
 
 func TestMarkSnapshotDirectoriesInternal(t *testing.T) {
 	files := []string{"/volume", "/volume/folder", "/volume/file.txt", "/volume/link"}
-	longOutput := "drwxr-xr-x root root 0 1 Jan 2026 00:00 \"/volume\"\r\ndrwxr-xr-x root root 0 1 Jan 2026 00:00 \"/volume/folder\"\r\n-rw-r--r-- root root 5 1 Jan 2026 00:00 \"/volume/file.txt\"\r\nlrwxrwxrwx root root 4 1 Jan 2026 00:00 \"/volume/link\" -> \"file.txt\""
+	longOutput := "drwxr-xr-x root root 0 1 Jan 2026 00:00 \"/volume\"\r\ndrwxr-xr-x root root 0 1 Jan 2026 00:00 \"/volume/" +
+		"folder\"\r\n-rw-r--r-- root root 5 1 Jan 2026 00:00 \"/volume/file.txt\"\r\nlrwxrwxrwx root root 4 1 Jan 20" +
+		"26 00:00 \"/volume/link\" -> \"file.txt\""
 
 	marked, err := markSnapshotDirectoriesInternal(files, longOutput)
 	require.NoError(t, err)
@@ -115,7 +117,24 @@ func TestSnapshotCommandInternal(t *testing.T) {
 
 	multi, err := snapshotCommandInternal("arcane-system-recovery", CreateSnapshotInput{Sources: []string{"/data", "/projects"}, Globs: []string{"!/data/arcane.db-wal"}})
 	require.NoError(t, err)
-	require.Equal(t, []string{"backup", "--init", "--json", "--host", "arcane", "--label", "arcane-system-recovery", "--glob", "!/data/arcane.db-wal", "--", "/data", "/projects"}, multi)
+	require.Equal(
+		t,
+		[]string{
+			"backup",
+			"--init",
+			"--json",
+			"--host",
+			"arcane",
+			"--label",
+			"arcane-system-recovery",
+			"--glob",
+			"!/data/arcane.db-wal",
+			"--",
+			"/data",
+			"/projects",
+		},
+		multi,
+	)
 
 	_, err = snapshotCommandInternal("x", CreateSnapshotInput{Sources: []string{"/data", "/projects"}, AsPath: "/"})
 	require.ErrorContains(t, err, "single source")

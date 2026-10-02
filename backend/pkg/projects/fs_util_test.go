@@ -1,7 +1,6 @@
 package projects
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -21,7 +20,7 @@ func TestGetProjectsDirectory_ResolvesRelativePathAgainstBackendModuleRoot(t *te
 
 	t.Chdir(repoRoot)
 
-	resolved, err := GetProjectsDirectory(context.Background(), "data/projects")
+	resolved, err := GetProjectsDirectory(t.Context(), "data/projects")
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join(backendRoot, "data", "projects"), resolved)
 }
@@ -35,7 +34,7 @@ func TestGetProjectsDirectory_ResolvesRelativePathFromBackendWorkingDirectory(t 
 
 	t.Chdir(backendRoot)
 
-	resolved, err := GetProjectsDirectory(context.Background(), "data/projects")
+	resolved, err := GetProjectsDirectory(t.Context(), "data/projects")
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join(backendRoot, "data", "projects"), resolved)
 }

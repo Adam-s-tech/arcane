@@ -131,7 +131,15 @@ type DeleteOidcRoleMappingOutput struct {
 
 // RegisterOidc registers all OIDC authentication endpoints (plus the OIDC
 // group → role mapping CRUD) using Huma.
-func RegisterOidc(api huma.API, authService *auth.AuthService, passkeyService *passkey.PasskeyService, oidcService *OidcService, roleService *role.RoleService, userService *user.UserService, cfg *config.Config) {
+func RegisterOidc(
+	api huma.API,
+	authService *auth.AuthService,
+	passkeyService *passkey.PasskeyService,
+	oidcService *OidcService,
+	roleService *role.RoleService,
+	userService *user.UserService,
+	cfg *config.Config,
+) {
 	h := &OidcHandler{authService: authService, passkeyService: passkeyService, oidcService: oidcService, roleService: roleService, userService: userService, config: cfg}
 
 	huma.Register(api, huma.Operation{
@@ -299,9 +307,9 @@ func (h *OidcHandler) GetOidcAuthUrl(ctx context.Context, input *GetOidcAuthUrlI
 
 	mobileRedirectURI := input.Body.MobileRedirectUri
 	if mobileRedirectURI != "" {
-		if err := h.oidcService.ValidateMobileRedirectURI(ctx, mobileRedirectURI); err != nil {
-			slog.WarnContext(ctx, "OIDC auth URL: rejected mobile redirect URI", "uri", mobileRedirectURI, "error", err)
-			return nil, huma.Error400BadRequest(err.Error())
+		if validateMobileRedirectURIErr := h.oidcService.ValidateMobileRedirectURI(ctx, mobileRedirectURI); validateMobileRedirectURIErr != nil {
+			slog.WarnContext(ctx, "OIDC auth URL: rejected mobile redirect URI", "uri", mobileRedirectURI, "error", validateMobileRedirectURIErr)
+			return nil, huma.Error400BadRequest(validateMobileRedirectURIErr.Error())
 		}
 	}
 
@@ -366,8 +374,8 @@ func (h *OidcHandler) HandleOidcCallback(ctx context.Context, input *HandleOidcC
 	clearStateCookie := cookie.BuildClearOidcStateCookieString(cookie.SecureCookieFromContext(ctx))
 	setCookies := []string{clearStateCookie}
 	if userModel.PasskeyMFAEnabled {
-		challenge, err := h.passkeyService.BeginMFAAuthentication(ctx, userModel.ID, meta, session.UserSessionSourceOidc)
-		if err != nil {
+		challenge, beginMFAAuthenticationErr := h.passkeyService.BeginMFAAuthentication(ctx, userModel.ID, meta, session.UserSessionSourceOidc)
+		if beginMFAAuthenticationErr != nil {
 			return nil, huma.Error500InternalServerError("Authentication failed")
 		}
 		return &HandleOidcCallbackOutput{

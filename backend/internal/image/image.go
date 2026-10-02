@@ -52,7 +52,14 @@ type ImageService struct {
 	projectIDCache *hot.HotCache[struct{}, map[string]string]
 }
 
-func NewImageService(db *database.DB, dockerService *docker.DockerClientService, registryService *registry.ContainerRegistryService, imageUpdateService *imageupdate.ImageUpdateService, vulnerabilityService *vulnerability.VulnerabilityService, eventService *event.EventService) *ImageService {
+func NewImageService(
+	db *database.DB,
+	dockerService *docker.DockerClientService,
+	registryService *registry.ContainerRegistryService,
+	imageUpdateService *imageupdate.ImageUpdateService,
+	vulnerabilityService *vulnerability.VulnerabilityService,
+	eventService *event.EventService,
+) *ImageService {
 	return &ImageService{
 		db:                   db,
 		dockerService:        dockerService,
@@ -86,10 +93,10 @@ func (s *ImageService) GetImageDetail(ctx context.Context, id string) (*imagetyp
 	g.Go(func() (workerErr error) {
 		defer utils.RecoverToError(&workerErr, "image worker")
 
-		var err error
-		inspectResult, err := dockerClient.ImageInspect(gctx, id)
-		if err != nil {
-			return fmt.Errorf("inspect not found: %w", err)
+		var inspectImageErr error
+		inspectResult, inspectImageErr := dockerClient.ImageInspect(gctx, id)
+		if inspectImageErr != nil {
+			return fmt.Errorf("inspect not found: %w", inspectImageErr)
 		}
 		inspect = inspectResult.InspectResponse
 		return nil
@@ -98,9 +105,9 @@ func (s *ImageService) GetImageDetail(ctx context.Context, id string) (*imagetyp
 	g.Go(func() (workerErr error) {
 		defer utils.RecoverToError(&workerErr, "image worker")
 
-		imageList, err := dockerClient.ImageList(gctx, client.ImageListOptions{})
-		if err != nil {
-			return fmt.Errorf("failed to list images: %w", err)
+		imageList, imageListErr := dockerClient.ImageList(gctx, client.ImageListOptions{})
+		if imageListErr != nil {
+			return fmt.Errorf("failed to list images: %w", imageListErr)
 		}
 		for _, img := range imageList.Items {
 			if img.ID == id {
@@ -114,17 +121,17 @@ func (s *ImageService) GetImageDetail(ctx context.Context, id string) (*imagetyp
 	g.Go(func() (workerErr error) {
 		defer utils.RecoverToError(&workerErr, "image worker")
 
-		containerList, err := s.dockerService.ListContainers(gctx)
-		if err != nil {
-			slog.DebugContext(gctx, "failed to list containers for image detail pinned references", "id", id, "error", err)
+		containerList, listContainersErr := s.dockerService.ListContainers(gctx)
+		if listContainersErr != nil {
+			slog.DebugContext(gctx, "failed to list containers for image detail pinned references", "id", id, "error", listContainersErr)
 			return nil
 		}
 		containers = containerList
 		return nil
 	})
 
-	if err := g.Wait(); err != nil {
-		return nil, err
+	if waitErr := g.Wait(); waitErr != nil {
+		return nil, waitErr
 	}
 
 	out := imagetypes.NewDetailSummary(&inspect)
@@ -162,8 +169,14 @@ func (s *ImageService) RemoveImage(ctx context.Context, id string, force bool, u
 	defer s.eventService.BeginDockerResourceSuppressionWindow("image", id, imageName)()
 	if inspectErr == nil {
 		defer s.eventService.BeginDockerResourceSuppressionWindow("image", imageDetails.ID, "")()
+		tagReleases := make([]func(), 0, len(imageDetails.RepoTags))
+		defer func() {
+			for _, release := range slices.Backward(tagReleases) {
+				release()
+			}
+		}()
 		for _, tag := range imageDetails.RepoTags {
-			defer s.eventService.BeginDockerResourceSuppressionWindow("image", "", tag)()
+			tagReleases = append(tagReleases, s.eventService.BeginDockerResourceSuppressionWindow("image", "", tag))
 		}
 	}
 	removed, err := dockerClient.ImageRemove(ctx, id, options)
@@ -177,8 +190,8 @@ func (s *ImageService) RemoveImage(ctx context.Context, id string, force bool, u
 
 	// Clean up vulnerability scan records for the deleted image
 	if s.vulnerabilityService != nil {
-		if err := s.vulnerabilityService.DeleteScanResult(ctx, id); err != nil {
-			slog.WarnContext(ctx, "failed to delete vulnerability scan record", "id", id, "error", err)
+		if deleteScanResultErr := s.vulnerabilityService.DeleteScanResult(ctx, id); deleteScanResultErr != nil {
+			slog.WarnContext(ctx, "failed to delete vulnerability scan record", "id", id, "error", deleteScanResultErr)
 		}
 	}
 
@@ -221,7 +234,20 @@ func (s *ImageService) PullImage(ctx context.Context, imageName string, progress
 		reader, err = dockerClient.ImagePull(ctx, imageName, pullOptions)
 	}
 	if err != nil {
-		slog.ErrorContext(ctx, "Docker ImagePull failed", "image", imageName, "hasAuth", pullOptions.RegistryAuth != "", "initialHasAuth", initialHasAuth, "retriedWithoutAuth", retriedWithoutAuth, "error", err.Error())
+		slog.ErrorContext(
+			ctx,
+			"Docker ImagePull failed",
+			"image",
+			imageName,
+			"hasAuth",
+			pullOptions.RegistryAuth != "",
+			"initialHasAuth",
+			initialHasAuth,
+			"retriedWithoutAuth",
+			retriedWithoutAuth,
+			"error",
+			err.Error(),
+		)
 		s.eventService.LogErrorEvent(ctx, event.EventTypeImageError, "image", "", imageName, user.ID, user.Username, "0", err, database.JSON{"action": "pull"})
 		return fmt.Errorf("failed to initiate image pull for %s: %w", imageName, err)
 	}
@@ -250,8 +276,8 @@ func (s *ImageService) PullImage(ctx context.Context, imageName string, progress
 		slog.Warn("could not log image pull action", "err", logErr, "image", imageName)
 	}
 	if s.registryService != nil {
-		if err := s.registryService.RecordImagePull(ctx, imageName); err != nil {
-			slog.WarnContext(ctx, "failed to record registry pull count", "image", imageName, "error", err)
+		if recordImagePullErr := s.registryService.RecordImagePull(ctx, imageName); recordImagePullErr != nil {
+			slog.WarnContext(ctx, "failed to record registry pull count", "image", imageName, "error", recordImagePullErr)
 		}
 	}
 
@@ -428,7 +454,22 @@ func (s *ImageService) LoadImageFromReader(ctx context.Context, reader io.Reader
 	var responseBuilder strings.Builder
 	streamErr := dockerutils.RenderJSONMessageStream(loadResp, &responseBuilder)
 	if streamErr != nil {
-		s.eventService.LogErrorEvent(ctx, event.EventTypeImageError, "image", "", fileName, user.ID, user.Username, "0", streamErr, database.JSON{"action": "load", "file": fileName, "step": "read_response"})
+		s.eventService.LogErrorEvent(
+			ctx,
+			event.EventTypeImageError,
+			"image",
+			"",
+			fileName,
+			user.ID,
+			user.Username,
+			"0",
+			streamErr,
+			database.JSON{
+				"action": "load",
+				"file":   fileName,
+				"step":   "read_response",
+			},
+		)
 		return nil, fmt.Errorf("failed to read load response: %w", streamErr)
 	}
 
@@ -1085,8 +1126,8 @@ func determineRepoAndTag(di image.Summary) (repo, tag string) {
 	}
 
 	if len(di.RepoDigests) > 0 {
-		if repo, found := parseRepoFromDigests(di.RepoDigests).Get(); found {
-			return repo, "<none>"
+		if localRepo, found := parseRepoFromDigests(di.RepoDigests).Get(); found {
+			return localRepo, "<none>"
 		}
 	}
 
@@ -1135,7 +1176,13 @@ func collectPinnedReferencesByImageIDInternal(containers []container.Summary) ma
 	return result
 }
 
-func MapDockerImagesToDTOs(dockerImages []image.Summary, containers []container.Summary, usageMap map[string][]imagetypes.UsedBy, updateMap map[string]*imageupdate.ImageUpdateRecord, vulnerabilityMap map[string]*vulnerabilitytypes.ScanSummary) []imagetypes.Summary {
+func MapDockerImagesToDTOs(
+	dockerImages []image.Summary,
+	containers []container.Summary,
+	usageMap map[string][]imagetypes.UsedBy,
+	updateMap map[string]*imageupdate.ImageUpdateRecord,
+	vulnerabilityMap map[string]*vulnerabilitytypes.ScanSummary,
+) []imagetypes.Summary {
 	pinnedRefsByImageID := collectPinnedReferencesByImageIDInternal(containers)
 	items := make([]imagetypes.Summary, 0, len(dockerImages))
 	for _, di := range dockerImages {
@@ -1200,11 +1247,11 @@ func (s *ImageService) getImagePaginationConfig() pagination.Config[imagetypes.S
 			{
 				Key: "repo",
 				Fn: func(a, b imagetypes.Summary) int {
-					if cmp := strings.Compare(a.Repo, b.Repo); cmp != 0 {
-						return cmp
+					if localCmp := strings.Compare(a.Repo, b.Repo); localCmp != 0 {
+						return localCmp
 					}
-					if cmp := strings.Compare(a.Tag, b.Tag); cmp != 0 {
-						return cmp
+					if localCmp2 := strings.Compare(a.Tag, b.Tag); localCmp2 != 0 {
+						return localCmp2
 					}
 					return strings.Compare(a.ID, b.ID)
 				},

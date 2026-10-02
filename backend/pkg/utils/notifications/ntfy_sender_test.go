@@ -111,7 +111,8 @@ func TestBuildNtfyURL(t *testing.T) {
 			},
 			wantErr: false,
 			check: func(url string) bool {
-				return url == "ntfy://user:pass@ntfy.example.com:8080/test?cache=no&disabletlsverification=yes&firebase=no&icon=https%3A%2F%2Fexample.com%2Ficon.png&priority=max&tags=urgent&title=Arcane+Alert"
+				return url == "ntfy://user:pass@ntfy.example.com:8080/test?cache=no&disabletlsverification=yes&firebase=no&icon=htt"+
+					"ps%3A%2F%2Fexample.com%2Ficon.png&priority=max&tags=urgent&title=Arcane+Alert"
 			},
 		},
 	}

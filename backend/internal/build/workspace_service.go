@@ -28,8 +28,8 @@ type BuildWorkspaceService struct {
 	settings *settings.SettingsService
 }
 
-func NewBuildWorkspaceService(settings *settings.SettingsService) *BuildWorkspaceService {
-	return &BuildWorkspaceService{settings: settings}
+func NewBuildWorkspaceService(localSettings *settings.SettingsService) *BuildWorkspaceService {
+	return &BuildWorkspaceService{settings: localSettings}
 }
 
 func (s *BuildWorkspaceService) ListDirectory(ctx context.Context, dirPath string) ([]workspacetypes.FileEntry, error) {
@@ -125,13 +125,13 @@ func (s *BuildWorkspaceService) UploadFile(ctx context.Context, destPath string,
 		return fmt.Errorf("invalid path: %w", err)
 	}
 
-	if err := acfs.MkdirAll(ctx, root, cleaned, 0o755); err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
+	if mkdirAllErr := acfs.MkdirAll(ctx, root, cleaned, 0o755); mkdirAllErr != nil {
+		return fmt.Errorf("failed to create directory: %w", mkdirAllErr)
 	}
 
 	targetFile := path.Join(cleaned, safeFilename)
-	if _, err := acfs.WriteFrom(ctx, root, targetFile, content, size, 0o644); err != nil {
-		return fmt.Errorf("failed to write file: %w", err)
+	if _, writeFromErr := acfs.WriteFrom(ctx, root, targetFile, content, size, 0o644); writeFromErr != nil {
+		return fmt.Errorf("failed to write file: %w", writeFromErr)
 	}
 
 	return nil
@@ -153,8 +153,8 @@ func (s *BuildWorkspaceService) CreateDirectory(ctx context.Context, dirPath str
 		return nil
 	}
 
-	if err := acfs.MkdirAll(ctx, root, cleaned, 0o755); err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
+	if mkdirAllErr := acfs.MkdirAll(ctx, root, cleaned, 0o755); mkdirAllErr != nil {
+		return fmt.Errorf("failed to create directory: %w", mkdirAllErr)
 	}
 
 	return nil
@@ -176,8 +176,8 @@ func (s *BuildWorkspaceService) DeleteFile(ctx context.Context, filePath string)
 		return errors.New("cannot delete root directory")
 	}
 
-	if err := acfs.RemoveAll(ctx, root, cleaned); err != nil {
-		return fmt.Errorf("failed to delete path: %w", err)
+	if removeAllErr := acfs.RemoveAll(ctx, root, cleaned); removeAllErr != nil {
+		return fmt.Errorf("failed to delete path: %w", removeAllErr)
 	}
 
 	return nil

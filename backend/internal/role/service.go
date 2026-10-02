@@ -110,10 +110,10 @@ func (s *RoleService) BackfillLegacyRoleAssignments(ctx context.Context) error {
 			return nil
 		}
 		var rows []legacyUser
-		if err := tx.Table("users").Select("id, roles").
+		if loadLegacyUsersErr := tx.Table("users").Select("id, roles").
 			Where("NOT EXISTS (SELECT 1 FROM user_role_assignments ura WHERE ura.user_id = users.id)").
-			Scan(&rows).Error; err != nil {
-			return fmt.Errorf("failed to read legacy users.roles for backfill: %w", err)
+			Scan(&rows).Error; loadLegacyUsersErr != nil {
+			return fmt.Errorf("failed to read legacy users.roles for backfill: %w", loadLegacyUsersErr)
 		}
 		for _, u := range rows {
 			roleID := kit.Ternary(legacyRolesContainsAdminInternal(u.Roles), authz.BuiltInRoleAdmin, authz.BuiltInRoleViewer)
@@ -291,8 +291,8 @@ func (s *RoleService) UpdateRole(ctx context.Context, id, name string, descripti
 		existing.Name = input.Name
 		existing.Description = input.Description
 		existing.Permissions = permissions
-		if err := tx.Save(&existing).Error; err != nil {
-			return fmt.Errorf("failed to update role: %w", err)
+		if updateRoleErr := tx.Save(&existing).Error; updateRoleErr != nil {
+			return fmt.Errorf("failed to update role: %w", updateRoleErr)
 		}
 		out = existing
 		return nil
@@ -326,8 +326,8 @@ func (s *RoleService) DeleteRole(ctx context.Context, id string) error {
 			return err
 		}
 		affected = ids
-		if err := tx.Delete(&Role{}, "id = ?", id).Error; err != nil {
-			return fmt.Errorf("failed to delete role: %w", err)
+		if deleteRoleErr := tx.Delete(&Role{}, "id = ?", id).Error; deleteRoleErr != nil {
+			return fmt.Errorf("failed to delete role: %w", deleteRoleErr)
 		}
 		return nil
 	})
@@ -994,8 +994,8 @@ func (s *RoleService) ValidateRoleAssignmentAgainstCaller(ctx context.Context, c
 	}
 
 	desired := []string(role.Permissions)
-	if err := validatePermissionsInternal(desired); err != nil {
-		return err
+	if validatePermissionsErr := validatePermissionsInternal(desired); validatePermissionsErr != nil {
+		return validatePermissionsErr
 	}
 	return validatePermissionSetAgainstCallerInternal(caller, desired, mo.PointerToOption(environmentID).OrEmpty())
 }

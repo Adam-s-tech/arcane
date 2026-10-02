@@ -145,11 +145,11 @@ func (s *FederatedCredentialService) validateRoleGrantAgainstUserInternal(ctx co
 	if err != nil {
 		return fmt.Errorf("resolve user permissions: %w", err)
 	}
-	if err := s.roleService.ValidateRoleAssignmentAgainstCaller(ctx, permissions, roleID, environmentID); err != nil {
-		if errors.Is(err, common.ErrRolePermissionEscalation) {
-			return common.Classify(common.ErrFederatedCredentialPermissionEscalation, fmt.Errorf("cannot map a federated credential to a role you do not hold: %w", err))
+	if validateRoleAssignmentAgainstCallerErr := s.roleService.ValidateRoleAssignmentAgainstCaller(ctx, permissions, roleID, environmentID); validateRoleAssignmentAgainstCallerErr != nil {
+		if errors.Is(validateRoleAssignmentAgainstCallerErr, common.ErrRolePermissionEscalation) {
+			return common.Classify(common.ErrFederatedCredentialPermissionEscalation, fmt.Errorf("cannot map a federated credential to a role you do not hold: %w", validateRoleAssignmentAgainstCallerErr))
 		}
-		return common.Classify(common.ErrFederatedCredentialInvalid, fmt.Errorf("invalid federated credential: %w", err))
+		return common.Classify(common.ErrFederatedCredentialInvalid, fmt.Errorf("invalid federated credential: %w", validateRoleAssignmentAgainstCallerErr))
 	}
 	return nil
 }

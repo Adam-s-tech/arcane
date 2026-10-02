@@ -52,7 +52,9 @@ func TestEnvironmentService_OverlappingHealthCheckIsSkippedInternal(t *testing.T
 
 	service := &EnvironmentService{jobs: entityjobs.New(environmentHealthJobPrefix, environmentHealthAdmissionScopeInternal)}
 	require.NoError(t, service.SetScheduler(t.Context(), &environmentTestSchedulerInternal{}, gate))
-	service.runHealthCheckInternal(t.Context(), "environment-id")
+	outcome, runErr := service.runHealthCheckInternal(t.Context(), "environment-id")
+	require.NoError(t, runErr)
+	require.Equal(t, schedulertypes.Skipped, outcome.Status)
 	lease.Release(t.Context())
 }
 
@@ -145,12 +147,12 @@ func setupEnvironmentServiceTestDB(t *testing.T) *database.DB {
 func createTestEnvironmentServiceUser(t *testing.T, ctx context.Context, userService *user.UserService, id string) *common.User {
 	t.Helper()
 
-	user := &common.User{
+	localUser := &common.User{
 		ID:       id,
-		Username: fmt.Sprintf("user-%s", id),
+		Username: "user-" + id,
 	}
 
-	created, err := userService.CreateUser(ctx, user)
+	created, err := userService.CreateUser(ctx, localUser)
 	require.NoError(t, err)
 	return created
 }
@@ -175,7 +177,7 @@ func createNamedTestEnvironmentInternal(t *testing.T, db *database.DB, id, name,
 		AccessToken: accessToken,
 	}
 
-	require.NoError(t, db.WithContext(context.Background()).Create(env).Error)
+	require.NoError(t, db.WithContext(t.Context()).Create(env).Error)
 }
 
 func createTestEnvironmentWithState(t *testing.T, db *database.DB, id, apiURL, status string, isEdge bool, accessToken *string) {
@@ -194,11 +196,11 @@ func createTestEnvironmentWithState(t *testing.T, db *database.DB, id, apiURL, s
 		AccessToken: accessToken,
 	}
 
-	require.NoError(t, db.WithContext(context.Background()).Create(env).Error)
+	require.NoError(t, db.WithContext(t.Context()).Create(env).Error)
 }
 
 func TestEnvironmentService_DeleteEnvironment_CascadesGitOpsSyncs(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEnvironmentServiceTestDB(t)
 	require.NoError(t, db.AutoMigrate(&testProjectRow{}, &testGitOpsSyncRow{}))
 
@@ -244,7 +246,7 @@ func createTestRegistry(t *testing.T, db *database.DB, id string) {
 	require.NoError(t, err)
 
 	now := time.Now()
-	registry := &registry.ContainerRegistry{
+	localRegistry := &registry.ContainerRegistry{
 		BaseModel: database.BaseModel{
 			ID:        id,
 			CreatedAt: now,
@@ -260,7 +262,7 @@ func createTestRegistry(t *testing.T, db *database.DB, id string) {
 		UpdatedAt:    now,
 	}
 
-	require.NoError(t, db.WithContext(context.Background()).Create(registry).Error)
+	require.NoError(t, db.WithContext(t.Context()).Create(localRegistry).Error)
 }
 
 func createTestECRRegistry(t *testing.T, db *database.DB, id string) {
@@ -270,7 +272,7 @@ func createTestECRRegistry(t *testing.T, db *database.DB, id string) {
 	require.NoError(t, err)
 
 	now := time.Now()
-	registry := &registry.ContainerRegistry{
+	localRegistry := &registry.ContainerRegistry{
 		BaseModel: database.BaseModel{
 			ID:        id,
 			CreatedAt: now,
@@ -286,7 +288,7 @@ func createTestECRRegistry(t *testing.T, db *database.DB, id string) {
 		UpdatedAt:          now,
 	}
 
-	require.NoError(t, db.WithContext(context.Background()).Create(registry).Error)
+	require.NoError(t, db.WithContext(t.Context()).Create(localRegistry).Error)
 }
 
 func createTestGitRepository(t *testing.T, db *database.DB, repository gitrepo.GitRepository) {
@@ -302,7 +304,7 @@ func encryptSecretForTest(t *testing.T, value string) string {
 }
 
 func TestEnvironmentService_SyncRegistriesToRemoteEnvironments_SyncsEligibleRemotes(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEnvironmentServiceTestDB(t)
 	svc := NewEnvironmentService(db, nil, nil, nil, nil, nil)
 
@@ -379,7 +381,7 @@ func TestEnvironmentService_SyncRegistriesToRemoteEnvironments_SyncsEligibleRemo
 }
 
 func TestEnvironmentService_SyncRegistriesToEnvironment_IncludesECRFields(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEnvironmentServiceTestDB(t)
 	svc := NewEnvironmentService(db, nil, nil, nil, nil, nil)
 
@@ -436,7 +438,7 @@ func TestEnvironmentService_SyncRegistriesToEnvironment_IncludesECRFields(t *tes
 }
 
 func TestEnvironmentService_SyncS3DestinationsToEnvironment(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEnvironmentServiceTestDB(t)
 	svc := NewEnvironmentService(db, nil, nil, nil, nil, nil)
 
@@ -457,17 +459,35 @@ func TestEnvironmentService_SyncS3DestinationsToEnvironment(t *testing.T) {
 
 	accessToken := "agent-token"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodPost, r.Method)
-		require.Equal(t, "/api/backups/s3/sync", r.URL.Path)
-		require.Equal(t, accessToken, r.Header.Get("X-API-Key"))
-		require.Equal(t, accessToken, r.Header.Get("X-Arcane-Agent-Token"))
+		if !assert.Equal(t, http.MethodPost, r.Method) {
+			return
+		}
+		if !assert.Equal(t, "/api/backups/s3/sync", r.URL.Path) {
+			return
+		}
+		if !assert.Equal(t, accessToken, r.Header.Get("X-API-Key")) {
+			return
+		}
+		if !assert.Equal(t, accessToken, r.Header.Get("X-Arcane-Agent-Token")) {
+			return
+		}
 
 		var syncReq backuptypes.S3DestinationSyncRequest
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&syncReq))
-		require.Len(t, syncReq.Destinations, 1)
-		require.Equal(t, "s3-1", syncReq.Destinations[0].ID)
-		require.Equal(t, "s3-secret", syncReq.Destinations[0].SecretAccessKey)
-		require.Equal(t, "volume-backups", syncReq.Destinations[0].Bucket)
+		if !assert.NoError(t, json.NewDecoder(r.Body).Decode(&syncReq)) {
+			return
+		}
+		if !assert.Len(t, syncReq.Destinations, 1) {
+			return
+		}
+		if !assert.Equal(t, "s3-1", syncReq.Destinations[0].ID) {
+			return
+		}
+		if !assert.Equal(t, "s3-secret", syncReq.Destinations[0].SecretAccessKey) {
+			return
+		}
+		if !assert.Equal(t, "volume-backups", syncReq.Destinations[0].Bucket) {
+			return
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"success":true,"data":{"message":"ok"}}`))
@@ -479,7 +499,7 @@ func TestEnvironmentService_SyncS3DestinationsToEnvironment(t *testing.T) {
 }
 
 func TestEnvironmentService_SyncRepositoriesToEnvironment_UsesAgentHeaders(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEnvironmentServiceTestDB(t)
 	require.NoError(t, db.AutoMigrate(&gitrepo.GitRepository{}))
 	svc := NewEnvironmentService(db, nil, nil, nil, nil, nil)
@@ -536,7 +556,7 @@ func TestEnvironmentService_SyncRepositoriesToEnvironment_UsesAgentHeaders(t *te
 }
 
 func TestEnvironmentService_SyncRegistriesToRemoteEnvironments_SkipsRemoteWithoutAccessToken(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEnvironmentServiceTestDB(t)
 	svc := NewEnvironmentService(db, nil, nil, nil, nil, nil)
 
@@ -559,7 +579,7 @@ func TestEnvironmentService_SyncRegistriesToRemoteEnvironments_SkipsRemoteWithou
 }
 
 func TestEnvironmentService_SyncRegistriesToRemoteEnvironments_ReportsFailuresButContinues(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEnvironmentServiceTestDB(t)
 	svc := NewEnvironmentService(db, nil, nil, nil, nil, nil)
 
@@ -583,7 +603,7 @@ func TestEnvironmentService_SyncRegistriesToRemoteEnvironments_ReportsFailuresBu
 }
 
 func TestEnvironmentService_ReconcileEdgeStatusesOnStartup(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEnvironmentServiceTestDB(t)
 	svc := NewEnvironmentService(db, nil, nil, nil, nil, nil)
 
@@ -613,7 +633,7 @@ func TestEnvironmentService_ReconcileEdgeStatusesOnStartup(t *testing.T) {
 }
 
 func TestEnvironmentService_UpdateEnvironmentConnectionState(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEnvironmentServiceTestDB(t)
 	svc := NewEnvironmentService(db, nil, nil, nil, nil, nil)
 
@@ -639,7 +659,7 @@ func TestEnvironmentService_UpdateEnvironmentConnectionState(t *testing.T) {
 }
 
 func TestEnvironmentService_UpdateEnvironmentStatusInternal_PromotesPendingDirectEnv(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEnvironmentServiceTestDB(t)
 	svc := NewEnvironmentService(db, nil, nil, nil, nil, nil)
 
@@ -654,7 +674,7 @@ func TestEnvironmentService_UpdateEnvironmentStatusInternal_PromotesPendingDirec
 }
 
 func TestEnvironmentService_UpdateEnvironmentStatusInternal_DoesNotDemotePendingDirectEnvOnFailedTick(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEnvironmentServiceTestDB(t)
 	svc := NewEnvironmentService(db, nil, nil, nil, nil, nil)
 
@@ -673,7 +693,7 @@ func TestEnvironmentService_UpdateEnvironmentStatusInternal_DoesNotDemotePending
 }
 
 func TestEnvironmentService_UpdateEnvironmentStatusInternal_LeavesPendingEdgeEnvAlone(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEnvironmentServiceTestDB(t)
 	svc := NewEnvironmentService(db, nil, nil, nil, nil, nil)
 
@@ -690,7 +710,7 @@ func TestEnvironmentService_UpdateEnvironmentStatusInternal_LeavesPendingEdgeEnv
 }
 
 func TestEnvironmentService_ResolveEdgeEnvironmentByToken_CachesAndInvalidatesOnUpdate(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEnvironmentServiceTestDB(t)
 	svc := NewEnvironmentService(db, nil, nil, nil, nil, nil)
 
@@ -720,7 +740,7 @@ func TestEnvironmentService_ResolveEdgeEnvironmentByToken_CachesAndInvalidatesOn
 }
 
 func TestEnvironmentService_UpdateEnvironment_ClearingAccessTokenInvalidatesCache(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEnvironmentServiceTestDB(t)
 	svc := NewEnvironmentService(db, nil, nil, nil, nil, nil)
 
@@ -752,7 +772,7 @@ func TestEnvironmentService_UpdateEnvironment_ClearingAccessTokenInvalidatesCach
 }
 
 func TestEnvironmentServiceUpdateEnvironmentRejectsTargetChangeWithStoredTokenInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEnvironmentServiceTestDB(t)
 	svc := NewEnvironmentService(db, nil, nil, nil, nil, nil)
 
@@ -824,7 +844,7 @@ func TestEnvironmentService_getCachedEnvironmentIDForTokenInternal_ExpiresAndCle
 }
 
 func TestEnvironmentService_ResolveEnvironmentByAccessToken(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEnvironmentServiceTestDB(t)
 	svc := NewEnvironmentService(db, nil, nil, nil, nil, nil)
 
@@ -845,7 +865,7 @@ func TestEnvironmentService_ResolveEnvironmentByAccessToken(t *testing.T) {
 func TestEnvironmentService_GenerateDeploymentSnippets_ExplicitlyUsePollTransport(t *testing.T) {
 	svc := NewEnvironmentService(nil, nil, nil, nil, nil, nil)
 
-	standard, err := svc.GenerateDeploymentSnippets(context.Background(), "env-1", "https://manager.example.com", "https://agent.example.com", "token-123")
+	standard, err := svc.GenerateDeploymentSnippets(t.Context(), "env-1", "https://manager.example.com", "https://agent.example.com", "token-123")
 	require.NoError(t, err)
 	require.NotNil(t, standard)
 	require.NotContains(t, standard.DockerRun, "EDGE_TRANSPORT=websocket")
@@ -857,7 +877,7 @@ func TestEnvironmentService_GenerateDeploymentSnippets_ExplicitlyUsePollTranspor
 	require.Contains(t, standard.DockerCompose, "- arcane-data:/app/data")
 	require.NotContains(t, standard.DockerRun, "-v arcane-data:/data")
 
-	edgeSnippets, err := svc.GenerateEdgeDeploymentSnippets(context.Background(), "env-2", "https://manager.example.com", "token-456", nil)
+	edgeSnippets, err := svc.GenerateEdgeDeploymentSnippets(t.Context(), "env-2", "https://manager.example.com", "token-456", nil)
 	require.NoError(t, err)
 	require.NotNil(t, edgeSnippets)
 	require.NotContains(t, edgeSnippets.DockerRun, "EDGE_TRANSPORT=websocket")
@@ -928,20 +948,20 @@ func TestAgentHostPortInternal(t *testing.T) {
 }
 
 func TestEnvironmentService_EnsureSwarmNodeAgentEnvironment_CreatesVisibleEnvironmentAndReusesToken(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEnvironmentServiceTestDB(t)
 	userService := user.NewUserService(db, nil)
 	apiKeyService := apikey.NewApiKeyService(db, userService, nil)
 	svc := NewEnvironmentService(db, nil, nil, nil, nil, apiKeyService)
-	user := createTestEnvironmentServiceUser(t, ctx, userService, "swarm-admin")
+	localUser := createTestEnvironmentServiceUser(t, ctx, userService, "swarm-admin")
 
 	createdEnv, createdToken, err := svc.EnsureSwarmNodeAgentEnvironment(
 		ctx,
 		"manager-env",
 		"node-1234567890abcdef",
 		"worker-1",
-		user.ID,
-		user.Username,
+		localUser.ID,
+		localUser.Username,
 		false,
 	)
 	require.NoError(t, err)
@@ -981,8 +1001,8 @@ func TestEnvironmentService_EnsureSwarmNodeAgentEnvironment_CreatesVisibleEnviro
 		"manager-env",
 		"node-1234567890abcdef",
 		"worker-1",
-		user.ID,
-		user.Username,
+		localUser.ID,
+		localUser.Username,
 		false,
 	)
 	require.NoError(t, err)
@@ -1000,7 +1020,7 @@ func TestEnvironmentService_EnsureSwarmNodeAgentEnvironment_CreatesVisibleEnviro
 }
 
 func TestEnvironmentService_EnsureSwarmNodeAgentEnvironment_ReusesLegacyHiddenRegistration(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEnvironmentServiceTestDB(t)
 	svc := NewEnvironmentService(db, nil, nil, nil, nil, nil)
 	parentEnvironmentID := "manager-env"
@@ -1048,11 +1068,11 @@ func TestEnvironmentService_EnsureSwarmNodeAgentEnvironment_ReusesLegacyHiddenRe
 
 	var environments []Environment
 	{
-		err := db.WithContext(ctx).
+		operationErr := db.WithContext(ctx).
 			Where("parent_environment_id = ? AND swarm_node_id = ?", parentEnvironmentID, nodeID).
 			Find(&environments).Error
-		require.NoError(t, err,
-			"list node environments: %v", err)
+		require.NoError(t, operationErr,
+			"list node environments: %v", operationErr)
 	}
 
 	require.Len(t, environments, 1,
@@ -1068,20 +1088,20 @@ func TestEnvironmentService_EnsureSwarmNodeAgentEnvironment_ReusesLegacyHiddenRe
 // transformation (trim, encode, hash) were ever introduced between the
 // command-generation path and the poll-validation path.
 func TestEnvironmentService_EnsureSwarmNodeAgentEnvironment_TokenResolvesEndToEnd(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEnvironmentServiceTestDB(t)
 	userService := user.NewUserService(db, nil)
 	apiKeyService := apikey.NewApiKeyService(db, userService, nil)
 	svc := NewEnvironmentService(db, nil, nil, nil, nil, apiKeyService)
-	user := createTestEnvironmentServiceUser(t, ctx, userService, "swarm-resolve-admin")
+	localUser := createTestEnvironmentServiceUser(t, ctx, userService, "swarm-resolve-admin")
 
 	createdEnv, createdToken, err := svc.EnsureSwarmNodeAgentEnvironment(
 		ctx,
 		"manager-env-resolve",
 		"node-resolve-1234567890",
 		"resolve-host",
-		user.ID,
-		user.Username,
+		localUser.ID,
+		localUser.Username,
 		false,
 	)
 	require.NoError(t, err)
@@ -1103,8 +1123,8 @@ func TestEnvironmentService_EnsureSwarmNodeAgentEnvironment_TokenResolvesEndToEn
 		"manager-env-resolve",
 		"node-resolve-1234567890",
 		"resolve-host",
-		user.ID,
-		user.Username,
+		localUser.ID,
+		localUser.Username,
 		true,
 	)
 	require.NoError(t, err)
@@ -1121,7 +1141,7 @@ func TestEnvironmentService_EnsureSwarmNodeAgentEnvironment_TokenResolvesEndToEn
 }
 
 func TestEnvironmentService_BindSwarmNodeEnvironment_PreservesVisibleEnvironmentToken(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEnvironmentServiceTestDB(t)
 	token := "existing-agent-token"
 	createTestEnvironment(t, db, "visible-env", "http://visible.example", &token)
@@ -1143,7 +1163,7 @@ func TestEnvironmentService_BindSwarmNodeEnvironment_PreservesVisibleEnvironment
 }
 
 func TestEnvironmentService_BindSwarmNodeEnvironment_RequiresExplicitRebind(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEnvironmentServiceTestDB(t)
 	createTestEnvironment(t, db, "visible-env", "http://visible.example", nil)
 	svc := NewEnvironmentService(db, nil, nil, nil, nil, nil)
@@ -1160,7 +1180,7 @@ func TestEnvironmentService_BindSwarmNodeEnvironment_RequiresExplicitRebind(t *t
 }
 
 func TestEnvironmentService_ListMethods_ExcludeHiddenEnvironments(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEnvironmentServiceTestDB(t)
 	svc := NewEnvironmentService(db, nil, nil, nil, nil, nil)
 
@@ -1195,7 +1215,7 @@ func TestEnvironmentService_ListMethods_ExcludeHiddenEnvironments(t *testing.T) 
 }
 
 func TestEnvironmentService_ListEnvironmentsPaginated_FiltersByAccessibleEnvIDs(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEnvironmentServiceTestDB(t)
 	svc := NewEnvironmentService(db, nil, nil, nil, nil, nil)
 
@@ -1238,7 +1258,7 @@ func TestEnvironmentService_ListEnvironmentsPaginated_FiltersByAccessibleEnvIDs(
 }
 
 func TestEnvironmentService_ListEnvironmentsPaginated_FiltersByRuntimeType(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEnvironmentServiceTestDB(t)
 	svc := NewEnvironmentService(db, nil, nil, nil, nil, nil)
 
@@ -1378,7 +1398,7 @@ func TestEnvironmentService_GenerateEdgeDeploymentSnippets_WithAutoGeneratedMTLS
 	svc := NewEnvironmentService(nil, nil, nil, nil, nil, nil)
 
 	assetsDir := filepath.Join(t.TempDir(), "edge-mtls")
-	snippets, err := svc.GenerateEdgeDeploymentSnippets(context.Background(), "env-mtls", "https://manager.example.com", "token-789", &edge.Config{
+	snippets, err := svc.GenerateEdgeDeploymentSnippets(t.Context(), "env-mtls", "https://manager.example.com", "token-789", &edge.Config{
 		EdgeMTLSMode:      edge.EdgeMTLSModeRequired,
 		EdgeMTLSAssetsDir: assetsDir,
 	})
@@ -1412,7 +1432,7 @@ func TestEnvironmentService_GenerateEdgeDeploymentSnippets_ReturnsBasicSnippetsW
 	assetsPath := filepath.Join(t.TempDir(), "edge-mtls-file")
 	require.NoError(t, os.WriteFile(assetsPath, []byte("not a directory"), 0o600))
 
-	snippets, err := svc.GenerateEdgeDeploymentSnippets(context.Background(), "env-mtls", "https://manager.example.com", "token-789", &edge.Config{
+	snippets, err := svc.GenerateEdgeDeploymentSnippets(t.Context(), "env-mtls", "https://manager.example.com", "token-789", &edge.Config{
 		EdgeMTLSMode:      edge.EdgeMTLSModeRequired,
 		EdgeMTLSAssetsDir: assetsPath,
 	})
@@ -1425,7 +1445,7 @@ func TestEnvironmentService_GenerateEdgeDeploymentSnippets_ReturnsBasicSnippetsW
 }
 
 func TestEnvironmentService_TestConnection_RejectsInvalidCustomURL(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEnvironmentServiceTestDB(t)
 	svc := NewEnvironmentService(db, nil, nil, nil, nil, nil)
 
@@ -1442,7 +1462,7 @@ func TestEnvironmentServiceTestConnectionHidesCustomURLFailureInternal(t *testin
 	}))
 	t.Cleanup(server.Close)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEnvironmentServiceTestDB(t)
 	svc := NewEnvironmentService(db, server.Client(), nil, nil, nil, nil)
 	createTestEnvironment(t, db, "env-1", "http://stored.example", nil)
@@ -1459,7 +1479,7 @@ func TestEnvironmentServiceTestConnectionAllowsStoredPrivateURLInternal(t *testi
 	}))
 	t.Cleanup(server.Close)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEnvironmentServiceTestDB(t)
 	svc := NewEnvironmentService(db, server.Client(), nil, nil, nil, nil)
 	createTestEnvironment(t, db, "env-private", server.URL, nil)
@@ -1470,7 +1490,7 @@ func TestEnvironmentServiceTestConnectionAllowsStoredPrivateURLInternal(t *testi
 }
 
 func TestEnvironmentService_ExecuteRemoteRequest_RejectsInvalidEnvironmentURL(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupEnvironmentServiceTestDB(t)
 	svc := NewEnvironmentService(db, nil, nil, nil, nil, nil)
 

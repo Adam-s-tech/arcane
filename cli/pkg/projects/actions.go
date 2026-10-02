@@ -57,8 +57,7 @@ var tagsCmd = &cobra.Command{
 		for i, tag := range result.Data {
 			rows[i] = []string{tag.Name, string(tag.Color)}
 		}
-		output.Table(headers, rows)
-		return nil
+		return output.Table(headers, rows)
 	},
 }
 
@@ -195,12 +194,12 @@ var buildCmd = &cobra.Command{
 			return fmt.Errorf("failed to build project images: %w", err)
 		}
 		defer func() { _ = resp.Body.Close() }()
-		if err := cmdutil.EnsureSuccessStatus(resp); err != nil {
-			return fmt.Errorf("failed to build project images: %w", err)
+		if ensureSuccessStatusErr := cmdutil.EnsureSuccessStatus(resp); ensureSuccessStatusErr != nil {
+			return fmt.Errorf("failed to build project images: %w", ensureSuccessStatusErr)
 		}
 
-		if err := printOperationStreamInternal(resp.Body); err != nil {
-			return fmt.Errorf("failed to build project images: %w", err)
+		if printOperationStreamErr := printOperationStreamInternal(resp.Body); printOperationStreamErr != nil {
+			return fmt.Errorf("failed to build project images: %w", printOperationStreamErr)
 		}
 
 		output.Success("Images built successfully for project %s", resolved.Name)
@@ -305,8 +304,8 @@ var workspaceDownloadCmd = &cobra.Command{
 			return fmt.Errorf("failed to download workspace file: %w", err)
 		}
 		defer func() { _ = resp.Body.Close() }()
-		if err := cmdutil.EnsureSuccessStatus(resp); err != nil {
-			return fmt.Errorf("failed to download workspace file: %w", err)
+		if ensureSuccessStatusErr := cmdutil.EnsureSuccessStatus(resp); ensureSuccessStatusErr != nil {
+			return fmt.Errorf("failed to download workspace file: %w", ensureSuccessStatusErr)
 		}
 
 		outputFile := path.Base(args[1])

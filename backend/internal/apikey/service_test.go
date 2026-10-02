@@ -60,17 +60,17 @@ func setupAPIKeyService(t *testing.T) (*ApiKeyService, *database.DB, *user.UserS
 
 func createTestAPIKeyUser(t *testing.T, ctx context.Context, userService *user.UserService, id string, usernames ...string) *common.User {
 	t.Helper()
-	username := fmt.Sprintf("user-%s", id)
+	username := "user-" + id
 	if len(usernames) > 0 {
 		username = usernames[0]
 	}
 
-	user := &common.User{
+	localUser := &common.User{
 		ID:       id,
 		Username: username,
 	}
 
-	created, err := userService.CreateUser(ctx, user)
+	created, err := userService.CreateUser(ctx, localUser)
 	require.NoError(t, err)
 	return created
 }
@@ -79,7 +79,7 @@ func fetchAPIKey(t *testing.T, db *database.DB, keyID string) ApiKey {
 	t.Helper()
 
 	var apiKey ApiKey
-	err := db.WithContext(context.Background()).Where("id = ?", keyID).First(&apiKey).Error
+	err := db.WithContext(t.Context()).Where("id = ?", keyID).First(&apiKey).Error
 	require.NoError(t, err)
 	return apiKey
 }
@@ -88,7 +88,7 @@ func listAPIKeysForUser(t *testing.T, db *database.DB, userID string) []ApiKey {
 	t.Helper()
 
 	var apiKeys []ApiKey
-	err := db.WithContext(context.Background()).Where("user_id = ?", userID).Order("created_at asc").Find(&apiKeys).Error
+	err := db.WithContext(t.Context()).Where("user_id = ?", userID).Order("created_at asc").Find(&apiKeys).Error
 	require.NoError(t, err)
 	return apiKeys
 }
@@ -108,12 +108,12 @@ func invalidateAPIKey(rawKey string) string {
 func createDefaultAdminUser(t *testing.T, ctx context.Context, userService *user.UserService) *common.User {
 	t.Helper()
 
-	user := &common.User{
+	localUser := &common.User{
 		ID:       "default-admin-user",
 		Username: defaultAdminUsername,
 	}
 
-	created, err := userService.CreateUser(ctx, user)
+	created, err := userService.CreateUser(ctx, localUser)
 	require.NoError(t, err)
 	return created
 }
@@ -154,7 +154,7 @@ func TestListApiKeysPermissionQueryCountIsConstant(t *testing.T) {
 				queryCount.Add(1)
 			}))
 
-			result, _, err := service.ListApiKeys(context.Background(), pagination.QueryParams{
+			result, _, err := service.ListApiKeys(t.Context(), pagination.QueryParams{
 				Limit: 100,
 			})
 			require.NoError(t, err)
@@ -165,7 +165,7 @@ func TestListApiKeysPermissionQueryCountIsConstant(t *testing.T) {
 			queryCounts[keyCount] = queryCount.Load()
 
 			queryCount.Store(0)
-			result, err = service.ListApiKeysByUser(context.Background(), userID)
+			result, err = service.ListApiKeysByUser(t.Context(), userID)
 			require.NoError(t, err)
 			require.Len(t, result, keyCount)
 			for _, apiKey := range result {
@@ -184,12 +184,12 @@ func TestListApiKeysPermissionQueryCountIsConstant(t *testing.T) {
 }
 
 func TestCreateDefaultAdminAPIKeyUsesProvidedRawKey(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, db, userService := setupAPIKeyService(t)
-	user := createTestAPIKeyUser(t, ctx, userService, "user-default-admin")
+	localUser := createTestAPIKeyUser(t, ctx, userService, "user-default-admin")
 
 	rawKey := "arc_bootstrapprovidedkey1234567890"
-	created, err := service.CreateDefaultAdminAPIKey(ctx, user.ID, rawKey)
+	created, err := service.CreateDefaultAdminAPIKey(ctx, localUser.ID, rawKey)
 	require.NoError(t, err)
 	require.Equal(t, rawKey, created.Key)
 	require.Equal(t, defaultAdminAPIKeyName, created.Name)
@@ -203,7 +203,7 @@ func TestCreateDefaultAdminAPIKeyUsesProvidedRawKey(t *testing.T) {
 }
 
 func TestReconcileDefaultAdminAPIKeyCreatesManagedKey(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, db, userService := setupAPIKeyService(t)
 	adminUser := createDefaultAdminUser(t, ctx, userService)
 
@@ -225,7 +225,7 @@ func TestReconcileDefaultAdminAPIKeyCreatesManagedKey(t *testing.T) {
 }
 
 func TestDeleteApiKeyRejectsStaticKey(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, db, userService := setupAPIKeyService(t)
 	adminUser := createDefaultAdminUser(t, ctx, userService)
 
@@ -241,7 +241,7 @@ func TestDeleteApiKeyRejectsStaticKey(t *testing.T) {
 }
 
 func TestUpdateApiKeyRejectsStaticKey(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, db, userService := setupAPIKeyService(t)
 	adminUser := createDefaultAdminUser(t, ctx, userService)
 
@@ -263,7 +263,7 @@ func TestUpdateApiKeyRejectsStaticKey(t *testing.T) {
 }
 
 func TestUpdateApiKeyRollsBackMetadataWhenPermissionUpdateFails(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupAPIKeyServiceTestDB(t)
 	require.NoError(t, db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_akp_uniq ON api_key_permissions(api_key_id, permission, COALESCE(environment_id, ''))").Error)
 
@@ -294,22 +294,22 @@ func TestUpdateApiKeyRollsBackMetadataWhenPermissionUpdateFails(t *testing.T) {
 }
 
 func TestCreateApiKeyRejectsGrantsBeyondCallerPermissions(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, _, userService := setupAPIKeyService(t)
-	user := createTestAPIKeyUser(t, ctx, userService, "user-escalation")
+	localUser := createTestAPIKeyUser(t, ctx, userService, "user-escalation")
 
 	callerPerms := authz.NewPermissionSet()
 	callerPerms.AddGlobal(authz.PermContainersList)
 
 	// A grant the caller does not hold must be rejected.
-	_, err := service.CreateApiKey(ctx, user.ID, callerPerms, apikey.CreateApiKey{
+	_, err := service.CreateApiKey(ctx, localUser.ID, callerPerms, apikey.CreateApiKey{
 		Name:        "escalated",
 		Permissions: []apikey.PermissionGrant{{Permission: authz.PermApiKeysCreate}},
 	})
 	require.ErrorIs(t, err, ErrApiKeyPermissionEscalation)
 
 	// A grant within the caller's set succeeds.
-	created, err := service.CreateApiKey(ctx, user.ID, callerPerms, apikey.CreateApiKey{
+	created, err := service.CreateApiKey(ctx, localUser.ID, callerPerms, apikey.CreateApiKey{
 		Name:        "allowed",
 		Permissions: []apikey.PermissionGrant{{Permission: authz.PermContainersList}},
 	})
@@ -318,7 +318,7 @@ func TestCreateApiKeyRejectsGrantsBeyondCallerPermissions(t *testing.T) {
 }
 
 func TestApiKeyGrantsAreCappedByOwnerRoles(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupAPIKeyServiceTestDB(t)
 
 	roleSvc := role.NewRoleService(db)
@@ -359,13 +359,13 @@ func TestApiKeyGrantsAreCappedByOwnerRoles(t *testing.T) {
 }
 
 func TestCreatePersonalApiKeyHasNoGrantsAndCannotGainAny(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, db, userService := setupAPIKeyService(t)
-	user := createTestAPIKeyUser(t, ctx, userService, "user-personal")
+	localUser := createTestAPIKeyUser(t, ctx, userService, "user-personal")
 
-	_, err := service.CreatePersonalApiKey(ctx, user.ID, apikey.CreateUserApiKey{Name: " \t "})
+	_, err := service.CreatePersonalApiKey(ctx, localUser.ID, apikey.CreateUserApiKey{Name: " \t "})
 	require.EqualError(t, err, "name: must contain at least 1 characters after normalization")
-	created, err := service.CreatePersonalApiKey(ctx, user.ID, apikey.CreateUserApiKey{Name: "  cafe\u0301 personal  "})
+	created, err := service.CreatePersonalApiKey(ctx, localUser.ID, apikey.CreateUserApiKey{Name: "  cafe\u0301 personal  "})
 	require.NoError(t, err)
 	require.Equal(t, "café personal", created.Name)
 	require.Equal(t, ApiKeyKindPersonal, created.Kind)
@@ -380,7 +380,7 @@ func TestCreatePersonalApiKeyHasNoGrantsAndCannotGainAny(t *testing.T) {
 }
 
 func TestReconcileDefaultAdminAPIKeyNoOpWhenUnchanged(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, db, userService := setupAPIKeyService(t)
 	adminUser := createDefaultAdminUser(t, ctx, userService)
 
@@ -396,7 +396,7 @@ func TestReconcileDefaultAdminAPIKeyNoOpWhenUnchanged(t *testing.T) {
 }
 
 func TestReconcileDefaultAdminAPIKeyReplacesManagedKeyOnRotation(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, db, userService := setupAPIKeyService(t)
 	adminUser := createDefaultAdminUser(t, ctx, userService)
 
@@ -420,7 +420,7 @@ func TestReconcileDefaultAdminAPIKeyReplacesManagedKeyOnRotation(t *testing.T) {
 }
 
 func TestReconcileDefaultAdminAPIKeyRotationEvictsRacingCacheFill(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, db, userService := setupAPIKeyService(t)
 	adminUser := createDefaultAdminUser(t, ctx, userService)
 
@@ -455,7 +455,7 @@ func TestReconcileDefaultAdminAPIKeyRotationEvictsRacingCacheFill(t *testing.T) 
 }
 
 func TestReconcileDefaultAdminAPIKeyDeletesManagedKeyWhenUnset(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, db, userService := setupAPIKeyService(t)
 	adminUser := createDefaultAdminUser(t, ctx, userService)
 
@@ -467,7 +467,7 @@ func TestReconcileDefaultAdminAPIKeyDeletesManagedKeyWhenUnset(t *testing.T) {
 }
 
 func TestReconcileDefaultAdminAPIKeyPreservesUserManagedKeys(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, db, userService := setupAPIKeyService(t)
 	adminUser := createDefaultAdminUser(t, ctx, userService)
 
@@ -497,7 +497,7 @@ func TestReconcileDefaultAdminAPIKeyPreservesUserManagedKeys(t *testing.T) {
 }
 
 func TestReconcileDefaultAdminAPIKeyDeletesDuplicateManagedKeys(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, db, userService := setupAPIKeyService(t)
 	adminUser := createDefaultAdminUser(t, ctx, userService)
 
@@ -515,7 +515,7 @@ func TestReconcileDefaultAdminAPIKeyDeletesDuplicateManagedKeys(t *testing.T) {
 }
 
 func TestReconcileDefaultAdminAPIKeySkipsWhenDefaultAdminMissing(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, db, _ := setupAPIKeyService(t)
 
 	err := service.ReconcileDefaultAdminAPIKey(ctx, "arc_bootstrapmissing1234567890")
@@ -528,7 +528,7 @@ func TestReconcileDefaultAdminAPIKeySkipsWhenDefaultAdminMissing(t *testing.T) {
 }
 
 func TestReconcileDefaultAdminAPIKeyRejectsInvalidKey(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, db, userService := setupAPIKeyService(t)
 	adminUser := createDefaultAdminUser(t, ctx, userService)
 
@@ -538,28 +538,28 @@ func TestReconcileDefaultAdminAPIKeyRejectsInvalidKey(t *testing.T) {
 }
 
 func TestValidateAPIKeyUpdatesLastUsedAt(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, db, userService := setupAPIKeyService(t)
-	user := createTestAPIKeyUser(t, ctx, userService, "user-validate")
+	localUser := createTestAPIKeyUser(t, ctx, userService, "user-validate")
 
-	created, err := service.CreateApiKey(ctx, user.ID, authz.SudoPermissionSet(), apikey.CreateApiKey{Name: "validate-key"})
+	created, err := service.CreateApiKey(ctx, localUser.ID, authz.SudoPermissionSet(), apikey.CreateApiKey{Name: "validate-key"})
 	require.NoError(t, err)
 	require.Nil(t, fetchAPIKey(t, db, created.ID).LastUsedAt)
 
 	validatedUser, err := service.ValidateApiKey(ctx, created.Key)
 	require.NoError(t, err)
-	require.Equal(t, user.ID, validatedUser.ID)
+	require.Equal(t, localUser.ID, validatedUser.ID)
 
 	apiKey := fetchAPIKey(t, db, created.ID)
 	require.NotNil(t, apiKey.LastUsedAt)
 }
 
 func TestValidateAPIKeyCacheSkipsHashValidationAndInvalidatesOnRevoke(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, db, userService := setupAPIKeyService(t)
-	user := createTestAPIKeyUser(t, ctx, userService, "user-cached")
+	localUser := createTestAPIKeyUser(t, ctx, userService, "user-cached")
 
-	created, err := service.CreateApiKey(ctx, user.ID, authz.SudoPermissionSet(), apikey.CreateApiKey{Name: "cached-key"})
+	created, err := service.CreateApiKey(ctx, localUser.ID, authz.SudoPermissionSet(), apikey.CreateApiKey{Name: "cached-key"})
 	require.NoError(t, err)
 
 	_, err = service.ValidateApiKey(ctx, created.Key)
@@ -571,7 +571,7 @@ func TestValidateAPIKeyCacheSkipsHashValidationAndInvalidatesOnRevoke(t *testing
 
 	validatedUser, err := service.ValidateApiKey(ctx, created.Key)
 	require.NoError(t, err)
-	require.Equal(t, user.ID, validatedUser.ID)
+	require.Equal(t, localUser.ID, validatedUser.ID)
 
 	// Revocation must reject immediately despite the cache.
 	require.NoError(t, service.DeleteApiKey(ctx, created.ID))
@@ -580,11 +580,11 @@ func TestValidateAPIKeyCacheSkipsHashValidationAndInvalidatesOnRevoke(t *testing
 }
 
 func TestValidateAPIKeyCacheFillDroppedWhenRevocationRacesValidation(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, db, userService := setupAPIKeyService(t)
-	user := createTestAPIKeyUser(t, ctx, userService, "user-fill-race")
+	localUser := createTestAPIKeyUser(t, ctx, userService, "user-fill-race")
 
-	created, err := service.CreateApiKey(ctx, user.ID, authz.SudoPermissionSet(), apikey.CreateApiKey{Name: "fill-race-key"})
+	created, err := service.CreateApiKey(ctx, localUser.ID, authz.SudoPermissionSet(), apikey.CreateApiKey{Name: "fill-race-key"})
 	require.NoError(t, err)
 
 	// Simulate a validation whose DB read happened before the revocation:
@@ -600,11 +600,11 @@ func TestValidateAPIKeyCacheFillDroppedWhenRevocationRacesValidation(t *testing.
 }
 
 func TestValidateAPIKeyDebouncesLastUsedWrites(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, db, userService := setupAPIKeyService(t)
-	user := createTestAPIKeyUser(t, ctx, userService, "user-debounce")
+	localUser := createTestAPIKeyUser(t, ctx, userService, "user-debounce")
 
-	created, err := service.CreateApiKey(ctx, user.ID, authz.SudoPermissionSet(), apikey.CreateApiKey{Name: "debounce-key"})
+	created, err := service.CreateApiKey(ctx, localUser.ID, authz.SudoPermissionSet(), apikey.CreateApiKey{Name: "debounce-key"})
 	require.NoError(t, err)
 
 	_, err = service.ValidateApiKey(ctx, created.Key)
@@ -621,11 +621,11 @@ func TestValidateAPIKeyDebouncesLastUsedWrites(t *testing.T) {
 }
 
 func TestValidateAPIKeyDebounceReleasedOnWriteFailure(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, db, userService := setupAPIKeyService(t)
-	user := createTestAPIKeyUser(t, ctx, userService, "user-debounce-retry")
+	localUser := createTestAPIKeyUser(t, ctx, userService, "user-debounce-retry")
 
-	created, err := service.CreateApiKey(ctx, user.ID, authz.SudoPermissionSet(), apikey.CreateApiKey{Name: "debounce-retry-key"})
+	created, err := service.CreateApiKey(ctx, localUser.ID, authz.SudoPermissionSet(), apikey.CreateApiKey{Name: "debounce-retry-key"})
 	require.NoError(t, err)
 
 	canceledCtx, cancel := context.WithCancel(ctx)
@@ -640,11 +640,11 @@ func TestValidateAPIKeyDebounceReleasedOnWriteFailure(t *testing.T) {
 }
 
 func TestValidateAPIKeyLastUsedUpdateIsRequestScoped(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, db, userService := setupAPIKeyService(t)
-	user := createTestAPIKeyUser(t, ctx, userService, "user-request-scoped")
+	localUser := createTestAPIKeyUser(t, ctx, userService, "user-request-scoped")
 
-	created, err := service.CreateApiKey(ctx, user.ID, authz.SudoPermissionSet(), apikey.CreateApiKey{Name: "request-scoped-key"})
+	created, err := service.CreateApiKey(ctx, localUser.ID, authz.SudoPermissionSet(), apikey.CreateApiKey{Name: "request-scoped-key"})
 	require.NoError(t, err)
 
 	updateStarted := make(chan struct{})
@@ -656,8 +656,8 @@ func TestValidateAPIKeyLastUsedUpdateIsRequestScoped(t *testing.T) {
 
 	validationDone := make(chan error, 1)
 	go func() {
-		_, err := service.ValidateApiKey(ctx, created.Key)
-		validationDone <- err
+		_, validateApiKeyErr := service.ValidateApiKey(ctx, created.Key)
+		validationDone <- validateApiKeyErr
 	}()
 
 	select {
@@ -668,9 +668,9 @@ func TestValidateAPIKeyLastUsedUpdateIsRequestScoped(t *testing.T) {
 	}
 
 	select {
-	case err := <-validationDone:
+	case operationErr := <-validationDone:
 		close(releaseUpdate)
-		require.NoError(t, err)
+		require.NoError(t, operationErr)
 		require.FailNow(t, "validation returned before its last-used update completed")
 	case <-time.After(50 * time.Millisecond):
 	}
@@ -680,11 +680,11 @@ func TestValidateAPIKeyLastUsedUpdateIsRequestScoped(t *testing.T) {
 }
 
 func TestMarkAPIKeyUsedHonorsRequestCancellation(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, db, userService := setupAPIKeyService(t)
-	user := createTestAPIKeyUser(t, ctx, userService, "user-canceled-usage")
+	localUser := createTestAPIKeyUser(t, ctx, userService, "user-canceled-usage")
 
-	created, err := service.CreateApiKey(ctx, user.ID, authz.SudoPermissionSet(), apikey.CreateApiKey{Name: "canceled-usage-key"})
+	created, err := service.CreateApiKey(ctx, localUser.ID, authz.SudoPermissionSet(), apikey.CreateApiKey{Name: "canceled-usage-key"})
 	require.NoError(t, err)
 
 	canceledCtx, cancel := context.WithCancel(ctx)
@@ -695,11 +695,11 @@ func TestMarkAPIKeyUsedHonorsRequestCancellation(t *testing.T) {
 }
 
 func TestMarkAPIKeyUsedReturnsDatabaseErrors(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, db, userService := setupAPIKeyService(t)
-	user := createTestAPIKeyUser(t, ctx, userService, "user-usage-error")
+	localUser := createTestAPIKeyUser(t, ctx, userService, "user-usage-error")
 
-	created, err := service.CreateApiKey(ctx, user.ID, authz.SudoPermissionSet(), apikey.CreateApiKey{Name: "usage-error-key"})
+	created, err := service.CreateApiKey(ctx, localUser.ID, authz.SudoPermissionSet(), apikey.CreateApiKey{Name: "usage-error-key"})
 	require.NoError(t, err)
 
 	sqlDB, err := db.DB.DB()
@@ -712,18 +712,18 @@ func TestMarkAPIKeyUsedReturnsDatabaseErrors(t *testing.T) {
 }
 
 func TestValidateAPIKeyRepeatedAuthenticationDoesNotGrowGoroutines(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, _, userService := setupAPIKeyService(t)
-	user := createTestAPIKeyUser(t, ctx, userService, "user-repeated-auth")
+	localUser := createTestAPIKeyUser(t, ctx, userService, "user-repeated-auth")
 
-	created, err := service.CreateApiKey(ctx, user.ID, authz.SudoPermissionSet(), apikey.CreateApiKey{Name: "repeated-auth-key"})
+	created, err := service.CreateApiKey(ctx, localUser.ID, authz.SudoPermissionSet(), apikey.CreateApiKey{Name: "repeated-auth-key"})
 	require.NoError(t, err)
 
 	before := runtime.NumGoroutine()
 	for range 20 {
-		validatedUser, err := service.ValidateApiKey(ctx, created.Key)
-		require.NoError(t, err)
-		require.Equal(t, user.ID, validatedUser.ID)
+		validatedUser, validateApiKeyErr := service.ValidateApiKey(ctx, created.Key)
+		require.NoError(t, validateApiKeyErr)
+		require.Equal(t, localUser.ID, validatedUser.ID)
 	}
 	runtime.Gosched()
 	after := runtime.NumGoroutine()
@@ -732,7 +732,7 @@ func TestValidateAPIKeyRepeatedAuthenticationDoesNotGrowGoroutines(t *testing.T)
 }
 
 func TestGetEnvironmentByAPIKeyUpdatesLastUsedAt(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, db, _ := setupAPIKeyService(t)
 
 	created, err := service.CreateEnvironmentApiKey(ctx, "env-123")
@@ -749,7 +749,7 @@ func TestGetEnvironmentByAPIKeyUpdatesLastUsedAt(t *testing.T) {
 }
 
 func TestApiKeyProtectedWhileEnvironmentReferenced(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, db, _ := setupAPIKeyService(t)
 
 	created, err := service.CreateEnvironmentApiKey(ctx, "env-referenced")
@@ -791,11 +791,11 @@ func TestApiKeyProtectedWhileEnvironmentReferenced(t *testing.T) {
 }
 
 func TestValidateAPIKeyInvalidDoesNotUpdateLastUsedAt(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, db, userService := setupAPIKeyService(t)
-	user := createTestAPIKeyUser(t, ctx, userService, "user-invalid")
+	localUser := createTestAPIKeyUser(t, ctx, userService, "user-invalid")
 
-	created, err := service.CreateApiKey(ctx, user.ID, authz.SudoPermissionSet(), apikey.CreateApiKey{Name: "invalid-key"})
+	created, err := service.CreateApiKey(ctx, localUser.ID, authz.SudoPermissionSet(), apikey.CreateApiKey{Name: "invalid-key"})
 	require.NoError(t, err)
 
 	_, err = service.ValidateApiKey(ctx, invalidateAPIKey(created.Key))
@@ -806,7 +806,7 @@ func TestValidateAPIKeyInvalidDoesNotUpdateLastUsedAt(t *testing.T) {
 }
 
 func TestValidateAPIKeyRejectsShortPrefixedInput(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, _, _ := setupAPIKeyService(t)
 
 	_, err := service.ValidateApiKey(ctx, "arc_123")
@@ -814,7 +814,7 @@ func TestValidateAPIKeyRejectsShortPrefixedInput(t *testing.T) {
 }
 
 func TestGetEnvironmentByAPIKeyExpiredDoesNotUpdateLastUsedAt(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, db, _ := setupAPIKeyService(t)
 
 	created, err := service.CreateEnvironmentApiKey(ctx, "env-expired")
@@ -832,7 +832,7 @@ func TestGetEnvironmentByAPIKeyExpiredDoesNotUpdateLastUsedAt(t *testing.T) {
 }
 
 func TestCreateEnvironmentApiKeySeedsAllPermissionsScopedToEnv(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupAPIKeyServiceTestDB(t)
 	require.NoError(t, db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_akp_uniq ON api_key_permissions(api_key_id, permission, COALESCE(environment_id, ''))").Error)
 
@@ -863,7 +863,7 @@ func TestCreateEnvironmentApiKeySeedsAllPermissionsScopedToEnv(t *testing.T) {
 }
 
 func TestBackfillApiKeyPermissionsRepairsExistingBootstrapKey(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupAPIKeyServiceTestDB(t)
 	require.NoError(t, db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_akp_uniq ON api_key_permissions(api_key_id, permission, COALESCE(environment_id, ''))").Error)
 
@@ -917,7 +917,7 @@ func TestBackfillApiKeyPermissionsRepairsExistingBootstrapKey(t *testing.T) {
 }
 
 func TestBackfillPermsForKeyDeduplicatesGlobalAndEnvironmentPermissions(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupAPIKeyServiceTestDB(t)
 
 	roleSvc := role.NewRoleService(db)
@@ -961,7 +961,7 @@ func TestBackfillPermsForKeyDeduplicatesGlobalAndEnvironmentPermissions(t *testi
 }
 
 func TestGetEnvironmentByAPIKeyRecentLastUsedAtDoesNotRewriteImmediately(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, db, _ := setupAPIKeyService(t)
 
 	created, err := service.CreateEnvironmentApiKey(ctx, "env-456")

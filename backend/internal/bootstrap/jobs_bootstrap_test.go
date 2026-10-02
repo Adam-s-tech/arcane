@@ -78,15 +78,15 @@ func TestSettingsTimeoutSyncDoesNotBlockOtherEffectsInternal(t *testing.T) {
 	lifecycle := fxtest.NewLifecycle(t)
 
 	settings := &settingsSubscriptionStubInternal{}
-	scheduler := &settingsSubscriptionSchedulerStubInternal{rescheduled: make(chan struct{})}
-	environment := &timeoutSyncEnvironmentStubInternal{started: make(chan struct{})}
+	localScheduler := &settingsSubscriptionSchedulerStubInternal{rescheduled: make(chan struct{})}
+	localEnvironment := &timeoutSyncEnvironmentStubInternal{started: make(chan struct{})}
 	require.NoError(t, setupSettingsSubscriptionsInternal(settingsSubscriptionsParams{
 		Lifecycle:    lifecycle,
-		LifecycleCtx: context.Background(),
+		LifecycleCtx: t.Context(),
 		Config:       &config.Config{},
-		Scheduler:    scheduler,
+		Scheduler:    localScheduler,
 		Settings:     settings,
-		Environment:  environment,
+		Environment:  localEnvironment,
 	}))
 
 	timeoutCallbackDone := make(chan struct{})
@@ -96,7 +96,7 @@ func TestSettingsTimeoutSyncDoesNotBlockOtherEffectsInternal(t *testing.T) {
 	}()
 
 	select {
-	case <-environment.started:
+	case <-localEnvironment.started:
 	case <-time.After(time.Second):
 		require.FailNow(t, "timeout sync did not start")
 	}
@@ -108,12 +108,12 @@ func TestSettingsTimeoutSyncDoesNotBlockOtherEffectsInternal(t *testing.T) {
 
 	settings.pollingCallback([]libarcane.SettingUpdate{{Key: "pollingEnabled", Value: "true"}})
 	select {
-	case <-scheduler.rescheduled:
+	case <-localScheduler.rescheduled:
 	case <-time.After(time.Second):
 		require.FailNow(t, "local settings effect was blocked by remote timeout sync")
 	}
 
-	stopCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	stopCtx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
 	require.NoError(t, lifecycle.Stop(stopCtx))
 }
@@ -137,7 +137,7 @@ func TestFeatureChangeReschedulesScanAndPatchJobsInternal(t *testing.T) {
 		callback([]libarcane.SettingUpdate{{Key: features.VulnerabilityManagementSettingKey, Value: "false"}})
 	}
 	require.ElementsMatch(t, []string{scheduler.VulnerabilityScanJobName, scheduler.VulnerabilityRiskJobName, scheduler.AutoPatchJobName}, schedulerStub.jobs)
-	stopCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	stopCtx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
 	require.NoError(t, lifecycle.Stop(stopCtx))
 }

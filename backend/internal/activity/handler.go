@@ -82,10 +82,10 @@ type CancelActivityInput struct {
 	RequestedBy   string `query:"requestedBy" doc:"Display name to attribute the cancellation to (used when proxying to a remote environment)"`
 }
 
-func NewHandler(activityService *ActivityService, environment EnvironmentDependencies) *ActivityHandler {
+func NewHandler(activityService *ActivityService, localEnvironment EnvironmentDependencies) *ActivityHandler {
 	return &ActivityHandler{
 		activityService: activityService,
-		environment:     environment,
+		environment:     localEnvironment,
 		remoteStreamHub: agg.NewHub[activitytypes.StreamEvent](),
 	}
 }
@@ -189,9 +189,9 @@ func (h *ActivityHandler) ClearHistory(ctx context.Context, input *ClearActivity
 	}
 
 	if input.EnvironmentID != "0" {
-		out, err := h.proxyClearHistoryInternal(ctx, input)
-		if err != nil {
-			return nil, err
+		out, proxyClearHistoryErr := h.proxyClearHistoryInternal(ctx, input)
+		if proxyClearHistoryErr != nil {
+			return nil, proxyClearHistoryErr
 		}
 		out.Body.Data.Deleted += deleted
 		return out, nil
@@ -360,20 +360,20 @@ func (h *ActivityHandler) RunRemoteStreamPollers(ctx context.Context, ps *authz.
 		})
 }
 
-func activityStreamEnvironmentVersionInternal(environment environment.Environment) string {
-	if environment.UpdatedAt == nil {
-		return environment.ID
+func activityStreamEnvironmentVersionInternal(localEnvironment environment.Environment) string {
+	if localEnvironment.UpdatedAt == nil {
+		return localEnvironment.ID
 	}
-	return environment.ID + ":" + environment.UpdatedAt.UTC().Format(time.RFC3339Nano)
+	return localEnvironment.ID + ":" + localEnvironment.UpdatedAt.UTC().Format(time.RFC3339Nano)
 }
 
-func (h *ActivityHandler) runRemoteActivityStreamPollerInternal(ctx context.Context, environment environment.Environment, limit int, publish func(activitytypes.StreamEvent)) {
-	environmentID := environment.ID
+func (h *ActivityHandler) runRemoteActivityStreamPollerInternal(ctx context.Context, localEnvironment environment.Environment, limit int, publish func(activitytypes.StreamEvent)) {
+	environmentID := localEnvironment.ID
 	lastError := ""
 	lastFingerprint := ""
 
 	poll := func() {
-		currentEnvironment := environment
+		currentEnvironment := localEnvironment
 		if h.environment.GetActiveRemoteEnvironment != nil {
 			var ok bool
 			currentEnvironment, ok = h.environment.GetActiveRemoteEnvironment(environmentID).Get()
@@ -591,23 +591,46 @@ func (h *ActivityHandler) proxyListActivitiesInternal(ctx context.Context, input
 	return out, nil
 }
 
-func (h *ActivityHandler) proxyListActivitiesForEnvironmentInternal(ctx context.Context, environment environment.Environment, input *ListActivitiesInput) (*handlerutil.Page[activitytypes.Activity], error) {
+func (
+	h *ActivityHandler,
+) proxyListActivitiesForEnvironmentInternal(
+	ctx context.Context,
+	localEnvironment environment.Environment,
+	input *ListActivitiesInput,
+) (
+	*handlerutil.Page[activitytypes.Activity],
+	error,
+) {
 	out, err := h.listRemoteActivitiesInternal(ctx, input, func(path string) (*base.Paginated[activitytypes.Activity], error) {
 		pollCtx, cancelPoll := context.WithTimeout(ctx, activityStreamRemotePollTimeout)
 		defer cancelPoll()
 		var out base.Paginated[activitytypes.Activity]
-		if err := h.environment.ProxyJSONRequestForEnvironment(pollCtx, environment, http.MethodGet, path, nil, &out); err != nil {
+		if err := h.environment.ProxyJSONRequestForEnvironment(pollCtx, localEnvironment, http.MethodGet, path, nil, &out); err != nil {
 			return nil, handlerutil.TranslateRemoteProxyError(err)
 		}
 		return &out, nil
 	})
 	if out != nil {
-		applyActivitySourceLabelsForEnvironmentInternal(environment, out.Body.Data)
+		applyActivitySourceLabelsForEnvironmentInternal(localEnvironment, out.Body.Data)
 	}
 	return out, err
 }
 
-func (h *ActivityHandler) listRemoteActivitiesInternal(ctx context.Context, input *ListActivitiesInput, fetch func(string) (*base.Paginated[activitytypes.Activity], error)) (*handlerutil.Page[activitytypes.Activity], error) {
+func (
+	h *ActivityHandler,
+) listRemoteActivitiesInternal(
+	ctx context.Context,
+	input *ListActivitiesInput,
+	fetch func(
+		string,
+	) (
+		*base.Paginated[activitytypes.Activity],
+		error,
+	),
+) (
+	*handlerutil.Page[activitytypes.Activity],
+	error,
+) {
 	params := normalizeRemoteActivityParamsInternal(activityListParamsInternal(input))
 	// The agent only ships the newest window the merged page can use, not its
 	// whole history; the stream poller repeats this every few seconds.

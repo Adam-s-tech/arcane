@@ -43,15 +43,15 @@ func (s *ProjectService) UpdateProject(ctx context.Context, projectID string, na
 
 	name = resolveAuthoritativeProjectNameInternal(ctx, &proj, name, composeContent)
 	renameRequested := isProjectRenameRequestedInternal(&proj, name)
-	if err := s.recoverProjectRenameJournalForProjectInternal(ctx, projectID); err != nil {
+	if recoverProjectRenameJournalForProjectErr := s.recoverProjectRenameJournalForProjectInternal(ctx, projectID); recoverProjectRenameJournalForProjectErr != nil {
 		if renameRequested {
-			return nil, err
+			return nil, recoverProjectRenameJournalForProjectErr
 		}
-		slog.WarnContext(ctx, "project rename journal recovery failed before non-rename update; continuing", "projectID", projectID, "error", err)
+		slog.WarnContext(ctx, "project rename journal recovery failed before non-rename update; continuing", "projectID", projectID, "error", recoverProjectRenameJournalForProjectErr)
 	} else {
-		proj, projectsDirectory, err = s.getProjectForUpdate(ctx, projectID)
-		if err != nil {
-			return nil, err
+		proj, projectsDirectory, recoverProjectRenameJournalForProjectErr = s.getProjectForUpdate(ctx, projectID)
+		if recoverProjectRenameJournalForProjectErr != nil {
+			return nil, recoverProjectRenameJournalForProjectErr
 		}
 		name = resolveAuthoritativeProjectNameInternal(ctx, &proj, name, composeContent)
 	}
@@ -59,11 +59,11 @@ func (s *ProjectService) UpdateProject(ctx context.Context, projectID string, na
 	if proj.IsArchived {
 		return nil, common.Classify(common.ErrProjectArchived, errors.New("project is archived and must be unarchived before this action"))
 	}
-	if err := ensureProjectEnvReadableInternal(ctx, projectsDirectory, proj.Path); err != nil {
-		return nil, err
+	if ensureProjectEnvReadableErr := ensureProjectEnvReadableInternal(ctx, projectsDirectory, proj.Path); ensureProjectEnvReadableErr != nil {
+		return nil, ensureProjectEnvReadableErr
 	}
-	if err := s.ensureProjectStoppedForRenameInternal(ctx, &proj, name); err != nil {
-		return nil, err
+	if ensureProjectStoppedForRenameErr := s.ensureProjectStoppedForRenameInternal(ctx, &proj, name); ensureProjectStoppedForRenameErr != nil {
+		return nil, ensureProjectStoppedForRenameErr
 	}
 
 	volumeMigration, err := s.prepareProjectRenameVolumeMigrationForUpdateInternal(ctx, &proj, name, projectsDirectory, composeContent, envContent, overrideContent)
@@ -81,17 +81,29 @@ func (s *ProjectService) UpdateProject(ctx context.Context, projectID string, na
 
 	journalActive := renameJournal != nil
 	if journalActive {
-		if err := s.writeProjectRenameJournalInternal(ctx, renameJournal, projecttypes.RenameJournalPhaseStarted); err != nil {
-			return nil, err
+		if writeProjectRenameJournalErr := s.writeProjectRenameJournalInternal(ctx, renameJournal, projecttypes.RenameJournalPhaseStarted); writeProjectRenameJournalErr != nil {
+			return nil, writeProjectRenameJournalErr
 		}
 	}
 
 	projectStateCommitted := false
-	if err := withProjectRenameRollbackInternal(ctx, &proj, &projectStateCommitted, func() error {
-		return s.applyProjectUpdateWithRenameJournalInternal(ctx, &proj, name, projectsDirectory, composeContent, envContent, overrideContent, volumeMigration, renameJournal, &journalActive, &projectStateCommitted)
-	}); err != nil {
-		err = s.handleProjectUpdateFailureInternal(ctx, projectID, projectsDirectory, &proj, backup, &journalActive, projectStateCommitted, err)
-		return nil, err
+	if withProjectRenameRollbackErr := withProjectRenameRollbackInternal(ctx, &proj, &projectStateCommitted, func() error {
+		return s.applyProjectUpdateWithRenameJournalInternal(
+			ctx,
+			&proj,
+			name,
+			projectsDirectory,
+			composeContent,
+			envContent,
+			overrideContent,
+			volumeMigration,
+			renameJournal,
+			&journalActive,
+			&projectStateCommitted,
+		)
+	}); withProjectRenameRollbackErr != nil {
+		withProjectRenameRollbackErr = s.handleProjectUpdateFailureInternal(ctx, projectID, projectsDirectory, &proj, backup, &journalActive, projectStateCommitted, withProjectRenameRollbackErr)
+		return nil, withProjectRenameRollbackErr
 	}
 
 	s.refreshProjectAfterContentUpdateInternal(ctx, &proj, composeContent, overrideContent)
@@ -111,7 +123,15 @@ func ensureProjectEnvReadableInternal(ctx context.Context, projectsDirectory, pr
 	if cfgErr == nil || !cfgErr.BlocksOperations {
 		return nil
 	}
-	return common.Classify(common.ErrProjectEnvUnreadable, fmt.Errorf("%s is not readable by the runtime user (uid %d, gid %d); fix its ownership/read permission or set PUID/PGID to a user that can read it", cfgErr.Path, cfgErr.UID, cfgErr.GID))
+	return common.Classify(
+		common.ErrProjectEnvUnreadable,
+		fmt.Errorf(
+			"%s is not readable by the runtime user (uid %d, gid %d); fix its ownership/read permission or set PUID/PGID to a user that can read it",
+			cfgErr.Path,
+			cfgErr.UID,
+			cfgErr.GID,
+		),
+	)
 }
 
 // resolveAuthoritativeProjectNameInternal enforces that a top-level `name:` in
@@ -135,7 +155,17 @@ func resolveAuthoritativeProjectNameInternal(ctx context.Context, proj *Project,
 	return name
 }
 
-func (s *ProjectService) prepareProjectUpdateBackupInternal(ctx context.Context, projectsDirectory, projectPath string, composeContent, envContent, overrideContent *string) (*projects.ProjectUpdateBackup, func(), error) {
+func (
+	s *ProjectService,
+) prepareProjectUpdateBackupInternal(
+	ctx context.Context,
+	projectsDirectory, projectPath string,
+	composeContent, envContent, overrideContent *string,
+) (
+	*projects.ProjectUpdateBackup,
+	func(),
+	error,
+) {
 	if composeContent == nil && envContent == nil && overrideContent == nil {
 		return nil, func() {}, nil
 	}
@@ -148,7 +178,20 @@ func (s *ProjectService) prepareProjectUpdateBackupInternal(ctx context.Context,
 	return projects.BackupProjectDirectory(ctx, projectsDirectory, projectPath, ".project-update-backup-*", scope)
 }
 
-func (s *ProjectService) applyProjectUpdateWithRenameJournalInternal(ctx context.Context, proj *Project, name *string, projectsDirectory string, composeContent, envContent, overrideContent *string, volumeMigration volumetypes.Migration, renameJournal *projecttypes.RenameJournal, journalActive, projectStateCommitted *bool) (err error) {
+func (
+	s *ProjectService,
+) applyProjectUpdateWithRenameJournalInternal(
+	ctx context.Context,
+	proj *Project,
+	name *string,
+	projectsDirectory string,
+	composeContent, envContent, overrideContent *string,
+	volumeMigration volumetypes.Migration,
+	renameJournal *projecttypes.RenameJournal,
+	journalActive, projectStateCommitted *bool,
+) (
+	err error,
+) {
 	volumeMigrationApplied := false
 	defer func() {
 		stateCommitted := projectStateCommitted != nil && *projectStateCommitted
@@ -159,17 +202,17 @@ func (s *ProjectService) applyProjectUpdateWithRenameJournalInternal(ctx context
 		}
 	}()
 
-	if err = s.applyProjectRenameIfNeeded(ctx, proj, name, projectsDirectory); err != nil {
-		return err
+	if renameErr := s.applyProjectRenameIfNeeded(ctx, proj, name, projectsDirectory); renameErr != nil {
+		return renameErr
 	}
-	if err = s.persistUpdatedProjectFiles(ctx, proj, projectsDirectory, composeContent, envContent, overrideContent); err != nil {
-		return err
+	if persistFilesErr := s.persistUpdatedProjectFiles(ctx, proj, projectsDirectory, composeContent, envContent, overrideContent); persistFilesErr != nil {
+		return persistFilesErr
 	}
-	if err = projects.ApplyRenameVolumeMigration(ctx, s.renameRecoveryOperationsInternal(), volumeMigration, renameJournal, &volumeMigrationApplied); err != nil {
-		return err
+	if migrationErr := projects.ApplyRenameVolumeMigration(ctx, s.renameRecoveryOperationsInternal(), volumeMigration, renameJournal, &volumeMigrationApplied); migrationErr != nil {
+		return migrationErr
 	}
-	if err = s.saveProjectUpdateInternal(ctx, proj); err != nil {
-		return err
+	if saveProjectErr := s.saveProjectUpdateInternal(ctx, proj); saveProjectErr != nil {
+		return saveProjectErr
 	}
 	if projectStateCommitted != nil {
 		*projectStateCommitted = true
@@ -201,7 +244,17 @@ func (s *ProjectService) saveProjectUpdateInternal(ctx context.Context, proj *Pr
 	return nil
 }
 
-func (s *ProjectService) handleProjectUpdateFailureInternal(ctx context.Context, projectID, projectsDirectory string, proj *Project, backup *projects.ProjectUpdateBackup, journalActive *bool, projectStateCommitted bool, err error) error {
+func (
+	s *ProjectService,
+) handleProjectUpdateFailureInternal(
+	ctx context.Context,
+	projectID, projectsDirectory string,
+	proj *Project,
+	backup *projects.ProjectUpdateBackup,
+	journalActive *bool,
+	projectStateCommitted bool,
+	err error,
+) error {
 	if projectStateCommitted {
 		return err
 	}
@@ -254,7 +307,19 @@ func (s *ProjectService) refreshProjectAfterContentUpdateInternal(ctx context.Co
 	}
 }
 
-func (s *ProjectService) ApplyGitSyncProjectFiles(ctx context.Context, projectID, composeContent string, gitEnvContent, gitOverrideContent *string, gitOverrideFileName string, user common.User) (*Project, bool, error) {
+func (
+	s *ProjectService,
+) ApplyGitSyncProjectFiles(
+	ctx context.Context,
+	projectID, composeContent string,
+	gitEnvContent, gitOverrideContent *string,
+	gitOverrideFileName string,
+	user common.User,
+) (
+	*Project,
+	bool,
+	error,
+) {
 	proj, projectsDirectory, err := s.getProjectForUpdate(ctx, projectID)
 	if err != nil {
 		return nil, false, err
@@ -269,8 +334,18 @@ func (s *ProjectService) ApplyGitSyncProjectFiles(ctx context.Context, projectID
 		return nil, false, fmt.Errorf("failed to resolve git env state: %w", err)
 	}
 
-	if err := projects.ValidateComposeContentForUpdate(ctx, projectsDirectory, proj.Path, proj.Name, composeContent, envUpdate.effectiveContent, gitOverrideContent, gitOverrideFileName, true); err != nil {
-		return nil, false, fmt.Errorf("invalid compose file: %w", err)
+	if validateComposeContentForUpdateErr := projects.ValidateComposeContentForUpdate(
+		ctx,
+		projectsDirectory,
+		proj.Path,
+		proj.Name,
+		composeContent,
+		envUpdate.effectiveContent,
+		gitOverrideContent,
+		gitOverrideFileName,
+		true,
+	); validateComposeContentForUpdateErr != nil {
+		return nil, false, fmt.Errorf("invalid compose file: %w", validateComposeContentForUpdateErr)
 	}
 
 	backup, cleanupBackup, err := s.prepareProjectUpdateBackupInternal(ctx, projectsDirectory, proj.Path, &composeContent, gitEnvContent, gitOverrideContent)
@@ -281,22 +356,31 @@ func (s *ProjectService) ApplyGitSyncProjectFiles(ctx context.Context, projectID
 
 	journalActive := false
 	projectStateCommitted := false
-	if err := s.applyGitSyncProjectFilesInternal(ctx, &proj, projectsDirectory, composeContent, envUpdate, gitOverrideContent, gitOverrideFileName, &projectStateCommitted); err != nil {
+	if applyGitSyncProjectFilesErr := s.applyGitSyncProjectFilesInternal(
+		ctx,
+		&proj,
+		projectsDirectory,
+		composeContent,
+		envUpdate,
+		gitOverrideContent,
+		gitOverrideFileName,
+		&projectStateCommitted,
+	); applyGitSyncProjectFilesErr != nil {
 		// A failure after the env persist would otherwise leave the project with
 		// new env values and an old or partially updated compose file set.
-		err = s.handleProjectUpdateFailureInternal(ctx, projectID, projectsDirectory, &proj, backup, &journalActive, projectStateCommitted, err)
-		return nil, false, err
+		applyGitSyncProjectFilesErr = s.handleProjectUpdateFailureInternal(ctx, projectID, projectsDirectory, &proj, backup, &journalActive, projectStateCommitted, applyGitSyncProjectFilesErr)
+		return nil, false, applyGitSyncProjectFilesErr
 	}
 
 	s.refreshComposeProjectNameInternal(ctx, &proj)
 	s.refreshProjectImageRefsInternal(ctx, &proj)
-	if err := s.reconcileComposeTagsForProjectInternal(ctx, &proj); err != nil {
-		slog.WarnContext(ctx, "failed to reconcile Compose project tags after git sync", "projectID", proj.ID, "error", err)
+	if reconcileComposeTagsForProjectErr := s.reconcileComposeTagsForProjectInternal(ctx, &proj); reconcileComposeTagsForProjectErr != nil {
+		slog.WarnContext(ctx, "failed to reconcile Compose project tags after git sync", "projectID", proj.ID, "error", reconcileComposeTagsForProjectErr)
 	}
 
 	// Recalculate service counts and status after compose file sync
-	if err := s.updateProjectStatusandCountsInternal(ctx, proj.ID, proj.Status); err != nil {
-		slog.WarnContext(ctx, "failed to update service counts after git sync", "projectID", proj.ID, "error", err)
+	if updateProjectStatusandCountsErr := s.updateProjectStatusandCountsInternal(ctx, proj.ID, proj.Status); updateProjectStatusandCountsErr != nil {
+		slog.WarnContext(ctx, "failed to update service counts after git sync", "projectID", proj.ID, "error", updateProjectStatusandCountsErr)
 	}
 
 	after := s.readGitSyncProjectContentInternal(ctx, proj.ID)
@@ -354,7 +438,17 @@ func (s *ProjectService) logGitSyncProjectUpdateInternal(ctx context.Context, pr
 // WriteComposeFile targets the COMPOSE_FILE base the updated .env selects, not
 // the one the old .env selected. When it fails before the project row is saved,
 // the caller restores the pre-update backup.
-func (s *ProjectService) applyGitSyncProjectFilesInternal(ctx context.Context, proj *Project, projectsDirectory, composeContent string, envUpdate gitSyncEnvUpdateInternal, gitOverrideContent *string, gitOverrideFileName string, projectStateCommitted *bool) error {
+func (
+	s *ProjectService,
+) applyGitSyncProjectFilesInternal(
+	ctx context.Context,
+	proj *Project,
+	projectsDirectory, composeContent string,
+	envUpdate gitSyncEnvUpdateInternal,
+	gitOverrideContent *string,
+	gitOverrideFileName string,
+	projectStateCommitted *bool,
+) error {
 	if err := persistGitSyncEnvFilesInternal(ctx, proj.Path, projectsDirectory, envUpdate); err != nil {
 		return fmt.Errorf("failed to sync git env files: %w", err)
 	}
@@ -387,14 +481,25 @@ func (s *ProjectService) getProjectForUpdate(ctx context.Context, projectID stri
 		return Project{}, "", fmt.Errorf("failed to get projects directory: %w", err)
 	}
 
-	if err := s.EnsureProjectPathUnderRoot(ctx, &proj, false); err != nil {
-		return Project{}, "", err
+	if ensureProjectPathUnderRootErr := s.EnsureProjectPathUnderRoot(ctx, &proj, false); ensureProjectPathUnderRootErr != nil {
+		return Project{}, "", ensureProjectPathUnderRootErr
 	}
 
 	return proj, projectsDirectory, nil
 }
 
-func (s *ProjectService) prepareProjectRenameVolumeMigrationForUpdateInternal(ctx context.Context, proj *Project, name *string, projectsDirectory string, composeContent, envContent, overrideContent *string) (volumetypes.Migration, error) {
+func (
+	s *ProjectService,
+) prepareProjectRenameVolumeMigrationForUpdateInternal(
+	ctx context.Context,
+	proj *Project,
+	name *string,
+	projectsDirectory string,
+	composeContent, envContent, overrideContent *string,
+) (
+	volumetypes.Migration,
+	error,
+) {
 	if !isProjectRenameRequestedInternal(proj, name) {
 		return nil, nil
 	}
@@ -418,14 +523,14 @@ func (s *ProjectService) prepareProjectRenameVolumeMigrationForUpdateInternal(ct
 		}
 	}()
 
-	if _, err := acfs.CopyDir(ctx, proj.Path, previewPath, acfstypes.CopyOptions{}); err != nil {
-		return nil, fmt.Errorf("failed to prepare project update preview: %w", err)
+	if _, copyDirErr := acfs.CopyDir(ctx, proj.Path, previewPath, acfstypes.CopyOptions{}); copyDirErr != nil {
+		return nil, fmt.Errorf("failed to prepare project update preview: %w", copyDirErr)
 	}
 
 	previewProject := *proj
 	previewProject.Path = previewPath
-	if err := s.persistUpdatedProjectFiles(ctx, &previewProject, projectsDirectory, composeContent, envContent, overrideContent); err != nil {
-		return nil, fmt.Errorf("failed to prepare project update preview: %w", err)
+	if persistUpdatedProjectFilesErr := s.persistUpdatedProjectFiles(ctx, &previewProject, projectsDirectory, composeContent, envContent, overrideContent); persistUpdatedProjectFilesErr != nil {
+		return nil, fmt.Errorf("failed to prepare project update preview: %w", persistUpdatedProjectFilesErr)
 	}
 
 	return s.prepareProjectRenameVolumeMigrationInternal(ctx, &previewProject, name)
@@ -493,25 +598,35 @@ func (s *ProjectService) persistUpdatedProjectFiles(ctx context.Context, proj *P
 			return fmt.Errorf("invalid compose file: %w", err)
 		}
 		valOverride, valOverrideName := projects.ResolveEffectiveOverrideForValidation(proj.Path, overrideContent)
-		if err := projects.ValidateComposeContentForUpdate(ctx, projectsDirectory, proj.Path, proj.Name, *composeContent, effectiveEnvContent, valOverride, valOverrideName, false); err != nil {
-			return fmt.Errorf("invalid compose file: %w", err)
+		if validateComposeContentForUpdateErr := projects.ValidateComposeContentForUpdate(
+			ctx,
+			projectsDirectory,
+			proj.Path,
+			proj.Name,
+			*composeContent,
+			effectiveEnvContent,
+			valOverride,
+			valOverrideName,
+			false,
+		); validateComposeContentForUpdateErr != nil {
+			return fmt.Errorf("invalid compose file: %w", validateComposeContentForUpdateErr)
 		}
 		// The env is persisted first so WriteComposeFile targets the COMPOSE_FILE
 		// base the updated .env selects, not the one the old .env selected. A
 		// non-nil composeContent is an explicit submission and is always written;
 		// clients omit it when the compose editor is unchanged.
 		if envContent != nil {
-			if err := persistEffectiveEnvContentInternal(ctx, proj.Path, projectsDirectory, *envContent); err != nil {
-				return fmt.Errorf("failed to save project files: %w", err)
+			if persistEffectiveEnvContentErr := persistEffectiveEnvContentInternal(ctx, proj.Path, projectsDirectory, *envContent); persistEffectiveEnvContentErr != nil {
+				return fmt.Errorf("failed to save project files: %w", persistEffectiveEnvContentErr)
 			}
-		} else if err := s.ensureEffectiveEnvFileInternal(ctx, proj.Path, projectsDirectory); err != nil {
-			return fmt.Errorf("failed to save project files: %w", err)
+		} else if ensureEffectiveEnvFileErr := s.ensureEffectiveEnvFileInternal(ctx, proj.Path, projectsDirectory); ensureEffectiveEnvFileErr != nil {
+			return fmt.Errorf("failed to save project files: %w", ensureEffectiveEnvFileErr)
 		}
-		if err := projects.WriteComposeFile(ctx, projectsDirectory, proj.Path, *composeContent); err != nil {
-			return fmt.Errorf("failed to save project files: %w", err)
+		if writeComposeFileErr := projects.WriteComposeFile(ctx, projectsDirectory, proj.Path, *composeContent); writeComposeFileErr != nil {
+			return fmt.Errorf("failed to save project files: %w", writeComposeFileErr)
 		}
-		if err := projects.ApplyOverrideFileChange(ctx, projectsDirectory, proj.Path, overrideContent); err != nil {
-			return fmt.Errorf("failed to save project files: %w", err)
+		if applyOverrideFileChangeErr := projects.ApplyOverrideFileChange(ctx, projectsDirectory, proj.Path, overrideContent); applyOverrideFileChangeErr != nil {
+			return fmt.Errorf("failed to save project files: %w", applyOverrideFileChangeErr)
 		}
 	case overrideContent != nil:
 		if err := s.persistOverrideOnlyUpdateInternal(ctx, proj, projectsDirectory, envContent, overrideContent); err != nil {
@@ -541,16 +656,26 @@ func (s *ProjectService) persistOverrideOnlyUpdateInternal(ctx context.Context, 
 		return fmt.Errorf("invalid compose file: %w", err)
 	}
 	valOverride, valOverrideName := projects.ResolveEffectiveOverrideForValidation(proj.Path, overrideContent)
-	if err := projects.ValidateComposeContentForUpdate(ctx, projectsDirectory, proj.Path, proj.Name, baseContent, effectiveEnvContent, valOverride, valOverrideName, false); err != nil {
-		return fmt.Errorf("invalid compose file: %w", err)
+	if validateComposeContentForUpdateErr := projects.ValidateComposeContentForUpdate(
+		ctx,
+		projectsDirectory,
+		proj.Path,
+		proj.Name,
+		baseContent,
+		effectiveEnvContent,
+		valOverride,
+		valOverrideName,
+		false,
+	); validateComposeContentForUpdateErr != nil {
+		return fmt.Errorf("invalid compose file: %w", validateComposeContentForUpdateErr)
 	}
 	if envContent != nil {
-		if err := persistEffectiveEnvContentInternal(ctx, proj.Path, projectsDirectory, *envContent); err != nil {
-			return fmt.Errorf("failed to save project files: %w", err)
+		if persistEffectiveEnvContentErr := persistEffectiveEnvContentInternal(ctx, proj.Path, projectsDirectory, *envContent); persistEffectiveEnvContentErr != nil {
+			return fmt.Errorf("failed to save project files: %w", persistEffectiveEnvContentErr)
 		}
 	}
-	if err := projects.ApplyOverrideFileChange(ctx, projectsDirectory, proj.Path, overrideContent); err != nil {
-		return fmt.Errorf("failed to save project files: %w", err)
+	if applyOverrideFileChangeErr := projects.ApplyOverrideFileChange(ctx, projectsDirectory, proj.Path, overrideContent); applyOverrideFileChangeErr != nil {
+		return fmt.Errorf("failed to save project files: %w", applyOverrideFileChangeErr)
 	}
 	return nil
 }
@@ -622,8 +747,8 @@ func (s *ProjectService) applyProjectRenameIfNeeded(ctx context.Context, proj *P
 		if currentErr != nil {
 			// The cross-root move cannot go through acfs, so the cancellation
 			// check acfs.Rename performs happens here instead.
-			if err := ctx.Err(); err != nil {
-				return err
+			if cancellationErr := ctx.Err(); cancellationErr != nil {
+				return cancellationErr
 			}
 			err = os.Rename(currentPath, targetPath)
 		} else {
@@ -663,8 +788,8 @@ func (s *ProjectService) activeProjectRenameSyncStateInternal(ctx context.Contex
 
 	for _, entry := range entries {
 		var journal projecttypes.RenameJournal
-		if err := json.Unmarshal([]byte(entry.Value), &journal); err != nil {
-			slog.WarnContext(ctx, "failed to decode project rename journal during filesystem sync", "key", entry.Key, "error", err)
+		if unmarshalErr := json.Unmarshal([]byte(entry.Value), &journal); unmarshalErr != nil {
+			slog.WarnContext(ctx, "failed to decode project rename journal during filesystem sync", "key", entry.Key, "error", unmarshalErr)
 			continue
 		}
 		if !projects.RenameJournalFilesystemSyncPending(journal.Phase) {
@@ -775,8 +900,8 @@ func (s *ProjectService) writeProjectRenameJournalInternal(ctx context.Context, 
 		return fmt.Errorf("marshal project rename journal: %w", err)
 	}
 
-	if err := s.KVService.Set(ctx, projecttypes.RenameJournalKeyPrefix+journal.ProjectID, string(payload)); err != nil {
-		return fmt.Errorf("write project rename journal: %w", err)
+	if setErr := s.KVService.Set(ctx, projecttypes.RenameJournalKeyPrefix+journal.ProjectID, string(payload)); setErr != nil {
+		return fmt.Errorf("write project rename journal: %w", setErr)
 	}
 	return nil
 }
@@ -806,8 +931,8 @@ func (s *ProjectService) writeProjectRenameRollbackCleanupInternal(ctx context.C
 	if err != nil {
 		return fmt.Errorf("marshal project rename rollback cleanup: %w", err)
 	}
-	if err := s.KVService.Set(ctx, projecttypes.RenameRollbackCleanupKeyPrefix+journal.ProjectID, string(payload)); err != nil {
-		return fmt.Errorf("write project rename rollback cleanup: %w", err)
+	if setErr := s.KVService.Set(ctx, projecttypes.RenameRollbackCleanupKeyPrefix+journal.ProjectID, string(payload)); setErr != nil {
+		return fmt.Errorf("write project rename rollback cleanup: %w", setErr)
 	}
 	return nil
 }
@@ -832,12 +957,12 @@ func (s *ProjectService) RecoverProjectRenameJournals(ctx context.Context) error
 	var recoverErr error
 	for _, entry := range entries {
 		var journal projecttypes.RenameJournal
-		if err := json.Unmarshal([]byte(entry.Value), &journal); err != nil {
-			recoverErr = errors.Join(recoverErr, fmt.Errorf("decode project rename journal %s: %w", entry.Key, err))
+		if unmarshalErr := json.Unmarshal([]byte(entry.Value), &journal); unmarshalErr != nil {
+			recoverErr = errors.Join(recoverErr, fmt.Errorf("decode project rename journal %s: %w", entry.Key, unmarshalErr))
 			continue
 		}
-		if err := s.recoverProjectRenameJournalInternal(ctx, &journal); err != nil {
-			recoverErr = errors.Join(recoverErr, fmt.Errorf("recover project rename journal %s: %w", entry.Key, err))
+		if recoverProjectRenameJournalErr := s.recoverProjectRenameJournalInternal(ctx, &journal); recoverProjectRenameJournalErr != nil {
+			recoverErr = errors.Join(recoverErr, fmt.Errorf("recover project rename journal %s: %w", entry.Key, recoverProjectRenameJournalErr))
 			continue
 		}
 	}
@@ -855,8 +980,8 @@ func (s *ProjectService) recoverProjectRenameJournalForProjectInternal(ctx conte
 	}
 
 	var journal projecttypes.RenameJournal
-	if err := json.Unmarshal([]byte(raw), &journal); err != nil {
-		return fmt.Errorf("decode project rename journal: %w", err)
+	if unmarshalErr := json.Unmarshal([]byte(raw), &journal); unmarshalErr != nil {
+		return fmt.Errorf("decode project rename journal: %w", unmarshalErr)
 	}
 	return s.recoverProjectRenameJournalInternal(ctx, &journal)
 }
@@ -889,12 +1014,12 @@ func (s *ProjectService) recoverProjectRenameRollbackCleanupsInternal(ctx contex
 	var recoverErr error
 	for _, entry := range entries {
 		var cleanup projecttypes.RenameRollbackCleanup
-		if err := json.Unmarshal([]byte(entry.Value), &cleanup); err != nil {
-			recoverErr = errors.Join(recoverErr, fmt.Errorf("decode project rename rollback cleanup %s: %w", entry.Key, err))
+		if unmarshalErr := json.Unmarshal([]byte(entry.Value), &cleanup); unmarshalErr != nil {
+			recoverErr = errors.Join(recoverErr, fmt.Errorf("decode project rename rollback cleanup %s: %w", entry.Key, unmarshalErr))
 			continue
 		}
-		if err := s.recoverProjectRenameRollbackCleanupInternal(ctx, &cleanup); err != nil {
-			recoverErr = errors.Join(recoverErr, fmt.Errorf("recover project rename rollback cleanup %s: %w", entry.Key, err))
+		if recoverProjectRenameRollbackCleanupErr := s.recoverProjectRenameRollbackCleanupInternal(ctx, &cleanup); recoverProjectRenameRollbackCleanupErr != nil {
+			recoverErr = errors.Join(recoverErr, fmt.Errorf("recover project rename rollback cleanup %s: %w", entry.Key, recoverProjectRenameRollbackCleanupErr))
 			continue
 		}
 	}
@@ -997,8 +1122,8 @@ func (s *ProjectService) persistProjectImageChangesInternal(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	if err := persistProjectServiceImagesInternal(ctx, proj.Path, logical, original, updated); err != nil {
-		return nil, err
+	if persistProjectServiceImagesErr := persistProjectServiceImagesInternal(ctx, proj.Path, logical, original, updated); persistProjectServiceImagesErr != nil {
+		return nil, persistProjectServiceImagesErr
 	}
 	s.invalidateProjectCachesInternal(projectID)
 	// Keep the desired source on deployment failure: Compose may have partially
@@ -1164,8 +1289,8 @@ func persistProjectServiceImagesInternal(ctx context.Context, projectPath, logic
 	if !bytes.Equal(current, original) {
 		return errors.New("Compose source changed during the image update; check updates again") //nolint:staticcheck // Preserve the existing error message.
 	}
-	if err := acfs.Write(ctx, projectPath, logical, updated, acfs.WriteOptions{Mode: os.FileMode(entry.UnixMode).Perm()}); err != nil {
-		return fmt.Errorf("persist Compose image changes: %w", err)
+	if writeErr := acfs.Write(ctx, projectPath, logical, updated, acfs.WriteOptions{Mode: os.FileMode(entry.UnixMode).Perm()}); writeErr != nil {
+		return fmt.Errorf("persist Compose image changes: %w", writeErr)
 	}
 	return nil
 }

@@ -61,7 +61,9 @@ func RegisterBuildWorkspaces(api huma.API, workspaceService *BuildWorkspaceServi
 		Method:      "POST",
 		Path:        "/environments/{id}/builds/browse/upload",
 		Summary:     "Upload build workspace file",
-		Description: "Copy a complete chunked upload session into the builds workspace root. multipart/form-data bodies are still accepted for backward compatibility; that form is deprecated and will be removed in a future release.",
+		Description: "Copy a complete chunked upload session into the builds workspace root. multipart/form-data bodies " +
+			"are still accepted for backward compatibility; that form is deprecated and will be removed in a " +
+			"future release.",
 		Tags:        []string{"Builds"},
 		Security:    handlerutil.DefaultOperationSecurity(),
 		Middlewares: upload.LegacyMultipartMiddleware(api, uploadService, uploadtypes.KindBuildWorkspace),
@@ -174,8 +176,8 @@ func (h *BuildWorkspaceHandler) UploadFile(ctx context.Context, input *UploadBui
 	}
 	defer cleanup()
 
-	if err := h.service.UploadFile(ctx, input.Path, file, session.Filename, session.Size); err != nil {
-		return nil, huma.Error500InternalServerError(err.Error())
+	if uploadFileErr := h.service.UploadFile(ctx, input.Path, file, session.Filename, session.Size); uploadFileErr != nil {
+		return nil, huma.Error500InternalServerError(uploadFileErr.Error())
 	}
 	return &base.ApiResponse[base.MessageResponse]{
 		Success: true,

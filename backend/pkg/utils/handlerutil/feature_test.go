@@ -29,7 +29,12 @@ func TestFeatureDisabledError(t *testing.T) {
 			require.Equal(t, tt.wantContentType, err.ContentType(tt.contentType))
 			encoded, marshalErr := json.Marshal(err)
 			require.NoError(t, marshalErr)
-			require.JSONEq(t, `{"status":403,"title":"Forbidden","detail":"feature vulnerabilityManagement is disabled","code":"feature_disabled","feature":"vulnerabilityManagement"}`, string(encoded))
+			require.JSONEq(
+				t,
+				"{\"status\":403,\"title\":\"Forbidden\",\"detail\":\"feature vulnerabilityManagement is disabled\",\"code\":\"fea"+
+					"ture_disabled\",\"feature\":\"vulnerabilityManagement\"}",
+				string(encoded),
+			)
 		})
 	}
 }

@@ -73,7 +73,7 @@ func (logrusSlogHook) Fire(entry *logrus.Entry) error {
 
 	ctx := entry.Context
 	if ctx == nil {
-		ctx = context.Background()
+		ctx = context.Background() //nolint:forbidigo // Legacy log entry has no context; logging still needs an empty root.
 	}
 	message := strings.TrimSpace(entry.Message)
 	slog.Log(ctx, level, message, args...)

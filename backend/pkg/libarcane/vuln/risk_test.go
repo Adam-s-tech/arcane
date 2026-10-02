@@ -3,6 +3,7 @@ package vuln
 import (
 	"fmt"
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/getarcaneapp/arcane/types/v2/vulnerability"
@@ -12,8 +13,22 @@ import (
 func TestBuildScanInsights(t *testing.T) {
 	vulns := []vulnerability.Vulnerability{
 		{VulnerabilityID: "CVE-LOW", PkgName: "zlib", InstalledVersion: "1.0.0", Severity: vulnerability.SeverityLow, CVSS: &vulnerability.CVSSInfo{V3Score: 3}},
-		{VulnerabilityID: "CVE-HIGH-1", PkgName: "openssl", InstalledVersion: "3.0.0", FixedVersion: "3.0.2", Severity: vulnerability.SeverityHigh, CVSS: &vulnerability.CVSSInfo{V3Score: 7.5}},
-		{VulnerabilityID: "CVE-HIGH-2", PkgName: "openssl", InstalledVersion: "3.0.0", FixedVersion: "3.0.10", Severity: vulnerability.SeverityHigh, CVSS: &vulnerability.CVSSInfo{V2Score: 7.8}},
+		{
+			VulnerabilityID:  "CVE-HIGH-1",
+			PkgName:          "openssl",
+			InstalledVersion: "3.0.0",
+			FixedVersion:     "3.0.2",
+			Severity:         vulnerability.SeverityHigh,
+			CVSS:             &vulnerability.CVSSInfo{V3Score: 7.5},
+		},
+		{
+			VulnerabilityID:  "CVE-HIGH-2",
+			PkgName:          "openssl",
+			InstalledVersion: "3.0.0",
+			FixedVersion:     "3.0.10",
+			Severity:         vulnerability.SeverityHigh,
+			CVSS:             &vulnerability.CVSSInfo{V2Score: 7.8},
+		},
 		{VulnerabilityID: "CVE-MED", PkgName: "curl", InstalledVersion: "8.0.0", Severity: vulnerability.SeverityMedium},
 	}
 
@@ -28,7 +43,17 @@ func TestBuildScanInsights(t *testing.T) {
 	require.Equal(t, vulnerability.ScoreStatusComplete, insights.ScoreStatus)
 
 	require.Len(t, insights.TopPackages, 3)
-	require.Equal(t, vulnerability.PackageInsight{PkgName: "openssl", Severity: vulnerability.SeverityHigh, Count: 2, InstalledVersion: "3.0.0", FixedVersion: "3.0.10"}, insights.TopPackages[0])
+	require.Equal(
+		t,
+		vulnerability.PackageInsight{
+			PkgName:          "openssl",
+			Severity:         vulnerability.SeverityHigh,
+			Count:            2,
+			InstalledVersion: "3.0.0",
+			FixedVersion:     "3.0.10",
+		},
+		insights.TopPackages[0],
+	)
 	require.Equal(t, "curl", insights.TopPackages[1].PkgName)
 	require.Equal(t, "zlib", insights.TopPackages[2].PkgName)
 }
@@ -39,7 +64,19 @@ func TestBuildScanInsights_VolumeSaturatesWithDiminishingReturns(t *testing.T) {
 		intel := map[string]ThreatIntel{}
 		for i := range n {
 			id := fmt.Sprintf("CVE-%d", i)
-			vulns = append(vulns, vulnerability.Vulnerability{VulnerabilityID: id, PkgName: fmt.Sprintf("pkg-%d", i), FixedVersion: "1.0.1", Severity: severity, CVSS: &vulnerability.CVSSInfo{V3Score: cvss}})
+			vulns = append(
+				vulns,
+				vulnerability.Vulnerability{
+					VulnerabilityID: id,
+					PkgName: fmt.Sprintf(
+						"pkg-%d",
+						i,
+					),
+					FixedVersion: "1.0.1",
+					Severity:     severity,
+					CVSS:         &vulnerability.CVSSInfo{V3Score: cvss},
+				},
+			)
 			intel[id] = ThreatIntel{KnownExploited: knownExploited, EPSS: new(0.0)}
 		}
 		return vulns, intel
@@ -105,7 +142,16 @@ func TestBuildScanInsights_UnknownSeverity(t *testing.T) {
 	require.Equal(t, vulnerability.ScoreStatusUnavailable, insights.ScoreStatus)
 	require.Zero(t, insights.RiskScore)
 
-	mixed := append(unscored, vulnerability.Vulnerability{VulnerabilityID: "CVE-KEV", PkgName: "bar", FixedVersion: "1.1", Severity: vulnerability.SeverityMedium, CVSS: &vulnerability.CVSSInfo{V3Score: 6}})
+	mixed := append(
+		slices.Clone(unscored),
+		vulnerability.Vulnerability{
+			VulnerabilityID: "CVE-KEV",
+			PkgName:         "bar",
+			FixedVersion:    "1.1",
+			Severity:        vulnerability.SeverityMedium,
+			CVSS:            &vulnerability.CVSSInfo{V3Score: 6},
+		},
+	)
 	intel := map[string]ThreatIntel{"CVE-KEV": {KnownExploited: true}}
 	insights = BuildScanInsights(mixed, intel, vulnerability.ImageExposureRunning)
 	// The unscored finding is left out of the score.

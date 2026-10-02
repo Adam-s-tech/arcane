@@ -49,15 +49,15 @@ func init() {
 	RestoreCmd.Flags().StringVar(&requestPath, "request", "/app/data/.arcane-recovery-request.json", "Prepared recovery request")
 }
 
-func runRestoreInternal(_ *cobra.Command, _ []string) error {
-	ctx := context.Background()
+func runRestoreInternal(cmd *cobra.Command, _ []string) error {
+	ctx := cmd.Context()
 	data, err := os.ReadFile(requestPath)
 	if err != nil {
 		return fmt.Errorf("read recovery request: %w", err)
 	}
 	var request recoverytypes.RestoreRequest
-	if err := json.Unmarshal(data, &request); err != nil {
-		return fmt.Errorf("decode recovery request: %w", err)
+	if unmarshalErr := json.Unmarshal(data, &request); unmarshalErr != nil {
+		return fmt.Errorf("decode recovery request: %w", unmarshalErr)
 	}
 	_ = os.Remove(requestPath)
 	if len(request.Stages) == 0 {
@@ -72,7 +72,7 @@ func runRestoreInternal(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("inspect Arcane container: %w", err)
 	}
-	if _, err := dockerClient.ImageInspect(ctx, rusticImage); err != nil {
+	if _, imageInspectErr := dockerClient.ImageInspect(ctx, rusticImage); imageInspectErr != nil {
 		reader, pullErr := dockerClient.ImagePull(ctx, rusticImage, client.ImagePullOptions{})
 		if pullErr != nil {
 			return fmt.Errorf("pull Arcane tools image for Rustic: %w", pullErr)
@@ -83,19 +83,19 @@ func runRestoreInternal(_ *cobra.Command, _ []string) error {
 		}
 		_ = reader.Close()
 	}
-	if _, err := dockerClient.ContainerStop(ctx, request.ContainerID, client.ContainerStopOptions{Timeout: new(30)}); err != nil {
-		return fmt.Errorf("stop Arcane container: %w", err)
+	if _, containerStopErr := dockerClient.ContainerStop(ctx, request.ContainerID, client.ContainerStopOptions{Timeout: new(30)}); containerStopErr != nil {
+		return fmt.Errorf("stop Arcane container: %w", containerStopErr)
 	}
 	restart := func() { _, _ = dockerClient.ContainerStart(ctx, request.ContainerID, client.ContainerStartOptions{}) }
-	if err := runStagesInternal(ctx, dockerClient, request, request.Stages); err != nil {
+	if runStagesErr := runStagesInternal(ctx, dockerClient, request, request.Stages); runStagesErr != nil {
 		// Arcane restarts only when the rollback succeeds; otherwise it stays
 		// stopped rather than running with mismatched data and projects.
-		err = fmt.Errorf("rustic system restore failed: %w", err)
+		runStagesErr = fmt.Errorf("rustic system restore failed: %w", runStagesErr)
 		if len(request.RollbackStages) == 0 {
-			return errors.Join(err, errors.New("no pre-restore system backup is available for rollback; Arcane was left stopped"))
+			return errors.Join(runStagesErr, errors.New("no pre-restore system backup is available for rollback; Arcane was left stopped"))
 		}
 		if rollbackErr := runStagesInternal(context.WithoutCancel(ctx), dockerClient, request, request.RollbackStages); rollbackErr != nil {
-			return errors.Join(err, fmt.Errorf("restoring the pre-restore system backup failed; Arcane was left stopped: %w", rollbackErr))
+			return errors.Join(runStagesErr, fmt.Errorf("restoring the pre-restore system backup failed; Arcane was left stopped: %w", rollbackErr))
 		}
 		rollbackManifest, readErr := os.ReadFile("/app/data/.arcane-recovery.json")
 		var rollback recoverytypes.Manifest
@@ -106,10 +106,10 @@ func runRestoreInternal(_ *cobra.Command, _ []string) error {
 			readErr = francis.ClearRestoredHosts(context.WithoutCancel(ctx), rollback.Environment["DATABASE_URL"])
 		}
 		if readErr != nil {
-			return errors.Join(err, fmt.Errorf("clear restored actor ownership; Arcane was left stopped: %w", readErr))
+			return errors.Join(runStagesErr, fmt.Errorf("clear restored actor ownership; Arcane was left stopped: %w", readErr))
 		}
 		restart()
-		return fmt.Errorf("%w; the pre-restore system backup was restored", err)
+		return fmt.Errorf("%w; the pre-restore system backup was restored", runStagesErr)
 	}
 	if !request.ProjectsIncluded {
 		slog.Warn("the restored system backup did not include the projects directory; the current projects directory was left untouched")
@@ -120,9 +120,9 @@ func runRestoreInternal(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("read restored recovery manifest: %w", err)
 	}
 	var manifest recoverytypes.Manifest
-	if err := json.Unmarshal(manifestData, &manifest); err != nil {
+	if unmarshalErr2 := json.Unmarshal(manifestData, &manifest); unmarshalErr2 != nil {
 		restart()
-		return fmt.Errorf("decode restored recovery manifest: %w", err)
+		return fmt.Errorf("decode restored recovery manifest: %w", unmarshalErr2)
 	}
 	_ = os.Remove("/app/data/.arcane-recovery.json")
 	if (manifest.FormatVersion != 1 && manifest.FormatVersion != recoverytypes.ManifestFormatVersion) || len(manifest.Environment) == 0 {
@@ -132,11 +132,11 @@ func runRestoreInternal(_ *cobra.Command, _ []string) error {
 	// Projects were restored into the current directory, so the recovered
 	// configuration must keep pointing there rather than at the backup-time path.
 	manifest.Environment["PROJECTS_DIRECTORY"] = cmp.Or(request.ProjectsSetting, manifest.Environment["PROJECTS_DIRECTORY"])
-	if err := finalizeRestoredBackupInternal(ctx, manifest.Environment["DATABASE_URL"], manifest.BackupID, manifest.ActivityID, request); err != nil {
-		return fmt.Errorf("finalize restored system backup: %w", err)
+	if finalizeRestoredBackupErr := finalizeRestoredBackupInternal(ctx, manifest.Environment["DATABASE_URL"], manifest.BackupID, manifest.ActivityID, request); finalizeRestoredBackupErr != nil {
+		return fmt.Errorf("finalize restored system backup: %w", finalizeRestoredBackupErr)
 	}
-	if err := upgrade.UpgradeContainer(ctx, dockerClient, inspect.Container, request.ContainerImage, manifest.Environment); err != nil {
-		return fmt.Errorf("recreate Arcane container with recovered configuration: %w", err)
+	if upgradeContainerErr := upgrade.UpgradeContainer(ctx, dockerClient, inspect.Container, request.ContainerImage, manifest.Environment); upgradeContainerErr != nil {
+		return fmt.Errorf("recreate Arcane container with recovered configuration: %w", upgradeContainerErr)
 	}
 	return nil
 }
@@ -159,23 +159,23 @@ func finalizeRestoredBackupInternal(ctx context.Context, databaseURL, manifestBa
 		}
 	}()
 	db = db.WithContext(ctx)
-	if err := finalizeRestoredRunInternal(db, manifestBackupID, request); err != nil {
-		return err
+	if finalizeRestoredRunErr := finalizeRestoredRunInternal(db, manifestBackupID, request); finalizeRestoredRunErr != nil {
+		return finalizeRestoredRunErr
 	}
-	if err := preserveSafetyBackupInternal(db, request.SafetyBackup); err != nil {
-		return err
+	if preserveSafetyBackupErr := preserveSafetyBackupInternal(db, request.SafetyBackup); preserveSafetyBackupErr != nil {
+		return preserveSafetyBackupErr
 	}
 	// Keep the restored database pointing at the directory projects were restored into.
 	if value := strings.TrimSpace(request.ProjectsSetting); value != "" {
-		err := db.Model(&settings.SettingVariable{}).
+		operationErr := db.Model(&settings.SettingVariable{}).
 			Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "key"}}, DoUpdates: clause.Assignments(map[string]any{"value": value})}).
 			Create(map[string]any{"key": "projectsDirectory", "value": value}).Error
-		if err != nil {
-			return err
+		if operationErr != nil {
+			return operationErr
 		}
 	}
-	if err := finalizeRestoredActivityInternal(db, manifestActivityID); err != nil {
-		return err
+	if finalizeRestoredActivityErr := finalizeRestoredActivityInternal(db, manifestActivityID); finalizeRestoredActivityErr != nil {
+		return finalizeRestoredActivityErr
 	}
 	return francis.ClearRestoredHosts(ctx, databaseURL)
 }

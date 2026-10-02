@@ -44,7 +44,7 @@ type KeySetManager struct {
 
 func NewKeySetManager(ctx context.Context) *KeySetManager { //nolint:contextcheck // cache workers inherit the application lifecycle context, not request contexts.
 	if ctx == nil {
-		ctx = context.Background()
+		ctx = context.Background() //nolint:forbidigo // Fallback supports construction without an application lifecycle context.
 	}
 	return &KeySetManager{
 		ctx:    ctx,
@@ -133,8 +133,8 @@ func (m *managedCache) initializeKeySetInternal(ctx context.Context, jwksURL str
 		if initialized {
 			return
 		}
-		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		defer cancel()
+		cleanupCtx, localCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer localCancel()
 		if m.cache.IsRegistered(cleanupCtx, jwksURL) {
 			_ = m.cache.Unregister(cleanupCtx, jwksURL)
 		}

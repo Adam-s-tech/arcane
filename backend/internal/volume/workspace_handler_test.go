@@ -19,16 +19,16 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
 )
 
-func volumeWorkspacePermissionContextInternal(environmentID string, permissions ...string) context.Context {
+func volumeWorkspacePermissionContextInternal(t *testing.T, environmentID string, permissions ...string) context.Context {
 	permissionSet := authz.NewPermissionSet()
 	permissionSet.AddEnv(environmentID, permissions...)
-	return context.WithValue(context.Background(), middleware.ContextKeyUserPermissions, permissionSet)
+	return context.WithValue(t.Context(), middleware.ContextKeyUserPermissions, permissionSet)
 }
 
 func TestUploadAndRestoreReturnsNotFoundForUnknownSession(t *testing.T) {
 	h := &VolumeHandler{volumeService: &VolumeService{}, uploadService: upload.NewUploadService(nil)}
 
-	ctx := context.WithValue(context.Background(), common.CurrentUserContextKey{}, &common.User{ID: "u-1"})
+	ctx := context.WithValue(t.Context(), common.CurrentUserContextKey{}, &common.User{ID: "u-1"})
 
 	_, err := h.UploadAndRestore(ctx, &UploadAndRestoreInput{
 		EnvironmentID: "0",
@@ -66,23 +66,23 @@ func TestRequireVolumeWorkspacePermissionsInternal(t *testing.T) {
 	remove := []volumetypes.WorkspaceFileChange{{Operation: volumetypes.FileOpDelete}}
 	restore := []volumetypes.WorkspaceFileChange{{Operation: volumetypes.FileOpRestoreFile}}
 
-	require.Error(t, requireVolumeWorkspacePermissionsInternal(context.Background(), environmentID, create))
+	require.Error(t, requireVolumeWorkspacePermissionsInternal(t.Context(), environmentID, create))
 	require.NoError(t, requireVolumeWorkspacePermissionsInternal(
-		volumeWorkspacePermissionContextInternal(environmentID, authz.PermVolumesUpload), environmentID, create,
+		volumeWorkspacePermissionContextInternal(t, environmentID, authz.PermVolumesUpload), environmentID, create,
 	))
 	require.Error(t, requireVolumeWorkspacePermissionsInternal(
-		volumeWorkspacePermissionContextInternal(environmentID, authz.PermVolumesUpload), environmentID, rename,
+		volumeWorkspacePermissionContextInternal(t, environmentID, authz.PermVolumesUpload), environmentID, rename,
 	))
 	require.NoError(t, requireVolumeWorkspacePermissionsInternal(
-		volumeWorkspacePermissionContextInternal(environmentID, authz.PermVolumesUpload, authz.PermVolumesDelete), environmentID, rename,
+		volumeWorkspacePermissionContextInternal(t, environmentID, authz.PermVolumesUpload, authz.PermVolumesDelete), environmentID, rename,
 	))
 	require.NoError(t, requireVolumeWorkspacePermissionsInternal(
-		volumeWorkspacePermissionContextInternal(environmentID, authz.PermVolumesDelete), environmentID, remove,
+		volumeWorkspacePermissionContextInternal(t, environmentID, authz.PermVolumesDelete), environmentID, remove,
 	))
 	require.NoError(t, requireVolumeWorkspacePermissionsInternal(
-		volumeWorkspacePermissionContextInternal(environmentID, authz.PermVolumesBackup), environmentID, restore,
+		volumeWorkspacePermissionContextInternal(t, environmentID, authz.PermVolumesBackup), environmentID, restore,
 	))
 	require.Error(t, requireVolumeWorkspacePermissionsInternal(
-		volumeWorkspacePermissionContextInternal("env-2", authz.PermVolumesUpload), environmentID, create,
+		volumeWorkspacePermissionContextInternal(t, "env-2", authz.PermVolumesUpload), environmentID, create,
 	))
 }

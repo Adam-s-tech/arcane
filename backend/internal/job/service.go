@@ -57,22 +57,30 @@ type JobService struct {
 	RunEnvironmentHealthNow       func(ctx context.Context) error
 }
 
-func NewJobService(db *database.DB, settings *settings.SettingsService, cfg *config.Config, coordinator *runs.Coordinator, roles *role.RoleService, environment *environment.EnvironmentService, activity *activity.ActivityService) *JobService {
+func NewJobService(
+	db *database.DB,
+	localSettings *settings.SettingsService,
+	cfg *config.Config,
+	coordinator *runs.Coordinator,
+	roles *role.RoleService,
+	localEnvironment *environment.EnvironmentService,
+	localActivity *activity.ActivityService,
+) *JobService {
 	service := &JobService{
 		roles:       roles,
-		environment: environment,
-		activity:    activity,
+		environment: localEnvironment,
+		activity:    localActivity,
 		store:       kv.NewKVService(db),
 		runs:        coordinator,
 		db:          db,
-		settings:    settings,
+		settings:    localSettings,
 		cfg:         cfg,
 		location:    cfg.GetLocation(),
 	}
 
 	if coordinator != nil {
 		coordinator.SetExecutor(service.executeRunInternal, service.reconcileRunInternal)
-		if activity != nil {
+		if localActivity != nil {
 			coordinator.SetObserver(service)
 		}
 	}
@@ -81,7 +89,7 @@ func NewJobService(db *database.DB, settings *settings.SettingsService, cfg *con
 
 func (s *JobService) SetScheduler(ctx context.Context, scheduler schedulertypes.JobController) { //nolint:contextcheck // scheduler jobs must capture the app lifecycle context, not request contexts
 	if ctx == nil {
-		ctx = context.Background()
+		ctx = context.Background() //nolint:forbidigo // A nil scheduler context uses an independent lifecycle root.
 	}
 	s.lifecycleCtx = ctx
 	s.scheduler = scheduler
@@ -335,44 +343,44 @@ func (s *JobService) ListJobs(ctx context.Context) (*jobschedule.JobListResponse
 	}, nil
 }
 
-func (s *JobService) getJobScheduleInternal(ctx context.Context, meta meta.JobMetadata) string {
+func (s *JobService) getJobScheduleInternal(ctx context.Context, localMeta meta.JobMetadata) string {
 	// Continuous jobs with a settings key (image-polling) are event-driven but
 	// also poll on that cron schedule, so surface the real expression.
-	if meta.IsContinuous && meta.SettingsKey == "" {
+	if localMeta.IsContinuous && localMeta.SettingsKey == "" {
 		return "continuous"
 	}
 
-	if meta.ID == "analytics-heartbeat" {
+	if localMeta.ID == "analytics-heartbeat" {
 		return "automatic (checked hourly; sent once per 24h)"
 	}
 
-	if meta.SettingsKey == "" {
+	if localMeta.SettingsKey == "" {
 		return ""
 	}
 
-	defaultSchedule, _, _, err := settings.DefaultSettingsConfig().FieldByKey(meta.SettingsKey)
+	defaultSchedule, _, _, err := settings.DefaultSettingsConfig().FieldByKey(localMeta.SettingsKey)
 	if err != nil || defaultSchedule == "" {
 		defaultSchedule = "0 0 0 * * *"
 	}
 
-	return s.settings.GetStringSetting(ctx, meta.SettingsKey, defaultSchedule)
+	return s.settings.GetStringSetting(ctx, localMeta.SettingsKey, defaultSchedule)
 }
 
-func (s *JobService) isJobEnabledInternal(ctx context.Context, meta meta.JobMetadata) bool {
-	if meta.EnabledKey != "" {
-		return s.settings.GetBoolSetting(ctx, meta.EnabledKey, false)
+func (s *JobService) isJobEnabledInternal(ctx context.Context, localMeta meta.JobMetadata) bool {
+	if localMeta.EnabledKey != "" {
+		return s.settings.GetBoolSetting(ctx, localMeta.EnabledKey, false)
 	}
-	if meta.IsContinuous {
+	if localMeta.IsContinuous {
 		return true
 	}
 
 	return true
 }
 
-func (s *JobService) evaluatePrerequisitesInternal(ctx context.Context, meta meta.JobMetadata) []jobschedule.JobPrerequisite {
-	prerequisites := make([]jobschedule.JobPrerequisite, 0, len(meta.Prerequisites))
+func (s *JobService) evaluatePrerequisitesInternal(ctx context.Context, localMeta meta.JobMetadata) []jobschedule.JobPrerequisite {
+	prerequisites := make([]jobschedule.JobPrerequisite, 0, len(localMeta.Prerequisites))
 
-	for _, prereq := range meta.Prerequisites {
+	for _, prereq := range localMeta.Prerequisites {
 		isMet := s.settings.GetBoolSetting(ctx, prereq.SettingKey, false)
 
 		prerequisites = append(prerequisites, jobschedule.JobPrerequisite{

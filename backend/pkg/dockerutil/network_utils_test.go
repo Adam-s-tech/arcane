@@ -1,7 +1,6 @@
 package docker
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -65,7 +64,9 @@ func TestSelectDockerHostReachableNetworkMode(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if strings.HasSuffix(r.URL.Path, "/containers/json") {
-			_, _ = w.Write([]byte(`[{"Id":"proxy1","Names":["/myproj-socket-proxy-1"],"Labels":{"com.docker.compose.service":"socket-proxy"},"State":"running","NetworkSettings":{"Networks":{"myproj_socket-proxy-net":{"Aliases":["socket-proxy"]}}}}]`))
+			_, _ = w.Write([]byte("[{\"Id\":\"proxy1\",\"Names\":[\"/myproj-socket-proxy-1\"],\"Labels\":{\"com.docker.compose.service\":\"socket-pr" +
+				"oxy\"},\"State\":\"running\",\"NetworkSettings\":{\"Networks\":{\"myproj_socket-proxy-net\":{\"Aliases\":[\"socket" +
+				"-proxy\"]}}}}]"))
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -79,12 +80,12 @@ func TestSelectDockerHostReachableNetworkMode(t *testing.T) {
 	defer func() { _ = dockerClient.Close() }()
 
 	t.Run("prefers shared network with the DOCKER_HOST container", func(t *testing.T) {
-		got := SelectDockerHostReachableNetworkMode(context.Background(), dockerClient, inspect, "tcp://socket-proxy:2375")
+		got := SelectDockerHostReachableNetworkMode(t.Context(), dockerClient, inspect, "tcp://socket-proxy:2375")
 		require.Equal(t, "myproj_socket-proxy-net", got)
 	})
 
 	t.Run("falls back to auto heuristic when nothing matches", func(t *testing.T) {
-		got := SelectDockerHostReachableNetworkMode(context.Background(), dockerClient, inspect, "tcp://unknown-host:2375")
+		got := SelectDockerHostReachableNetworkMode(t.Context(), dockerClient, inspect, "tcp://unknown-host:2375")
 		require.Equal(t, "cloudflare-tunnel", got)
 	})
 }

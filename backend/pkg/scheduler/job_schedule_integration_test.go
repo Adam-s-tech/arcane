@@ -19,12 +19,12 @@ import (
 )
 
 func TestDeprecatedImagePollingSchedulePersistsWithoutRuntimeJob(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	databasePath := filepath.Join(t.TempDir(), "arcane.db")
 	db, settingsService := openJobScheduleTestDatabaseInternal(t, ctx, databasePath)
 
 	appConfig := &config.Config{Timezone: "UTC"}
-	lifecycleCtx, cancelLifecycle := context.WithCancel(context.Background())
+	lifecycleCtx, cancelLifecycle := context.WithCancel(t.Context())
 	jobScheduler := newJobSchedulerForTestInternal(t, lifecycleCtx, appConfig.GetLocation())
 
 	jobService := job.NewJobService(db, settingsService, appConfig, jobScheduler.coordinator, nil, nil, nil)
@@ -60,18 +60,18 @@ func TestDeprecatedImagePollingSchedulePersistsWithoutRuntimeJob(t *testing.T) {
 	require.Equal(t, "pollingInterval", imagePollingStatus.SettingsKey)
 
 	cancelLifecycle()
-	waitForSchedulerStopInternal(jobScheduler)
+	require.NoError(t, stopJobSchedulerForTestInternal(t.Context(), jobScheduler))
 	closeJobScheduleTestDatabaseInternal(t, db)
 
 	restartDB, restartSettingsService := openJobScheduleTestDatabaseInternal(t, ctx, databasePath)
-	restartLifecycleCtx, cancelRestartLifecycle := context.WithCancel(context.Background())
+	restartLifecycleCtx, cancelRestartLifecycle := context.WithCancel(t.Context())
 	restartScheduler := newJobSchedulerForTestInternal(t, restartLifecycleCtx, appConfig.GetLocation())
 	restartJobService := job.NewJobService(restartDB, restartSettingsService, appConfig, restartScheduler.coordinator, nil, nil, nil)
 	restartJobService.SetScheduler(restartLifecycleCtx, restartScheduler)
 	require.NoError(t, restartScheduler.StartScheduler(t.Context()))
 	t.Cleanup(func() {
 		cancelRestartLifecycle()
-		waitForSchedulerStopInternal(restartScheduler)
+		require.NoError(t, stopJobSchedulerForTestInternal(context.WithoutCancel(t.Context()), restartScheduler))
 		closeJobScheduleTestDatabaseInternal(t, restartDB)
 	})
 
@@ -122,10 +122,6 @@ func closeJobScheduleTestDatabaseInternal(t *testing.T, db *database.DB) {
 	sqlDB, err := db.DB.DB()
 	require.NoError(t, err)
 	require.NoError(t, sqlDB.Close())
-}
-
-func waitForSchedulerStopInternal(jobScheduler *jobSchedulerInternal) {
-	_ = stopJobSchedulerForTestInternal(context.Background(), jobScheduler)
 }
 
 func findJobStatusInternal(t *testing.T, jobs *jobschedule.JobListResponse, jobID string) jobschedule.JobStatus {

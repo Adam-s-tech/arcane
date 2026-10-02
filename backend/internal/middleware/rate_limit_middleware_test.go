@@ -19,7 +19,7 @@ func TestPerIPRateLimit_AllowsUnderBurstAndBlocksOver(t *testing.T) {
 	}, PerIPRateLimit(60, 2))
 
 	doReq := func() int {
-		req := httptest.NewRequest(http.MethodPost, "/t", nil)
+		req := httptest.NewRequest(http.MethodPost, "/t", http.NoBody)
 		req.RemoteAddr = "192.0.2.10:4000"
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
@@ -38,7 +38,7 @@ func TestPerIPRateLimit_TracksDistinctClients(t *testing.T) {
 	}, PerIPRateLimit(60, 1))
 
 	doReqFrom := func(addr string) int {
-		req := httptest.NewRequest(http.MethodPost, "/t", nil)
+		req := httptest.NewRequest(http.MethodPost, "/t", http.NoBody)
 		req.RemoteAddr = addr
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
@@ -57,7 +57,7 @@ func TestStackedAgentEnrollmentRateLimits_KeepIPBackPressure(t *testing.T) {
 	}, PerIPRateLimit(60, 1), PerAgentTokenRateLimit(60, 10))
 
 	doReq := func(token string) int {
-		req := httptest.NewRequest(http.MethodPost, "/t", nil)
+		req := httptest.NewRequest(http.MethodPost, "/t", http.NoBody)
 		req.RemoteAddr = "192.0.2.10:4000"
 		req.Header.Set("X-Arcane-Agent-Token", token)
 		rec := httptest.NewRecorder()
@@ -82,7 +82,7 @@ func TestPerIPRateLimitForPaths_AppliesOnlyToConfiguredPaths(t *testing.T) {
 	})
 
 	doReq := func(path string) int {
-		req := httptest.NewRequest(http.MethodPost, path, nil)
+		req := httptest.NewRequest(http.MethodPost, path, http.NoBody)
 		req.RemoteAddr = "192.0.2.10:4000"
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
@@ -107,7 +107,7 @@ func TestPerIPRateLimitForPaths_TracksDistinctIPs(t *testing.T) {
 	})
 
 	doReqFrom := func(addr string) int {
-		req := httptest.NewRequest(http.MethodPost, "/limited", nil)
+		req := httptest.NewRequest(http.MethodPost, "/limited", http.NoBody)
 		req.RemoteAddr = addr
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
@@ -128,7 +128,7 @@ func TestPerIPRateLimitForPaths_IndependentBucketPerPath(t *testing.T) {
 	router.POST("/b", func(c *echo.Context) error { return c.NoContent(http.StatusOK) })
 
 	doReq := func(path string) int {
-		req := httptest.NewRequest(http.MethodPost, path, nil)
+		req := httptest.NewRequest(http.MethodPost, path, http.NoBody)
 		req.RemoteAddr = "192.0.2.10:4000"
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
@@ -152,7 +152,7 @@ func TestPerIPRateLimitForPaths_RouteParamsDoNotEscapeFilter(t *testing.T) {
 	})
 
 	doReq := func(token string) int {
-		req := httptest.NewRequest(http.MethodPost, "/webhooks/trigger/"+token, nil)
+		req := httptest.NewRequest(http.MethodPost, "/webhooks/trigger/"+token, http.NoBody)
 		req.RemoteAddr = "192.0.2.10:4000"
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
@@ -179,7 +179,7 @@ func newTokenRateLimitTestRouterInternal(
 	router.POST("/webhooks/trigger/:token", handler)
 
 	return func(token string) int {
-		req := httptest.NewRequest(http.MethodPost, "/webhooks/trigger/"+token, nil)
+		req := httptest.NewRequest(http.MethodPost, "/webhooks/trigger/"+token, http.NoBody)
 		req.RemoteAddr = "192.0.2.10:4000"
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
@@ -282,7 +282,7 @@ func TestPerTokenRateLimitForPaths_AppliesOnlyToConfiguredPaths(t *testing.T) {
 	})
 
 	doReq := func(path string) int {
-		req := httptest.NewRequest(http.MethodPost, path, nil)
+		req := httptest.NewRequest(http.MethodPost, path, http.NoBody)
 		req.RemoteAddr = "192.0.2.10:4000"
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)

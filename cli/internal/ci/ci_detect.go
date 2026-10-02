@@ -76,7 +76,7 @@ func mintGitHubActionsTokenInternal(ctx context.Context, audience string, getenv
 		parsedURL.RawQuery = q.Encode()
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsedURL.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsedURL.String(), http.NoBody)
 	if err != nil {
 		return "", fmt.Errorf("failed to create GitHub Actions OIDC request: %w", err)
 	}
@@ -100,8 +100,8 @@ func mintGitHubActionsTokenInternal(ctx context.Context, audience string, getenv
 	var payload struct {
 		Value string `json:"value"`
 	}
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return "", fmt.Errorf("failed to parse GitHub Actions OIDC response: %w", err)
+	if unmarshalErr := json.Unmarshal(body, &payload); unmarshalErr != nil {
+		return "", fmt.Errorf("failed to parse GitHub Actions OIDC response: %w", unmarshalErr)
 	}
 	token := strings.TrimSpace(payload.Value)
 	if token == "" {

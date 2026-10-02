@@ -92,9 +92,9 @@ func (s *NetworkService) GetNetworkTopology(ctx context.Context) (*networktypes.
 		g.Go(func() (workerErr error) {
 			defer utils.RecoverToError(&workerErr, "network worker")
 
-			inspected, err := compat.NetworkInspectWithCompatibility(groupCtx, dockerClient, rawNetwork.ID, client.NetworkInspectOptions{})
-			if err != nil {
-				return fmt.Errorf("failed to inspect network %s: %w", rawNetwork.Name, err)
+			inspected, networkInspectWithCompatibilityErr := compat.NetworkInspectWithCompatibility(groupCtx, dockerClient, rawNetwork.ID, client.NetworkInspectOptions{})
+			if networkInspectWithCompatibilityErr != nil {
+				return fmt.Errorf("failed to inspect network %s: %w", rawNetwork.Name, networkInspectWithCompatibilityErr)
 			}
 
 			inspectedNetworks[i] = struct {
@@ -108,8 +108,8 @@ func (s *NetworkService) GetNetworkTopology(ctx context.Context) (*networktypes.
 		})
 	}
 
-	if err := g.Wait(); err != nil {
-		return nil, err
+	if waitErr := g.Wait(); waitErr != nil {
+		return nil, waitErr
 	}
 
 	for _, inspectedNetwork := range inspectedNetworks {
@@ -223,9 +223,9 @@ func (s *NetworkService) RemoveNetwork(ctx context.Context, id string, user comm
 	networkName := kit.Ternary(err == nil, networkInfo.Network.Name, id)
 
 	defer s.eventService.BeginDockerResourceSuppressionWindow("network", id, networkName)()
-	if _, err := dockerClient.NetworkRemove(ctx, id, client.NetworkRemoveOptions{}); err != nil {
-		s.eventService.LogErrorEvent(ctx, event.EventTypeNetworkError, "network", id, networkName, user.ID, user.Username, "0", err, database.JSON{"action": "delete"})
-		return fmt.Errorf("failed to remove network: %w", err)
+	if _, networkRemoveErr := dockerClient.NetworkRemove(ctx, id, client.NetworkRemoveOptions{}); networkRemoveErr != nil {
+		s.eventService.LogErrorEvent(ctx, event.EventTypeNetworkError, "network", id, networkName, user.ID, user.Username, "0", networkRemoveErr, database.JSON{"action": "delete"})
+		return fmt.Errorf("failed to remove network: %w", networkRemoveErr)
 	}
 
 	metadata := database.JSON{
@@ -269,12 +269,26 @@ func (s *NetworkService) ConnectContainer(ctx context.Context, networkID string,
 		endpoint.IPAMConfig = ipam
 	}
 
-	if _, err := dockerClient.NetworkConnect(ctx, networkID, client.NetworkConnectOptions{
+	if _, networkConnectErr := dockerClient.NetworkConnect(ctx, networkID, client.NetworkConnectOptions{
 		Container:      req.ContainerID,
 		EndpointConfig: endpoint,
-	}); err != nil {
-		s.eventService.LogErrorEvent(ctx, event.EventTypeNetworkError, "network", networkID, "", user.ID, user.Username, "0", err, database.JSON{"action": "connect", "containerId": req.ContainerID})
-		return fmt.Errorf("failed to connect container to network: %w", err)
+	}); networkConnectErr != nil {
+		s.eventService.LogErrorEvent(
+			ctx,
+			event.EventTypeNetworkError,
+			"network",
+			networkID,
+			"",
+			user.ID,
+			user.Username,
+			"0",
+			networkConnectErr,
+			database.JSON{
+				"action":      "connect",
+				"containerId": req.ContainerID,
+			},
+		)
+		return fmt.Errorf("failed to connect container to network: %w", networkConnectErr)
 	}
 
 	metadata := database.JSON{
@@ -297,12 +311,26 @@ func (s *NetworkService) DisconnectContainer(ctx context.Context, networkID stri
 		return fmt.Errorf("failed to connect to Docker: %w", err)
 	}
 
-	if _, err := dockerClient.NetworkDisconnect(ctx, networkID, client.NetworkDisconnectOptions{
+	if _, networkDisconnectErr := dockerClient.NetworkDisconnect(ctx, networkID, client.NetworkDisconnectOptions{
 		Container: req.ContainerID,
 		Force:     req.Force,
-	}); err != nil {
-		s.eventService.LogErrorEvent(ctx, event.EventTypeNetworkError, "network", networkID, "", user.ID, user.Username, "0", err, database.JSON{"action": "disconnect", "containerId": req.ContainerID})
-		return fmt.Errorf("failed to disconnect container from network: %w", err)
+	}); networkDisconnectErr != nil {
+		s.eventService.LogErrorEvent(
+			ctx,
+			event.EventTypeNetworkError,
+			"network",
+			networkID,
+			"",
+			user.ID,
+			user.Username,
+			"0",
+			networkDisconnectErr,
+			database.JSON{
+				"action":      "disconnect",
+				"containerId": req.ContainerID,
+			},
+		)
+		return fmt.Errorf("failed to disconnect container from network: %w", networkDisconnectErr)
 	}
 
 	metadata := database.JSON{

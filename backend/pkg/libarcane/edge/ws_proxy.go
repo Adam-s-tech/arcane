@@ -65,14 +65,14 @@ func ProxyWebSocketRequest(c *echo.Context, tunnel *AgentTunnel, targetPath stri
 	defer tunnel.Pending.Delete(streamID)
 
 	headers := buildWebSocketHeaders(req)
-	if err := DefaultCommandClient.OpenStream(streamCtx, tunnel, &CommandRequest{
+	if openStreamErr := DefaultCommandClient.OpenStream(streamCtx, tunnel, &CommandRequest{
 		ID:      streamID,
 		Method:  http.MethodGet,
 		Path:    targetPath,
 		Query:   req.URL.RawQuery,
 		Headers: headers,
-	}); err != nil {
-		slog.ErrorContext(ctx, "Failed to send WebSocket start to agent", "error", err)
+	}); openStreamErr != nil {
+		slog.ErrorContext(ctx, "Failed to send WebSocket start to agent", "error", openStreamErr)
 		return nil
 	}
 
@@ -115,8 +115,8 @@ func forwardClientToAgent(ctx, streamCtx context.Context, clientWS *websocket.Co
 			continue
 		}
 
-		if err := sendStreamDataInternal(tunnel, streamID, int(msgType), data); err != nil {
-			slog.DebugContext(ctx, "Failed to send WebSocket data to agent", "error", err)
+		if sendStreamDataErr := sendStreamDataInternal(tunnel, streamID, int(msgType), data); sendStreamDataErr != nil {
+			slog.DebugContext(ctx, "Failed to send WebSocket data to agent", "error", sendStreamDataErr)
 			return
 		}
 	}

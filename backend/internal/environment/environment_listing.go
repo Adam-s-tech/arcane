@@ -72,7 +72,17 @@ func filterEnvironmentsByIDInternal(items []environment.Environment, allowedIDs 
 	return out
 }
 
-func (s *EnvironmentService) listEnvironmentsPaginatedWithRuntimeFiltersInternal(ctx context.Context, params pagination.QueryParams, accessibleEnvIDs []string) ([]environment.Environment, pagination.Response, error) {
+func (
+	s *EnvironmentService,
+) listEnvironmentsPaginatedWithRuntimeFiltersInternal(
+	ctx context.Context,
+	params pagination.QueryParams,
+	accessibleEnvIDs []string,
+) (
+	[]environment.Environment,
+	pagination.Response,
+	error,
+) {
 	var envs []Environment
 	if err := s.db.WithContext(ctx).
 		Model(&Environment{}).

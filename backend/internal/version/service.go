@@ -58,7 +58,15 @@ type VersionService struct {
 	streamHub                *agg.Hub[version.StreamEvent]
 }
 
-func NewVersionService(httpClient *http.Client, disabled bool, appVersion, revision string, containerRegistryService *registry.ContainerRegistryService, dockerService *docker.DockerClientService, imageUpdateService *imageupdate.ImageUpdateService, settingsService *settings.SettingsService) *VersionService {
+func NewVersionService(
+	httpClient *http.Client,
+	disabled bool,
+	appVersion, revision string,
+	containerRegistryService *registry.ContainerRegistryService,
+	dockerService *docker.DockerClientService,
+	imageUpdateService *imageupdate.ImageUpdateService,
+	settingsService *settings.SettingsService,
+) *VersionService {
 	if httpClient == nil {
 		httpClient = http.DefaultClient
 	}
@@ -74,7 +82,7 @@ func NewVersionService(httpClient *http.Client, disabled bool, appVersion, revis
 		streamHub:                agg.NewHub[version.StreamEvent](),
 	}
 	loader := func(_ []struct{}) (map[struct{}]latestRelease, error) {
-		ctx, cancel := context.WithTimeout(context.Background(), defaultRequestTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), defaultRequestTimeout) //nolint:forbidigo // Cache revalidation runs independently of request cancellation.
 		defer cancel()
 		release, err := service.fetchLatestReleaseInternal(ctx)
 		if err != nil {
@@ -103,7 +111,7 @@ func (s *VersionService) getLatestReleaseInternal(_ context.Context) (latestRele
 }
 
 func (s *VersionService) fetchLatestReleaseInternal(ctx context.Context) (latestRelease, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, versionCheckURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, versionCheckURL, http.NoBody)
 	if err != nil {
 		return latestRelease{}, fmt.Errorf("create GitHub request: %w", err)
 	}
@@ -123,8 +131,8 @@ func (s *VersionService) fetchLatestReleaseInternal(ctx context.Context) (latest
 		Body        string `json:"body"`
 		PublishedAt string `json:"published_at"`
 	}
-	if err := json.UnmarshalRead(resp.Body, &payload); err != nil {
-		return latestRelease{}, fmt.Errorf("decode payload: %w", err)
+	if unmarshalReadErr := json.UnmarshalRead(resp.Body, &payload); unmarshalReadErr != nil {
+		return latestRelease{}, fmt.Errorf("decode payload: %w", unmarshalReadErr)
 	}
 	if payload.TagName == "" {
 		return latestRelease{}, errors.New("GitHub API returned empty tag name")
@@ -181,12 +189,12 @@ func (s *VersionService) normalizeVersion(ver string) string {
 	return ver
 }
 
-func (s *VersionService) ReleaseURL(version string) string {
-	if strings.TrimSpace(version) == "" {
+func (s *VersionService) ReleaseURL(localVersion string) string {
+	if strings.TrimSpace(localVersion) == "" {
 		return "https://github.com/getarcaneapp/arcane/releases/latest"
 	}
 
-	return "https://github.com/getarcaneapp/arcane/releases/tag/" + kit.EnsurePrefix(version, "v")
+	return "https://github.com/getarcaneapp/arcane/releases/tag/" + kit.EnsurePrefix(localVersion, "v")
 }
 
 func (s *VersionService) GetVersionInformation(ctx context.Context, currentVersion string) (*version.Check, error) {
@@ -462,8 +470,8 @@ func (s *VersionService) extractImageDetails(ctx context.Context, dockerClient *
 
 	// Extract digest and repository from first RepoDigest using reference library
 	for _, repoDigest := range imageInspect.RepoDigests {
-		named, err := ref.ParseNormalizedNamed(repoDigest)
-		if err != nil {
+		named, parseNormalizedNamedErr := ref.ParseNormalizedNamed(repoDigest)
+		if parseNormalizedNamedErr != nil {
 			continue
 		}
 		if digested, ok := named.(ref.Digested); ok {

@@ -45,7 +45,7 @@ func TestValidateSafeRemoteURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			parsed, err := ValidateSafeRemoteURL(context.Background(), tt.rawURL, lookupIP)
+			parsed, err := ValidateSafeRemoteURL(t.Context(), tt.rawURL, lookupIP)
 			if tt.wantErr {
 				require.Error(t, err)
 				require.ErrorIs(t, err, common.ErrUnsafeRemoteURL)

@@ -33,10 +33,7 @@ func discoveredNamesInternal(dirs []DiscoveredProjectDir) []string {
 func TestDiscoverProjectDirectories_StopsDescentAtCompose(t *testing.T) {
 	root := t.TempDir()
 
-	// Layout:
-	//   root/networking/compose.yml
-	//   root/networking/adguardhome/compose.yml
-	//   root/networking/nginx-proxy-manager/compose.yml
+	// A Compose file in networking owns both nested project directories.
 	writeComposeFileInternal(t, filepath.Join(root, "networking"))
 	writeComposeFileInternal(t, filepath.Join(root, "networking", "adguardhome"))
 	writeComposeFileInternal(t, filepath.Join(root, "networking", "nginx-proxy-manager"))

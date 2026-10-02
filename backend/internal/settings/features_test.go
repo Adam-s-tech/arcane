@@ -1,7 +1,6 @@
 package settings
 
 import (
-	"context"
 	"net/http"
 	"testing"
 
@@ -94,7 +93,7 @@ func TestSettingsService_RejectInvalidFeatureBoolean(t *testing.T) {
 			require.ErrorIs(t, err, common.ErrValidation)
 			err = svc.UpdateSetting(t.Context(), features.VulnerabilityManagementSettingKey, invalid)
 			require.ErrorIs(t, err, common.ErrValidation)
-			err = svc.UpdateSettingValues(context.Background(), []libarcane.SettingUpdate{{Key: features.VulnerabilityManagementSettingKey, Value: invalid}})
+			err = svc.UpdateSettingValues(t.Context(), []libarcane.SettingUpdate{{Key: features.VulnerabilityManagementSettingKey, Value: invalid}})
 			require.ErrorIs(t, err, common.ErrValidation)
 			require.True(t, svc.IsFeatureEnabled(t.Context(), features.VulnerabilityManagement))
 		})

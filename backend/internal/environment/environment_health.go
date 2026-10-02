@@ -114,8 +114,8 @@ func (s *EnvironmentService) RunHealthChecksNow(ctx context.Context) error {
 	}
 	for _, id := range ids {
 		request.JobID = s.jobs.JobName(id)
-		if _, err := s.jobs.Scheduler().Submit(ctx, request); err != nil {
-			return err
+		if _, submitErr := s.jobs.Scheduler().Submit(ctx, request); submitErr != nil {
+			return submitErr
 		}
 	}
 	return nil
@@ -135,14 +135,14 @@ func (s *EnvironmentService) runHealthCheckInternal(ctx context.Context, envID s
 	}
 	defer lease.Release(ctx)
 
-	environment, err := s.GetEnvironmentByID(ctx, envID)
+	localEnvironment, err := s.GetEnvironmentByID(ctx, envID)
 	if err != nil {
 		return schedulertypes.Outcome{}, err
 	}
-	if !environment.Enabled {
+	if !localEnvironment.Enabled {
 		return schedulertypes.Outcome{Status: schedulertypes.Canceled, Message: "Environment disabled"}, nil
 	}
-	wasOnline := environment.Status == string(EnvironmentStatusOnline)
+	wasOnline := localEnvironment.Status == string(EnvironmentStatusOnline)
 	status, err := s.TestConnection(ctx, envID, nil)
 	switch {
 	case err != nil:
@@ -166,26 +166,26 @@ func (s *EnvironmentService) runHealthCheckInternal(ctx context.Context, envID s
 	var syncErrors []error
 	syncCtx, cancel := context.WithTimeout(ctx, environmentHealthCheckTimeout)
 	defer cancel()
-	if err := s.SyncRegistriesToEnvironment(syncCtx, envID); err != nil {
-		slog.WarnContext(syncCtx, "failed to sync registries during health check", "environment_id", envID, "error", err)
-		syncErrors = append(syncErrors, err)
+	if syncRegistriesToEnvironmentErr := s.SyncRegistriesToEnvironment(syncCtx, envID); syncRegistriesToEnvironmentErr != nil {
+		slog.WarnContext(syncCtx, "failed to sync registries during health check", "environment_id", envID, "error", syncRegistriesToEnvironmentErr)
+		syncErrors = append(syncErrors, syncRegistriesToEnvironmentErr)
 	}
-	if err := s.SyncS3DestinationsToEnvironment(syncCtx, envID); err != nil {
-		slog.WarnContext(syncCtx, "failed to sync S3 destinations during health check", "environment_id", envID, "error", err)
-		syncErrors = append(syncErrors, err)
+	if syncS3DestinationsToEnvironmentErr := s.SyncS3DestinationsToEnvironment(syncCtx, envID); syncS3DestinationsToEnvironmentErr != nil {
+		slog.WarnContext(syncCtx, "failed to sync S3 destinations during health check", "environment_id", envID, "error", syncS3DestinationsToEnvironmentErr)
+		syncErrors = append(syncErrors, syncS3DestinationsToEnvironmentErr)
 	}
-	if err := s.SyncRepositoriesToEnvironment(syncCtx, envID); err != nil {
-		slog.WarnContext(syncCtx, "failed to sync git repositories during health check", "environment_id", envID, "error", err)
-		syncErrors = append(syncErrors, err)
+	if syncRepositoriesToEnvironmentErr := s.SyncRepositoriesToEnvironment(syncCtx, envID); syncRepositoriesToEnvironmentErr != nil {
+		slog.WarnContext(syncCtx, "failed to sync git repositories during health check", "environment_id", envID, "error", syncRepositoriesToEnvironmentErr)
+		syncErrors = append(syncErrors, syncRepositoriesToEnvironmentErr)
 	}
 	if s.variableSyncer != nil {
-		if err := s.variableSyncer.SyncEnvironment(syncCtx, envID); err != nil {
-			slog.WarnContext(syncCtx, "failed to sync global variables during health check", "environment_id", envID, "error", err)
-			syncErrors = append(syncErrors, err)
+		if syncEnvironmentErr := s.variableSyncer.SyncEnvironment(syncCtx, envID); syncEnvironmentErr != nil {
+			slog.WarnContext(syncCtx, "failed to sync global variables during health check", "environment_id", envID, "error", syncEnvironmentErr)
+			syncErrors = append(syncErrors, syncEnvironmentErr)
 		}
 	}
-	if err := errors.Join(syncErrors...); err != nil {
-		return schedulertypes.Outcome{Status: schedulertypes.Partial}, err
+	if joinErr := errors.Join(syncErrors...); joinErr != nil {
+		return schedulertypes.Outcome{Status: schedulertypes.Partial}, joinErr
 	}
 	return schedulertypes.Outcome{Status: schedulertypes.Succeeded}, nil
 }
@@ -228,7 +228,7 @@ func (s *EnvironmentService) TestConnection(ctx context.Context, id string, cust
 
 	reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, healthURL, nil)
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, healthURL, http.NoBody)
 	if err != nil {
 		if customApiUrl == nil {
 			_ = s.updateEnvironmentStatusInternal(ctx, id, string(EnvironmentStatusOffline))
@@ -437,7 +437,7 @@ func ApplyEnvironmentRuntimeState(env *environment.Environment) {
 		if len(runtimeState.Capabilities) > 0 {
 			env.EdgeCapabilities = append([]string(nil), runtimeState.Capabilities...)
 		}
-		if transport, ok := edge.GetActiveTunnelTransport(env.ID).Get(); ok {
+		if transport, localOk := edge.GetActiveTunnelTransport(env.ID).Get(); localOk {
 			env.EdgeTransport = &transport
 		} else if runtimeState.Transport != "" {
 			env.EdgeTransport = &runtimeState.Transport

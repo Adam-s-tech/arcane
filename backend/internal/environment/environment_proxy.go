@@ -49,12 +49,12 @@ func (s *EnvironmentService) SyncRegistriesToRemoteEnvironments(ctx context.Cont
 			continue
 		}
 
-		if err := s.SyncRegistriesToEnvironment(ctx, env.ID); err != nil {
+		if syncRegistriesToEnvironmentErr := s.SyncRegistriesToEnvironment(ctx, env.ID); syncRegistriesToEnvironmentErr != nil {
 			failedCount++
 			slog.WarnContext(ctx, "Failed to sync registries to remote environment",
 				"environmentID", env.ID,
 				"environmentName", env.Name,
-				"error", err.Error())
+				"error", syncRegistriesToEnvironmentErr.Error())
 		}
 	}
 
@@ -78,9 +78,9 @@ func (s *EnvironmentService) SyncS3DestinationsToRemoteEnvironments(ctx context.
 			slog.DebugContext(ctx, "Skipping S3 destination sync for environment without access token", "environmentID", env.ID, "environmentName", env.Name)
 			continue
 		}
-		if err := s.SyncS3DestinationsToEnvironment(ctx, env.ID); err != nil {
+		if syncS3DestinationsToEnvironmentErr := s.SyncS3DestinationsToEnvironment(ctx, env.ID); syncS3DestinationsToEnvironmentErr != nil {
 			failedCount++
-			slog.WarnContext(ctx, "Failed to sync S3 destinations to remote environment", "environmentID", env.ID, "environmentName", env.Name, "error", err)
+			slog.WarnContext(ctx, "Failed to sync S3 destinations to remote environment", "environmentID", env.ID, "environmentName", env.Name, "error", syncS3DestinationsToEnvironmentErr)
 		}
 	}
 
@@ -108,8 +108,17 @@ func (s *EnvironmentService) CheckS3DestinationReferences(ctx context.Context, d
 		var result struct {
 			InUse bool `json:"inUse"`
 		}
-		if err := s.ProxyJSONRequestForEnvironment(ctx, env, http.MethodGet, "/api/backups/s3/"+url.PathEscape(destinationID)+"/in-use", nil, &result); err != nil {
-			return fmt.Errorf("cannot verify S3 destination references on environment %s; restore connectivity before deleting: %w", env.Name, err)
+		if proxyJSONRequestForEnvironmentErr := s.ProxyJSONRequestForEnvironment(
+			ctx,
+			env,
+			http.MethodGet,
+			"/api/backups/s3/"+url.PathEscape(
+				destinationID,
+			)+"/in-use",
+			nil,
+			&result,
+		); proxyJSONRequestForEnvironmentErr != nil {
+			return fmt.Errorf("cannot verify S3 destination references on environment %s; restore connectivity before deleting: %w", env.Name, proxyJSONRequestForEnvironmentErr)
 		}
 		if result.InUse {
 			return fmt.Errorf("still referenced by environment %s", env.Name)
@@ -278,16 +287,16 @@ func (s *EnvironmentService) proxyJSONRequestForTargetInternal(
 	if err != nil {
 		return err
 	}
-	if err := resp.RequireSuccess(); err != nil {
-		return err
+	if requireSuccessErr := resp.RequireSuccess(); requireSuccessErr != nil {
+		return requireSuccessErr
 	}
 	// This is the erased decode behind the RemoteJSONProxy func-value seam;
 	// typed callers go through RemoteJSONProxy.JSON or remenv's generic decode.
 	if out == nil {
 		return nil
 	}
-	if err := json.Unmarshal(resp.Body, out); err != nil {
-		return &remenv.DecodeError{Err: err}
+	if unmarshalErr := json.Unmarshal(resp.Body, out); unmarshalErr != nil {
+		return &remenv.DecodeError{Err: unmarshalErr}
 	}
 
 	return nil
@@ -479,15 +488,15 @@ func (s *EnvironmentService) fanOutSyncToEnvironment[Model, Item, Request any](
 	}
 
 	var records []Model
-	if err := s.db.WithContext(ctx).Find(&records).Error; err != nil {
-		return fmt.Errorf("failed to get %s: %w", kind, err)
+	if loadRecordsErr := s.db.WithContext(ctx).Find(&records).Error; loadRecordsErr != nil {
+		return fmt.Errorf("failed to get %s: %w", kind, loadRecordsErr)
 	}
 
 	syncItems := make([]Item, 0, len(records))
 	for _, record := range records {
-		item, keep, err := toSyncItem(record)
-		if err != nil {
-			return err
+		item, keep, toSyncItemErr := toSyncItem(record)
+		if toSyncItemErr != nil {
+			return toSyncItemErr
 		}
 		if keep {
 			syncItems = append(syncItems, item)
@@ -522,8 +531,8 @@ func (s *EnvironmentService) fanOutSyncToEnvironment[Model, Item, Request any](
 			Message string `json:"message"`
 		} `json:"data"`
 	}
-	if err := s.proxyJSONRequestForTargetInternal(reqCtx, target, http.MethodPost, path, reqBody, &result); err != nil {
-		return fmt.Errorf("failed to send sync request: %w", err)
+	if proxyJSONRequestForTargetErr := s.proxyJSONRequestForTargetInternal(reqCtx, target, http.MethodPost, path, reqBody, &result); proxyJSONRequestForTargetErr != nil {
+		return fmt.Errorf("failed to send sync request: %w", proxyJSONRequestForTargetErr)
 	}
 
 	if !result.Success {

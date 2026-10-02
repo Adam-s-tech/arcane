@@ -157,8 +157,8 @@ func (j *AutoHealJob) Run(ctx context.Context) (schedulertypes.Outcome, error) {
 	if err != nil {
 		return schedulertypes.Outcome{}, err
 	}
-	if err := jobcontext.Progress(ctx, schedulertypes.TargetOutcome{ResourceType: "heal_plan", ID: "auto-heal-plan", Status: schedulertypes.Succeeded, RecoveryData: frozen}); err != nil {
-		return schedulertypes.Outcome{}, err
+	if progressErr := jobcontext.Progress(ctx, schedulertypes.TargetOutcome{ResourceType: "heal_plan", ID: "auto-heal-plan", Status: schedulertypes.Succeeded, RecoveryData: frozen}); progressErr != nil {
+		return schedulertypes.Outcome{}, progressErr
 	}
 
 	g, groupCtx := errgroup.WithContext(ctx)
@@ -170,10 +170,10 @@ func (j *AutoHealJob) Run(ctx context.Context) (schedulertypes.Outcome, error) {
 		g.Go(func() (workerErr error) {
 			defer utils.RecoverToError(&workerErr, "auto-heal worker")
 
-			target, err := j.processCandidateInternal(groupCtx, dockerClient, candidate, maxRestarts, restartWindow, restartWindowMinutes)
+			target, processCandidateErr := j.processCandidateInternal(groupCtx, dockerClient, candidate, maxRestarts, restartWindow, restartWindowMinutes)
 			resultMu.Lock()
 			outcome.Targets = append(outcome.Targets, target)
-			if err != nil {
+			if processCandidateErr != nil {
 				outcome.Status = schedulertypes.Partial
 			}
 			resultMu.Unlock()
@@ -289,16 +289,16 @@ func (j *AutoHealJob) processCandidateInternal(
 	}
 	target.RecoveryData = baseline
 	target.Status = schedulertypes.Running
-	if err := jobcontext.Progress(ctx, target); err != nil {
+	if progressErr := jobcontext.Progress(ctx, target); progressErr != nil {
 		releaseSlot()
-		return target, err
+		return target, progressErr
 	}
-	if err := j.restartContainerInternal(ctx, dockerClient, containerID); err != nil {
+	if restartContainerErr := j.restartContainerInternal(ctx, dockerClient, containerID); restartContainerErr != nil {
 		releaseSlot()
-		slog.ErrorContext(ctx, "auto-heal failed to restart container", "container", containerName, "error", err)
+		slog.ErrorContext(ctx, "auto-heal failed to restart container", "container", containerName, "error", restartContainerErr)
 		target.Status = schedulertypes.Failed
-		target.Message = err.Error()
-		return target, err
+		target.Message = restartContainerErr.Error()
+		return target, restartContainerErr
 	}
 
 	j.postRestartActionsInternal(ctx, containerID, containerName)
@@ -552,8 +552,8 @@ func (j *AutoHealJob) Reconcile(ctx context.Context, previous schedulertypes.Run
 	planned := false
 	for _, target := range previous.Outcome.Targets {
 		if target.ID == "auto-heal-plan" && len(target.RecoveryData) > 0 {
-			if err := json.Unmarshal(target.RecoveryData, &plan); err != nil {
-				return schedulertypes.Outcome{}, err
+			if unmarshalErr := json.Unmarshal(target.RecoveryData, &plan); unmarshalErr != nil {
+				return schedulertypes.Outcome{}, unmarshalErr
 			}
 			planned = true
 			break

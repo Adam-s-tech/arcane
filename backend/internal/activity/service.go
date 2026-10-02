@@ -161,13 +161,14 @@ func (sub *activitySubscriber) enqueue(event activitytypes.StreamEvent) {
 
 func (sub *activitySubscriber) dropOldestMessageLockedInternal() {
 	for i, entry := range sub.queue {
-		if !isCoalescableEventInternal(entry.event) {
-			sub.queue = append(sub.queue[:i], sub.queue[i+1:]...)
-			sub.messageCount--
-			sub.missed = true
-			slog.Warn("activity subscriber message buffer full; snapshot will be sent on next heartbeat", "environmentId", sub.environmentID)
-			return
+		if isCoalescableEventInternal(entry.event) {
+			continue
 		}
+		sub.queue = append(sub.queue[:i], sub.queue[i+1:]...)
+		sub.messageCount--
+		sub.missed = true
+		slog.Warn("activity subscriber message buffer full; snapshot will be sent on next heartbeat", "environmentId", sub.environmentID)
+		return
 	}
 }
 
@@ -686,7 +687,19 @@ func (s *ActivityService) appendBatchWithRetryInternal(ctx context.Context, acti
 	return nil, writeErr
 }
 
-func (s *ActivityService) CompleteActivity(ctx context.Context, activityID string, status activitytypes.Status, finalMessage string, errMessage *string, finalStep ...string) (*activitytypes.Activity, error) {
+func (
+	s *ActivityService,
+) CompleteActivity(
+	ctx context.Context,
+	activityID string,
+	status activitytypes.Status,
+	finalMessage string,
+	errMessage *string,
+	finalStep ...string,
+) (
+	*activitytypes.Activity,
+	error,
+) {
 	if err := s.checkInitInternal(); err != nil {
 		return nil, err
 	}
@@ -1122,7 +1135,9 @@ func (s *ActivityService) ListActivitiesPaginated(ctx context.Context, environme
 		escaped := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(term)
 		searchPattern := "%" + escaped + "%"
 		q = q.Where(
-			"type LIKE ? ESCAPE '\\' OR COALESCE(resource_name, '') LIKE ? ESCAPE '\\' OR COALESCE(latest_message, '') LIKE ? ESCAPE '\\' OR COALESCE(step, '') LIKE ? ESCAPE '\\' OR COALESCE(error, '') LIKE ? ESCAPE '\\'",
+			"type LIKE ? ESCAPE '\\' OR COALESCE(resource_name, '') LIKE ? ESCAPE '\\' OR COALESCE(latest_message, "+
+				"'') LIKE ? ESCAPE '\\' OR COALESCE(step, '') LIKE ? ESCAPE '\\' OR COALESCE(error, '') LIKE ? ESCAPE "+
+				"'\\'",
 			searchPattern, searchPattern, searchPattern, searchPattern, searchPattern,
 		)
 	}
@@ -1278,31 +1293,31 @@ func (s *ActivityService) Subscribe(environmentID string) (<-chan activitytypes.
 
 	missedEvents := func() bool {
 		s.subscribersMu.RLock()
-		sub, ok := s.subscribers[id]
+		localSub, ok := s.subscribers[id]
 		s.subscribersMu.RUnlock()
 		if !ok {
 			return false
 		}
 
-		sub.mu.Lock()
-		defer sub.mu.Unlock()
-		if !sub.missed {
+		localSub.mu.Lock()
+		defer localSub.mu.Unlock()
+		if !localSub.missed {
 			return false
 		}
-		sub.missed = false
+		localSub.missed = false
 		return true
 	}
 
 	unsubscribe := func() {
 		s.subscribersMu.Lock()
-		sub, ok := s.subscribers[id]
+		localSub, ok := s.subscribers[id]
 		if ok {
 			delete(s.subscribers, id)
 		}
 		s.subscribersMu.Unlock()
 		if ok {
 			// The pump goroutine owns ch and closes it on shutdown.
-			close(sub.done)
+			close(localSub.done)
 		}
 	}
 
@@ -1554,7 +1569,23 @@ func activityStartedByDTOInternal(model *Activity) *activitytypes.StartedBy {
 // FailInterruptedBackups finalizes backup activities before startup admits work.
 func (s *ActivityService) FailInterruptedBackups(ctx context.Context, protectedIDs ...string) error {
 	var pending []Activity
-	if err := s.db.WithContext(ctx).Where("status IN ?", []activitytypes.Status{activitytypes.StatusQueued, activitytypes.StatusRunning}).Where("id NOT IN ?", append(protectedIDs, "")).Find(&pending).Error; err != nil {
+	if err := s.db.WithContext(
+		ctx,
+	).Where(
+		"status IN ?",
+		[]activitytypes.Status{
+			activitytypes.StatusQueued,
+			activitytypes.StatusRunning,
+		},
+	).Where(
+		"id NOT IN ?",
+		append(
+			protectedIDs,
+			"",
+		),
+	).Find(
+		&pending,
+	).Error; err != nil {
 		return fmt.Errorf("find interrupted backup activities: %w", err)
 	}
 	const message = "Backup interrupted by Arcane restart"

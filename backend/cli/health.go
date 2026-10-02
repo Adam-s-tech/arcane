@@ -75,7 +75,7 @@ func runHealthCommandInternal(ctx context.Context, cfg *config.Config, timeout t
 		return err
 	}
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodHead, healthURL, nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodHead, healthURL, http.NoBody)
 	if err != nil {
 		return fmt.Errorf("health check request creation failed: %w", err)
 	}

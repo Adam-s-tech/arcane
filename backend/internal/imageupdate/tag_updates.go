@@ -51,7 +51,12 @@ type tagRegistryInternal struct {
 	digests     *scanRegistryMemoInternal[string]
 }
 
-func newTagRegistryInternal(service *registry.ContainerRegistryService, credentials []containerregistry.Credential, dockerService *docker.DockerClientService, settingsService *settings.SettingsService) tagRegistryInternal {
+func newTagRegistryInternal(
+	service *registry.ContainerRegistryService,
+	credentials []containerregistry.Credential,
+	dockerService *docker.DockerClientService,
+	settingsService *settings.SettingsService,
+) tagRegistryInternal {
 	return tagRegistryInternal{
 		service:     service,
 		credentials: credentials,
@@ -198,8 +203,8 @@ func (s *ImageUpdateService) checkContainerTagUpdatesInternal(ctx context.Contex
 		}
 		candidates = append(candidates, cnt)
 	}
-	if err := s.deleteContainerUpdateRecordsInternal(ctx, staleDigestContainerIDs); err != nil {
-		return results, err
+	if deleteContainerUpdateRecordsErr := s.deleteContainerUpdateRecordsInternal(ctx, staleDigestContainerIDs); deleteContainerUpdateRecordsErr != nil {
+		return results, deleteContainerUpdateRecordsErr
 	}
 
 	// Policies are evaluated concurrently; the shared adapter dedupes registry
@@ -255,8 +260,8 @@ func (s *ImageUpdateService) checkContainerTagInternal(ctx context.Context, engi
 		return result
 	}
 	if s.registryLimiter != nil {
-		if err := s.registryLimiter.Acquire(ctx, parsed.RegistryHost); err != nil {
-			result.Error = err.Error()
+		if acquireErr := s.registryLimiter.Acquire(ctx, parsed.RegistryHost); acquireErr != nil {
+			result.Error = acquireErr.Error()
 			return result
 		}
 		defer s.registryLimiter.Release(parsed.RegistryHost)
@@ -281,9 +286,9 @@ func (s *ImageUpdateService) checkContainerTagInternal(ctx context.Context, engi
 	result.CurrentDigest = check.CurrentDigest
 	result.LatestDigest = check.TargetDigest
 	if check.TargetRef != "" {
-		target, err := refs.NormalizeReference(check.TargetRef)
-		if err != nil {
-			result.Error = err.Error()
+		target, normalizeReferenceErr := refs.NormalizeReference(check.TargetRef)
+		if normalizeReferenceErr != nil {
+			result.Error = normalizeReferenceErr.Error()
 			result.HasUpdate = false
 			return result
 		}
@@ -311,11 +316,11 @@ func (s *ImageUpdateService) saveContainerTagResultInternal(ctx context.Context,
 	policyKey := imageref.UpdatePolicyKey(cnt.Image, cnt.Labels)
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// A previous good result must not survive a rate limit under a different policy.
-		if err := tx.Where("id = ? AND policy_key <> ?", id, policyKey).Delete(&ImageUpdateRecord{}).Error; err != nil {
-			return err
+		if deleteStaleUpdatesErr := tx.Where("id = ? AND policy_key <> ?", id, policyKey).Delete(&ImageUpdateRecord{}).Error; deleteStaleUpdatesErr != nil {
+			return deleteStaleUpdatesErr
 		}
-		if err := savePreparedUpdateResultWithTxInternal(tx, id, parsed.RegistryHost+"/"+parsed.Repository, parsed.Tag, result); err != nil {
-			return err
+		if savePreparedUpdateResultWithTxErr := savePreparedUpdateResultWithTxInternal(tx, id, parsed.RegistryHost+"/"+parsed.Repository, parsed.Tag, result); savePreparedUpdateResultWithTxErr != nil {
+			return savePreparedUpdateResultWithTxErr
 		}
 		return tx.Model(&ImageUpdateRecord{}).Where("id = ?", id).Updates(map[string]any{"container_id": cnt.ID, "image_id": cnt.ImageID, "policy_key": policyKey}).Error
 	})

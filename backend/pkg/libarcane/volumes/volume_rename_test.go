@@ -10,6 +10,7 @@ import (
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/volume"
 	"github.com/moby/moby/client"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	kit "go.getarcane.app/kit/pkg"
 
@@ -40,15 +41,19 @@ func TestPlanRenamePreservesStandaloneVolumeConfiguration(t *testing.T) {
 		switch {
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/volumes/source-data"):
 			w.Header().Set("Content-Type", "application/json")
-			require.NoError(t, json.NewEncoder(w).Encode(volume.Volume{
+			if !assert.NoError(t, json.NewEncoder(w).Encode(volume.Volume{
 				Name:    "source-data",
 				Driver:  "local",
 				Options: map[string]string{"type": "none", "device": "/srv/data"},
 				Labels:  map[string]string{"owner": "arcane"},
-			}))
+			})) {
+				return
+			}
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/containers/json"):
 			w.Header().Set("Content-Type", "application/json")
-			require.NoError(t, json.NewEncoder(w).Encode([]container.Summary{}))
+			if !assert.NoError(t, json.NewEncoder(w).Encode([]container.Summary{})) {
+				return
+			}
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/volumes/renamed-data"):
 			http.NotFound(w, r)
 		default:

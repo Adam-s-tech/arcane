@@ -195,7 +195,7 @@ func collectEnvConfigInternal(sourceRoot string) ([]ConfigEntry, error) {
 	}
 
 	configEntries, err := parseStructEnvFieldsInternal(
-		filepath.Join(root, "internal/config/config.go"),
+		filepath.Join(root, "internal", "config", "config.go"),
 		"Config",
 		envFieldOptions{
 			sourceFile: sourceFileConfig,
@@ -207,7 +207,7 @@ func collectEnvConfigInternal(sourceRoot string) ([]ConfigEntry, error) {
 	}
 
 	buildablesEntries, err := parseStructEnvFieldsInternal(
-		filepath.Join(root, "internal/config/buildables_config.go"),
+		filepath.Join(root, "internal", "config", "buildables_config.go"),
 		"BuildablesConfig",
 		envFieldOptions{
 			conditional: true,
@@ -246,9 +246,9 @@ func parseStructEnvFieldsInternal(filename, structName string, opts envFieldOpti
 			continue
 		}
 
-		tagValue, err := strconv.Unquote(field.Tag.Value)
-		if err != nil {
-			return nil, fmt.Errorf("unquote struct tag for %s: %w", structName, err)
+		tagValue, unquoteErr := strconv.Unquote(field.Tag.Value)
+		if unquoteErr != nil {
+			return nil, fmt.Errorf("unquote struct tag for %s: %w", structName, unquoteErr)
 		}
 
 		structTag := reflect.StructTag(tagValue)
@@ -258,9 +258,9 @@ func parseStructEnvFieldsInternal(filename, structName string, opts envFieldOpti
 		}
 
 		options := kit.TrimNonEmpty(strings.Split(structTag.Get("options"), ","))
-		typeName, err := exprStringInternal(field.Type)
-		if err != nil {
-			return nil, fmt.Errorf("render type for %s.%s: %w", structName, field.Names[0].Name, err)
+		typeName, unquoteErr := exprStringInternal(field.Type)
+		if unquoteErr != nil {
+			return nil, fmt.Errorf("render type for %s.%s: %w", structName, field.Names[0].Name, unquoteErr)
 		}
 
 		description := cmp.Or(strings.Join(strings.Fields(field.Doc.Text()), " "), strings.Join(strings.Fields(field.Comment.Text()), " "))
@@ -362,13 +362,13 @@ func findStructTypeInternal(file *ast.File, structName string) (*ast.StructType,
 		}
 
 		for _, spec := range genDecl.Specs {
-			typeSpec, ok := spec.(*ast.TypeSpec)
-			if !ok || typeSpec.Name.Name != structName {
+			typeSpec, localOk := spec.(*ast.TypeSpec)
+			if !localOk || typeSpec.Name.Name != structName {
 				continue
 			}
 
-			structType, ok := typeSpec.Type.(*ast.StructType)
-			if !ok {
+			structType, localOk := typeSpec.Type.(*ast.StructType)
+			if !localOk {
 				return nil, fmt.Errorf("%s is not a struct", structName)
 			}
 
@@ -440,8 +440,8 @@ func resolveSourceRootCandidateInternal(candidate string) (string, error) {
 
 func hasSchemaSourceFilesInternal(root string) bool {
 	required := []string{
-		filepath.Join(root, "internal/config/config.go"),
-		filepath.Join(root, "internal/config/buildables_config.go"),
+		filepath.Join(root, "internal", "config", "config.go"),
+		filepath.Join(root, "internal", "config", "buildables_config.go"),
 	}
 
 	// os.* rather than acfs: this probes repo source files while walking up

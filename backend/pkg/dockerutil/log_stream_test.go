@@ -93,7 +93,7 @@ func TestStreamMultiplexedLogsContextCancelDoesNotDeadlock(t *testing.T) {
 	writeDockerLogFrameInternal(t, &stream, 1, "line 3\n")
 
 	logsChan := make(chan string, 1)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	done := make(chan error, 1)
@@ -117,7 +117,7 @@ func TestStreamMultiplexedLogsContextCancelDoesNotDeadlock(t *testing.T) {
 
 func TestReadAllLogsContextCancelClosesReader(t *testing.T) {
 	logsChan := make(chan string, 1)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	reader := &blockingReadCloserInternal{readStarted: make(chan struct{}), closeCalled: make(chan struct{})}

@@ -1,7 +1,6 @@
 package projects
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -54,7 +53,7 @@ func TestBuildImageRefsFromComposeProject_UsesMergedComposeOverrides(t *testing.
     build: ./app
 `), 0o644))
 
-	project, err := LoadComposeProject(context.Background(), composePath, "override-demo", dir, false, nil, nil, nil, false, nil, nil, nil)
+	project, err := LoadComposeProject(t.Context(), composePath, "override-demo", dir, false, nil, nil, nil, false, nil, nil, nil)
 	require.NoError(t, err)
 
 	assert.Equal(t, []string{"overridden-app:latest"}, BuildImageRefsFromComposeProject(project))

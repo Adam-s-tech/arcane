@@ -83,17 +83,17 @@ func (s *ProjectService) UpdateProjectServices(ctx context.Context, projectID st
 		return err
 	}
 	if discoverTags {
-		effective, _, err := s.loadComposeProjectForProjectInternal(ctx, proj, nil, servicesToUpdate...)
-		if err != nil {
-			return fmt.Errorf("load project for service image checks: %w", err)
+		effective, _, loadComposeProjectForProjectErr := s.loadComposeProjectForProjectInternal(ctx, proj, nil, servicesToUpdate...)
+		if loadComposeProjectForProjectErr != nil {
+			return fmt.Errorf("load project for service image checks: %w", loadComposeProjectForProjectErr)
 		}
-		changes, err := s.projectServiceImageChangesInternal(ctx, proj, effective)
-		if err != nil {
-			return err
+		changes, loadComposeProjectForProjectErr := s.projectServiceImageChangesInternal(ctx, proj, effective)
+		if loadComposeProjectForProjectErr != nil {
+			return loadComposeProjectForProjectErr
 		}
 		if len(changes) > 0 {
-			if _, err := s.persistProjectImageChangesInternal(ctx, projectID, changes); err != nil {
-				return err
+			if _, persistProjectImageChangesErr := s.persistProjectImageChangesInternal(ctx, projectID, changes); persistProjectImageChangesErr != nil {
+				return persistProjectImageChangesErr
 			}
 		}
 	}
@@ -124,8 +124,8 @@ func (s *ProjectService) updateProjectServicesInternal(ctx context.Context, proj
 	defer s.eventService.BeginComposeSuppressionWindow(compProj.Name)()
 
 	// 2. Set status to deploying/restarting
-	if err := s.updateProjectStatusInternal(ctx, projectID, ProjectStatusDeploying); err != nil {
-		return err
+	if updateProjectStatusErr := s.updateProjectStatusInternal(ctx, projectID, ProjectStatusDeploying); updateProjectStatusErr != nil {
+		return updateProjectStatusErr
 	}
 
 	credentials, err := s.ResolveRegistryCredentials(ctx)
@@ -137,7 +137,7 @@ func (s *ProjectService) updateProjectServicesInternal(ctx context.Context, proj
 	}
 
 	progressWriter, _ := ctx.Value(dockerutil.ProgressWriterKey{}).(io.Writer)
-	if err := s.composeCoordinator.UpdateServices(ctx, projecttypes.ComposeServiceUpdate{
+	if updateServicesErr := s.composeCoordinator.UpdateServices(ctx, projecttypes.ComposeServiceUpdate{
 		Project: compProj, Services: servicesToUpdate, Dependents: dependents, StoppedDependents: stoppedDependents,
 		Images: s.composeImageOperationsInternal(&user, credentials), Progress: progressWriter,
 		AuthConfigs: s.composeRegistryAuthConfigsInternal(ctx), WaitTimeout: timeouts.GetDuration(s.settingsService.GetSettingsConfig().DeployWaitTimeout.AsInt(), timeouts.DefaultDeployWait),
@@ -147,13 +147,13 @@ func (s *ProjectService) updateProjectServicesInternal(ctx context.Context, proj
 			}
 		},
 		Recover: func(ctx context.Context) { s.restoreProjectStatusAfterFailedDeployInternal(ctx, projectID) },
-	}); err != nil {
-		return err
+	}); updateServicesErr != nil {
+		return updateServicesErr
 	}
 
 	// 6. Finalize status
-	if err := s.updateProjectStatusandCountsInternal(ctx, projectID, ProjectStatusRunning); err != nil {
-		return err
+	if updateProjectStatusandCountsErr := s.updateProjectStatusandCountsInternal(ctx, projectID, ProjectStatusRunning); updateProjectStatusandCountsErr != nil {
+		return updateProjectStatusandCountsErr
 	}
 
 	metadata := database.JSON{
@@ -263,8 +263,8 @@ func ensureProjectBindDirectoryInternal(ctx context.Context, projectPath, source
 		return err
 	}
 
-	if err := acfs.MkdirAll(ctx, projectPath, logicalPath, utils.DirPerm); err != nil {
-		return kit.Ternary(errors.Is(err, acfs.ErrOutsideRoot), nil, err)
+	if mkdirAllErr := acfs.MkdirAll(ctx, projectPath, logicalPath, utils.DirPerm); mkdirAllErr != nil {
+		return kit.Ternary(errors.Is(mkdirAllErr, acfs.ErrOutsideRoot), nil, mkdirAllErr)
 	}
 	slog.InfoContext(ctx, "created missing bind directory for project deployment", "projectPath", projectPath, "source", source)
 	return nil
@@ -294,11 +294,11 @@ func (s *ProjectService) ArchiveProject(ctx context.Context, projectID string, u
 	}
 
 	now := time.Now()
-	if err := s.db.WithContext(ctx).Model(&Project{}).Where("id = ?", projectID).Updates(map[string]any{
+	if archiveProjectErr := s.db.WithContext(ctx).Model(&Project{}).Where("id = ?", projectID).Updates(map[string]any{
 		"is_archived": true,
 		"archived_at": now,
-	}).Error; err != nil {
-		return fmt.Errorf("failed to archive project: %w", err)
+	}).Error; archiveProjectErr != nil {
+		return fmt.Errorf("failed to archive project: %w", archiveProjectErr)
 	}
 
 	metadata := database.JSON{"action": "archived", "projectID": projectID, "projectName": proj.Name}
@@ -316,11 +316,11 @@ func (s *ProjectService) UnarchiveProject(ctx context.Context, projectID string,
 		return nil
 	}
 
-	if err := s.db.WithContext(ctx).Model(&Project{}).Where("id = ?", projectID).Updates(map[string]any{
+	if unarchiveProjectErr := s.db.WithContext(ctx).Model(&Project{}).Where("id = ?", projectID).Updates(map[string]any{
 		"is_archived": false,
 		"archived_at": gorm.Expr("NULL"),
-	}).Error; err != nil {
-		return fmt.Errorf("failed to unarchive project: %w", err)
+	}).Error; unarchiveProjectErr != nil {
+		return fmt.Errorf("failed to unarchive project: %w", unarchiveProjectErr)
 	}
 
 	metadata := database.JSON{"action": "unarchived", "projectID": projectID, "projectName": proj.Name}
@@ -337,12 +337,12 @@ func (s *ProjectService) DeployProject(ctx context.Context, projectID string, us
 	if projectFromDb != nil && projectFromDb.IsArchived {
 		return common.Classify(common.ErrProjectArchived, errors.New("project is archived and must be unarchived before this action"))
 	}
-	if _, err := s.ResolveProjectComposeFile(ctx, projectFromDb); err != nil {
-		return err
+	if _, resolveProjectComposeFileErr := s.ResolveProjectComposeFile(ctx, projectFromDb); resolveProjectComposeFileErr != nil {
+		return resolveProjectComposeFileErr
 	}
 
-	if err := s.updateProjectStatusInternal(ctx, projectID, ProjectStatusDeploying); err != nil {
-		return fmt.Errorf("failed to update project status to deploying: %w", err)
+	if updateProjectStatusErr := s.updateProjectStatusInternal(ctx, projectID, ProjectStatusDeploying); updateProjectStatusErr != nil {
+		return fmt.Errorf("failed to update project status to deploying: %w", updateProjectStatusErr)
 	}
 	var closeSuppression func()
 	defer func() {
@@ -356,7 +356,12 @@ func (s *ProjectService) DeployProject(ctx context.Context, projectID string, us
 		ProjectID: projectID, ProjectPath: projectFromDb.Path, Options: options,
 		DefaultPullPolicy: s.settingsService.GetStringSetting(ctx, "defaultDeployPullPolicy", "missing"),
 		GitOpsManaged:     projectFromDb.GitOpsManagedBy != nil && *projectFromDb.GitOpsManagedBy != "",
-		WaitTimeout:       timeouts.GetDuration(s.settingsService.GetSettingsConfig().DeployWaitTimeout.AsInt(), timeouts.DefaultDeployWait), AuthConfigs: s.composeRegistryAuthConfigsInternal(ctx), Progress: progressWriter,
+		WaitTimeout: timeouts.GetDuration(
+			s.settingsService.GetSettingsConfig().DeployWaitTimeout.AsInt(),
+			timeouts.DefaultDeployWait,
+		), AuthConfigs: s.composeRegistryAuthConfigsInternal(
+			ctx,
+		), Progress: progressWriter,
 		PreDeploy: func(ctx context.Context) error {
 			if s.lifecycleService == nil {
 				return nil
@@ -364,18 +369,18 @@ func (s *ProjectService) DeployProject(ctx context.Context, projectID string, us
 			return s.lifecycleService.RunPreDeploy(ctx, projectFromDb, user)
 		},
 		Load: func(ctx context.Context) (*composetypes.Project, error) {
-			model, _, err := s.loadComposeProjectForProjectInternal(ctx, projectFromDb, prepareProjectBindDirectoriesInternal(projectFromDb.Path))
-			if err == nil {
+			model, _, loadComposeProjectForProjectErr := s.loadComposeProjectForProjectInternal(ctx, projectFromDb, prepareProjectBindDirectoriesInternal(projectFromDb.Path))
+			if loadComposeProjectForProjectErr == nil {
 				closeSuppression = s.eventService.BeginComposeSuppressionWindow(model.Name)
 			}
-			return model, err
+			return model, loadComposeProjectForProjectErr
 		},
 		ResolveImages: func(ctx context.Context) (projecttypes.ComposeImageOperations, error) {
-			credentials, err := s.ResolveRegistryCredentials(ctx)
+			credentials, resolveRegistryCredentialsErr := s.ResolveRegistryCredentials(ctx)
 			operations := s.composeImageOperationsInternal(&user, credentials)
 			// Deployment pulls are recorded as system actions; builds retain the requesting actor.
 			operations.Pull = s.composeImageOperationsInternal(nil, credentials).Pull
-			return operations, err
+			return operations, resolveRegistryCredentialsErr
 		},
 		Recover: func(ctx context.Context) { s.restoreProjectStatusAfterFailedDeployInternal(ctx, projectID) },
 	})
@@ -405,15 +410,15 @@ func (s *ProjectService) DownProject(ctx context.Context, projectID string, user
 		return fmt.Errorf("failed to load compose project: %w", lerr)
 	}
 
-	if err := s.updateProjectStatusInternal(ctx, projectID, ProjectStatusStopped); err != nil {
-		return fmt.Errorf("failed to update project status to stopping: %w", err)
+	if updateProjectStatusErr := s.updateProjectStatusInternal(ctx, projectID, ProjectStatusStopped); updateProjectStatusErr != nil {
+		return fmt.Errorf("failed to update project status to stopping: %w", updateProjectStatusErr)
 	}
 
 	defer s.eventService.BeginComposeSuppressionWindow(proj.Name)()
 
-	if err := projects.ComposeDown(ctx, proj, false); err != nil {
+	if composeDownErr := projects.ComposeDown(ctx, proj, false); composeDownErr != nil {
 		_ = s.updateProjectStatusInternal(ctx, projectID, ProjectStatusRunning)
-		return fmt.Errorf("failed to bring down project: %w", err)
+		return fmt.Errorf("failed to bring down project: %w", composeDownErr)
 	}
 
 	metadata := database.JSON{
@@ -431,7 +436,22 @@ func (s *ProjectService) DownProject(ctx context.Context, projectID string, user
 // "-N" (the interactive default). When false a collision returns
 // projects.ErrProjectDirExists (wrapped) so GitOps creates fail loudly instead of
 // minting runaway "-N" duplicate projects on a broken binding.
-func (s *ProjectService) CreateProject(ctx context.Context, name, composeContent string, envContent *string, manifest projecttypes.CreateProjectWorkspaceManifest, uploads map[int][]byte, uiTags []string, uiTagColors map[string]projecttypes.TagColor, user common.User, allowNameSuffixOptions ...bool) (*Project, error) {
+func (
+	s *ProjectService,
+) CreateProject(
+	ctx context.Context,
+	name, composeContent string,
+	envContent *string,
+	manifest projecttypes.CreateProjectWorkspaceManifest,
+	uploads map[int][]byte,
+	uiTags []string,
+	uiTagColors map[string]projecttypes.TagColor,
+	user common.User,
+	allowNameSuffixOptions ...bool,
+) (
+	*Project,
+	error,
+) {
 	normalizedUITags, err := projects.NormalizeProjectTags(uiTags)
 	if err != nil {
 		return nil, fmt.Errorf("invalid project tags: %w", err)
@@ -480,29 +500,39 @@ func (s *ProjectService) CreateProject(ctx context.Context, name, composeContent
 		RunningCount: 0,
 	}
 
-	if err := projects.ApplyProjectWorkspaceChanges(projectPath, manifest.FileChanges, uploads, projects.ProjectWorkspaceApplyOptions{
+	if applyProjectWorkspaceChangesErr := projects.ApplyProjectWorkspaceChanges(projectPath, manifest.FileChanges, uploads, projects.ProjectWorkspaceApplyOptions{
 		MaxDepth:         s.config.ProjectWorkspaceMaxDepth,
 		MaxEntries:       s.config.ProjectWorkspaceMaxEntries,
 		MaxFileSizeBytes: workspace.MaxFileSizeBytes(s.config.ProjectWorkspaceMaxFileSizeMB),
 		SkipDirectories:  s.config.ProjectScanSkipDirs,
 		ComposeFileName:  projects.DefaultComposeFileName,
-	}); err != nil {
+	}); applyProjectWorkspaceChangesErr != nil {
 		_ = acfs.RemoveAll(context.WithoutCancel(ctx), projectsDirectory, projectLogical)
-		return nil, wrapProjectWorkspaceErrorInternal(err)
+		return nil, wrapProjectWorkspaceErrorInternal(applyProjectWorkspaceChangesErr)
 	}
 
 	// GitOps-originated creates (allowNameSuffix=false) tolerate not-yet-supplied
 	// ${VAR} references the same way single-file git sync updates do; interactive
 	// creates (allowNameSuffix=true) stay strict.
-	if err := projects.ValidateComposeContentForUpdate(ctx, projectsDirectory, projectPath, name, composeContent, envContent, nil, "", !allowNameSuffix); err != nil {
+	if validateComposeContentForUpdateErr := projects.ValidateComposeContentForUpdate(
+		ctx,
+		projectsDirectory,
+		projectPath,
+		name,
+		composeContent,
+		envContent,
+		nil,
+		"",
+		!allowNameSuffix,
+	); validateComposeContentForUpdateErr != nil {
 		_ = acfs.RemoveAll(context.WithoutCancel(ctx), projectsDirectory, projectLogical)
-		return nil, fmt.Errorf("invalid compose file: %w", err)
+		return nil, fmt.Errorf("invalid compose file: %w", validateComposeContentForUpdateErr)
 	}
 
-	if err := projects.WriteProjectFiles(ctx, projectsDirectory, projectPath, composeContent, envContent); err != nil {
+	if writeProjectFilesErr := projects.WriteProjectFiles(ctx, projectsDirectory, projectPath, composeContent, envContent); writeProjectFilesErr != nil {
 		// Best-effort cleanup to restore pre-transaction behavior.
 		_ = acfs.RemoveAll(context.WithoutCancel(ctx), projectsDirectory, projectLogical)
-		return nil, fmt.Errorf("failed to save project files: %w", err)
+		return nil, fmt.Errorf("failed to save project files: %w", writeProjectFilesErr)
 	}
 	composeMeta, err := projects.ParseArcaneComposeMetadata(
 		ctx,
@@ -516,18 +546,18 @@ func (s *ProjectService) CreateProject(ctx context.Context, name, composeContent
 	}
 	normalizedUITags = excludeComposeOwnedUITagsInternal(normalizedUITags, composeMeta.ProjectTags)
 
-	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(proj).Error; err != nil {
-			return err
+	if transactionErr := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if createProjectErr := tx.Create(proj).Error; createProjectErr != nil {
+			return createProjectErr
 		}
 		return createUIProjectTagsInternal(tx, proj.ID, normalizedUITags, normalizedTagColors)
-	}); err != nil {
+	}); transactionErr != nil {
 		_ = acfs.RemoveAll(context.WithoutCancel(ctx), projectsDirectory, projectLogical)
-		return nil, fmt.Errorf("failed to create project: %w", err)
+		return nil, fmt.Errorf("failed to create project: %w", transactionErr)
 	}
 	s.refreshComposeProjectNameInternal(ctx, proj)
 	s.refreshProjectImageRefsInternal(ctx, proj)
-	if err := s.reconcileComposeProjectTagsInternal(ctx, proj.ID, composeMeta.ProjectTags); err != nil {
+	if reconcileComposeProjectTagsErr := s.reconcileComposeProjectTagsInternal(ctx, proj.ID, composeMeta.ProjectTags); reconcileComposeProjectTagsErr != nil {
 		cleanupCtx := context.WithoutCancel(ctx)
 		databaseCleanupErr := s.db.WithContext(cleanupCtx).Transaction(func(tx *gorm.DB) error {
 			return deleteProjectWithTagsInternal(tx, proj.ID)
@@ -539,7 +569,7 @@ func (s *ProjectService) CreateProject(ctx context.Context, name, composeContent
 		if fileCleanupErr != nil {
 			fileCleanupErr = fmt.Errorf("rollback project files after tag reconciliation failure: %w", fileCleanupErr)
 		}
-		return nil, errors.Join(fmt.Errorf("reconcile Compose project tags: %w", err), databaseCleanupErr, fileCleanupErr)
+		return nil, errors.Join(fmt.Errorf("reconcile Compose project tags: %w", reconcileComposeProjectTagsErr), databaseCleanupErr, fileCleanupErr)
 	}
 
 	metadata := database.JSON{"action": "create", "projectID": proj.ID, "projectName": proj.Name, "path": projectPath}
@@ -565,8 +595,8 @@ func (s *ProjectService) DestroyProject(ctx context.Context, projectID string, r
 		"projectName", proj.Name,
 		"projectPath", proj.Path)
 
-	if err := s.DownProject(ctx, projectID, common.SystemUser); err != nil {
-		slog.WarnContext(ctx, "failed to bring down project", "error", err)
+	if downProjectErr := s.DownProject(ctx, projectID, common.SystemUser); downProjectErr != nil {
+		slog.WarnContext(ctx, "failed to bring down project", "error", downProjectErr)
 	}
 
 	if removeVolumes {
@@ -584,17 +614,17 @@ func (s *ProjectService) DestroyProject(ctx context.Context, projectID string, r
 		slog.DebugContext(ctx, "Removing project files", "path", proj.Path)
 		// An imported project can live anywhere, so the removal is rooted at the
 		// parent directory and names the project directory itself.
-		if err := acfs.RemoveAll(ctx, filepath.Dir(proj.Path), "/"+filepath.Base(proj.Path)); err != nil {
-			slog.ErrorContext(ctx, "Failed to remove project files", "path", proj.Path, "error", err)
-			return fmt.Errorf("failed to remove project files: %w", err)
+		if removeAllErr := acfs.RemoveAll(ctx, filepath.Dir(proj.Path), "/"+filepath.Base(proj.Path)); removeAllErr != nil {
+			slog.ErrorContext(ctx, "Failed to remove project files", "path", proj.Path, "error", removeAllErr)
+			return fmt.Errorf("failed to remove project files: %w", removeAllErr)
 		}
 		slog.InfoContext(ctx, "Project files removed successfully", "path", proj.Path)
 	}
 
-	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	if transactionErr := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		return deleteProjectWithTagsInternal(tx, projectID)
-	}); err != nil {
-		return fmt.Errorf("failed to delete project from database: %w", err)
+	}); transactionErr != nil {
+		return fmt.Errorf("failed to delete project from database: %w", transactionErr)
 	}
 
 	if !removeFiles {
@@ -603,8 +633,8 @@ func (s *ProjectService) DestroyProject(ctx context.Context, projectID string, r
 		} else if projects.IsSafeSubdirectory(projectsDir, proj.Path) && filepath.Clean(projectsDir) != filepath.Clean(proj.Path) {
 			trashName := fmt.Sprintf("%s%s-%d", projects.ArcaneTrashPrefix, filepath.Base(proj.Path), time.Now().Unix())
 			trashPath := filepath.Join(filepath.Dir(proj.Path), trashName)
-			if err := acfs.Rename(ctx, filepath.Dir(proj.Path), "/"+filepath.Base(proj.Path), "/"+trashName); err != nil {
-				slog.WarnContext(ctx, "Failed to quarantine project files", "path", proj.Path, "trashPath", trashPath, "error", err)
+			if renameErr := acfs.Rename(ctx, filepath.Dir(proj.Path), "/"+filepath.Base(proj.Path), "/"+trashName); renameErr != nil {
+				slog.WarnContext(ctx, "Failed to quarantine project files", "path", proj.Path, "trashPath", trashPath, "error", renameErr)
 			} else {
 				slog.InfoContext(ctx, "Project files quarantined successfully", "path", proj.Path, "trashPath", trashPath)
 			}
@@ -624,8 +654,8 @@ func (s *ProjectService) RedeployProject(ctx context.Context, projectID string, 
 		return err
 	}
 
-	if _, err := s.ResolveProjectComposeFile(ctx, proj); err != nil {
-		return err
+	if _, resolveProjectComposeFileErr := s.ResolveProjectComposeFile(ctx, proj); resolveProjectComposeFileErr != nil {
+		return resolveProjectComposeFileErr
 	}
 
 	disabled := s.projectRedeployDisabledInternal(ctx, *proj)
@@ -642,8 +672,8 @@ func (s *ProjectService) RedeployProject(ctx context.Context, projectID string, 
 	if cerr != nil {
 		slog.WarnContext(ctx, "failed to resolve registry credentials for redeploy pull", "error", cerr)
 	}
-	if err := s.PullProjectImages(ctx, projectID, progressWriter, user, credentials); err != nil {
-		slog.WarnContext(ctx, "failed to pull project images", "error", err)
+	if pullProjectImagesErr := s.PullProjectImages(ctx, projectID, progressWriter, user, credentials); pullProjectImagesErr != nil {
+		slog.WarnContext(ctx, "failed to pull project images", "error", pullProjectImagesErr)
 	}
 
 	return s.DeployProject(ctx, projectID, user, options)
@@ -682,8 +712,8 @@ func (s *ProjectService) PullProjectImages(ctx context.Context, projectID string
 	defer s.eventService.BeginComposeSuppressionWindow(compProj.Name)()
 
 	for _, img := range projects.PullableImageRefs(compProj) {
-		if err := s.pullAndReconcileImageInternal(ctx, img, progressWriter, user, credentials); err != nil {
-			return err
+		if pullAndReconcileImageErr := s.pullAndReconcileImageInternal(ctx, img, progressWriter, user, credentials); pullAndReconcileImageErr != nil {
+			return pullAndReconcileImageErr
 		}
 	}
 
@@ -756,12 +786,12 @@ func (s *ProjectService) RestartProject(ctx context.Context, projectID string, s
 	if err != nil {
 		return err
 	}
-	if _, err := s.ResolveProjectComposeFile(ctx, proj); err != nil {
-		return err
+	if _, resolveProjectComposeFileErr := s.ResolveProjectComposeFile(ctx, proj); resolveProjectComposeFileErr != nil {
+		return resolveProjectComposeFileErr
 	}
 
-	if err := s.updateProjectStatusInternal(ctx, projectID, ProjectStatusRestarting); err != nil {
-		return fmt.Errorf("failed to update project status to restarting: %w", err)
+	if updateProjectStatusErr := s.updateProjectStatusInternal(ctx, projectID, ProjectStatusRestarting); updateProjectStatusErr != nil {
+		return fmt.Errorf("failed to update project status to restarting: %w", updateProjectStatusErr)
 	}
 
 	compProj, _, lerr := s.loadComposeProjectForProjectInternal(ctx, proj, nil)
@@ -772,9 +802,9 @@ func (s *ProjectService) RestartProject(ctx context.Context, projectID string, s
 
 	defer s.eventService.BeginComposeSuppressionWindow(compProj.Name)()
 
-	if err := projects.ComposeRestart(ctx, compProj, services); err != nil {
+	if composeRestartErr := projects.ComposeRestart(ctx, compProj, services); composeRestartErr != nil {
 		_ = s.updateProjectStatusInternal(ctx, projectID, ProjectStatusRunning)
-		return fmt.Errorf("failed to restart project: %w", err)
+		return fmt.Errorf("failed to restart project: %w", composeRestartErr)
 	}
 
 	metadata := database.JSON{

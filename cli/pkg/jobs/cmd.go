@@ -141,7 +141,9 @@ var listCmd = &cobra.Command{
 			}
 		}
 
-		output.Table(headers, rows)
+		if tableErr := output.Table(headers, rows); tableErr != nil {
+			return tableErr
+		}
 		fmt.Printf("\nTotal: %d jobs\n", len(result.Jobs))
 		return nil
 	},

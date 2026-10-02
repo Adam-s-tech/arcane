@@ -16,7 +16,7 @@ import (
 )
 
 func TestNewClient(t *testing.T) {
-	_, serverConn, cleanup := newTestWSPair(t)
+	serverConn, cleanup := newTestWSPairInternal(t)
 	defer cleanup()
 
 	c := NewClient(serverConn, 64)
@@ -104,7 +104,7 @@ func TestServeClient_ContextCancellation(t *testing.T) {
 	hubCtx := t.Context()
 	go h.Run(hubCtx)
 
-	clientCtx, clientCancel := context.WithCancel(context.Background())
+	clientCtx, clientCancel := context.WithCancel(t.Context())
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := websocket.Accept(w, r, nil)
@@ -234,8 +234,8 @@ func TestServeClient_MultipleMessages(t *testing.T) {
 	readCtx, readCancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer readCancel()
 	for _, expected := range messages {
-		_, msg, err := clientConn.Read(readCtx)
-		require.NoError(t, err)
+		_, msg, readErr := clientConn.Read(readCtx)
+		require.NoError(t, readErr)
 		assert.Equal(t, expected, string(msg))
 	}
 }
@@ -256,7 +256,7 @@ func TestServeClient_StoppedHubDoesNotBlock(t *testing.T) {
 	cancel()
 	<-stopped
 
-	_, serverConn, cleanup := newTestWSPair(t)
+	serverConn, cleanup := newTestWSPairInternal(t)
 	defer cleanup()
 
 	var onRemoveCalled atomic.Bool

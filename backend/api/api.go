@@ -128,7 +128,7 @@ func customSchemaNamer(t reflect.Type, hint string) string {
 
 	if pkgName, ok := arcanePackageName(pkgPath); ok {
 		name = pkgName + name
-	} else if dockerPrefix, ok := dockerSchemaPrefix(pkgPath, shortPkg); ok {
+	} else if dockerPrefix, localOk := dockerSchemaPrefix(pkgPath, shortPkg); localOk {
 		name = dockerPrefix + name
 	}
 	return qualifyGenericArcaneArgumentsInternal(pkgPath, typeStr, name)
@@ -397,7 +397,7 @@ func SetupAPIForSpec() huma.API {
 
 	// Register handlers with zero-value dependencies for schema discovery only.
 	registerNormalizationInternal(api)
-	registerHandlersInternal(api, HandlerDeps{}, handlerutil.NewActivityAppContext(context.Background()), nil)
+	registerHandlersInternal(api, HandlerDeps{}, handlerutil.NewActivityAppContext(context.Background()), nil) //nolint:forbidigo // Schema discovery has no running request or application lifecycle.
 
 	return api
 }

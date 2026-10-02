@@ -82,14 +82,14 @@ func (s *JobService) ReconcileStartupActivities(ctx context.Context, extraProtec
 			}
 		}
 	}
-	if err := s.activity.FailInterruptedBackups(ctx, protected...); err != nil {
-		return err
+	if failInterruptedBackupsErr := s.activity.FailInterruptedBackups(ctx, protected...); failInterruptedBackupsErr != nil {
+		return failInterruptedBackupsErr
 	}
-	if _, err := s.activity.FailStaleImageUpdateChecks(ctx); err != nil {
-		return err
+	if _, failStaleImageUpdateChecksErr := s.activity.FailStaleImageUpdateChecks(ctx); failStaleImageUpdateChecksErr != nil {
+		return failStaleImageUpdateChecksErr
 	}
-	if _, err := s.activity.ResolveStaleAutoUpdateActivities(ctx, protected...); err != nil {
-		return err
+	if _, resolveStaleAutoUpdateActivitiesErr := s.activity.ResolveStaleAutoUpdateActivities(ctx, protected...); resolveStaleAutoUpdateActivitiesErr != nil {
+		return resolveStaleAutoUpdateActivitiesErr
 	}
 	_, err = s.activity.ResolveOrphanedQueuedActivities(ctx, protected...)
 	return err

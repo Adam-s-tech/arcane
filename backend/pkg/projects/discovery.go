@@ -105,7 +105,16 @@ func DiscoverProjectDirectories(ctx context.Context, root string, followSymlinks
 	return discovered, nil
 }
 
-func walkProjectDirectoriesInternal(ctx context.Context, root, path string, isRoot bool, currentDepth, maxDepth int, followSymlinks bool, ancestors map[string]struct{}, discovered *[]DiscoveredProjectDir) error {
+func walkProjectDirectoriesInternal(ctx context.Context,
+	root,
+	path string,
+	isRoot bool,
+	currentDepth,
+	maxDepth int,
+	followSymlinks bool,
+	ancestors map[string]struct{},
+	discovered *[]DiscoveredProjectDir,
+) error {
 	if !isRoot {
 		name := filepath.Base(path)
 		if IsIgnoredProjectDirName(name) {
@@ -136,15 +145,15 @@ func walkProjectDirectoriesInternal(ctx context.Context, root, path string, isRo
 	// The projects root directory itself is exempt — we always descend into it
 	// so siblings under the root are all discovered, even if the root happens
 	// to contain its own compose file.
-	switch composePath, err := DetectComposeFile(ctx, root, path); {
-	case err == nil, errors.Is(err, common.ErrProjectEnvUnreadable) && composePath != "":
-		if err != nil {
+	switch composePath, detectComposeFileErr := DetectComposeFile(ctx, root, path); {
+	case detectComposeFileErr == nil, errors.Is(detectComposeFileErr, common.ErrProjectEnvUnreadable) && composePath != "":
+		if detectComposeFileErr != nil {
 			slog.Warn("Discovered project with an unreadable .env",
 				"path", path,
 				"envFile", filepath.Join(path, EffectiveEnvFileName),
 				"uid", os.Geteuid(),
 				"gid", os.Getegid(),
-				"error", err)
+				"error", detectComposeFileErr)
 		}
 		*discovered = append(*discovered, DiscoveredProjectDir{
 			DirName: filepath.Base(path),
@@ -153,9 +162,9 @@ func walkProjectDirectoriesInternal(ctx context.Context, root, path string, isRo
 		if !isRoot {
 			return nil
 		}
-	case errors.Is(err, common.ErrComposeFileNotFound):
+	case errors.Is(detectComposeFileErr, common.ErrComposeFileNotFound):
 	default:
-		slog.Warn("Skipping undetectable project directory during discovery", "path", path, "error", err)
+		slog.Warn("Skipping undetectable project directory during discovery", "path", path, "error", detectComposeFileErr)
 	}
 
 	if maxDepth > 0 && currentDepth >= maxDepth {
@@ -177,8 +186,8 @@ func walkProjectDirectoriesInternal(ctx context.Context, root, path string, isRo
 			continue
 		}
 
-		if err := walkProjectDirectoriesInternal(ctx, root, childPath, false, currentDepth+1, maxDepth, followSymlinks, ancestors, discovered); err != nil {
-			return err
+		if walkProjectDirectoriesErr := walkProjectDirectoriesInternal(ctx, root, childPath, false, currentDepth+1, maxDepth, followSymlinks, ancestors, discovered); walkProjectDirectoriesErr != nil {
+			return walkProjectDirectoriesErr
 		}
 	}
 

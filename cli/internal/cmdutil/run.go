@@ -59,8 +59,8 @@ func RunList[T any](cmd *cobra.Command, c *client.Client, spec ListSpec[T]) erro
 	}
 
 	var result base.Paginated[T]
-	if err := json.Unmarshal(body, &result); err != nil {
-		return fmt.Errorf("failed to parse response: %w", err)
+	if unmarshalErr := json.Unmarshal(body, &result); unmarshalErr != nil {
+		return fmt.Errorf("failed to parse response: %w", unmarshalErr)
 	}
 
 	rows := make([][]string, len(result.Data))
@@ -68,7 +68,9 @@ func RunList[T any](cmd *cobra.Command, c *client.Client, spec ListSpec[T]) erro
 		rows[i] = spec.Row(item)
 	}
 
-	output.Table(spec.Headers, rows)
+	if tableErr := output.Table(spec.Headers, rows); tableErr != nil {
+		return tableErr
+	}
 	output.Showing(len(result.Data), result.Pagination.TotalItems, spec.Resource)
 	return nil
 }

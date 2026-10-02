@@ -1,7 +1,6 @@
 package swarm
 
 import (
-	"context"
 	"testing"
 
 	projecttypes "github.com/getarcaneapp/arcane/types/v2/project"
@@ -14,7 +13,7 @@ func TestLoadComposeProjectMergesOverrideContent(t *testing.T) {
 	base := "services:\n  app:\n    image: nginx:alpine\n    environment:\n      FROM_BASE: \"1\"\n"
 	override := "services:\n  app:\n    image: busybox:latest\n    environment:\n      FROM_OVERRIDE: \"1\"\n"
 
-	project, err := projects.LoadComposeProjectFromContent(context.Background(), projecttypes.ComposeContentOptions{
+	project, err := projects.LoadComposeProjectFromContent(t.Context(), projecttypes.ComposeContentOptions{
 		ProjectName:     "stack",
 		ComposeContent:  base,
 		OverrideContent: override,
@@ -28,7 +27,7 @@ func TestLoadComposeProjectMergesOverrideContent(t *testing.T) {
 }
 
 func TestLoadComposeProjectWithoutOverrideContent(t *testing.T) {
-	project, err := projects.LoadComposeProjectFromContent(context.Background(), projecttypes.ComposeContentOptions{
+	project, err := projects.LoadComposeProjectFromContent(t.Context(), projecttypes.ComposeContentOptions{
 		ProjectName:    "stack",
 		ComposeContent: "services:\n  app:\n    image: nginx:alpine\n",
 	})
@@ -65,7 +64,7 @@ networks:
     external: true
 `
 
-	project, err := projects.LoadComposeProjectFromContent(context.Background(), projecttypes.ComposeContentOptions{
+	project, err := projects.LoadComposeProjectFromContent(t.Context(), projecttypes.ComposeContentOptions{
 		ProjectName:    "stack",
 		ComposeContent: composeContent,
 	})

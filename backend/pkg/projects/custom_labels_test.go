@@ -1,7 +1,6 @@
 package projects
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,7 +32,7 @@ x-arcane:
 	composePath := filepath.Join(tempDir, "compose.yaml")
 	require.NoError(t, os.WriteFile(composePath, []byte(composeContent), 0o600))
 
-	meta, err := ParseArcaneComposeMetadata(context.Background(), composePath, tempDir, false)
+	meta, err := ParseArcaneComposeMetadata(t.Context(), composePath, tempDir, false)
 	require.NoError(t, err)
 	require.Equal(t, "https://cdn.jsdelivr.net/gh/homarr-labs/webp/raspberry-pi.webp", meta.ProjectIcon.Light)
 	require.Equal(t, "https://cdn.jsdelivr.net/gh/homarr-labs/webp/raspberry-pi.webp", meta.ProjectIcon.Dark)
@@ -58,7 +57,7 @@ services:
 	composePath := filepath.Join(tempDir, "compose.yaml")
 	require.NoError(t, os.WriteFile(composePath, []byte(composeContent), 0o600))
 
-	meta, err := ParseArcaneComposeMetadata(context.Background(), composePath, tempDir, false)
+	meta, err := ParseArcaneComposeMetadata(t.Context(), composePath, tempDir, false)
 	require.NoError(t, err)
 	require.Equal(t, IconSet{Light: "postgres", Dark: "postgres"}, meta.ServiceIconSets["db"])
 	require.NotContains(t, meta.ServiceIconSets, "umami")
@@ -84,7 +83,7 @@ services:
 `
 	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "meta.yaml"), []byte(metaContent), 0o600))
 
-	meta, err := ParseArcaneComposeMetadata(context.Background(), composePath, tempDir, false)
+	meta, err := ParseArcaneComposeMetadata(t.Context(), composePath, tempDir, false)
 	require.NoError(t, err)
 	require.Equal(t, "https://example.com/icon-light.png", meta.ProjectIcon.Light)
 	require.Equal(t, "https://example.com/icon-dark.png", meta.ProjectIcon.Dark)
@@ -116,7 +115,7 @@ services:
 services: {}
 `), 0o600))
 
-	meta, err := ParseArcaneComposeMetadata(context.Background(), filepath.Join(tempDir, "compose.yaml"), tempDir, false)
+	meta, err := ParseArcaneComposeMetadata(t.Context(), filepath.Join(tempDir, "compose.yaml"), tempDir, false)
 	require.NoError(t, err)
 	require.Equal(t, []projecttypes.TagOption{
 		{Name: "database", Color: projecttypes.TagColorPurple},
@@ -148,7 +147,7 @@ x-arcane:
   icon-dark: *watchtower-icon
 `), 0o600))
 
-	meta, err := ParseArcaneComposeMetadata(context.Background(), filepath.Join(projectDir, "compose.yaml"), projectsRoot, false)
+	meta, err := ParseArcaneComposeMetadata(t.Context(), filepath.Join(projectDir, "compose.yaml"), projectsRoot, false)
 	require.NoError(t, err)
 	require.Equal(t, "https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/watchtower.svg", meta.ProjectIcon.Light)
 	require.Equal(t, "https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/watchtower.svg", meta.ProjectIcon.Dark)
@@ -178,7 +177,7 @@ x-arcane:
   icon-dark: *watchtower-icon
 `), 0o600))
 
-	meta, err := ParseArcaneComposeMetadata(context.Background(), filepath.Join(projectDir, "compose.yaml"), projectsRoot, false)
+	meta, err := ParseArcaneComposeMetadata(t.Context(), filepath.Join(projectDir, "compose.yaml"), projectsRoot, false)
 	require.NoError(t, err)
 	require.Equal(t, "https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/watchtower.svg", meta.ProjectIcon.Light)
 	require.Equal(t, "https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/watchtower.svg", meta.ProjectIcon.Dark)
@@ -190,8 +189,8 @@ func TestNormalizeProjectTags(t *testing.T) {
 	require.Equal(t, []string{"database", "maintenance-window"}, tags)
 
 	for _, invalid := range []string{"", "bad,tag", "bad\ntag", strings.Repeat("a", ProjectTagMaxLength+1)} {
-		_, err := NormalizeProjectTag(invalid)
-		require.Error(t, err, invalid)
+		_, normalizeProjectTagErr := NormalizeProjectTag(invalid)
+		require.Error(t, normalizeProjectTagErr, invalid)
 	}
 
 	tooMany := make([]string, ProjectTagsPerSourceLimit+1)
@@ -247,7 +246,7 @@ services:
 		require.Equal(t, inherited[updaterlabels.LabelUpdateTagPattern], overridden[updaterlabels.LabelUpdateTagPattern])
 		explicit := project.Services["explicit"].Labels
 		require.Equal(t, "digest", explicit[updaterlabels.LabelUpdateStrategy])
-		require.Equal(t, "", explicit[updaterlabels.LabelUpdateConstraint])
+		require.Empty(t, explicit[updaterlabels.LabelUpdateConstraint])
 		require.Equal(t, "keep", explicit["custom"])
 	}
 	source, err := os.ReadFile(path)
@@ -256,9 +255,23 @@ services:
 }
 
 func TestUpdaterMetadataValidationInternal(t *testing.T) {
-	for _, config := range []string{"updater: true", "updater: {enabled: maybe}", "updater: {strategy: newest}", "updater: {constraint: 123}", "updater: {tag-pattern: []}", "updater: {unknown: true}"} {
+	for _, config := range []string{
+		"updater: true",
+		"updater: {enabled: maybe}",
+		"updater: {strategy: newest}",
+		"updater: {constraint: 123}",
+		"updater: {tag-pattern: []}",
+		"updater: {unknown: true}",
+	} {
 		t.Run(config, func(t *testing.T) {
-			_, err := LoadComposeProjectFromContent(t.Context(), projecttypes.ComposeContentOptions{ComposeContent: "services:\n  app:\n    image: alpine:3.20.0\nx-arcane:\n  " + config + "\n", WorkingDir: t.TempDir(), ProjectName: "metadata"})
+			_, err := LoadComposeProjectFromContent(
+				t.Context(),
+				projecttypes.ComposeContentOptions{
+					ComposeContent: "services:\n  app:\n    image: alpine:3.20.0\nx-arcane:\n  " + config + "\n",
+					WorkingDir:     t.TempDir(),
+					ProjectName:    "metadata",
+				},
+			)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "updater")
 		})

@@ -21,7 +21,7 @@ import (
 // to observe the panic. errPtr may be nil when the caller has no error to
 // report into (e.g. a fire-and-forget goroutine); the panic is still logged.
 // args are extra slog attributes appended to the log record.
-func RecoverToError(errPtr *error, label string, args ...any) {
+func RecoverToError(errPtr *error, label string, args ...any) { //nolint:gocritic // Pointer output updates the caller's named error result after recovery.
 	panicErr := PanicToError(recover())
 	if panicErr == nil {
 		return

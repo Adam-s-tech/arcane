@@ -90,7 +90,21 @@ type UploadMyAvatarInput struct {
 }
 
 // RegisterAuth registers authentication routes using Huma.
-func RegisterAuth(api huma.API, userService *user.UserService, authService *AuthService, settingsService *settings.SettingsService, beginMFAAuthentication func(context.Context, string, authtypes.SessionMeta, string) (*authtypes.MFAChallenge, error)) {
+func RegisterAuth(
+	api huma.API,
+	userService *user.UserService,
+	authService *AuthService,
+	settingsService *settings.SettingsService,
+	beginMFAAuthentication func(
+		context.Context,
+		string,
+		authtypes.SessionMeta,
+		string,
+	) (
+		*authtypes.MFAChallenge,
+		error,
+	),
+) {
 	h := &AuthHandler{
 		userService:            userService,
 		authService:            authService,
@@ -226,8 +240,8 @@ func (h *AuthHandler) Login(ctx context.Context, input *LoginInput) (*LoginOutpu
 	}
 
 	if userModel.PasskeyMFAEnabled {
-		challenge, err := h.beginMFAAuthentication(ctx, userModel.ID, meta, session.UserSessionSourceLocal)
-		if err != nil {
+		challenge, beginMFAAuthenticationErr := h.beginMFAAuthentication(ctx, userModel.ID, meta, session.UserSessionSourceLocal)
+		if beginMFAAuthenticationErr != nil {
 			return nil, huma.Error500InternalServerError("Authentication failed")
 		}
 		return &LoginOutput{
@@ -398,8 +412,8 @@ func (h *AuthHandler) LogoutAllOtherSessions(ctx context.Context, input *struct{
 	}
 
 	currentSessionID, _ := middleware.GetCurrentSessionIDFromContext(ctx)
-	if err := h.authService.LogoutAllOtherSessions(ctx, userModel.ID, currentSessionID); err != nil {
-		return nil, huma.Error500InternalServerError("failed to revoke sessions: " + err.Error())
+	if logoutAllOtherSessionsErr := h.authService.LogoutAllOtherSessions(ctx, userModel.ID, currentSessionID); logoutAllOtherSessionsErr != nil {
+		return nil, huma.Error500InternalServerError("failed to revoke sessions: " + logoutAllOtherSessionsErr.Error())
 	}
 
 	return &handlerutil.Out[base.MessageResponse]{
@@ -468,9 +482,9 @@ func (h *AuthHandler) UpdateMyProfile(ctx context.Context, input *UpdateMyProfil
 		userModel.DisplayName = input.Body.DisplayName
 	}
 	if input.Body.Email != nil {
-		normalized, err := user.NormalizeOptionalEmail(input.Body.Email)
-		if err != nil {
-			return nil, huma.Error400BadRequest(err.Error())
+		normalized, normalizeOptionalEmailErr := user.NormalizeOptionalEmail(input.Body.Email)
+		if normalizeOptionalEmailErr != nil {
+			return nil, huma.Error400BadRequest(normalizeOptionalEmailErr.Error())
 		}
 		userModel.Email = normalized
 	}
@@ -484,8 +498,8 @@ func (h *AuthHandler) UpdateMyProfile(ctx context.Context, input *UpdateMyProfil
 		userModel.FontSize = input.Body.FontSize
 	}
 	if p := input.Body.Preferences; p != nil {
-		if err := validatePreferencesInternal(p); err != nil {
-			return nil, err
+		if validatePreferencesErr := validatePreferencesInternal(p); validatePreferencesErr != nil {
+			return nil, validatePreferencesErr
 		}
 		mergePreferencesInternal(&userModel.Preferences, p)
 	}
@@ -537,8 +551,8 @@ func (h *AuthHandler) UploadMyAvatar(ctx context.Context, input *UploadMyAvatarI
 	// Read one byte past the configured ceiling so oversized files are rejected
 	// without buffering the full multipart payload.
 	buf := new(bytes.Buffer)
-	if _, err := buf.ReadFrom(io.LimitReader(f, maxSizeBytes+1)); err != nil {
-		return nil, huma.Error500InternalServerError("failed to read file data: " + err.Error())
+	if _, readFromErr := buf.ReadFrom(io.LimitReader(f, maxSizeBytes+1)); readFromErr != nil {
+		return nil, huma.Error500InternalServerError("failed to read file data: " + readFromErr.Error())
 	}
 
 	if int64(buf.Len()) > maxSizeBytes {
@@ -553,8 +567,8 @@ func (h *AuthHandler) UploadMyAvatar(ctx context.Context, input *UploadMyAvatarI
 	}
 	data, mimeType = normalizeAvatarImageInternal(data, mimeType)
 
-	if err := h.userService.UploadAvatar(ctx, currentUser.ID, data, mimeType); err != nil {
-		slog.ErrorContext(ctx, "Failed to save avatar", "user_id", currentUser.ID, "error", err)
+	if uploadAvatarErr := h.userService.UploadAvatar(ctx, currentUser.ID, data, mimeType); uploadAvatarErr != nil {
+		slog.ErrorContext(ctx, "Failed to save avatar", "user_id", currentUser.ID, "error", uploadAvatarErr)
 		return nil, huma.Error500InternalServerError("failed to save avatar")
 	}
 	h.authService.InvalidateUserTokenCache(currentUser.ID)
@@ -594,8 +608,8 @@ func (h *AuthHandler) DeleteMyAvatar(ctx context.Context, input *struct{}) (*han
 		return nil, err
 	}
 
-	if err := h.userService.DeleteAvatar(ctx, currentUser.ID); err != nil {
-		slog.ErrorContext(ctx, "Failed to delete avatar", "user_id", currentUser.ID, "error", err)
+	if deleteAvatarErr := h.userService.DeleteAvatar(ctx, currentUser.ID); deleteAvatarErr != nil {
+		slog.ErrorContext(ctx, "Failed to delete avatar", "user_id", currentUser.ID, "error", deleteAvatarErr)
 		return nil, huma.Error500InternalServerError("failed to delete avatar")
 	}
 	h.authService.InvalidateUserTokenCache(currentUser.ID)
@@ -650,7 +664,7 @@ func normalizeAvatarImageInternal(data []byte, mimeType string) ([]byte, string)
 	}
 
 	var out bytes.Buffer
-	if err := jpeg.Encode(&out, img, &jpeg.Options{Quality: 92}); err != nil {
+	if encodeErr := jpeg.Encode(&out, img, &jpeg.Options{Quality: 92}); encodeErr != nil {
 		return data, mimeType
 	}
 	if out.Len() == 0 || out.Len() >= len(data) {

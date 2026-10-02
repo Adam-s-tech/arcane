@@ -372,8 +372,8 @@ func (fw *Watcher) addExistingDirectoriesRecursiveInternal(path, logicalPath str
 			continue
 		}
 		childLogicalPath := filepath.Join(logicalPath, entry.Name())
-		if err := fw.addExistingDirectoriesRecursiveInternal(childPath, childLogicalPath, ancestors); err != nil {
-			return err
+		if addExistingDirectoriesRecursiveErr := fw.addExistingDirectoriesRecursiveInternal(childPath, childLogicalPath, ancestors); addExistingDirectoriesRecursiveErr != nil {
+			return addExistingDirectoriesRecursiveErr
 		}
 	}
 
@@ -501,8 +501,8 @@ func (fw *Watcher) reconnectInternal(ctx context.Context) bool {
 			if err == nil {
 				fw.watcher = watcher
 				fw.watchAliases = make(map[string]string)
-				if err := fw.addExistingDirectories(fw.watchedPath); err != nil {
-					slog.WarnContext(ctx, "Some filesystem subscriptions could not be restored", "error", err)
+				if addExistingDirectoriesErr := fw.addExistingDirectories(fw.watchedPath); addExistingDirectoriesErr != nil {
+					slog.WarnContext(ctx, "Some filesystem subscriptions could not be restored", "error", addExistingDirectoriesErr)
 				}
 				// Changes while disconnected need a full reconciliation.
 				fw.notifyChangesInternal(ctx, []string{fw.watchedPath})

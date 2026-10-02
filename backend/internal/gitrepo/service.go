@@ -199,7 +199,7 @@ func (s *GitRepositoryService) UpdateRepository(ctx context.Context, id string, 
 		return nil, err
 	}
 
-	if err := validation.ValidateCredentialTargetChange(
+	if validateCredentialTargetChangeErr := validation.ValidateCredentialTargetChange(
 		"repository URL",
 		repository.URL,
 		req.URL,
@@ -212,8 +212,8 @@ func (s *GitRepositoryService) UpdateRepository(ctx context.Context, id string, 
 			"sshKey": req.SSHKey != nil,
 			"token":  req.Token != nil,
 		},
-	); err != nil {
-		return nil, err
+	); validateCredentialTargetChangeErr != nil {
+		return nil, validateCredentialTargetChangeErr
 	}
 
 	updates := make(map[string]any)
@@ -250,9 +250,9 @@ func (s *GitRepositoryService) UpdateRepository(ctx context.Context, id string, 
 		if *req.Token == "" {
 			updates["token"] = ""
 		} else {
-			encrypted, err := crypto.Encrypt(*req.Token)
-			if err != nil {
-				return nil, fmt.Errorf("failed to encrypt token: %w", err)
+			encrypted, encryptErr := crypto.Encrypt(*req.Token)
+			if encryptErr != nil {
+				return nil, fmt.Errorf("failed to encrypt token: %w", encryptErr)
 			}
 			updates["token"] = encrypted
 		}
@@ -262,21 +262,21 @@ func (s *GitRepositoryService) UpdateRepository(ctx context.Context, id string, 
 		if *req.SSHKey == "" {
 			updates["ssh_key"] = ""
 		} else {
-			encrypted, err := crypto.Encrypt(*req.SSHKey)
-			if err != nil {
-				return nil, fmt.Errorf("failed to encrypt SSH key: %w", err)
+			encrypted, encryptSSHKeyErr := crypto.Encrypt(*req.SSHKey)
+			if encryptSSHKeyErr != nil {
+				return nil, fmt.Errorf("failed to encrypt SSH key: %w", encryptSSHKeyErr)
 			}
 			updates["ssh_key"] = encrypted
 		}
 	}
 
-	if err := applySigningKeyUpdateInternal(repository, req, updates); err != nil {
-		return nil, err
+	if applySigningKeyUpdateErr := applySigningKeyUpdateInternal(repository, req, updates); applySigningKeyUpdateErr != nil {
+		return nil, applySigningKeyUpdateErr
 	}
 
 	if len(updates) > 0 {
-		if err := s.db.WithContext(ctx).Model(repository).Updates(updates).Error; err != nil {
-			return nil, fmt.Errorf("failed to update repository: %w", err)
+		if updateRepositoryErr := s.db.WithContext(ctx).Model(repository).Updates(updates).Error; updateRepositoryErr != nil {
+			return nil, fmt.Errorf("failed to update repository: %w", updateRepositoryErr)
 		}
 
 		// Log event
@@ -313,8 +313,8 @@ func (s *GitRepositoryService) DeleteRepository(ctx context.Context, id string, 
 		return err
 	}
 
-	if err := s.db.WithContext(ctx).Where("id = ?", id).Delete(&GitRepository{}).Error; err != nil {
-		return fmt.Errorf("failed to delete repository: %w", err)
+	if deleteRepositoryErr := s.db.WithContext(ctx).Where("id = ?", id).Delete(&GitRepository{}).Error; deleteRepositoryErr != nil {
+		return fmt.Errorf("failed to delete repository: %w", deleteRepositoryErr)
 	}
 
 	// Log event
@@ -334,8 +334,8 @@ func (s *GitRepositoryService) DeleteRepository(ctx context.Context, id string, 
 }
 
 func (s *GitRepositoryService) TestConnection(ctx context.Context, id, branch string, actor common.User) error {
-	settings := s.settingsService.GetSettingsConfig()
-	ctx, cancel := context.WithTimeout(ctx, timeouts.GetDuration(settings.GitOperationTimeout.AsInt(), timeouts.DefaultGitOperation))
+	localSettings := s.settingsService.GetSettingsConfig()
+	ctx, cancel := context.WithTimeout(ctx, timeouts.GetDuration(localSettings.GitOperationTimeout.AsInt(), timeouts.DefaultGitOperation))
 	defer cancel()
 
 	repository, err := s.GetRepositoryByID(ctx, id)
@@ -493,8 +493,8 @@ func applySigningKeyUpdateInternal(current *GitRepository, req gitops.UpdateRepo
 }
 
 func (s *GitRepositoryService) ListBranches(ctx context.Context, id string) ([]gitops.BranchInfo, error) {
-	settings := s.settingsService.GetSettingsConfig()
-	listCtx, cancel := context.WithTimeout(ctx, timeouts.GetDuration(settings.GitOperationTimeout.AsInt(), timeouts.DefaultGitOperation))
+	localSettings := s.settingsService.GetSettingsConfig()
+	listCtx, cancel := context.WithTimeout(ctx, timeouts.GetDuration(localSettings.GitOperationTimeout.AsInt(), timeouts.DefaultGitOperation))
 	defer cancel()
 
 	repository, err := s.GetRepositoryByID(listCtx, id)
@@ -524,8 +524,8 @@ func (s *GitRepositoryService) ListBranches(ctx context.Context, id string) ([]g
 }
 
 func (s *GitRepositoryService) BrowseFiles(ctx context.Context, id, branch, path string) (*gitops.BrowseResponse, error) {
-	settings := s.settingsService.GetSettingsConfig()
-	ctx, cancel := context.WithTimeout(ctx, timeouts.GetDuration(settings.GitOperationTimeout.AsInt(), timeouts.DefaultGitOperation))
+	localSettings := s.settingsService.GetSettingsConfig()
+	ctx, cancel := context.WithTimeout(ctx, timeouts.GetDuration(localSettings.GitOperationTimeout.AsInt(), timeouts.DefaultGitOperation))
 	defer cancel()
 
 	repository, err := s.GetRepositoryByID(ctx, id)
@@ -574,8 +574,8 @@ func (s *GitRepositoryService) SyncRepositories(ctx context.Context, syncItems [
 	for _, item := range syncItems {
 		syncedIDs[item.ID] = true
 
-		if err := s.processSyncItem(ctx, item, existingMap); err != nil {
-			return err
+		if processSyncItemErr := s.processSyncItem(ctx, item, existingMap); processSyncItemErr != nil {
+			return processSyncItemErr
 		}
 	}
 
@@ -612,8 +612,8 @@ func (s *GitRepositoryService) updateExistingRepository(ctx context.Context, ite
 
 	if needsUpdate {
 		// Use Save to trigger GORM callbacks including UpdatedAt
-		if err := s.db.WithContext(ctx).Save(existing).Error; err != nil {
-			return fmt.Errorf("failed to update repository %s: %w", item.ID, err)
+		if syncRepositoryErr := s.db.WithContext(ctx).Save(existing).Error; syncRepositoryErr != nil {
+			return fmt.Errorf("failed to update repository %s: %w", item.ID, syncRepositoryErr)
 		}
 	}
 
@@ -699,8 +699,8 @@ func (s *GitRepositoryService) createNewRepository(ctx context.Context, item git
 		Enabled:                item.Enabled,
 		ID:                     item.ID,
 	}
-	if err := s.db.WithContext(ctx).Create(&repo).Error; err != nil {
-		return fmt.Errorf("failed to create repository %s: %w", item.ID, err)
+	if createRepositoryErr := s.db.WithContext(ctx).Create(&repo).Error; createRepositoryErr != nil {
+		return fmt.Errorf("failed to create repository %s: %w", item.ID, createRepositoryErr)
 	}
 	return nil
 }

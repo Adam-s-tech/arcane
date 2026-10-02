@@ -176,13 +176,13 @@ func (m *EnvironmentMiddleware) Handle(c *echo.Context, next echo.HandlerFunc) e
 
 	isEdgeEnvironment := isEdgeEnvironmentURLInternal(apiURL)
 
-	if handled, err := m.proxyActiveEdgeTunnelInternal(c, envID, accessToken); handled {
-		return err
+	if handled, proxyActiveEdgeTunnelErr := m.proxyActiveEdgeTunnelInternal(c, envID, accessToken); handled {
+		return proxyActiveEdgeTunnelErr
 	}
 
 	if isEdgeEnvironment {
-		if handled, err := m.proxyRecoveredEdgeTunnelInternal(c, envID, accessToken); handled {
-			return err
+		if handled, proxyRecoveredEdgeTunnelErr := m.proxyRecoveredEdgeTunnelInternal(c, envID, accessToken); handled {
+			return proxyRecoveredEdgeTunnelErr
 		}
 
 		slog.WarnContext(c.Request().Context(), "No active edge tunnel for environment", "environment_id", envID)
@@ -379,8 +379,8 @@ func proxiedVolumeWorkspacePermissionsInternal(request *http.Request) ([]string,
 			return nil, errors.New("workspace manifest is too large")
 		}
 		var manifest volumetypes.WorkspaceUpdateManifest
-		if err := json.Unmarshal(manifestJSON, &manifest); err != nil {
-			return nil, fmt.Errorf("decode workspace manifest: %w", err)
+		if unmarshalErr := json.Unmarshal(manifestJSON, &manifest); unmarshalErr != nil {
+			return nil, fmt.Errorf("decode workspace manifest: %w", unmarshalErr)
 		}
 		required, valid := authz.VolumeWorkspaceRequiredPermissions(manifest.FileChanges)
 		if !valid {

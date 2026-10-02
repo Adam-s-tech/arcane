@@ -51,7 +51,7 @@ func GetStringSliceClaim(m map[string]any, key string) []string {
 	if !ok || v == nil {
 		return nil
 	}
-	if t, ok := v.(string); ok {
+	if t, localOk := v.(string); localOk {
 		s := strings.TrimSpace(t)
 		if s == "" {
 			return nil

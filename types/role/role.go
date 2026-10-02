@@ -65,7 +65,7 @@ type OidcRoleMapping struct {
 	ClaimValue    string     `json:"claimValue" doc:"OIDC claim value that triggers this mapping" example:"docker-admins"`
 	RoleID        string     `json:"roleId" doc:"Role to assign when the claim matches"`
 	EnvironmentID *string    `json:"environmentId,omitempty" doc:"Environment ID to scope the assignment to; omit for a global assignment"`
-	Source        string     `json:"source" enum:"manual,env" doc:"How this mapping was created. 'manual' rows are UI/API-managed and freely editable; 'env' rows are declared via OIDC_ROLE_MAPPINGS and are read-only at runtime."`
+	Source        string     `json:"source" enum:"manual,env" doc:"Origin: manual rows are editable via UI/API; env rows come from OIDC_ROLE_MAPPINGS and are read-only"`
 	CreatedAt     time.Time  `json:"createdAt"`
 	UpdatedAt     *time.Time `json:"updatedAt,omitempty"`
 }

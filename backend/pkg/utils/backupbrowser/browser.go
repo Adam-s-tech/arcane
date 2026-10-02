@@ -174,7 +174,7 @@ func explicitSelectionCandidatesInternal(requestedPaths []string, eligible []bac
 		if expectsDirectory && !entry.IsDirectory {
 			return nil, fmt.Errorf("%s is a file, not a folder", normalized)
 		}
-		if _, exists := seen[normalized]; exists {
+		if _, localExists := seen[normalized]; localExists {
 			continue
 		}
 		seen[normalized] = struct{}{}

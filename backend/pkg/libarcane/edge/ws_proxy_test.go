@@ -24,8 +24,8 @@ func TestProxyWebSocketRequest(t *testing.T) {
 		defer func() { _ = conn.CloseNow() }()
 
 		for {
-			_, data, err := conn.Read(r.Context())
-			if err != nil {
+			_, data, readErr := conn.Read(r.Context())
+			if readErr != nil {
 				return
 			}
 
@@ -74,8 +74,8 @@ func TestProxyWebSocketRequest(t *testing.T) {
 	// Start receiving on tunnel
 	go func() {
 		for {
-			msg, err := tunnel.Conn.Receive()
-			if err != nil {
+			msg, receiveErr := tunnel.Conn.Receive()
+			if receiveErr != nil {
 				return
 			}
 			if req, ok := tunnel.Pending.Load(msg.ID); ok {
@@ -131,7 +131,7 @@ func TestProxyWebSocketRequest_ClientClose(t *testing.T) {
 		}
 		defer func() { _ = conn.CloseNow() }()
 		for {
-			if _, _, err := conn.Read(r.Context()); err != nil {
+			if _, _, readErr := conn.Read(r.Context()); readErr != nil {
 				return
 			}
 		}
@@ -147,7 +147,7 @@ func TestProxyWebSocketRequest_ClientClose(t *testing.T) {
 
 	go func() {
 		for {
-			if _, err := tunnel.Conn.Receive(); err != nil {
+			if _, receiveErr := tunnel.Conn.Receive(); receiveErr != nil {
 				return
 			}
 		}

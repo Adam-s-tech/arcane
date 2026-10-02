@@ -51,20 +51,20 @@ func setupContainerRegistryTestDBInternal(t *testing.T) *database.DB {
 	return &database.DB{DB: db}
 }
 
-func createTestPullRegistryInternal(t *testing.T, db *database.DB, url, username, token string) {
+func createTestPullRegistryInternal(t *testing.T, db *database.DB, localUrl, username, token string) {
 	t.Helper()
 
 	encryptedToken, err := crypto.Encrypt(token)
 	require.NoError(t, err)
 
 	record := &ContainerRegistry{
-		URL:          url,
+		URL:          localUrl,
 		Username:     username,
 		Token:        encryptedToken,
 		Enabled:      true,
 		RegistryType: RegistryTypeGeneric,
 	}
-	require.NoError(t, db.WithContext(context.Background()).Create(record).Error)
+	require.NoError(t, db.WithContext(t.Context()).Create(record).Error)
 }
 
 func decodeRegistryAuthInternal(t *testing.T, encoded string) dockerregistry.AuthConfig {
@@ -112,10 +112,10 @@ func registryPingInternal(w http.ResponseWriter, r *http.Request, challenge stri
 }
 
 // writeManifestHeadInternal answers a manifest HEAD with the headers a client needs to trust the digest without a body.
-func writeManifestHeadInternal(w http.ResponseWriter, digest string) {
+func writeManifestHeadInternal(w http.ResponseWriter, localDigest string) {
 	w.Header().Set("Content-Type", "application/vnd.docker.distribution.manifest.v2+json")
 	w.Header().Set("Content-Length", "0")
-	w.Header().Set("Docker-Content-Digest", digest)
+	w.Header().Set("Docker-Content-Digest", localDigest)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -160,7 +160,7 @@ func TestContainerRegistryService_GetAllRegistryAuthConfigs_NormalizesHosts(t *t
 	createTestPullRegistryInternal(t, db, "https://GHCR.IO/", "gh-user", "gh-token")
 
 	svc := NewContainerRegistryService(db, nil, nil, nil)
-	authConfigs, err := svc.GetAllRegistryAuthConfigs(context.Background())
+	authConfigs, err := svc.GetAllRegistryAuthConfigs(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, authConfigs)
 
@@ -187,7 +187,7 @@ func TestContainerRegistryService_GetAllRegistryAuthConfigs_SkipsInvalidEntries(
 	createTestPullRegistryInternal(t, db, "https://registry.example.com", "example-user", "example-token")
 
 	svc := NewContainerRegistryService(db, nil, nil, nil)
-	authConfigs, err := svc.GetAllRegistryAuthConfigs(context.Background())
+	authConfigs, err := svc.GetAllRegistryAuthConfigs(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, authConfigs)
 
@@ -206,7 +206,7 @@ func TestContainerRegistryService_GetRegistryAuthForHost_UsesDatabaseCredentials
 	createTestPullRegistryInternal(t, db, "https://index.docker.io/v1/", "docker-user", "docker-token")
 
 	svc := NewContainerRegistryService(db, nil, nil, nil)
-	auth, err := svc.GetRegistryAuthForHost(context.Background(), "registry-1.docker.io")
+	auth, err := svc.GetRegistryAuthForHost(t.Context(), "registry-1.docker.io")
 	require.NoError(t, err)
 	require.NotEmpty(t, auth)
 
@@ -221,7 +221,7 @@ func TestContainerRegistryService_GetRegistryAuthForImage_UsesHostLookup(t *test
 	createTestPullRegistryInternal(t, db, "https://ghcr.io", "gh-user", "gh-token")
 
 	svc := NewContainerRegistryService(db, nil, nil, nil)
-	auth, err := svc.GetRegistryAuthForImage(context.Background(), "ghcr.io/getarcaneapp/arcane:latest")
+	auth, err := svc.GetRegistryAuthForImage(t.Context(), "ghcr.io/getarcaneapp/arcane:latest")
 	require.NoError(t, err)
 	require.NotEmpty(t, auth)
 
@@ -233,7 +233,7 @@ func TestContainerRegistryService_GetRegistryAuthForImage_UsesHostLookup(t *test
 
 func TestContainerRegistryService_NilService_RegistryAuthMethodsReturnEmpty(t *testing.T) {
 	var svc *ContainerRegistryService
-	ctx := context.Background()
+	ctx := t.Context()
 
 	authConfigs, err := svc.GetAllRegistryAuthConfigs(ctx)
 	require.NoError(t, err)
@@ -250,7 +250,7 @@ func TestContainerRegistryService_NilService_RegistryAuthMethodsReturnEmpty(t *t
 
 func TestContainerRegistryService_GetRegistryPullUsage_AnonymousDockerHubLimit(t *testing.T) {
 	db := setupContainerRegistryTestDBInternal(t)
-	require.NoError(t, db.WithContext(context.Background()).Create(&ContainerRegistry{
+	require.NoError(t, db.WithContext(t.Context()).Create(&ContainerRegistry{
 		URL:          "docker.io",
 		Enabled:      true,
 		RegistryType: RegistryTypeGeneric,
@@ -281,7 +281,7 @@ func TestContainerRegistryService_GetRegistryPullUsage_AnonymousDockerHubLimit(t
 		}
 	})
 
-	result, err := svc.GetRegistryPullUsage(context.Background())
+	result, err := svc.GetRegistryPullUsage(t.Context())
 	require.NoError(t, err)
 
 	require.Len(t, result.Registries, 1)
@@ -297,7 +297,7 @@ func TestContainerRegistryService_GetRegistryPullUsage_AnonymousDockerHubLimit(t
 	assert.Equal(t, 10, *registry.Used)
 	assert.Equal(t, 1, tokenCalls)
 
-	cachedResult, err := svc.GetRegistryPullUsage(context.Background())
+	cachedResult, err := svc.GetRegistryPullUsage(t.Context())
 	require.NoError(t, err)
 	require.Len(t, cachedResult.Registries, 1)
 	require.NotNil(t, cachedResult.Registries[0].Remaining)
@@ -333,7 +333,7 @@ func TestContainerRegistryService_GetRegistryPullUsage_UsesDockerHubCredential(t
 		}
 	})
 
-	result, err := svc.GetRegistryPullUsage(context.Background())
+	result, err := svc.GetRegistryPullUsage(t.Context())
 	require.NoError(t, err)
 
 	require.Len(t, result.Registries, 2)
@@ -367,7 +367,7 @@ func TestContainerRegistryService_GetRegistryPullUsage_CredentialErrorIsNonFatal
 		}
 	})
 
-	result, err := svc.GetRegistryPullUsage(context.Background())
+	result, err := svc.GetRegistryPullUsage(t.Context())
 	require.NoError(t, err)
 
 	require.Len(t, result.Registries, 1)
@@ -379,17 +379,17 @@ func TestContainerRegistryService_GetRegistryPullUsage_CredentialErrorIsNonFatal
 
 func TestContainerRegistryService_RecordImagePull_IncrementsObservedRegistryCount(t *testing.T) {
 	db := setupContainerRegistryTestDBInternal(t)
-	require.NoError(t, db.WithContext(context.Background()).Create(&ContainerRegistry{
+	require.NoError(t, db.WithContext(t.Context()).Create(&ContainerRegistry{
 		URL:          "ghcr.io",
 		Enabled:      true,
 		RegistryType: RegistryTypeGeneric,
 	}).Error)
 
 	svc := NewContainerRegistryService(db, nil, kv.NewKVService(db), nil)
-	require.NoError(t, svc.RecordImagePull(context.Background(), "ghcr.io/example/app:latest"))
-	require.NoError(t, svc.RecordImagePull(context.Background(), "ghcr.io/example/worker:latest"))
+	require.NoError(t, svc.RecordImagePull(t.Context(), "ghcr.io/example/app:latest"))
+	require.NoError(t, svc.RecordImagePull(t.Context(), "ghcr.io/example/worker:latest"))
 
-	result, err := svc.GetRegistryPullUsage(context.Background())
+	result, err := svc.GetRegistryPullUsage(t.Context())
 	require.NoError(t, err)
 	require.Len(t, result.Registries, 1)
 	assert.Equal(t, "ghcr.io", result.Registries[0].Registry)
@@ -401,7 +401,7 @@ func TestContainerRegistryService_CreateRegistry_RejectsUnsupportedRegistryType(
 	db := setupContainerRegistryTestDBInternal(t)
 	svc := NewContainerRegistryService(db, nil, nil, nil)
 
-	_, err := svc.CreateRegistry(context.Background(), containerregistry.CreateContainerRegistryRequest{
+	_, err := svc.CreateRegistry(t.Context(), containerregistry.CreateContainerRegistryRequest{
 		URL:          "registry.example.com",
 		RegistryType: "ECR-ish",
 	})
@@ -417,7 +417,7 @@ func TestContainerRegistryService_CreateRegistry_RejectsEmptyUsernameForGeneric(
 	db := setupContainerRegistryTestDBInternal(t)
 	svc := NewContainerRegistryService(db, nil, nil, nil)
 
-	_, err := svc.CreateRegistry(context.Background(), containerregistry.CreateContainerRegistryRequest{
+	_, err := svc.CreateRegistry(t.Context(), containerregistry.CreateContainerRegistryRequest{
 		URL:      "https://registry.example.com",
 		Username: "",
 		Token:    "my-token",
@@ -434,7 +434,7 @@ func TestContainerRegistryService_CreateRegistry_RejectsEmptyTokenForGeneric(t *
 	db := setupContainerRegistryTestDBInternal(t)
 	svc := NewContainerRegistryService(db, nil, nil, nil)
 
-	_, err := svc.CreateRegistry(context.Background(), containerregistry.CreateContainerRegistryRequest{
+	_, err := svc.CreateRegistry(t.Context(), containerregistry.CreateContainerRegistryRequest{
 		URL:      "https://registry.example.com",
 		Username: "my-user",
 		Token:    "",
@@ -451,7 +451,7 @@ func TestContainerRegistryService_CreateRegistry_AcceptsValidGenericCredentials(
 	db := setupContainerRegistryTestDBInternal(t)
 	svc := NewContainerRegistryService(db, nil, nil, nil)
 
-	reg, err := svc.CreateRegistry(context.Background(), containerregistry.CreateContainerRegistryRequest{
+	reg, err := svc.CreateRegistry(t.Context(), containerregistry.CreateContainerRegistryRequest{
 		URL:      "https://registry.example.com",
 		Username: "my-user",
 		Token:    "my-token",
@@ -465,14 +465,14 @@ func TestContainerRegistryService_UpdateRegistry_RejectsBlankingUsername(t *test
 	db := setupContainerRegistryTestDBInternal(t)
 	svc := NewContainerRegistryService(db, nil, nil, nil)
 
-	reg, err := svc.CreateRegistry(context.Background(), containerregistry.CreateContainerRegistryRequest{
+	reg, err := svc.CreateRegistry(t.Context(), containerregistry.CreateContainerRegistryRequest{
 		URL:      "https://registry.example.com",
 		Username: "my-user",
 		Token:    "my-token",
 	})
 	require.NoError(t, err)
 
-	_, err = svc.UpdateRegistry(context.Background(), reg.ID, containerregistry.UpdateContainerRegistryRequest{
+	_, err = svc.UpdateRegistry(t.Context(), reg.ID, containerregistry.UpdateContainerRegistryRequest{
 		Username: new(""),
 	})
 	require.Error(t, err)
@@ -487,7 +487,7 @@ func TestContainerRegistryService_UpdateRegistry_KeepsExistingTokenWhenNotProvid
 	db := setupContainerRegistryTestDBInternal(t)
 	svc := NewContainerRegistryService(db, nil, nil, nil)
 
-	reg, err := svc.CreateRegistry(context.Background(), containerregistry.CreateContainerRegistryRequest{
+	reg, err := svc.CreateRegistry(t.Context(), containerregistry.CreateContainerRegistryRequest{
 		URL:      "https://registry.example.com",
 		Username: "my-user",
 		Token:    "my-token",
@@ -495,7 +495,7 @@ func TestContainerRegistryService_UpdateRegistry_KeepsExistingTokenWhenNotProvid
 	require.NoError(t, err)
 	originalToken := reg.Token
 
-	updated, err := svc.UpdateRegistry(context.Background(), reg.ID, containerregistry.UpdateContainerRegistryRequest{
+	updated, err := svc.UpdateRegistry(t.Context(), reg.ID, containerregistry.UpdateContainerRegistryRequest{
 		Username: new("updated-user"),
 	})
 	require.NoError(t, err)
@@ -517,7 +517,7 @@ func TestContainerRegistryService_UpdateRegistry_RejectsTargetChangeWhenStoredTo
 			db := setupContainerRegistryTestDBInternal(t)
 			svc := NewContainerRegistryService(db, nil, nil, nil)
 
-			registry, err := svc.CreateRegistry(context.Background(), containerregistry.CreateContainerRegistryRequest{
+			registry, err := svc.CreateRegistry(t.Context(), containerregistry.CreateContainerRegistryRequest{
 				URL:      "https://registry.example.com",
 				Username: "my-user",
 				Token:    "my-token",
@@ -525,7 +525,7 @@ func TestContainerRegistryService_UpdateRegistry_RejectsTargetChangeWhenStoredTo
 			require.NoError(t, err)
 			originalToken := registry.Token
 
-			_, err = svc.UpdateRegistry(context.Background(), registry.ID, containerregistry.UpdateContainerRegistryRequest{
+			_, err = svc.UpdateRegistry(t.Context(), registry.ID, containerregistry.UpdateContainerRegistryRequest{
 				URL:   new("https://attacker.example.com"),
 				Token: tt.token,
 			})
@@ -536,7 +536,7 @@ func TestContainerRegistryService_UpdateRegistry_RejectsTargetChangeWhenStoredTo
 			require.True(t, ok)
 			assert.Equal(t, "token", fieldErr.Field)
 
-			stored, loadErr := svc.GetRegistryByID(context.Background(), registry.ID)
+			stored, loadErr := svc.GetRegistryByID(t.Context(), registry.ID)
 			require.NoError(t, loadErr)
 			assert.Equal(t, "https://registry.example.com", stored.URL)
 			assert.Equal(t, originalToken, stored.Token)
@@ -548,7 +548,7 @@ func TestContainerRegistryService_UpdateRegistry_AllowsPathChangeOnSameHostWitho
 	db := setupContainerRegistryTestDBInternal(t)
 	svc := NewContainerRegistryService(db, nil, nil, nil)
 
-	registry, err := svc.CreateRegistry(context.Background(), containerregistry.CreateContainerRegistryRequest{
+	registry, err := svc.CreateRegistry(t.Context(), containerregistry.CreateContainerRegistryRequest{
 		URL:      "https://registry.example.com/one",
 		Username: "my-user",
 		Token:    "my-token",
@@ -556,7 +556,7 @@ func TestContainerRegistryService_UpdateRegistry_AllowsPathChangeOnSameHostWitho
 	require.NoError(t, err)
 	originalToken := registry.Token
 
-	updated, err := svc.UpdateRegistry(context.Background(), registry.ID, containerregistry.UpdateContainerRegistryRequest{
+	updated, err := svc.UpdateRegistry(t.Context(), registry.ID, containerregistry.UpdateContainerRegistryRequest{
 		URL: new("REGISTRY.EXAMPLE.COM/two"),
 	})
 	require.NoError(t, err)
@@ -568,14 +568,14 @@ func TestContainerRegistryService_UpdateRegistry_AllowsTargetChangeWhenTokenIsRe
 	db := setupContainerRegistryTestDBInternal(t)
 	svc := NewContainerRegistryService(db, nil, nil, nil)
 
-	registry, err := svc.CreateRegistry(context.Background(), containerregistry.CreateContainerRegistryRequest{
+	registry, err := svc.CreateRegistry(t.Context(), containerregistry.CreateContainerRegistryRequest{
 		URL:      "https://registry.example.com",
 		Username: "my-user",
 		Token:    "my-token",
 	})
 	require.NoError(t, err)
 
-	updated, err := svc.UpdateRegistry(context.Background(), registry.ID, containerregistry.UpdateContainerRegistryRequest{
+	updated, err := svc.UpdateRegistry(t.Context(), registry.ID, containerregistry.UpdateContainerRegistryRequest{
 		URL:   new("https://registry.example.net"),
 		Token: new("new-token"),
 	})
@@ -591,7 +591,7 @@ func TestContainerRegistryService_UpdateRegistryRejectsECRTargetChangeWithStored
 	db := setupContainerRegistryTestDBInternal(t)
 	svc := NewContainerRegistryService(db, nil, nil, nil)
 
-	registry, err := svc.CreateRegistry(context.Background(), containerregistry.CreateContainerRegistryRequest{
+	registry, err := svc.CreateRegistry(t.Context(), containerregistry.CreateContainerRegistryRequest{
 		URL:                "123456789012.dkr.ecr.us-east-1.amazonaws.com",
 		RegistryType:       RegistryTypeECR,
 		AWSAccessKeyID:     "old-access-key",
@@ -601,7 +601,7 @@ func TestContainerRegistryService_UpdateRegistryRejectsECRTargetChangeWithStored
 	require.NoError(t, err)
 	originalSecret := registry.AWSSecretAccessKey
 
-	_, err = svc.UpdateRegistry(context.Background(), registry.ID, containerregistry.UpdateContainerRegistryRequest{
+	_, err = svc.UpdateRegistry(t.Context(), registry.ID, containerregistry.UpdateContainerRegistryRequest{
 		URL: new("999999999999.dkr.ecr.us-east-1.amazonaws.com"),
 	})
 	require.Error(t, err)
@@ -611,12 +611,12 @@ func TestContainerRegistryService_UpdateRegistryRejectsECRTargetChangeWithStored
 	require.Equal(t, common.APIErrorCodeValidationError, apiErr.Code)
 	require.ElementsMatch(t, []string{"awsAccessKeyId", "awsSecretAccessKey"}, apiErr.Details.(map[string]any)["fields"])
 
-	stored, loadErr := svc.GetRegistryByID(context.Background(), registry.ID)
+	stored, loadErr := svc.GetRegistryByID(t.Context(), registry.ID)
 	require.NoError(t, loadErr)
 	require.Equal(t, "123456789012.dkr.ecr.us-east-1.amazonaws.com", stored.URL)
 	require.Equal(t, originalSecret, stored.AWSSecretAccessKey)
 
-	updated, err := svc.UpdateRegistry(context.Background(), registry.ID, containerregistry.UpdateContainerRegistryRequest{
+	updated, err := svc.UpdateRegistry(t.Context(), registry.ID, containerregistry.UpdateContainerRegistryRequest{
 		URL:                new("999999999999.dkr.ecr.us-east-1.amazonaws.com"),
 		AWSAccessKeyID:     new("new-access-key"),
 		AWSSecretAccessKey: new("new-secret-key"),
@@ -633,14 +633,14 @@ func TestContainerRegistryService_UpdateRegistry_RejectsChangingRegistryType(t *
 	db := setupContainerRegistryTestDBInternal(t)
 	svc := NewContainerRegistryService(db, nil, nil, nil)
 
-	reg, err := svc.CreateRegistry(context.Background(), containerregistry.CreateContainerRegistryRequest{
+	reg, err := svc.CreateRegistry(t.Context(), containerregistry.CreateContainerRegistryRequest{
 		URL:      "https://registry.example.com",
 		Username: "my-user",
 		Token:    "my-token",
 	})
 	require.NoError(t, err)
 
-	_, err = svc.UpdateRegistry(context.Background(), reg.ID, containerregistry.UpdateContainerRegistryRequest{
+	_, err = svc.UpdateRegistry(t.Context(), reg.ID, containerregistry.UpdateContainerRegistryRequest{
 		RegistryType: new("ecr"),
 	})
 	require.Error(t, err)
@@ -655,14 +655,14 @@ func TestContainerRegistryService_UpdateRegistry_AllowsSameRegistryType(t *testi
 	db := setupContainerRegistryTestDBInternal(t)
 	svc := NewContainerRegistryService(db, nil, nil, nil)
 
-	reg, err := svc.CreateRegistry(context.Background(), containerregistry.CreateContainerRegistryRequest{
+	reg, err := svc.CreateRegistry(t.Context(), containerregistry.CreateContainerRegistryRequest{
 		URL:      "https://registry.example.com",
 		Username: "my-user",
 		Token:    "my-token",
 	})
 	require.NoError(t, err)
 
-	updated, err := svc.UpdateRegistry(context.Background(), reg.ID, containerregistry.UpdateContainerRegistryRequest{
+	updated, err := svc.UpdateRegistry(t.Context(), reg.ID, containerregistry.UpdateContainerRegistryRequest{
 		RegistryType: new("generic"),
 		Username:     new("updated-user"),
 	})
@@ -676,10 +676,10 @@ func TestContainerRegistryService_SyncRegistries_ClearsGenericTokenWhenManagerSe
 	createTestPullRegistryInternal(t, db, "https://registry.example.com", "registry-user", "old-token")
 
 	var existing ContainerRegistry
-	require.NoError(t, db.WithContext(context.Background()).First(&existing).Error)
+	require.NoError(t, db.WithContext(t.Context()).First(&existing).Error)
 
 	svc := NewContainerRegistryService(db, nil, nil, nil)
-	err := svc.SyncRegistries(context.Background(), []containerregistry.Sync{
+	err := svc.SyncRegistries(t.Context(), []containerregistry.Sync{
 		{
 			ID:           existing.ID,
 			URL:          existing.URL,
@@ -694,7 +694,7 @@ func TestContainerRegistryService_SyncRegistries_ClearsGenericTokenWhenManagerSe
 	require.NoError(t, err)
 
 	var updated ContainerRegistry
-	require.NoError(t, db.WithContext(context.Background()).First(&updated, "id = ?", existing.ID).Error)
+	require.NoError(t, db.WithContext(t.Context()).First(&updated, "id = ?", existing.ID).Error)
 
 	decryptedToken, err := crypto.Decrypt(updated.Token)
 	require.NoError(t, err)
@@ -713,7 +713,7 @@ func TestContainerRegistryService_TestRegistry_UsesDockerDaemon(t *testing.T) {
 		}, nil
 	}, nil, nil)
 
-	err := svc.TestRegistry(context.Background(), "https://registry.example.com:5443", "user", "token")
+	err := svc.TestRegistry(t.Context(), "https://registry.example.com:5443", "user", "token")
 	require.NoError(t, err)
 }
 
@@ -727,7 +727,7 @@ func TestContainerRegistryService_TestRegistry_PropagatesDaemonError(t *testing.
 		}, nil
 	}, nil, nil)
 
-	err := svc.TestRegistry(context.Background(), "registry.example.com", "user", "token")
+	err := svc.TestRegistry(t.Context(), "registry.example.com", "user", "token")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, expectedErr)
 }
@@ -742,10 +742,10 @@ func TestContainerRegistryService_TestRegistry_SkipsLoginForEmptyCredentials(t *
 		}, nil
 	}, nil, nil)
 
-	err := svc.TestRegistry(context.Background(), "registry.example.com", "", "")
+	err := svc.TestRegistry(t.Context(), "registry.example.com", "", "")
 	require.NoError(t, err)
 
-	err = svc.TestRegistry(context.Background(), "registry.example.com", "  ", "  ")
+	err = svc.TestRegistry(t.Context(), "registry.example.com", "  ", "  ")
 	require.NoError(t, err)
 }
 
@@ -766,7 +766,7 @@ func TestContainerRegistryService_InspectImageDigest_AnonymousSuccess(t *testing
 		}, nil
 	}, nil, nil)
 
-	result, err := svc.InspectImageDigest(context.Background(), "registry.example.com:5443/team/app:1.2.3", nil)
+	result, err := svc.InspectImageDigest(t.Context(), "registry.example.com:5443/team/app:1.2.3", nil)
 	require.NoError(t, err)
 	assert.Equal(t, wantDigest, result.Digest)
 	assert.Equal(t, "anonymous", result.AuthMethod)
@@ -789,7 +789,7 @@ func TestContainerRegistryService_GetImageDigest_HonorsCallerCancellation(t *tes
 	}, nil, nil)
 	t.Cleanup(svc.cache.StopJanitor)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	result := make(chan error, 1)
 	go func() {
@@ -838,7 +838,7 @@ func TestContainerRegistryService_InspectImageDigest_UsesStoredDockerHubCredenti
 		}, nil
 	}, nil, nil)
 
-	result, err := svc.InspectImageDigest(context.Background(), "registry-1.docker.io/library/nginx:latest", nil)
+	result, err := svc.InspectImageDigest(t.Context(), "registry-1.docker.io/library/nginx:latest", nil)
 	require.NoError(t, err)
 	assert.Equal(t, 1, calls)
 	assert.Equal(t, wantDigest, result.Digest)
@@ -873,7 +873,7 @@ func TestContainerRegistryService_InspectImageDigest_UsesStoredDockerHubCredenti
 		}, nil
 	}, nil, nil)
 
-	result, err := svc.InspectImageDigest(context.Background(), "docker.io/library/registry:3", nil)
+	result, err := svc.InspectImageDigest(t.Context(), "docker.io/library/registry:3", nil)
 	require.NoError(t, err)
 	assert.Equal(t, 1, calls)
 	assert.Equal(t, wantDigest, result.Digest)
@@ -907,7 +907,7 @@ func TestContainerRegistryService_InspectImageDigest_UsesStoredCredentialsForNon
 		}, nil
 	}, nil, nil)
 
-	result, err := svc.InspectImageDigest(context.Background(), "ghcr.io/getarcaneapp/agent:latest", nil)
+	result, err := svc.InspectImageDigest(t.Context(), "ghcr.io/getarcaneapp/agent:latest", nil)
 	require.NoError(t, err)
 	assert.Equal(t, 1, calls)
 	assert.Equal(t, wantDigest, result.Digest)
@@ -943,7 +943,7 @@ func TestContainerRegistryService_InspectImageDigest_UsesStoredCredentialsInstea
 		}, nil
 	}, nil, nil)
 
-	result, err := svc.InspectImageDigest(context.Background(), "ghcr.io/getarcaneapp/agent:latest", nil)
+	result, err := svc.InspectImageDigest(t.Context(), "ghcr.io/getarcaneapp/agent:latest", nil)
 	require.NoError(t, err)
 	assert.Zero(t, anonymousCalls)
 	assert.Equal(t, wantDigest, result.Digest)
@@ -974,7 +974,7 @@ func TestContainerRegistryService_InspectImageDigest_FallsBackToAnonymousWhenSto
 		}, nil
 	}, nil, nil)
 
-	result, err := svc.InspectImageDigest(context.Background(), "ghcr.io/immich-app/immich-server:release", nil)
+	result, err := svc.InspectImageDigest(t.Context(), "ghcr.io/immich-app/immich-server:release", nil)
 	require.NoError(t, err)
 	assert.Equal(t, 1, anonymousCalls)
 	assert.Equal(t, wantDigest, result.Digest)
@@ -1001,7 +1001,7 @@ func TestContainerRegistryService_InspectImageDigest_DoesNotFallBackToAnonymousO
 		}, nil
 	}, nil, nil)
 
-	result, err := svc.InspectImageDigest(context.Background(), "ghcr.io/getarcaneapp/agent:latest", nil)
+	result, err := svc.InspectImageDigest(t.Context(), "ghcr.io/getarcaneapp/agent:latest", nil)
 	require.Error(t, err)
 	assert.Zero(t, anonymousCalls, "must not burn anonymous quota when the credential itself is rate limited")
 	require.NotNil(t, result)
@@ -1046,7 +1046,7 @@ func TestContainerRegistryService_InspectImageDigest_FallbackUsesStoredCredentia
 		}),
 	}
 
-	result, err := svc.InspectImageDigest(context.Background(), "ghcr.io/getarcaneapp/agent:latest", nil)
+	result, err := svc.InspectImageDigest(t.Context(), "ghcr.io/getarcaneapp/agent:latest", nil)
 	require.NoError(t, err)
 	assert.Zero(t, anonymousCalls)
 	assert.Equal(t, wantDigest, result.Digest)
@@ -1086,7 +1086,7 @@ func TestContainerRegistryService_InspectImageDigest_FallsBackWhenDistributionNo
 	}, nil, nil)
 	svc.distributionHTTPClient = server.Client()
 
-	result, err := svc.InspectImageDigest(context.Background(), serverURL.Host+"/team/app:1.2.3", nil)
+	result, err := svc.InspectImageDigest(t.Context(), serverURL.Host+"/team/app:1.2.3", nil)
 	require.NoError(t, err)
 	assert.Equal(t, 1, calls)
 	assert.Equal(t, wantDigest, result.Digest)
@@ -1119,13 +1119,14 @@ func TestContainerRegistryService_InspectImageDigest_FallsBackWhenDistributionFo
 				calls++
 				assert.Equal(t, serverURL.Host+"/team/app:1.2.3", imageRef)
 				assert.Empty(t, options.EncodedRegistryAuth)
-				return client.DistributionInspectResult{}, errors.New("Error response from daemon: <html><body><h1>403 Forbidden</h1> Request forbidden by administrative rules. </body></html>")
+				return client.DistributionInspectResult{}, errors.New("Error response from daemon: <html><body><h1>403 Forbidden</h1> Request forbidden by administrative r" +
+					"ules. </body></html>")
 			},
 		}, nil
 	}, nil, nil)
 	svc.distributionHTTPClient = server.Client()
 
-	result, err := svc.InspectImageDigest(context.Background(), serverURL.Host+"/team/app:1.2.3", nil)
+	result, err := svc.InspectImageDigest(t.Context(), serverURL.Host+"/team/app:1.2.3", nil)
 	require.NoError(t, err)
 	assert.Equal(t, 1, calls)
 	assert.Equal(t, wantDigest, result.Digest)
@@ -1201,7 +1202,7 @@ func TestContainerRegistryService_InspectImageDigest_RetriesStoredCredentialsAft
 	}, nil, nil)
 	svc.distributionHTTPClient = server.Client()
 
-	result, err := svc.InspectImageDigest(context.Background(), serverURL.Host+"/team/app:1.2.3", nil)
+	result, err := svc.InspectImageDigest(t.Context(), serverURL.Host+"/team/app:1.2.3", nil)
 	require.NoError(t, err)
 	assert.Equal(t, wantDigest, result.Digest)
 	// Stored credentials go first; only after rejection does the lookup retry anonymously.
@@ -1221,7 +1222,7 @@ func TestContainerRegistryService_InspectImageDigest_DoesNotFallbackOnTLSFailure
 		}, nil
 	}, nil, nil)
 
-	result, err := svc.InspectImageDigest(context.Background(), "registry.example.com/team/app:1.2.3", nil)
+	result, err := svc.InspectImageDigest(t.Context(), "registry.example.com/team/app:1.2.3", nil)
 	require.Error(t, err)
 	require.NotNil(t, result)
 	assert.Contains(t, strings.ToLower(err.Error()), "x509")
@@ -1247,7 +1248,7 @@ func TestContainerRegistryService_InspectImageDigest_PreservesDaemonAndFallbackE
 		}),
 	}
 
-	result, err := svc.InspectImageDigest(context.Background(), "registry.example.com/team/app:1.2.3", nil)
+	result, err := svc.InspectImageDigest(t.Context(), "registry.example.com/team/app:1.2.3", nil)
 	require.Error(t, err)
 	require.NotNil(t, result)
 	require.ErrorIs(t, err, daemonErr)
@@ -1295,7 +1296,7 @@ func TestContainerRegistryService_InspectImageDigest_PreservesAnonymousUnauthori
 	}, nil, nil)
 	svc.distributionHTTPClient = server.Client()
 
-	result, err := svc.InspectImageDigest(context.Background(), serverURL.Host+"/team/app:1.2.3", nil)
+	result, err := svc.InspectImageDigest(t.Context(), serverURL.Host+"/team/app:1.2.3", nil)
 	require.Error(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, "anonymous", result.AuthMethod)
@@ -1307,7 +1308,7 @@ func TestContainerRegistryService_InspectImageDigest_PreservesAnonymousUnauthori
 func createRegistryWithRepositoryNames(t *testing.T, svc *ContainerRegistryService, repositoryNames ...string) *ContainerRegistry {
 	t.Helper()
 
-	registry, err := svc.CreateRegistry(context.Background(), containerregistry.CreateContainerRegistryRequest{
+	registry, err := svc.CreateRegistry(t.Context(), containerregistry.CreateContainerRegistryRequest{
 		URL:             "https://registry.example.com",
 		Username:        "my-user",
 		Token:           "my-token",
@@ -1322,7 +1323,7 @@ func fetchRegistry(t *testing.T, db *database.DB, id string) ContainerRegistry {
 	t.Helper()
 
 	var fetched ContainerRegistry
-	require.NoError(t, db.WithContext(context.Background()).First(&fetched, "id = ?", id).Error)
+	require.NoError(t, db.WithContext(t.Context()).First(&fetched, "id = ?", id).Error)
 
 	return fetched
 }
@@ -1342,7 +1343,7 @@ func TestContainerRegistryService_CreateRegistry_RejectsInvalidRepositoryName(t 
 	db := setupContainerRegistryTestDBInternal(t)
 	svc := NewContainerRegistryService(db, nil, nil, nil)
 
-	_, err := svc.CreateRegistry(context.Background(), containerregistry.CreateContainerRegistryRequest{
+	_, err := svc.CreateRegistry(t.Context(), containerregistry.CreateContainerRegistryRequest{
 		URL:             "https://registry.example.com",
 		RepositoryNames: []string{"team:latest"},
 	})
@@ -1359,14 +1360,14 @@ func TestContainerRegistryService_UpdateRegistry_RepositoryNamesPointerSemantics
 	registry := createRegistryWithRepositoryNames(t, svc, "team", "team/platform")
 
 	// A nil pointer leaves the existing names untouched.
-	updated, err := svc.UpdateRegistry(context.Background(), registry.ID, containerregistry.UpdateContainerRegistryRequest{
+	updated, err := svc.UpdateRegistry(t.Context(), registry.ID, containerregistry.UpdateContainerRegistryRequest{
 		Username: new("updated-user"),
 	})
 	require.NoError(t, err)
 	assert.Equal(t, database.StringSlice{"team", "team/platform"}, updated.RepositoryNames)
 
 	// An empty slice clears them.
-	updated, err = svc.UpdateRegistry(context.Background(), registry.ID, containerregistry.UpdateContainerRegistryRequest{
+	updated, err = svc.UpdateRegistry(t.Context(), registry.ID, containerregistry.UpdateContainerRegistryRequest{
 		RepositoryNames: &[]string{},
 	})
 	require.NoError(t, err)

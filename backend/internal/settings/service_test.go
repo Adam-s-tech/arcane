@@ -34,7 +34,7 @@ func newSettingsServiceForTestInternal(t testing.TB, ctx context.Context, db *da
 	t.Helper()
 	svc, err := NewSettingsService(ctx, db)
 	if err == nil {
-		t.Cleanup(func() { require.NoError(t, svc.Stop(context.Background())) })
+		t.Cleanup(func() { require.NoError(t, svc.Stop(context.WithoutCancel(t.Context()))) })
 	}
 	return svc, err
 }
@@ -54,7 +54,7 @@ func waitForSettingsNotificationsInternal(t *testing.T, svc *SettingsService) {
 }
 
 func TestSettingsService_EnsureDefaultSettings_ReplacesRetiredDefaults(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -71,7 +71,7 @@ func TestSettingsService_EnsureDefaultSettings_ReplacesRetiredDefaults(t *testin
 }
 
 func TestSettingsService_EnsureDefaultSettings_Idempotent(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -89,10 +89,32 @@ func TestSettingsService_EnsureDefaultSettings_Idempotent(t *testing.T) {
 	require.Equal(t, count1, count2)
 
 	// Spot-check core and automation defaults exist with correct values
-	for _, key := range []string{"authLocalEnabled", "projectsDirectory", "followProjectSymlinks", "autoUpdateExcludedContainers", "imageEventWatcherEnabled", "vulnerabilityScanEnabled", "vulnerabilityScanInterval", "toolsImageRegistry", "updateCheckRegistry", "trivyDbRegistry", "trivyNetwork", "trivySecurityOpts", "trivyPrivileged", "trivyResourceLimitsEnabled", "trivyCpuLimit", "trivyMemoryLimitMb", "trivyConcurrentScanContainers", "gitSyncMaxFiles", "gitSyncMaxTotalSizeMb", "gitSyncMaxBinarySizeMb", "lifecycleDefaultRunnerImage"} {
+	for _, key := range []string{
+		"authLocalEnabled",
+		"projectsDirectory",
+		"followProjectSymlinks",
+		"autoUpdateExcludedContainers",
+		"imageEventWatcherEnabled",
+		"vulnerabilityScanEnabled",
+		"vulnerabilityScanInterval",
+		"toolsImageRegistry",
+		"updateCheckRegistry",
+		"trivyDbRegistry",
+		"trivyNetwork",
+		"trivySecurityOpts",
+		"trivyPrivileged",
+		"trivyResourceLimitsEnabled",
+		"trivyCpuLimit",
+		"trivyMemoryLimitMb",
+		"trivyConcurrentScanContainers",
+		"gitSyncMaxFiles",
+		"gitSyncMaxTotalSizeMb",
+		"gitSyncMaxBinarySizeMb",
+		"lifecycleDefaultRunnerImage",
+	} {
 		var sv SettingVariable
-		err := svc.db.WithContext(ctx).Where("key = ?", key).First(&sv).Error
-		require.NoErrorf(t, err, "missing default key %s", key)
+		lookupSettingErr := svc.db.WithContext(ctx).Where("key = ?", key).First(&sv).Error
+		require.NoErrorf(t, lookupSettingErr, "missing default key %s", key)
 
 		switch key {
 		case "followProjectSymlinks":
@@ -138,7 +160,7 @@ func TestSettingsService_EnsureDefaultSettings_Idempotent(t *testing.T) {
 }
 
 func TestSettingsService_ImageEventWatcherSettingPersists(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -155,7 +177,7 @@ func TestSettingsService_ImageEventWatcherSettingPersists(t *testing.T) {
 }
 
 func TestSettingsService_GetSettings_UnknownKeysIgnored(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -168,7 +190,7 @@ func TestSettingsService_GetSettings_UnknownKeysIgnored(t *testing.T) {
 }
 
 func TestSettingsService_GetSettings_UsesCachedSnapshotWithoutDatabase(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -184,7 +206,7 @@ func TestSettingsService_GetSettings_UsesCachedSnapshotWithoutDatabase(t *testin
 }
 
 func TestSettingsService_AvatarMaxUploadSizeDefaultAndUpdate(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -205,7 +227,7 @@ func TestSettingsService_AvatarMaxUploadSizeDefaultAndUpdate(t *testing.T) {
 }
 
 func TestSettingsServiceUpdateSettingsRejectsOIDCIssuerChangeWithStoredSecretInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -224,7 +246,7 @@ func TestSettingsServiceUpdateSettingsRejectsOIDCIssuerChangeWithStoredSecretInt
 }
 
 func TestSettingsServiceUpdateSettingsAllowsOIDCIssuerChangeWhenClearingSecretInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -244,7 +266,7 @@ func TestSettingsServiceUpdateSettingsAllowsOIDCIssuerChangeWhenClearingSecretIn
 }
 
 func TestSettingsServiceUpdateSettingsRejectsEnablingOIDCWithoutSecretInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -262,7 +284,7 @@ func TestSettingsServiceUpdateSettingsRejectsEnablingOIDCWithoutSecretInternal(t
 }
 
 func TestSettingsServiceUpdateSettingsAllowsOIDCIssuerChangeWithReplacementSecretInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -289,7 +311,7 @@ func TestSettingsServiceUpdateSettingsAllowsOIDCIssuerChangeWithReplacementSecre
 }
 
 func TestSettingsServiceUpdateSettingsRejectsTrivyServerChangeWithStoredTokenInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -308,7 +330,7 @@ func TestSettingsServiceUpdateSettingsRejectsTrivyServerChangeWithStoredTokenInt
 }
 
 func TestSettingsServiceUpdateSettingsAllowsTrivyServerChangeWithReplacementTokenInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -328,7 +350,7 @@ func TestSettingsServiceUpdateSettingsAllowsTrivyServerChangeWithReplacementToke
 }
 
 func TestSettingsServiceUpdateSettingsAllowsClearingTrivyServerWithStoredTokenInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -347,7 +369,7 @@ func TestSettingsServiceUpdateSettingsAllowsClearingTrivyServerWithStoredTokenIn
 }
 
 func TestSettingsServiceUpdateSettingsAllowsTrivyServerChangeWithoutStoredTokenInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -364,7 +386,7 @@ func TestSettingsServiceUpdateSettingsAllowsTrivyServerChangeWithoutStoredTokenI
 }
 
 func TestSettingsService_PruneUnknownSettings_RemovesStaleKeys(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -389,7 +411,7 @@ func TestSettingsService_PruneUnknownSettings_RemovesStaleKeys(t *testing.T) {
 }
 
 func TestSettingsService_GetSettings_EnvOverride_OidcMergeAccounts(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	t.Setenv("OIDC_MERGE_ACCOUNTS", "true")
 
@@ -403,7 +425,7 @@ func TestSettingsService_GetSettings_EnvOverride_OidcMergeAccounts(t *testing.T)
 }
 
 func TestSettingsService_GetSettings_EnvOverride_TrivyScanTimeout(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	t.Setenv("TRIVY_SCAN_TIMEOUT", "1800")
 
@@ -417,7 +439,7 @@ func TestSettingsService_GetSettings_EnvOverride_TrivyScanTimeout(t *testing.T) 
 }
 
 func TestSettingsService_GetSettings_EnvOverride_TrivyResourceLimits(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	t.Setenv("TRIVY_RESOURCE_LIMITS_ENABLED", "false")
 	t.Setenv("TRIVY_CPU_LIMIT", "2.5")
@@ -435,7 +457,7 @@ func TestSettingsService_GetSettings_EnvOverride_TrivyResourceLimits(t *testing.
 }
 
 func TestSettingsService_GetSettings_EnvOverride_TrivyNetwork(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	t.Setenv("TRIVY_NETWORK", "arcane-external")
 
@@ -449,7 +471,7 @@ func TestSettingsService_GetSettings_EnvOverride_TrivyNetwork(t *testing.T) {
 }
 
 func TestSettingsService_GetSettings_EnvOverride_FollowProjectSymlinks(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	t.Setenv("FOLLOW_PROJECT_SYMLINKS", "true")
 
@@ -463,7 +485,7 @@ func TestSettingsService_GetSettings_EnvOverride_FollowProjectSymlinks(t *testin
 }
 
 func TestSettingsService_GetSettings_EnvOverride_TrivyRuntimeSecurity(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	t.Setenv("TRIVY_SECURITY_OPTS", "label=disable,\nlabel=type:container_runtime_t")
 	t.Setenv("TRIVY_PRIVILEGED", "true")
@@ -479,7 +501,7 @@ func TestSettingsService_GetSettings_EnvOverride_TrivyRuntimeSecurity(t *testing
 }
 
 func TestSettingsService_GetStringSetting_EnvOverride_SwarmStackSourcesDirectory(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	t.Setenv("SWARM_STACK_SOURCES_DIRECTORY", "/mnt/swarm-from-env")
 
@@ -492,7 +514,7 @@ func TestSettingsService_GetStringSetting_EnvOverride_SwarmStackSourcesDirectory
 }
 
 func TestSettingsService_isEnvOverrideActiveInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
@@ -511,7 +533,7 @@ func TestSettingsService_isEnvOverrideActiveInternal(t *testing.T) {
 }
 
 func TestSettingsService_GetSetHelpers(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -533,7 +555,7 @@ func TestSettingsService_GetSetHelpers(t *testing.T) {
 }
 
 func TestSettingsService_UpdateSetting(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -546,7 +568,7 @@ func TestSettingsService_UpdateSetting(t *testing.T) {
 }
 
 func TestSettingsService_UpdateSettingRejectsInvalidCronBeforePersistence(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -560,7 +582,7 @@ func TestSettingsService_UpdateSettingRejectsInvalidCronBeforePersistence(t *tes
 }
 
 func TestSettingsService_UpdateSetting_RefreshesCachedSnapshot(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -576,7 +598,7 @@ func TestSettingsService_UpdateSetting_RefreshesCachedSnapshot(t *testing.T) {
 }
 
 func TestSettingsService_UpdateSettings_PruneModesDoNotTriggerScheduledPruneCallback(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -596,7 +618,7 @@ func TestSettingsService_UpdateSettings_PruneModesDoNotTriggerScheduledPruneCall
 }
 
 func TestSettingsService_UpdateSettings_ScheduledPruneScheduleTriggersCallback(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -664,8 +686,8 @@ func TestSettingsServiceActorPublishesSnapshotBeforeAsynchronousNotificationInte
 
 	require.Equal(t, "https://actor.example", <-callbackStarted)
 	select {
-	case err := <-updateResult:
-		require.NoError(t, err)
+	case updateErr := <-updateResult:
+		require.NoError(t, updateErr)
 	case <-time.After(time.Second):
 		require.FailNow(t, "settings update waited for notification callback")
 	}
@@ -676,8 +698,8 @@ func TestSettingsServiceActorPublishesSnapshotBeforeAsynchronousNotificationInte
 		secondUpdate <- updateErr
 	}()
 	select {
-	case err := <-secondUpdate:
-		require.NoError(t, err)
+	case secondUpdateErr := <-secondUpdate:
+		require.NoError(t, secondUpdateErr)
 	case <-time.After(time.Second):
 		require.FailNow(t, "settings subscriber blocked the next settings writer")
 	}
@@ -747,13 +769,13 @@ func TestSettingsServiceActorSerializesContainerExclusionUpdatesInternal(t *test
 }
 
 func BenchmarkSettingsService_GetSettings(b *testing.B) {
-	ctx := context.Background()
+	ctx := b.Context()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		require.FailNowf(b, "benchmark database setup failed", "%v", err)
 	}
-	if err := db.AutoMigrate(&SettingVariable{}); err != nil {
-		require.FailNowf(b, "benchmark database migration failed", "%v", err)
+	if autoMigrateErr := db.AutoMigrate(&SettingVariable{}); autoMigrateErr != nil {
+		require.FailNowf(b, "benchmark database migration failed", "%v", autoMigrateErr)
 	}
 	settingsDB := &database.DB{DB: db}
 	svc, err := newSettingsServiceForTestInternal(b, ctx, settingsDB)
@@ -765,9 +787,9 @@ func BenchmarkSettingsService_GetSettings(b *testing.B) {
 	b.ResetTimer()
 
 	for b.Loop() {
-		settingsCfg, err := svc.GetSettings(ctx)
-		if err != nil {
-			require.FailNowf(b, "benchmark GetSettings failed", "%v", err)
+		settingsCfg, getSettingsErr := svc.GetSettings(ctx)
+		if getSettingsErr != nil {
+			require.FailNowf(b, "benchmark GetSettings failed", "%v", getSettingsErr)
 		}
 		if settingsCfg == nil {
 			require.FailNow(b, "GetSettings returned nil settings")
@@ -776,7 +798,7 @@ func BenchmarkSettingsService_GetSettings(b *testing.B) {
 }
 
 func TestSettingsService_EnsureEncryptionKey(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -808,7 +830,7 @@ func TestSettingsService_EnsureEncryptionKey(t *testing.T) {
 }
 
 func TestSettingsService_LoadDatabaseSettings_ReloadsChanges(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -838,7 +860,7 @@ func TestSettingsService_LoadDatabaseSettings_UIConfigurationDisabled_Env(t *tes
 	c := config.Load()
 	c.UIConfigurationDisabled = true
 
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -852,7 +874,7 @@ func TestSettingsService_LoadDatabaseSettings_UIConfigurationDisabled_Env(t *tes
 }
 
 func TestSettingsService_UpdateSettings_RefreshesCache(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -881,7 +903,7 @@ func TestSettingsService_UpdateSettings_RefreshesCache(t *testing.T) {
 func TestSettingsService_UpdateSettings_ReturnsEnvOverriddenValues(t *testing.T) {
 	t.Setenv("DOCKER_HOST", "tcp://env-docker:2375")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -903,7 +925,7 @@ func TestSettingsService_UpdateSettings_ReturnsEnvOverriddenValues(t *testing.T)
 }
 
 func TestSettingsService_UpdateSettings_TimeoutCallbackIncludesTrivyScanTimeout(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -923,7 +945,7 @@ func TestSettingsService_UpdateSettings_TimeoutCallbackIncludesTrivyScanTimeout(
 }
 
 func TestSettingsService_UpdateSettings_TimeoutCallbackIncludesTrivyResourceLimits(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -949,7 +971,7 @@ func TestSettingsService_UpdateSettings_TimeoutCallbackIncludesTrivyResourceLimi
 }
 
 func TestSettingsService_UpdateSettings_TimeoutCallbackIncludesTrivyConcurrentScanContainers(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -969,7 +991,7 @@ func TestSettingsService_UpdateSettings_TimeoutCallbackIncludesTrivyConcurrentSc
 }
 
 func TestSettingsService_UpdateSettings_TrivyNetworkTriggersVulnerabilityCallback(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -987,7 +1009,7 @@ func TestSettingsService_UpdateSettings_TrivyNetworkTriggersVulnerabilityCallbac
 }
 
 func TestSettingsService_UpdateSettings_TrivyNetworkDoesNotTriggerTimeoutCallback(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -1005,7 +1027,7 @@ func TestSettingsService_UpdateSettings_TrivyNetworkDoesNotTriggerTimeoutCallbac
 }
 
 func TestSettingsService_UpdateSettings_TrivyRuntimeSecurityTriggersVulnerabilityCallback(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -1026,7 +1048,7 @@ func TestSettingsService_UpdateSettings_TrivyRuntimeSecurityTriggersVulnerabilit
 }
 
 func TestSettingsService_UpdateSettings_TrivyRuntimeSecurityDoesNotTriggerTimeoutCallback(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -1050,7 +1072,7 @@ func TestSettingsService_LoadDatabaseSettings_InternalKeys_EnvMode(t *testing.T)
 	// Set env + disable flag
 	t.Setenv("UI_CONFIGURATION_DISABLED", "true")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 
 	// Pre-populate an internal setting in the DB
@@ -1070,7 +1092,7 @@ func TestSettingsService_LoadDatabaseSettings_InternalKeys_EnvMode(t *testing.T)
 }
 
 func TestSettingsService_NormalizeProjectsDirectory_ConvertsRelativeToAbsolute(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -1093,7 +1115,7 @@ func TestSettingsService_NormalizeProjectsDirectory_ConvertsRelativeToAbsolute(t
 }
 
 func TestSettingsService_NormalizeProjectsDirectory_SkipsWhenEnvSet(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -1112,7 +1134,7 @@ func TestSettingsService_NormalizeProjectsDirectory_SkipsWhenEnvSet(t *testing.T
 }
 
 func TestSettingsService_NormalizeProjectsDirectory_LeavesOtherPathsUnchanged(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -1131,7 +1153,7 @@ func TestSettingsService_NormalizeProjectsDirectory_LeavesOtherPathsUnchanged(t 
 }
 
 func TestSettingsService_NormalizeProjectsDirectory_HandlesNotFound(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -1144,7 +1166,7 @@ func TestSettingsService_NormalizeProjectsDirectory_HandlesNotFound(t *testing.T
 }
 
 func TestSettingsService_NormalizeProjectsDirectory_UpdatesCacheAfterNormalization(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDB(t)
 	svc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -1196,7 +1218,7 @@ func TestSettingsService_NormalizeProjectsDirectoryPublishesChangeInternal(t *te
 // pointer (no per-call clone), env overrides win over database values, and
 // an update rebuilds the snapshot while keeping the override applied.
 func TestSettingsServiceEffectiveSnapshotMaterializedInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	t.Setenv("PROJECTS_DIRECTORY", "/env/projects")
 
 	db := setupSettingsTestDB(t)

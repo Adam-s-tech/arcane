@@ -52,7 +52,21 @@ func TestValidateUploadIndices(t *testing.T) {
 		{name: "unexpected", changes: []UploadReference{{Operation: "delete", UploadIndex: new(0)}}, uploadCount: 1, message: "not allowed"},
 		{name: "negative", changes: []UploadReference{{Operation: "create_file", UploadIndex: new(-1)}}, uploadCount: 1, message: "out of range"},
 		{name: "out of range", changes: []UploadReference{{Operation: "create_file", UploadIndex: new(1)}}, uploadCount: 1, message: "out of range"},
-		{name: "duplicate", changes: []UploadReference{{Operation: "create_file", UploadIndex: new(0)}, {Operation: "update_file", UploadIndex: new(0)}}, uploadCount: 1, message: "duplicated"},
+		{
+			name: "duplicate",
+			changes: []UploadReference{
+				{
+					Operation:   "create_file",
+					UploadIndex: new(0),
+				},
+				{
+					Operation:   "update_file",
+					UploadIndex: new(0),
+				},
+			},
+			uploadCount: 1,
+			message:     "duplicated",
+		},
 		{name: "unused", changes: []UploadReference{{Operation: "create_file", UploadIndex: new(0)}}, uploadCount: 2, message: "unused"},
 	}
 	for _, test := range tests {

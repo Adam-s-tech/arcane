@@ -18,7 +18,7 @@ import (
 )
 
 // newTestWSPair creates a connected client/server WebSocket pair using httptest.
-func newTestWSPair(t *testing.T) (clientConn, serverConn *websocket.Conn, cleanup func()) {
+func newTestWSPairInternal(t *testing.T) (serverConn *websocket.Conn, cleanup func()) {
 	t.Helper()
 	serverReady := make(chan *websocket.Conn, 1)
 
@@ -36,7 +36,7 @@ func newTestWSPair(t *testing.T) (clientConn, serverConn *websocket.Conn, cleanu
 
 	sc := <-serverReady
 
-	return cc, sc, func() {
+	return sc, func() {
 		_ = cc.CloseNow()
 		// The hub and the forwarders own the server side and may already have
 		// closed it, so close errors here are expected.
@@ -62,7 +62,7 @@ func TestHub_RegisterAndClientCount(t *testing.T) {
 	ctx := t.Context()
 	go h.Run(ctx)
 
-	_, serverConn, cleanup := newTestWSPair(t)
+	serverConn, cleanup := newTestWSPairInternal(t)
 	defer cleanup()
 
 	c := NewClient(serverConn, 16)
@@ -79,7 +79,7 @@ func TestHub_UnregisterClient(t *testing.T) {
 	ctx := t.Context()
 	go h.Run(ctx)
 
-	_, serverConn, cleanup := newTestWSPair(t)
+	serverConn, cleanup := newTestWSPairInternal(t)
 	defer cleanup()
 
 	c := NewClient(serverConn, 16)
@@ -101,7 +101,7 @@ func TestHub_Broadcast(t *testing.T) {
 	ctx := t.Context()
 	go h.Run(ctx)
 
-	_, serverConn, cleanup := newTestWSPair(t)
+	serverConn, cleanup := newTestWSPairInternal(t)
 	defer cleanup()
 
 	c := NewClient(serverConn, 16)
@@ -133,7 +133,7 @@ func TestHub_BroadcastToMultipleClients(t *testing.T) {
 	cleanups := make([]func(), numClients)
 
 	for i := range numClients {
-		_, sc, cleanup := newTestWSPair(t)
+		sc, cleanup := newTestWSPairInternal(t)
 		cleanups[i] = cleanup
 		clients[i] = NewClient(sc, 16)
 		h.register <- clients[i]
@@ -167,7 +167,7 @@ func TestHub_BackpressureDropsSlowClient(t *testing.T) {
 	go h.Run(ctx)
 
 	// Create a client with a tiny send buffer so it fills up fast
-	_, serverConn, cleanup := newTestWSPair(t)
+	serverConn, cleanup := newTestWSPairInternal(t)
 	defer cleanup()
 
 	c := NewClient(serverConn, 1)
@@ -198,7 +198,7 @@ func TestHub_OnEmptyCallback(t *testing.T) {
 		called.Store(true)
 	})
 
-	_, serverConn, cleanup := newTestWSPair(t)
+	serverConn, cleanup := newTestWSPairInternal(t)
 	defer cleanup()
 
 	c := NewClient(serverConn, 16)
@@ -223,9 +223,9 @@ func TestHub_OnFirstClientCallback(t *testing.T) {
 		callCount.Add(1)
 	})
 
-	_, sc1, cleanup1 := newTestWSPair(t)
+	sc1, cleanup1 := newTestWSPairInternal(t)
 	defer cleanup1()
-	_, sc2, cleanup2 := newTestWSPair(t)
+	sc2, cleanup2 := newTestWSPairInternal(t)
 	defer cleanup2()
 
 	h.register <- NewClient(sc1, 16)
@@ -250,9 +250,9 @@ func TestHub_OnEmptyCalledOnlyOnce(t *testing.T) {
 	})
 
 	// Register two clients
-	_, sc1, cleanup1 := newTestWSPair(t)
+	sc1, cleanup1 := newTestWSPairInternal(t)
 	defer cleanup1()
-	_, sc2, cleanup2 := newTestWSPair(t)
+	sc2, cleanup2 := newTestWSPairInternal(t)
 	defer cleanup2()
 
 	c1 := NewClient(sc1, 16)
@@ -282,7 +282,7 @@ func TestHub_OnEmptyCalledOnlyOnce(t *testing.T) {
 
 func TestHub_ContextCancellation(t *testing.T) {
 	h := NewHub(10)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	done := make(chan struct{})
 	go func() {
@@ -290,7 +290,7 @@ func TestHub_ContextCancellation(t *testing.T) {
 		close(done)
 	}()
 
-	_, serverConn, cleanup := newTestWSPair(t)
+	serverConn, cleanup := newTestWSPairInternal(t)
 	defer cleanup()
 
 	c := NewClient(serverConn, 16)
@@ -378,7 +378,7 @@ func TestHub_ConcurrentOperations(t *testing.T) {
 		cleanup func()
 	}, goroutines)
 	for i := range goroutines {
-		_, pairs[i].sc, pairs[i].cleanup = newTestWSPair(t)
+		pairs[i].sc, pairs[i].cleanup = newTestWSPairInternal(t)
 		t.Cleanup(pairs[i].cleanup)
 	}
 
@@ -410,7 +410,7 @@ func TestHub_DoubleUnregister(t *testing.T) {
 	ctx := t.Context()
 	go h.Run(ctx)
 
-	_, serverConn, cleanup := newTestWSPair(t)
+	serverConn, cleanup := newTestWSPairInternal(t)
 	defer cleanup()
 
 	c := NewClient(serverConn, 16)

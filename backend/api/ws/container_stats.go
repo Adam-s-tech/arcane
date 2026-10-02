@@ -42,11 +42,10 @@ func (h *WebSocketHandler) ContainerStats(c *echo.Context) error {
 	// A reconnect can land exactly on the 5s idle-teardown boundary and load a
 	// hub whose Run has already exited. Drop that hub and retry once so the
 	// client gets a live producer instead of a silent socket.
-	// WebSocket connections use context.Background() because they are long-lived and should not
-	// be tied to the HTTP request context. Cleanup is handled by the shared hub when it idles.
+	// The hub owns connection cleanup; preserve request values without request cancellation.
 	for attempt := range 2 {
 		hub := h.getOrCreateContainerStatsHubInternal(containerID)
-		if wshub.ServeClientWithOnRemove(context.Background(), hub, conn, onRemove) {
+		if wshub.ServeClientWithOnRemove(context.WithoutCancel(c.Request().Context()), hub, conn, onRemove) {
 			return nil
 		}
 		h.containerStatsHubs.CompareAndDelete(containerID, hub)
@@ -62,7 +61,7 @@ func (h *WebSocketHandler) ContainerStats(c *echo.Context) error {
 
 func (h *WebSocketHandler) getOrCreateContainerStatsHubInternal(containerID string) *wshub.Hub {
 	if existing, ok := h.containerStatsHubs.Load(containerID); ok {
-		if hub, ok := existing.(*wshub.Hub); ok {
+		if hub, localOk := existing.(*wshub.Hub); localOk {
 			return hub
 		}
 	}
@@ -87,7 +86,7 @@ func (h *WebSocketHandler) getOrCreateContainerStatsHubInternal(containerID stri
 const containerStatsErrorDrainGrace = 2 * time.Second
 
 func (h *WebSocketHandler) runContainerStatsHubInternal(containerID string, hub *wshub.Hub) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background()) //nolint:forbidigo // Shared stats hubs own their lifecycle and idle cancellation across requests.
 	var cleanupTimer *time.Timer
 	var cleanupTimerMu sync.Mutex
 

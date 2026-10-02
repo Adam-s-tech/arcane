@@ -65,9 +65,9 @@ func UploadFileInChunks(ctx context.Context, c *client.Client, kind, filePath st
 	buf := make([]byte, session.ChunkSize)
 	for index := range session.TotalChunks {
 		expected := kit.Ternary(index == session.TotalChunks-1, session.Size-int64(index)*session.ChunkSize, session.ChunkSize)
-		if _, err := io.ReadFull(file, buf[:expected]); err != nil {
+		if _, readFullErr := io.ReadFull(file, buf[:expected]); readFullErr != nil {
 			deleteSession()
-			return "", fmt.Errorf("failed to read file: %w", err)
+			return "", fmt.Errorf("failed to read file: %w", readFullErr)
 		}
 
 		chunkPath := types.UploadSessionChunk(c.EnvID(), kind, session.ID, index)

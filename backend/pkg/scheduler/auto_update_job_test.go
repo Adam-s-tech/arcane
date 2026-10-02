@@ -14,7 +14,7 @@ import (
 )
 
 func TestAutoUpdateJob_ShouldSchedule_RequiresAutoUpdateAndPolling(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	_, settingsSvc, _ := setupAnalyticsStateServicesInternal(t)
 	job, err := NewAutoUpdateJob(nil, settingsSvc, newTestAdmissionGateInternal(t))
 	require.NoError(t, err)
@@ -48,7 +48,7 @@ func (f *blockingApplierFakeInternal) ApplyPending(context.Context, updater.Opti
 }
 
 func TestAutoUpdateJob_OverlappingRunIsSkippedInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	_, settingsSvc, _ := setupAnalyticsStateServicesInternal(t)
 	require.NoError(t, settingsSvc.SetBoolSetting(ctx, "autoUpdate", true))
 
@@ -60,13 +60,19 @@ func TestAutoUpdateJob_OverlappingRunIsSkippedInternal(t *testing.T) {
 
 	firstDone := make(chan struct{})
 	go func() {
-		job.Run(ctx)
+		_, runErr1 := job.Run(ctx)
+		if runErr1 != nil {
+			t.Errorf("first auto update job run failed: %v", runErr1)
+			close(firstDone)
+			return
+		}
 		close(firstDone)
 	}()
 	<-applier.started
 
 	// Overlapping tick returns immediately without a second ApplyPending.
-	job.Run(ctx)
+	_, runErr2 := job.Run(ctx)
+	require.NoError(t, runErr2)
 	require.Equal(t, int32(1), applier.calls.Load())
 
 	close(applier.release)
@@ -77,7 +83,8 @@ func TestAutoUpdateJob_OverlappingRunIsSkippedInternal(t *testing.T) {
 	}
 
 	// The guard resets once the run finishes.
-	job.Run(ctx)
+	_, runErr3 := job.Run(ctx)
+	require.NoError(t, runErr3)
 	require.Equal(t, int32(2), applier.calls.Load())
 	for _, tc := range []struct {
 		name       string
@@ -87,11 +94,80 @@ func TestAutoUpdateJob_OverlappingRunIsSkippedInternal(t *testing.T) {
 		unresolved bool
 	}{
 		{name: "missing progress", unresolved: true, status: schedulertypes.Failed},
-		{name: "image pull alone", unresolved: true, targets: []schedulertypes.TargetOutcome{{ID: "image", ResourceType: "image", Status: schedulertypes.Succeeded}}, status: schedulertypes.Failed},
-		{name: "failed containers only", unresolved: true, targets: []schedulertypes.TargetOutcome{{ID: "done", ResourceType: "container", Status: schedulertypes.Succeeded}, {ID: "failed", ResourceType: "container", Status: schedulertypes.Failed}, {ID: "image", ResourceType: "image", Status: schedulertypes.Failed}}, retryIDs: []string{"failed"}},
-		{name: "completed failed batch retry", targets: []schedulertypes.TargetOutcome{{ID: "auto-update", ResourceType: "update-batch", Status: schedulertypes.Partial}, {ID: "failed", ResourceType: "container", Status: schedulertypes.Failed}}, retryIDs: []string{"failed"}},
-		{name: "scoped retry cannot confirm original batch", targets: []schedulertypes.TargetOutcome{{ID: "auto-update", ResourceType: "update-retry", Status: schedulertypes.Succeeded}, {ID: "done", ResourceType: "container", Status: schedulertypes.Succeeded}}, status: schedulertypes.Failed, unresolved: true},
-		{name: "completed batch", targets: []schedulertypes.TargetOutcome{{ID: "auto-update", ResourceType: "update-batch", Status: schedulertypes.Succeeded}}, status: schedulertypes.Succeeded},
+		{
+			name:       "image pull alone",
+			unresolved: true,
+			targets: []schedulertypes.TargetOutcome{{
+				ID:           "image",
+				ResourceType: "image",
+				Status:       schedulertypes.Succeeded,
+			}},
+			status: schedulertypes.Failed,
+		},
+		{
+			name:       "failed containers only",
+			unresolved: true,
+			targets: []schedulertypes.TargetOutcome{
+				{
+					ID:           "done",
+					ResourceType: "container",
+					Status:       schedulertypes.Succeeded,
+				},
+				{
+					ID:           "failed",
+					ResourceType: "container",
+					Status:       schedulertypes.Failed,
+				},
+				{
+					ID:           "image",
+					ResourceType: "image",
+					Status:       schedulertypes.Failed,
+				},
+			},
+			retryIDs: []string{"failed"},
+		},
+		{
+			name: "completed failed batch retry",
+			targets: []schedulertypes.TargetOutcome{
+				{
+					ID:           "auto-update",
+					ResourceType: "update-batch",
+					Status:       schedulertypes.Partial,
+				},
+				{
+					ID:           "failed",
+					ResourceType: "container",
+					Status:       schedulertypes.Failed,
+				},
+			},
+			retryIDs: []string{"failed"},
+		},
+		{
+			name: "scoped retry cannot confirm original batch",
+			targets: []schedulertypes.TargetOutcome{
+				{
+					ID:           "auto-update",
+					ResourceType: "update-retry",
+					Status:       schedulertypes.Succeeded,
+				},
+				{
+					ID:           "done",
+					ResourceType: "container",
+					Status:       schedulertypes.Succeeded,
+				},
+			},
+			status:     schedulertypes.Failed,
+			unresolved: true,
+		},
+		{
+			name: "completed batch",
+			targets: []schedulertypes.TargetOutcome{{
+				ID:           "auto-update",
+				ResourceType: "update-batch",
+				Status:       schedulertypes.Succeeded,
+			}},
+			status: schedulertypes.Succeeded,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			previous := schedulertypes.Run{AttemptCount: 2, Outcome: schedulertypes.Outcome{Targets: tc.targets}}
@@ -115,7 +191,18 @@ func TestAutoUpdateJob_OverlappingRunIsSkippedInternal(t *testing.T) {
 	}
 
 	require.NoError(t, settingsSvc.SetBoolSetting(ctx, "autoUpdate", false))
-	retryCtx := jobcontext.WithExecution(ctx, schedulertypes.Run{AttemptCount: 2, Outcome: schedulertypes.Outcome{Targets: []schedulertypes.TargetOutcome{{ID: "failed", ResourceType: "container", Status: schedulertypes.Failed}}}}, nil)
+	retryCtx := jobcontext.WithExecution(
+		ctx,
+		schedulertypes.Run{
+			AttemptCount: 2,
+			Outcome: schedulertypes.Outcome{Targets: []schedulertypes.TargetOutcome{{
+				ID:           "failed",
+				ResourceType: "container",
+				Status:       schedulertypes.Failed,
+			}}},
+		},
+		nil,
+	)
 	outcome, err := job.Run(retryCtx)
 	require.NoError(t, err)
 	require.Equal(t, schedulertypes.Failed, outcome.Status)

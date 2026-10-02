@@ -135,29 +135,29 @@ func (s *UserService) ValidatePassword(encodedHash, password string) error {
 	return nil
 }
 
-func (s *UserService) CreateUser(ctx context.Context, user *common.User) (*common.User, error) {
-	if err := normalization.Normalize(user); err != nil {
+func (s *UserService) CreateUser(ctx context.Context, localUser *common.User) (*common.User, error) {
+	if err := normalization.Normalize(localUser); err != nil {
 		return nil, err
 	}
-	username, err := normalizeUsernameInternal(user.Username)
+	username, err := normalizeUsernameInternal(localUser.Username)
 	if err != nil {
 		return nil, err
 	}
-	user.Username = username
+	localUser.Username = username
 
 	err = dbutil.WithTx(ctx, s.db.DB, func(tx *gorm.DB) error {
-		if err := tx.Create(user).Error; err != nil {
-			if isDuplicateKeyErrorInternal(tx, err) {
+		if createUserErr := tx.Create(localUser).Error; createUserErr != nil {
+			if isDuplicateKeyErrorInternal(tx, createUserErr) {
 				return ErrUsernameTaken
 			}
-			return fmt.Errorf("failed to create user: %w", err)
+			return fmt.Errorf("failed to create user: %w", createUserErr)
 		}
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	return user, nil
+	return localUser, nil
 }
 
 func (s *UserService) GetUserByUsername(ctx context.Context, username string) (*common.User, error) {
@@ -268,15 +268,15 @@ func (s *UserService) checkTargetPrivilegeInternal(ctx context.Context, tx *gorm
 // UpdateUser persists the given user. actorPerms identifies the caller
 // performing the change; authenticated global-admin callers must also be
 // present in ctx. Pass nil for internal service-to-service calls.
-func (s *UserService) UpdateUser(ctx context.Context, user *common.User, actorPerms *authz.PermissionSet) (*common.User, error) {
-	if err := normalization.Normalize(user); err != nil {
+func (s *UserService) UpdateUser(ctx context.Context, localUser *common.User, actorPerms *authz.PermissionSet) (*common.User, error) {
+	if err := normalization.Normalize(localUser); err != nil {
 		return nil, err
 	}
 	err := dbutil.WithTx(ctx, s.db.DB, func(tx *gorm.DB) error {
-		if err := s.checkTargetPrivilegeInternal(ctx, tx, actorPerms, user.ID); err != nil {
+		if err := s.checkTargetPrivilegeInternal(ctx, tx, actorPerms, localUser.ID); err != nil {
 			return err
 		}
-		if err := tx.Save(user).Error; err != nil {
+		if err := tx.Save(localUser).Error; err != nil {
 			if isDuplicateKeyErrorInternal(tx, err) {
 				return ErrUsernameTaken
 			}
@@ -287,7 +287,7 @@ func (s *UserService) UpdateUser(ctx context.Context, user *common.User, actorPe
 	if err != nil {
 		return nil, err
 	}
-	return user, nil
+	return localUser, nil
 }
 
 func normalizeUsernameInternal(username string) (string, error) {
@@ -308,8 +308,8 @@ func isDuplicateKeyErrorInternal(db *gorm.DB, err error) bool {
 
 // SetPassword hashes and persists a new password for the given user and clears
 // the first-login password-change requirement for trusted internal callers.
-func (s *UserService) SetPassword(ctx context.Context, user *common.User, password string) (*common.User, error) {
-	if user == nil {
+func (s *UserService) SetPassword(ctx context.Context, localUser *common.User, password string) (*common.User, error) {
+	if localUser == nil {
 		return nil, errors.New("user is nil")
 	}
 
@@ -318,20 +318,20 @@ func (s *UserService) SetPassword(ctx context.Context, user *common.User, passwo
 		return nil, fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	user.PasswordHash = hashedPassword
-	user.RequiresPasswordChange = false
-	return s.UpdateUser(ctx, user, nil)
+	localUser.PasswordHash = hashedPassword
+	localUser.RequiresPasswordChange = false
+	return s.UpdateUser(ctx, localUser, nil)
 }
 
 // SetPasswordAndRevokeSessionsExcept atomically sets a new password, clears
 // the first-login password-change requirement, and revokes every session for
 // the user except exceptSessionID. Pass an empty exceptSessionID to revoke all
 // sessions. This is for trusted internal callers.
-func (s *UserService) SetPasswordAndRevokeSessionsExcept(ctx context.Context, user *common.User, password, exceptSessionID string) (*common.User, error) {
-	if user == nil {
+func (s *UserService) SetPasswordAndRevokeSessionsExcept(ctx context.Context, localUser *common.User, password, exceptSessionID string) (*common.User, error) {
+	if localUser == nil {
 		return nil, errors.New("user is nil")
 	}
-	if strings.TrimSpace(user.ID) == "" {
+	if strings.TrimSpace(localUser.ID) == "" {
 		return nil, common.ErrUserNotFound
 	}
 
@@ -342,19 +342,19 @@ func (s *UserService) SetPasswordAndRevokeSessionsExcept(ctx context.Context, us
 
 	var updatedUser common.User
 	err = dbutil.WithTx(ctx, s.db.DB, func(tx *gorm.DB) error {
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("id = ?", user.ID).
-			First(&updatedUser).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
+		if loadPasswordResetUserErr := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ?", localUser.ID).
+			First(&updatedUser).Error; loadPasswordResetUserErr != nil {
+			if errors.Is(loadPasswordResetUserErr, gorm.ErrRecordNotFound) {
 				return common.ErrUserNotFound
 			}
-			return fmt.Errorf("failed to load user for password reset: %w", err)
+			return fmt.Errorf("failed to load user for password reset: %w", loadPasswordResetUserErr)
 		}
 
 		updatedUser.PasswordHash = hashedPassword
 		updatedUser.RequiresPasswordChange = false
-		if err := tx.Save(&updatedUser).Error; err != nil {
-			return fmt.Errorf("failed to update user password: %w", err)
+		if updatePasswordErr := tx.Save(&updatedUser).Error; updatePasswordErr != nil {
+			return fmt.Errorf("failed to update user password: %w", updatePasswordErr)
 		}
 		return session.RevokeAllUserSessionsExceptInDB(ctx, tx, updatedUser.ID, exceptSessionID)
 	})
@@ -362,8 +362,8 @@ func (s *UserService) SetPasswordAndRevokeSessionsExcept(ctx context.Context, us
 		return nil, err
 	}
 
-	*user = updatedUser
-	return user, nil
+	*localUser = updatedUser
+	return localUser, nil
 }
 
 // AttachOidcSubjectTransactional safely links an OIDC subject to the given user inside a DB transaction.
@@ -463,8 +463,8 @@ func (s *UserService) CreateDefaultAdmin(ctx context.Context) error {
 				PasswordHash:           hashedPassword,
 				RequiresPasswordChange: true,
 			}
-			if err := tx.Create(userModel).Error; err != nil {
-				return fmt.Errorf("failed to create default admin user: %w", err)
+			if createAdminUserErr := tx.Create(userModel).Error; createAdminUserErr != nil {
+				return fmt.Errorf("failed to create default admin user: %w", createAdminUserErr)
 			}
 			adminUserID = userModel.ID
 			slog.InfoContext(ctx, "👑 Default admin user created!")
@@ -523,8 +523,8 @@ func (s *UserService) grantDefaultAdminRoleInternal(ctx context.Context, adminUs
 		RoleID:        authz.BuiltInRoleAdmin,
 		EnvironmentID: nil,
 	})
-	if err := s.roleService.SetUserAssignments(ctx, adminUserID, manual); err != nil {
-		return fmt.Errorf("failed to grant default admin global role: %w", err)
+	if setUserAssignmentsErr := s.roleService.SetUserAssignments(ctx, adminUserID, manual); setUserAssignmentsErr != nil {
+		return fmt.Errorf("failed to grant default admin global role: %w", setUserAssignmentsErr)
 	}
 	slog.InfoContext(ctx, "Default admin granted global Admin role assignment", "user_id", adminUserID)
 	return nil
@@ -544,9 +544,9 @@ func (s *UserService) DeleteUser(ctx context.Context, id string, actorPerms *aut
 			return err
 		}
 		if ps != nil && ps.IsGlobalAdmin() {
-			remaining, err := s.roleService.CountGlobalAdminsExcludingUser(ctx, id)
-			if err != nil {
-				return err
+			remaining, countGlobalAdminsExcludingUserErr := s.roleService.CountGlobalAdminsExcludingUser(ctx, id)
+			if countGlobalAdminsExcludingUserErr != nil {
+				return countGlobalAdminsExcludingUserErr
 			}
 			if remaining == 0 {
 				return ErrCannotRemoveLastAdmin
@@ -761,8 +761,8 @@ func (s *UserService) GetAvatar(ctx context.Context, userID string) ([]byte, str
 		return nil, "", nil
 	}
 	var avatar UserAvatar
-	if err := s.db.DB.WithContext(ctx).Where("user_id = ?", userID).First(&avatar).Error; err != nil {
-		return nil, "", kit.Ternary(errors.Is(err, gorm.ErrRecordNotFound), nil, err)
+	if loadAvatarErr := s.db.DB.WithContext(ctx).Where("user_id = ?", userID).First(&avatar).Error; loadAvatarErr != nil {
+		return nil, "", kit.Ternary(errors.Is(loadAvatarErr, gorm.ErrRecordNotFound), nil, loadAvatarErr)
 	}
 	return avatar.Data, avatar.MimeType, nil
 }

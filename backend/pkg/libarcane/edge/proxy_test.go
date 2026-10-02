@@ -33,8 +33,8 @@ func setupMockAgentServer(t *testing.T, handler func(*TunnelMessage) *TunnelMess
 		defer func() { _ = conn.CloseNow() }()
 
 		for {
-			_, data, err := conn.Read(r.Context())
-			if err != nil {
+			_, data, readErr := conn.Read(r.Context())
+			if readErr != nil {
 				return
 			}
 
@@ -58,8 +58,8 @@ func setupMockAgentServer(t *testing.T, handler func(*TunnelMessage) *TunnelMess
 	// We need a loop to read responses from the tunnel and dispatch them to pending
 	go func() {
 		for {
-			msg, err := tunnel.Conn.Receive()
-			if err != nil {
+			msg, receiveErr := tunnel.Conn.Receive()
+			if receiveErr != nil {
 				return
 			}
 			if req, ok := tunnel.Pending.Load(msg.ID); ok {
@@ -85,7 +85,7 @@ func TestProxyRequest(t *testing.T) {
 	defer server.Close()
 	defer func() { _ = tunnel.CloseWithReason("") }()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
 
 	status, headers, body, err := ProxyRequest(ctx, tunnel, http.MethodGet, "/api/health", "", nil, nil)
@@ -123,7 +123,7 @@ func TestProxyHTTPRequest(t *testing.T) {
 }
 
 func TestProxyHTTPRequest_GRPCTunnel(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 
 	envID := "env-grpc-proxy-http-1"
 	GetRegistry().Unregister(envID)
@@ -163,9 +163,9 @@ func TestProxyHTTPRequest_GRPCTunnel(t *testing.T) {
 
 	agentErrCh := make(chan error, 1)
 	go func() {
-		msg, err := stream.Recv()
-		if err != nil {
-			agentErrCh <- err
+		msg, recvErr := stream.Recv()
+		if recvErr != nil {
+			agentErrCh <- recvErr
 			return
 		}
 
@@ -200,10 +200,10 @@ func TestProxyHTTPRequest_GRPCTunnel(t *testing.T) {
 			return
 		}
 
-		if err := stream.Send(&tunnelpb.AgentMessage{Payload: &tunnelpb.AgentMessage_CommandAck{CommandAck: &tunnelpb.CommandAck{
+		if sendErr := stream.Send(&tunnelpb.AgentMessage{Payload: &tunnelpb.AgentMessage_CommandAck{CommandAck: &tunnelpb.CommandAck{
 			CommandId: req.GetCommandId(),
-		}}}); err != nil {
-			agentErrCh <- err
+		}}}); sendErr != nil {
+			agentErrCh <- sendErr
 			return
 		}
 
@@ -255,7 +255,7 @@ func TestDoRequest(t *testing.T) {
 	registry.Register("env-do-req", tunnel)
 	defer registry.Unregister("env-do-req")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	status, body, err := DoRequest(ctx, "env-do-req", "GET", "/api/health", nil)
 
 	require.NoError(t, err)
@@ -264,7 +264,7 @@ func TestDoRequest(t *testing.T) {
 }
 
 func TestDoRequest_NoTunnel(t *testing.T) {
-	_, _, err := DoRequest(context.Background(), "non-existent", "GET", "/", nil)
+	_, _, err := DoRequest(t.Context(), "non-existent", "GET", "/", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no active tunnel")
 }
@@ -274,7 +274,7 @@ func TestCommandRequestFailsWhenTunnelCloses(t *testing.T) {
 	errCh := make(chan error, 1)
 
 	go func() {
-		_, err := DefaultCommandClient.Execute(context.Background(), tunnel, &CommandRequest{
+		_, err := DefaultCommandClient.Execute(t.Context(), tunnel, &CommandRequest{
 			Method: http.MethodGet,
 			Path:   "/api/health",
 		})
@@ -456,7 +456,7 @@ func TestHandleRequest_SetsHostField(t *testing.T) {
 	conn := &capturingTunnelConnForHandleRequest{}
 	client.conn.Store(&connBox{conn: conn})
 
-	client.handleRequest(context.Background(), conn, &TunnelMessage{
+	client.handleRequest(t.Context(), conn, &TunnelMessage{
 		ID:     "req-host-1",
 		Type:   MessageTypeRequest,
 		Method: http.MethodGet,
@@ -488,7 +488,7 @@ func TestHandleRequest_ForwardsBody(t *testing.T) {
 	conn := &capturingTunnelConnForHandleRequest{}
 	client.conn.Store(&connBox{conn: conn})
 
-	client.handleRequest(context.Background(), conn, &TunnelMessage{
+	client.handleRequest(t.Context(), conn, &TunnelMessage{
 		ID:     "req-body-1",
 		Type:   MessageTypeRequest,
 		Method: http.MethodPost,
@@ -521,7 +521,7 @@ func TestHandleRequest_NoBrowserHeadersInTunnelMessage(t *testing.T) {
 	client.conn.Store(&connBox{conn: conn})
 
 	// Simulate an old manager that doesn't strip Origin
-	client.handleRequest(context.Background(), conn, &TunnelMessage{
+	client.handleRequest(t.Context(), conn, &TunnelMessage{
 		ID:     "req-origin-1",
 		Type:   MessageTypeRequest,
 		Method: http.MethodPost,
@@ -597,8 +597,8 @@ func TestProxyHTTPRequest_BodyPreservation_WebSocket(t *testing.T) {
 		defer func() { _ = conn.CloseNow() }()
 
 		for {
-			_, data, err := conn.Read(r.Context())
-			if err != nil {
+			_, data, readErr := conn.Read(r.Context())
+			if readErr != nil {
 				return
 			}
 
@@ -630,8 +630,8 @@ func TestProxyHTTPRequest_BodyPreservation_WebSocket(t *testing.T) {
 
 	go func() {
 		for {
-			msg, err := tunnel.Conn.Receive()
-			if err != nil {
+			msg, receiveErr := tunnel.Conn.Receive()
+			if receiveErr != nil {
 				return
 			}
 			if req, ok := tunnel.Pending.Load(msg.ID); ok {

@@ -342,7 +342,22 @@ func (s *VolumeService) ListBackupVolumeOptions(ctx context.Context) ([]backupty
 
 func (s *VolumeService) ListVolumesPaginated(ctx context.Context, params pagination.QueryParams, includeInternal bool) ([]volumetypes.Volume, pagination.Response, volumetypes.UsageCounts, error) {
 	startedAt := time.Now()
-	slog.DebugContext(ctx, "volume service: list volumes paginated", "search", params.Search, "sort", params.Sort, "order", params.Order, "start", params.Start, "limit", params.Limit, "include_internal", includeInternal)
+	slog.DebugContext(
+		ctx,
+		"volume service: list volumes paginated",
+		"search",
+		params.Search,
+		"sort",
+		params.Sort,
+		"order",
+		params.Order,
+		"start",
+		params.Start,
+		"limit",
+		params.Limit,
+		"include_internal",
+		includeInternal,
+	)
 	dockerClient, err := s.dockerService.GetClient(ctx)
 	if err != nil {
 		return nil, pagination.Response{}, volumetypes.UsageCounts{}, fmt.Errorf("failed to connect to Docker: %w", err)
@@ -366,13 +381,13 @@ func (s *VolumeService) ListVolumesPaginated(ctx context.Context, params paginat
 	defer cancel()
 
 	go func(ctx context.Context) {
-		volListBody, err := dockerClient.VolumeList(ctx, client.VolumeListOptions{})
-		volChan <- volumeListResult{volumes: volListBody.Items, err: err}
+		volListBody, volumeListErr := dockerClient.VolumeList(ctx, client.VolumeListOptions{})
+		volChan <- volumeListResult{volumes: volListBody.Items, err: volumeListErr}
 	}(apiCtx)
 
 	go func(ctx context.Context) {
-		containerMap, err := s.buildVolumeContainerMapInternal(ctx)
-		containerChan <- containerMapResult{containerMap: containerMap, err: err}
+		containerMap, buildVolumeContainerMapErr := s.buildVolumeContainerMapInternal(ctx)
+		containerChan <- containerMapResult{containerMap: containerMap, err: buildVolumeContainerMapErr}
 	}(apiCtx)
 
 	// Wait for both results

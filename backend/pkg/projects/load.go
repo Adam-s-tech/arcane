@@ -479,7 +479,15 @@ func LoadComposeProject(
 	return project, nil
 }
 
-func finishLoadedProjectInternal(ctx context.Context, project *composetypes.Project, workingDir string, pathMapper projecttypes.VolumeSourcePathMapper, translateFileResources bool, rawSources map[string]string, prepare PrepareProjectFunc) (*composetypes.Project, error) {
+func finishLoadedProjectInternal(ctx context.Context,
+	project *composetypes.Project,
+	workingDir string,
+	pathMapper projecttypes.VolumeSourcePathMapper,
+	translateFileResources bool,
+	rawSources map[string]string,
+	prepare PrepareProjectFunc) (*composetypes.Project,
+	error,
+) {
 	if err := applyServiceLabelMetadataInternal(project); err != nil {
 		return nil, err
 	}
@@ -571,7 +579,12 @@ func isNilVolumeSourcePathMapperInternal(pathMapper projecttypes.VolumeSourcePat
 	return value.Kind() == reflect.Pointer && value.IsNil()
 }
 
-func recoverComposeLoadPanicInternal(ctx context.Context, source string, project **composetypes.Project, err *error) {
+//nolint:gocritic // Pointer output updates the caller's named error result after recovery.
+func recoverComposeLoadPanicInternal(ctx context.Context,
+	source string,
+	project **composetypes.Project,
+	err *error,
+) {
 	if panicErr := utils.PanicToError(recover()); panicErr != nil {
 		slog.WarnContext(ctx,
 			"panic while loading compose project; compose file may contain invalid syntax",
@@ -685,7 +698,16 @@ func recordComposeDependenciesInternal(project *composetypes.Project, dependenci
 
 // ValidateComposeContentForUpdate validates proposed editor content without persisting it.
 // Missing includes are tolerated here; deployment uses strict executable loading.
-func ValidateComposeContentForUpdate(ctx context.Context, projectsDirectory, projectPath, projectName, composeContent string, effectiveEnvContent, overrideContent *string, overrideFileName string, lenient bool) (err error) {
+func ValidateComposeContentForUpdate(ctx context.Context,
+	projectsDirectory,
+	projectPath,
+	projectName,
+	composeContent string,
+	effectiveEnvContent,
+	overrideContent *string,
+	overrideFileName string,
+	lenient bool,
+) (err error) {
 	defer func() {
 		if panicErr := utils.PanicToError(recover()); panicErr != nil {
 			err = fmt.Errorf("compose file contains invalid syntax: %w", panicErr)

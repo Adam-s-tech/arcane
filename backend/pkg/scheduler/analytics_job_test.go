@@ -1,7 +1,6 @@
 package scheduler
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -24,7 +23,7 @@ import (
 
 func setupAnalyticsStateServicesInternal(t *testing.T) (*database.DB, *settings.SettingsService, *kv.KVService) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&settings.SettingVariable{}))
@@ -58,7 +57,7 @@ func newHeartbeatServer(t *testing.T) (*httptest.Server, <-chan []byte, *atomic.
 }
 
 func TestAnalyticsJob_Run_ManagerPayload(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	_, settingsService, kvService := setupAnalyticsStateServicesInternal(t)
 	server, bodyCh, _ := newHeartbeatServer(t)
 	defer server.Close()
@@ -86,7 +85,7 @@ func TestAnalyticsJob_Run_ManagerPayload(t *testing.T) {
 }
 
 func TestAnalyticsJob_Run_AgentPayload(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	_, settingsService, kvService := setupAnalyticsStateServicesInternal(t)
 	server, bodyCh, _ := newHeartbeatServer(t)
 	defer server.Close()
@@ -112,7 +111,7 @@ func TestAnalyticsJob_Run_AgentPayload(t *testing.T) {
 }
 
 func TestAnalyticsJob_Run_SkipsWhenDisabled(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	_, settingsService, kvService := setupAnalyticsStateServicesInternal(t)
 	server, bodyCh, _ := newHeartbeatServer(t)
 	defer server.Close()
@@ -133,7 +132,7 @@ func TestAnalyticsJob_Run_SkipsWhenDisabled(t *testing.T) {
 }
 
 func TestAnalyticsJob_Run_SkipsWhenTestEnv(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	_, settingsService, kvService := setupAnalyticsStateServicesInternal(t)
 	server, bodyCh, _ := newHeartbeatServer(t)
 	defer server.Close()
@@ -154,7 +153,7 @@ func TestAnalyticsJob_Run_SkipsWhenTestEnv(t *testing.T) {
 }
 
 func TestAnalyticsJob_Run_SkipsWithinHeartbeatWindowAfterRestart(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	wrappedDB, settingsService, kvService := setupAnalyticsStateServicesInternal(t)
 	server, _, requestCount := newHeartbeatServer(t)
 	defer server.Close()
@@ -174,7 +173,7 @@ func TestAnalyticsJob_Run_SkipsWithinHeartbeatWindowAfterRestart(t *testing.T) {
 	restartedJob := NewAnalyticsJob(reloadedSettingsService, kv.NewKVService(wrappedDB), server.Client(), cfg)
 	restartedJob.heartbeatURL = server.URL
 	restartedJob.now = func() time.Time { return firstAttemptAt.Add(19 * time.Minute) }
-	if _, err := restartedJob.Run(ctx); !assert.NoError(t, err) {
+	if _, runErr := restartedJob.Run(ctx); !assert.NoError(t, runErr) {
 		return
 	}
 
@@ -182,7 +181,7 @@ func TestAnalyticsJob_Run_SkipsWithinHeartbeatWindowAfterRestart(t *testing.T) {
 }
 
 func TestAnalyticsJob_Run_AllowsSendAfterHeartbeatWindow(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	_, settingsService, kvService := setupAnalyticsStateServicesInternal(t)
 	server, _, requestCount := newHeartbeatServer(t)
 	defer server.Close()
@@ -208,7 +207,7 @@ func TestAnalyticsJob_Run_AllowsSendAfterHeartbeatWindow(t *testing.T) {
 }
 
 func TestAnalyticsJob_Run_ConcurrentRunsSendOnce(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	_, settingsService, kvService := setupAnalyticsStateServicesInternal(t)
 	server, _, requestCount := newHeartbeatServer(t)
 	defer server.Close()
@@ -241,5 +240,5 @@ func TestAnalyticsJob_Schedule_UsesFixedHourlyCheck(t *testing.T) {
 	_, settingsService, kvService := setupAnalyticsStateServicesInternal(t)
 	job := NewAnalyticsJob(settingsService, kvService, nil, &config.Config{Environment: config.AppEnvironmentProduction})
 
-	require.Equal(t, analyticsHeartbeatCheckSchedule, job.Schedule(context.Background()))
+	require.Equal(t, analyticsHeartbeatCheckSchedule, job.Schedule(t.Context()))
 }

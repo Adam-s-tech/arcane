@@ -319,7 +319,7 @@ func TestTunnelConnectRouteRegistration(t *testing.T) {
 
 	// Verify route exists (simplistic check by trying to hit it)
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/tunnel/connect", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/tunnel/connect", http.NoBody)
 	router.ServeHTTP(w, req)
 
 	// Plain HTTP requests hit the route but fail the websocket upgrade;
@@ -346,7 +346,7 @@ func TestTunnelServer_HandleMTLSEnroll(t *testing.T) {
 	router := echo.New()
 	router.POST("/enroll", server.HandleMTLSEnroll)
 
-	req := httptest.NewRequest(http.MethodPost, "/enroll", nil)
+	req := httptest.NewRequest(http.MethodPost, "/enroll", http.NoBody)
 	req.Header.Set(HeaderAgentToken, "valid-token")
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -386,7 +386,7 @@ func TestTunnelServer_HandleMTLSEnroll_ServesCachedAssetsDuringCooldown(t *testi
 	router := echo.New()
 	router.POST("/enroll", server.HandleMTLSEnroll)
 
-	req := httptest.NewRequest(http.MethodPost, "/enroll", nil)
+	req := httptest.NewRequest(http.MethodPost, "/enroll", http.NoBody)
 	req.Header.Set(HeaderAgentToken, "valid-token")
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -396,7 +396,7 @@ func TestTunnelServer_HandleMTLSEnroll_ServesCachedAssetsDuringCooldown(t *testi
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &firstResp))
 	require.Len(t, firstResp.Files, 3)
 
-	req = httptest.NewRequest(http.MethodPost, "/enroll", nil)
+	req = httptest.NewRequest(http.MethodPost, "/enroll", http.NoBody)
 	req.Header.Set(HeaderAgentToken, "valid-token")
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -429,7 +429,7 @@ func TestTunnelServer_HandleMTLSEnroll_AllowsRepeatAfterCooldownAndMarksReenroll
 	router := echo.New()
 	router.POST("/enroll", server.HandleMTLSEnroll)
 
-	req := httptest.NewRequest(http.MethodPost, "/enroll", nil)
+	req := httptest.NewRequest(http.MethodPost, "/enroll", http.NoBody)
 	req.Header.Set(HeaderAgentToken, "valid-token")
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -441,7 +441,7 @@ func TestTunnelServer_HandleMTLSEnroll_AllowsRepeatAfterCooldownAndMarksReenroll
 	oldEnrollment := time.Now().Add(-(managerMTLSReenrollCooldown + time.Minute)).UTC().Format(time.RFC3339Nano) + "\n"
 	require.NoError(t, os.WriteFile(markerPath, []byte(oldEnrollment), 0o600))
 
-	req = httptest.NewRequest(http.MethodPost, "/enroll", nil)
+	req = httptest.NewRequest(http.MethodPost, "/enroll", http.NoBody)
 	req.Header.Set(HeaderAgentToken, "valid-token")
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -451,7 +451,7 @@ func TestTunnelServer_HandleMTLSEnroll_AllowsRepeatAfterCooldownAndMarksReenroll
 
 func TestTunnelServer_CleanupLoop(t *testing.T) {
 	server := NewTunnelServerWithRegistry(GetRegistry(), nil, nil)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	// Run cleanup loop
 	go server.StartCleanupLoop(ctx)
@@ -469,7 +469,7 @@ func TestTunnelServer_resolveEnvironment_TrimsToken(t *testing.T) {
 		return "env-trimmed", nil
 	}, nil)
 
-	envID, err := server.resolveEnvironment(context.Background(), "  valid-token  ")
+	envID, err := server.resolveEnvironment(t.Context(), "  valid-token  ")
 	require.NoError(t, err)
 	assert.Equal(t, "env-trimmed", envID)
 	assert.Equal(t, "valid-token", resolvedToken)
@@ -478,7 +478,7 @@ func TestTunnelServer_resolveEnvironment_TrimsToken(t *testing.T) {
 func TestTunnelServer_resolveEnvironment_Errors(t *testing.T) {
 	t.Run("missing resolver", func(t *testing.T) {
 		server := NewTunnelServerWithRegistry(GetRegistry(), nil, nil)
-		_, err := server.resolveEnvironment(context.Background(), "token")
+		_, err := server.resolveEnvironment(t.Context(), "token")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "edge resolver is not configured")
 	})
@@ -488,7 +488,7 @@ func TestTunnelServer_resolveEnvironment_Errors(t *testing.T) {
 			return "env", nil
 		}, nil)
 
-		_, err := server.resolveEnvironment(context.Background(), "   ")
+		_, err := server.resolveEnvironment(t.Context(), "   ")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "agent token required")
 	})
@@ -496,7 +496,7 @@ func TestTunnelServer_resolveEnvironment_Errors(t *testing.T) {
 
 func TestTokenFromMetadata(t *testing.T) {
 	t.Run("prefers agent token and trims whitespace", func(t *testing.T) {
-		ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs(
+		ctx := metadata.NewIncomingContext(t.Context(), metadata.Pairs(
 			strings.ToLower(HeaderAgentToken), "  agent-token  ",
 			strings.ToLower(HeaderAPIKey), "api-token",
 		))
@@ -505,7 +505,7 @@ func TestTokenFromMetadata(t *testing.T) {
 	})
 
 	t.Run("falls back to api key", func(t *testing.T) {
-		ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs(
+		ctx := metadata.NewIncomingContext(t.Context(), metadata.Pairs(
 			strings.ToLower(HeaderAPIKey), "api-token",
 		))
 
@@ -513,7 +513,7 @@ func TestTokenFromMetadata(t *testing.T) {
 	})
 
 	t.Run("returns empty when metadata missing", func(t *testing.T) {
-		assert.Empty(t, tokenFromMetadataInternal(context.Background()))
+		assert.Empty(t, tokenFromMetadataInternal(t.Context()))
 	})
 }
 
@@ -568,7 +568,7 @@ func TestTunnelServer_HandleEventCallback(t *testing.T) {
 	deliveryTimer := time.NewTimer(streamDeliveryTimeout)
 	deliveryTimer.Stop()
 	defer deliveryTimer.Stop()
-	server.handleTunnelMessage(context.Background(), tunnel, &TunnelMessage{
+	server.handleTunnelMessage(t.Context(), tunnel, &TunnelMessage{
 		Type: MessageTypeEvent,
 		Event: &TunnelEvent{
 			Type:  "container.start",
@@ -639,7 +639,7 @@ func TestTunnelServer_ManageConnectedTunnel_RegistersBeforeSendingGRPCRegisterRe
 	}
 
 	tunnel := NewAgentTunnelWithConn(envID, conn)
-	server.manageConnectedTunnel(context.Background(), context.Background(), tunnel)
+	server.manageConnectedTunnel(t.Context(), t.Context(), tunnel)
 
 	_, ok := server.registry.Get(envID).Get()
 	assert.False(t, ok)
@@ -650,14 +650,14 @@ func TestTunnelServer_ManageConnectedTunnel_UnregistersAfterConnectionContextCan
 	server := NewTunnelServerWithRegistry(registry, nil, nil)
 	tunnel := NewAgentTunnelWithConn("env-cancelled-disconnect", &registerResponseOrderConn{recvErr: context.Canceled})
 
-	connectionCtx, cancelConnection := context.WithCancel(context.Background())
+	connectionCtx, cancelConnection := context.WithCancel(t.Context())
 	cancelConnection()
 	server.manageConnectedTunnel(connectionCtx, context.WithoutCancel(connectionCtx), tunnel)
 
 	_, ok := registry.Get(tunnel.EnvironmentID).Get()
 	require.False(t, ok)
 
-	stopCtx, cancelStop := context.WithTimeout(context.Background(), time.Second)
+	stopCtx, cancelStop := context.WithTimeout(t.Context(), time.Second)
 	defer cancelStop()
 	require.NoError(t, registry.Stop(stopCtx))
 }

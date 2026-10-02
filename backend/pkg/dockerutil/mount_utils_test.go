@@ -252,7 +252,7 @@ func TestMountForEnclosingPath(t *testing.T) {
 
 	enclosing, relative = MountForEnclosingPath(mounts, "/app/data", "/restore")
 	require.Equal(t, "arcane-data", enclosing.Source)
-	require.Equal(t, "", relative)
+	require.Empty(t, relative)
 
 	enclosing, _ = MountForEnclosingPath(mounts, "/app/data/tmp/x", "/restore")
 	require.Nil(t, enclosing)

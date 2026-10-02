@@ -22,7 +22,7 @@ func newCSRFTestRouterInternal() *echo.Echo {
 
 func TestCSRF_BlocksCrossSiteStateChange(t *testing.T) {
 	router := newCSRFTestRouterInternal()
-	req := httptest.NewRequest(http.MethodPost, "/api/test", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/test", http.NoBody)
 	req.Header.Set("Sec-Fetch-Site", "cross-site")
 	req.Header.Set("Origin", "https://evil.example.com")
 	rec := httptest.NewRecorder()
@@ -32,7 +32,7 @@ func TestCSRF_BlocksCrossSiteStateChange(t *testing.T) {
 
 func TestCSRF_AllowsSameOrigin(t *testing.T) {
 	router := newCSRFTestRouterInternal()
-	req := httptest.NewRequest(http.MethodPost, "/api/test", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/test", http.NoBody)
 	req.Header.Set("Sec-Fetch-Site", "same-origin")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -43,7 +43,7 @@ func TestCSRF_AllowsSameOrigin(t *testing.T) {
 // Sec-Fetch-Site header and must not be blocked.
 func TestCSRF_AllowsNonBrowserClient(t *testing.T) {
 	router := newCSRFTestRouterInternal()
-	req := httptest.NewRequest(http.MethodPost, "/api/test", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/test", http.NoBody)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code)
@@ -53,7 +53,7 @@ func TestCSRF_AllowsNonBrowserClient(t *testing.T) {
 // cross-site Origin must not block such a request.
 func TestCSRF_SkipsHeaderCredentialedRequests(t *testing.T) {
 	router := newCSRFTestRouterInternal()
-	req := httptest.NewRequest(http.MethodPost, "/api/test", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/test", http.NoBody)
 	req.Header.Set("Sec-Fetch-Site", "cross-site")
 	req.Header.Set("Origin", "https://evil.example.com")
 	req.Header.Set("X-Api-Key", "some-key")
@@ -66,7 +66,7 @@ func TestCSRF_SkipsHeaderCredentialedRequests(t *testing.T) {
 // and may receive an Origin header from an external caller; it must be bypassed.
 func TestCSRF_AllowsPublicBypassPaths(t *testing.T) {
 	router := newCSRFTestRouterInternal()
-	req := httptest.NewRequest(http.MethodPost, "/api/webhooks/trigger/abc", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/webhooks/trigger/abc", http.NoBody)
 	req.Header.Set("Sec-Fetch-Site", "cross-site")
 	req.Header.Set("Origin", "https://ci.example.com")
 	rec := httptest.NewRecorder()

@@ -39,9 +39,9 @@ type activityEnvironmentSlots struct {
 	wake chan struct{}
 }
 
-func newActivitySlotLimiterInternal(settings *settings.SettingsService) *activitySlotLimiter {
+func newActivitySlotLimiterInternal(localSettings *settings.SettingsService) *activitySlotLimiter {
 	return &activitySlotLimiter{
-		settings: settings,
+		settings: localSettings,
 		state:    map[string]*activityEnvironmentSlots{},
 	}
 }

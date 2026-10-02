@@ -160,8 +160,8 @@ func (s *NotificationService) renderTemplatesInternal(name string, data any, tex
 	}
 
 	var htmlBuf bytes.Buffer
-	if err := htmlTmpl.ExecuteTemplate(&htmlBuf, "root", data); err != nil {
-		return "", "", fmt.Errorf("failed to execute HTML template: %w", err)
+	if executeTemplateErr := htmlTmpl.ExecuteTemplate(&htmlBuf, "root", data); executeTemplateErr != nil {
+		return "", "", fmt.Errorf("failed to execute HTML template: %w", executeTemplateErr)
 	}
 
 	textContent, err := resources.FS.ReadFile(fmt.Sprintf("email-templates/%s_text.tmpl", name))
@@ -179,9 +179,9 @@ func (s *NotificationService) renderTemplatesInternal(name string, data any, tex
 		return htmlBuf.String(), "", nil
 	}
 	var textBuf bytes.Buffer
-	if err := textTmpl.ExecuteTemplate(&textBuf, "root", data); err != nil {
+	if executeTextTemplateErr := textTmpl.ExecuteTemplate(&textBuf, "root", data); executeTextTemplateErr != nil {
 		if textRequired {
-			return "", "", fmt.Errorf("failed to execute text template: %w", err)
+			return "", "", fmt.Errorf("failed to execute text template: %w", executeTextTemplateErr)
 		}
 		return htmlBuf.String(), "", nil
 	}

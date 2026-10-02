@@ -1,7 +1,6 @@
 package notifications
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -10,7 +9,7 @@ import (
 )
 
 func TestDeliver_UnknownProviderIsNotHandled(t *testing.T) {
-	handled, err := Deliver(context.Background(), "bogus", database.JSON{}, Content{})
+	handled, err := Deliver(t.Context(), "bogus", database.JSON{}, Content{})
 	require.False(t, handled)
 	require.NoError(t, err)
 }

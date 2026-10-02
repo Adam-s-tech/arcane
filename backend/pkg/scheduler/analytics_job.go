@@ -129,15 +129,15 @@ func (j *AnalyticsJob) Run(ctx context.Context) (schedulertypes.Outcome, error) 
 			reqCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 			defer cancel()
 
-			req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, j.heartbeatURL, bytes.NewReader(body))
-			if err != nil {
-				return struct{}{}, fmt.Errorf("failed to create request: %w", err)
+			req, newRequestWithContextErr := http.NewRequestWithContext(reqCtx, http.MethodPost, j.heartbeatURL, bytes.NewReader(body))
+			if newRequestWithContextErr != nil {
+				return struct{}{}, fmt.Errorf("failed to create request: %w", newRequestWithContextErr)
 			}
 			req.Header.Set("Content-Type", "application/json")
 
-			resp, err := j.httpClient.Do(req)
-			if err != nil {
-				return struct{}{}, fmt.Errorf("failed to send request: %w", err)
+			resp, newRequestWithContextErr := j.httpClient.Do(req)
+			if newRequestWithContextErr != nil {
+				return struct{}{}, fmt.Errorf("failed to send request: %w", newRequestWithContextErr)
 			}
 			defer func() { _ = resp.Body.Close() }()
 
@@ -242,8 +242,8 @@ func (j *AnalyticsJob) claimHeartbeatAttemptWindowInternal(ctx context.Context) 
 	// Persist the attempt window before sending on purpose: the product behavior is
 	// best-effort at-most-once-per-24h check-ins, which avoids duplicate heartbeats
 	// after restarts or partially completed outbound requests.
-	if err := j.kvService.Set(ctx, analyticsHeartbeatLastAttemptKey, now.Format(time.RFC3339Nano)); err != nil {
-		return false, fmt.Errorf("failed to persist analytics heartbeat attempt state: %w", err)
+	if setErr := j.kvService.Set(ctx, analyticsHeartbeatLastAttemptKey, now.Format(time.RFC3339Nano)); setErr != nil {
+		return false, fmt.Errorf("failed to persist analytics heartbeat attempt state: %w", setErr)
 	}
 
 	return true, nil

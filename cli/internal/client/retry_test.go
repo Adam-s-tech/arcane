@@ -1,7 +1,6 @@
 package client
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -38,7 +37,7 @@ func TestClient_RetriesIdempotentRequests(t *testing.T) {
 
 	c.SetRetryPolicy(3, 1*time.Millisecond, 2*time.Millisecond)
 
-	resp, err := c.Get(context.Background(), "/api/version")
+	resp, err := c.Get(t.Context(), "/api/version")
 
 	require.NoError(t, err,
 		"Get() error: %v", err)
@@ -70,7 +69,7 @@ func TestClient_DoesNotRetryNonIdempotentRequests(t *testing.T) {
 
 	c.SetRetryPolicy(3, 1*time.Millisecond, 2*time.Millisecond)
 
-	resp, err := c.Post(context.Background(), "/api/version", map[string]any{"a": 1})
+	resp, err := c.Post(t.Context(), "/api/version", map[string]any{"a": 1})
 
 	require.NoError(t, err,
 		"Post() returned transport error: %v", err)
@@ -99,8 +98,8 @@ func TestClient_DoJSON_StrictStatus(t *testing.T) {
 		"New() error: %v", err)
 
 	{
-		_, err := c.DoJSON[map[string]any](context.Background(), http.MethodGet, "/api/version", nil)
-		require.Error(t, err,
+		_, requestErr := c.DoJSON[map[string]any](t.Context(), http.MethodGet, "/api/version", nil)
+		require.Error(t, requestErr,
 			"expected strict status error")
 	}
 }
@@ -135,7 +134,7 @@ func TestClient_DoRaw_Success(t *testing.T) {
 	require.NoError(t, err,
 		"New() error: %v", err)
 
-	b, err := c.DoRaw(context.Background(), http.MethodGet, "/api/version", nil)
+	b, err := c.DoRaw(t.Context(), http.MethodGet, "/api/version", nil)
 
 	require.NoError(t, err,
 		"DoRaw() error: %v", err)

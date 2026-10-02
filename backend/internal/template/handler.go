@@ -643,7 +643,7 @@ func (h *TemplateHandler) FetchRegistry(ctx context.Context, input *FetchTemplat
 	}
 
 	var registry templatetypes.RemoteRegistry
-	if err := json.Unmarshal(body, &registry); err != nil {
+	if unmarshalErr := json.Unmarshal(body, &registry); unmarshalErr != nil {
 		return nil, huma.Error502BadGateway("Invalid JSON response")
 	}
 

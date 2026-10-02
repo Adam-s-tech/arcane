@@ -128,9 +128,9 @@ var getCmd = &cobra.Command{
 		}
 
 		if !complete {
-			result, err := c.GetJSON[network.Inspect](cmd.Context(), types.Network(c.EnvID(), resolved.ID))
-			if err != nil {
-				return fmt.Errorf("failed to get network: %w", err)
+			result, inspectNetworkErr := c.GetJSON[network.Inspect](cmd.Context(), types.Network(c.EnvID(), resolved.ID))
+			if inspectNetworkErr != nil {
+				return fmt.Errorf("failed to get network: %w", inspectNetworkErr)
 			}
 			resolved = &result.Data
 		}
@@ -176,9 +176,9 @@ var deleteCmd = &cobra.Command{
 		}
 
 		if !forceFlag {
-			confirmed, err := cmdutil.Confirm(cmd, fmt.Sprintf("Are you sure you want to delete network %s?", display))
-			if err != nil {
-				return err
+			confirmed, confirmErr := cmdutil.Confirm(cmd, fmt.Sprintf("Are you sure you want to delete network %s?", display))
+			if confirmErr != nil {
+				return confirmErr
 			}
 			if !confirmed {
 				fmt.Println("Cancelled")
@@ -472,8 +472,7 @@ var topologyCmd = &cobra.Command{
 			}
 			rows[i] = []string{source, target, edge.IPv4Address, edge.IPv6Address}
 		}
-		output.Table(headers, rows)
-		return nil
+		return output.Table(headers, rows)
 	},
 }
 

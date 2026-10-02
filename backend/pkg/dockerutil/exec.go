@@ -67,8 +67,8 @@ func ExecInContainer(ctx context.Context, dockerClient *client.Client, container
 	defer stopClose()
 
 	copyErr := WaitStdCopy(StartStdCopy(attachResp.Reader, stdout, stderr))
-	if err := ctx.Err(); err != nil {
-		return 0, fmt.Errorf("failed to read exec output: %w", err)
+	if errErr := ctx.Err(); errErr != nil {
+		return 0, fmt.Errorf("failed to read exec output: %w", errErr)
 	}
 	if copyErr != nil {
 		return 0, fmt.Errorf("failed to read exec output: %w", copyErr)

@@ -150,7 +150,7 @@ func TestResolveRejectsUnsafeStates(t *testing.T) {
 				}
 				return nil
 			}))
-			_, err = q.Resolve(context.Background(), test.environment, "auto-update", run.ID, "operator")
+			_, err = q.Resolve(t.Context(), test.environment, "auto-update", run.ID, "operator")
 			require.Error(t, err)
 			stored, err := q.Get(t.Context(), test.environment, "auto-update", run.ID)
 			require.NoError(t, err)

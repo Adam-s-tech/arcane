@@ -123,14 +123,14 @@ func ReadAllLogs(ctx context.Context, logs io.ReadCloser, logsChan chan<- string
 	}
 
 	if stdoutBuf.Len() > 0 {
-		if err := readLogLinesInternal(ctx, strings.NewReader(stdoutBuf.String()), logsChan, ""); err != nil {
-			return err
+		if readLogLinesErr := readLogLinesInternal(ctx, strings.NewReader(stdoutBuf.String()), logsChan, ""); readLogLinesErr != nil {
+			return readLogLinesErr
 		}
 	}
 
 	if stderrBuf.Len() > 0 {
-		if err := readLogLinesInternal(ctx, strings.NewReader(stderrBuf.String()), logsChan, "[STDERR] "); err != nil {
-			return err
+		if readLogLinesErr2 := readLogLinesInternal(ctx, strings.NewReader(stderrBuf.String()), logsChan, "[STDERR] "); readLogLinesErr2 != nil {
+			return readLogLinesErr2
 		}
 	}
 
@@ -146,7 +146,7 @@ func readLogLinesInternal(ctx context.Context, reader io.Reader, logsChan chan<-
 		}
 
 		line, err := bufferedReader.ReadString('\n')
-		if len(line) > 0 {
+		if line != "" {
 			trimmed := strings.TrimRight(line, "\r\n")
 			if trimmed != "" {
 				if prefix != "" {

@@ -41,7 +41,8 @@ func TestBuildSlackURL(t *testing.T) {
 				Title:    "Container Update",
 				ThreadTS: "1234567890.123456",
 			},
-			wantURL: "slack://xoxb:123456789012-123456789012-abcdefghijklmnopqrstuvwx@notifications?botname=Arcane+Bot&color=%23FF0000&icon=%3Arobot%3A&thread_ts=1234567890.123456&title=Container+Update",
+			wantURL: "slack://xoxb:123456789012-123456789012-abcdefghijklmnopqrstuvwx@notifications?botname=Arcane+Bot&col" +
+				"or=%23FF0000&icon=%3Arobot%3A&thread_ts=1234567890.123456&title=Container+Update",
 		},
 		{
 			name: "empty token",

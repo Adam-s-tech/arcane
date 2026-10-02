@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"maps"
@@ -117,8 +116,8 @@ func TestTunnelClient_WebSocketProxy(t *testing.T) {
 		defer func() { _ = conn.CloseNow() }()
 
 		for {
-			mt, data, err := conn.Read(r.Context())
-			if err != nil {
+			mt, data, readErr := conn.Read(r.Context())
+			if readErr != nil {
 				return
 			}
 			// Echo
@@ -207,8 +206,8 @@ func TestTunnelClient_WebSocket_ReconnectClosesStreams(t *testing.T) {
 		}
 		defer func() { _ = conn.CloseNow() }()
 		for {
-			mt, data, err := conn.Read(r.Context())
-			if err != nil {
+			mt, data, readErr := conn.Read(r.Context())
+			if readErr != nil {
 				return
 			}
 			_ = conn.Write(r.Context(), mt, append([]byte("local echo: "), data...))
@@ -230,7 +229,7 @@ func TestTunnelClient_WebSocket_ReconnectClosesStreams(t *testing.T) {
 		defer func() { _ = conn.CloseNow() }()
 
 		// Every connection registers first.
-		if _, _, err := conn.Read(r.Context()); err != nil {
+		if _, _, readErr := conn.Read(r.Context()); readErr != nil {
 			return
 		}
 		registerResp, _ := json.Marshal(&TunnelMessage{
@@ -381,8 +380,8 @@ func TestTunnelClient_InternalHelpers(t *testing.T) {
 		defer func() { _ = conn.CloseNow() }()
 
 		for {
-			_, _, err := conn.Read(r.Context())
-			if err != nil {
+			_, _, readErr := conn.Read(r.Context())
+			if readErr != nil {
 				return
 			}
 		}
@@ -677,7 +676,7 @@ func TestTunnelClient_HandleRequest_GRPCConfigWithWebSocketConnUsesNonStreamingR
 	conn := &capturingTunnelConnForHandleRequest{}
 	client.conn.Store(&connBox{conn: conn})
 
-	client.handleRequest(context.Background(), conn, &TunnelMessage{
+	client.handleRequest(t.Context(), conn, &TunnelMessage{
 		ID:     "req-fallback-1",
 		Type:   MessageTypeRequest,
 		Method: http.MethodGet,
@@ -695,7 +694,7 @@ func TestTunnelClient_HeartbeatLoop_ClosesConnectionOnSendFailure(t *testing.T) 
 	client := &TunnelClient{
 		heartbeatInterval: 5 * time.Millisecond,
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
 
 	client.heartbeatLoop(ctx, conn)
@@ -848,7 +847,7 @@ func (s *stallingTunnelService) Connect(stream grpc.BidiStreamingServer[tunnelpb
 }
 
 func TestTunnelClient_GRPC_EndToEnd(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 
 	envID := "env-e2e-grpc-1"
 	GetRegistry().Unregister(envID)
@@ -904,9 +903,9 @@ func TestTunnelClient_GRPC_EndToEnd(t *testing.T) {
 	proxyCtx, proxyCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer proxyCancel()
 
-	status, headers, body, err := ProxyRequest(proxyCtx, tunnel, http.MethodGet, "/api/health", "", map[string]string{"Accept": "text/plain"}, nil)
+	localStatus, headers, body, err := ProxyRequest(proxyCtx, tunnel, http.MethodGet, "/api/health", "", map[string]string{"Accept": "text/plain"}, nil)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, status)
+	assert.Equal(t, http.StatusOK, localStatus)
 	assert.Equal(t, "text/plain", headers["Content-Type"])
 	assert.Equal(t, "ok-from-agent", string(body))
 
@@ -918,7 +917,7 @@ func TestTunnelClient_GRPC_EndToEnd(t *testing.T) {
 }
 
 func TestTunnelClient_GRPC_ChunkedRequestBodyEndToEnd(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 
 	envID := "env-e2e-grpc-chunked-body"
 	GetRegistry().Unregister(envID)
@@ -966,9 +965,9 @@ func TestTunnelClient_GRPC_ChunkedRequestBodyEndToEnd(t *testing.T) {
 	}, 5*time.Second, 20*time.Millisecond)
 	require.Contains(t, tunnel.Capabilities, tunnelCapabilityChunkedRequest)
 
-	status, _, body, err := ProxyRequest(ctx, tunnel, http.MethodPost, "/api/environments/0/images/upload", "", nil, wantBody)
+	localStatus, _, body, err := ProxyRequest(ctx, tunnel, http.MethodPost, "/api/environments/0/images/upload", "", nil, wantBody)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, status)
+	assert.Equal(t, http.StatusOK, localStatus)
 	assert.Equal(t, "uploaded", string(body))
 }
 
@@ -1053,13 +1052,13 @@ func TestTunnelClient_connectAndServeGRPC_EmptyManagerAddress(t *testing.T) {
 		AgentToken:    "valid-token",
 	}, http.NotFoundHandler())
 
-	err := client.connectAndServeGRPC(context.Background())
+	err := client.connectAndServeGRPC(t.Context())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "manager gRPC address is empty")
 }
 
 func TestTunnelClient_connectAndServeGRPC_RegistrationRejected(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 
 	envID := "env-e2e-grpc-reject-1"
 	GetRegistry().Unregister(envID)
@@ -1097,7 +1096,7 @@ func TestTunnelClient_connectAndServeGRPC_RegistrationRejected(t *testing.T) {
 }
 
 func TestTunnelClient_connectAndServeGRPC_TimesOutWithoutRegisterResponse(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
 	service := &stallingTunnelService{}
@@ -1122,7 +1121,7 @@ func TestTunnelClient_connectAndServeGRPC_TimesOutWithoutRegisterResponse(t *tes
 }
 
 func TestTunnelClient_awaitRegistrationInternal_ClosesConnOnContextDone(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 	defer cancel()
 
 	conn := newBlockingRegistrationConnInternal()
@@ -1139,7 +1138,7 @@ func TestTunnelClient_awaitRegistrationInternal_ClosesConnOnContextDone(t *testi
 }
 
 func TestTunnelClient_awaitRegistrationInternal_ClosesAttemptConnWhenClientConnChanges(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	firstConn := newBlockingRegistrationConnInternal()
@@ -1188,7 +1187,7 @@ func TestTunnelClient_awaitRegistrationInternal_ClosesAttemptConnWhenClientConnC
 }
 
 func TestTunnelClient_GRPC_WebSocketProxyEndToEnd(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 
 	envID := "env-e2e-grpc-ws-1"
 	GetRegistry().Unregister(envID)
@@ -1242,15 +1241,15 @@ func TestTunnelClient_GRPC_WebSocketProxyEndToEnd(t *testing.T) {
 		defer func() { _ = conn.CloseNow() }()
 
 		for {
-			mt, data, err := conn.Read(r.Context())
-			if err != nil {
+			mt, data, readErr := conn.Read(r.Context())
+			if readErr != nil {
 				return
 			}
 			select {
 			case receivedMsgCh <- string(data):
 			default:
 			}
-			if err := conn.Write(r.Context(), mt, append([]byte("local echo: "), data...)); err != nil {
+			if writeErr := conn.Write(r.Context(), mt, append([]byte("local echo: "), data...)); writeErr != nil {
 				return
 			}
 		}
@@ -1344,7 +1343,7 @@ func TestTunnelClient_GRPC_WebSocketProxyEndToEnd(t *testing.T) {
 }
 
 func TestTunnelClient_connectAndServe_WebSocketConfigFallsBackToWebSocket(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
 	wsConnectedCh := make(chan struct{}, 1)
@@ -1399,7 +1398,7 @@ func TestTunnelClient_managedTunnelTransports_AutoEnablesGRPCAndWebSocket(t *tes
 }
 
 func TestTunnelClient_connectAndServe_AutoFallsBackToWebSocketWhenGRPCUnavailable(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	managerURL, wsConnectedCh, stopManager := startTestWebSocketTunnelManagerInternal(t, ctx)
@@ -1436,7 +1435,7 @@ func TestTunnelClient_connectAndServe_AutoFallsBackToWebSocketWhenGRPCUnavailabl
 }
 
 func TestTunnelClient_connectAndServe_AutoFallsBackToWebSocketWhenGRPCSetupHangs(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	grpcAddr, stopGRPC := startHangingTCPServerInternal(t, ctx)
@@ -1474,7 +1473,7 @@ func TestTunnelClient_connectAndServe_AutoFallsBackToWebSocketWhenGRPCSetupHangs
 }
 
 func TestTunnelClient_connectAndServe_GRPCDoesNotFallbackToWebSocket(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
 
 	managerURL, wsConnectedCh, stopManager := startTestWebSocketTunnelManagerInternal(t, ctx)
@@ -1501,7 +1500,7 @@ func TestTunnelClient_connectAndServe_GRPCDoesNotFallbackToWebSocket(t *testing.
 }
 
 func TestTunnelClient_connectAndServe_OpensGRPCWhenAvailable(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	envID := "env-auto-poll-grpc"
@@ -1568,7 +1567,7 @@ func startTestWebSocketTunnelManagerInternal(t *testing.T, ctx context.Context) 
 		}
 		defer func() { _ = conn.CloseNow() }()
 
-		if _, _, err := conn.Read(r.Context()); err != nil {
+		if _, _, readErr := conn.Read(r.Context()); readErr != nil {
 			return
 		}
 
@@ -1581,7 +1580,7 @@ func startTestWebSocketTunnelManagerInternal(t *testing.T, ctx context.Context) 
 		if err != nil {
 			return
 		}
-		if err := conn.Write(r.Context(), websocket.MessageText, registerResp); err != nil {
+		if writeErr := conn.Write(r.Context(), websocket.MessageText, registerResp); writeErr != nil {
 			return
 		}
 
@@ -1616,8 +1615,8 @@ func startHangingTCPServerInternal(t *testing.T, ctx context.Context) (string, f
 	go func() {
 		defer close(done)
 		for {
-			conn, err := lis.Accept()
-			if err != nil {
+			conn, acceptErr := lis.Accept()
+			if acceptErr != nil {
 				return
 			}
 			go func() {
@@ -1693,7 +1692,7 @@ func startTestTunnelServiceOnAPIPathInternal(t *testing.T, ctx context.Context, 
 	}()
 
 	cleanup := func() {
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		shutdownCtx, shutdownCancel := context.WithTimeout(t.Context(), 5*time.Second)
 		defer shutdownCancel()
 		_ = httpServer.Shutdown(shutdownCtx)
 		grpcServer.Stop()
@@ -1758,8 +1757,8 @@ func TestTunnelClient_connectAndServe_AutoDoesNotFallbackWhenEstablishedGRPCSess
 	require.NoError(t, tunnel.CloseWithReason("manager restart"))
 
 	select {
-	case err := <-errCh:
-		require.ErrorIs(t, err, errEstablishedTunnelSessionEnded)
+	case operationErr := <-errCh:
+		require.ErrorIs(t, operationErr, errEstablishedTunnelSessionEnded)
 	case <-time.After(3 * time.Second):
 		require.FailNow(t, "expected dropped gRPC session to return instead of falling back to websocket")
 	}
@@ -1774,7 +1773,7 @@ func TestTunnelClient_connectAndServe_AutoDoesNotFallbackWhenEstablishedGRPCSess
 }
 
 func TestTunnelClient_connectAndServePoll_OpensGRPCWhenRequired(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	envID := "env-poll-grpc"
@@ -1831,7 +1830,7 @@ func TestTunnelClient_connectAndServePoll_OpensGRPCWhenRequired(t *testing.T) {
 }
 
 func TestTunnelClient_connectAndServePoll_OpensWebSocketWhenRequired(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 300*time.Millisecond)
 	defer cancel()
 
 	var pollCount atomic.Int32
@@ -1855,7 +1854,7 @@ func TestTunnelClient_connectAndServePoll_OpensWebSocketWhenRequired(t *testing.
 			}
 			defer func() { _ = conn.CloseNow() }()
 
-			if _, _, err := conn.Read(r.Context()); err != nil {
+			if _, _, readErr := conn.Read(r.Context()); readErr != nil {
 				return
 			}
 			registerResp, err := json.Marshal(&TunnelMessage{
@@ -1867,7 +1866,7 @@ func TestTunnelClient_connectAndServePoll_OpensWebSocketWhenRequired(t *testing.
 			if err != nil {
 				return
 			}
-			if err := conn.Write(r.Context(), websocket.MessageText, registerResp); err != nil {
+			if writeErr := conn.Write(r.Context(), websocket.MessageText, registerResp); writeErr != nil {
 				return
 			}
 
@@ -1928,13 +1927,13 @@ func TestTunnelClient_pollTunnelControlInternal_UsesConfiguredHTTPClient(t *test
 	client := NewTunnelClient(&Config{AgentToken: "valid-token"}, http.NotFoundHandler())
 	httpClient := &http.Client{Transport: rewriteTransport}
 
-	resp, err := client.pollTunnelControlInternal(context.Background(), httpClient, "http://127.0.0.1:1/api/tunnel/poll", false)
+	resp, err := client.pollTunnelControlInternal(t.Context(), httpClient, "http://127.0.0.1:1/api/tunnel/poll", false)
 	require.NoError(t, err)
 	assert.Equal(t, TunnelStatusIdle, resp.Status)
 	assert.Equal(t, 1, resp.PollIntervalSeconds)
 	assert.NotSame(t, http.DefaultClient, httpClient)
 
-	defaultReq, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "http://127.0.0.1:1/api/tunnel/poll", nil)
+	defaultReq, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://127.0.0.1:1/api/tunnel/poll", http.NoBody)
 	require.NoError(t, err)
 	_, err = http.DefaultClient.Do(defaultReq)
 	require.Error(t, err)
@@ -1942,7 +1941,7 @@ func TestTunnelClient_pollTunnelControlInternal_UsesConfiguredHTTPClient(t *test
 }
 
 func TestTunnelClient_connectAndServePoll_DoesNotOpenWebSocketWhenIdle(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
 	defer cancel()
 
 	wsConnectedCh := make(chan struct{}, 1)
@@ -1987,7 +1986,7 @@ func TestTunnelClient_connectAndServePoll_DoesNotOpenWebSocketWhenIdle(t *testin
 }
 
 func TestTunnelClient_connectAndServePoll_RetriesAfterTransientPollError(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 
 	var pollCount atomic.Int32
@@ -2016,7 +2015,7 @@ func TestTunnelClient_connectAndServePoll_RetriesAfterTransientPollError(t *test
 			}
 			defer func() { _ = conn.CloseNow() }()
 
-			if _, _, err := conn.Read(r.Context()); err != nil {
+			if _, _, readErr := conn.Read(r.Context()); readErr != nil {
 				return
 			}
 			registerResp, err := json.Marshal(&TunnelMessage{
@@ -2028,7 +2027,7 @@ func TestTunnelClient_connectAndServePoll_RetriesAfterTransientPollError(t *test
 			if err != nil {
 				return
 			}
-			if err := conn.Write(r.Context(), websocket.MessageText, registerResp); err != nil {
+			if writeErr := conn.Write(r.Context(), websocket.MessageText, registerResp); writeErr != nil {
 				return
 			}
 
@@ -2072,7 +2071,7 @@ func TestTunnelClient_stopPollManagedSessionInternal_DeadlineExceededReturnsTime
 		done:   make(chan error),
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
 	defer cancel()
 
 	err := (&TunnelClient{}).stopPollManagedSessionInternal(ctx, session)
@@ -2092,17 +2091,17 @@ func TestTunnelClient_syncPollManagedSessionInternal_IdleUsesBoundedStopTimeout(
 		done:   make(chan error),
 	}
 
-	nextSession, err := (&TunnelClient{}).syncPollManagedSessionInternal(context.Background(), session, TunnelStatusIdle)
+	nextSession, err := (&TunnelClient{}).syncPollManagedSessionInternal(t.Context(), session, TunnelStatusIdle)
 	require.Same(t, session, nextSession)
 	require.Error(t, err)
 	require.EqualError(t, err, "timed out waiting for poll-managed websocket session to stop")
 
-	fencedSession, err := (&TunnelClient{}).syncPollManagedSessionInternal(context.Background(), nextSession, TunnelStatusRequired)
+	fencedSession, err := (&TunnelClient{}).syncPollManagedSessionInternal(t.Context(), nextSession, TunnelStatusRequired)
 	require.NoError(t, err)
 	require.Same(t, session, fencedSession)
 
 	started := time.Now()
-	stillDraining, err := (&TunnelClient{}).syncPollManagedSessionInternal(context.Background(), nextSession, TunnelStatusIdle)
+	stillDraining, err := (&TunnelClient{}).syncPollManagedSessionInternal(t.Context(), nextSession, TunnelStatusIdle)
 	require.NoError(t, err)
 	require.Same(t, session, stillDraining)
 	require.Less(t, time.Since(started), defaultPollManagedSessionStopTimeout)
@@ -2165,7 +2164,7 @@ func startTestPollAndGRPCManagerInternal(t *testing.T, ctx context.Context, serv
 	}()
 
 	cleanup := func() {
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		shutdownCtx, shutdownCancel := context.WithTimeout(t.Context(), 5*time.Second)
 		defer shutdownCancel()
 		_ = httpServer.Shutdown(shutdownCtx)
 		grpcServer.Stop()
@@ -2179,7 +2178,7 @@ type roundTripperFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	if f == nil {
-		return nil, fmt.Errorf("round tripper is nil")
+		return nil, errors.New("round tripper is nil")
 	}
 	return f(req)
 }
@@ -2195,7 +2194,7 @@ func TestTunnelClient_InternalRequestSkipsSlogEcho(t *testing.T) {
 				conn := &capturingTunnelConnForHandleRequest{}
 				client.conn.Store(&connBox{conn: conn})
 
-				client.handleRequest(context.Background(), conn, &TunnelMessage{
+				client.handleRequest(t.Context(), conn, &TunnelMessage{
 					ID:     "req-legacy",
 					Type:   MessageTypeRequest,
 					Method: http.MethodGet,
@@ -2214,7 +2213,7 @@ func TestTunnelClient_InternalRequestSkipsSlogEcho(t *testing.T) {
 				conn := &fakeTunnelConn{}
 				client.conn.Store(&connBox{conn: conn})
 
-				client.handleRequestStreaming(context.Background(), conn, &TunnelMessage{
+				client.handleRequestStreaming(t.Context(), conn, &TunnelMessage{
 					ID:     "req-stream",
 					Type:   MessageTypeRequest,
 					Method: http.MethodGet,
@@ -2395,7 +2394,7 @@ func TestConnectAndServeWebSocket_CancelUnblocksMessageLoop(t *testing.T) {
 		close(registered)
 		// Go silent: keep reading so the socket stays open.
 		for {
-			if _, _, err := conn.Read(r.Context()); err != nil {
+			if _, _, readErr := conn.Read(r.Context()); readErr != nil {
 				return
 			}
 		}

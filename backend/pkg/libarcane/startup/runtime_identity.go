@@ -83,8 +83,8 @@ func ApplyRequestedRuntimeIdentity(ctx context.Context, cfg *RuntimeIdentityConf
 
 	// Avoid re-execing forever when the requested runtime identity is already active.
 	if os.Geteuid() == runtimeUID && os.Getegid() == runtimeGID {
-		if err := ensureRuntimeDockerConfigInternal(cfg, os.Setenv, runtimeUID, runtimeGID, inContainer); err != nil {
-			return err
+		if ensureRuntimeDockerConfigErr := ensureRuntimeDockerConfigInternal(cfg, os.Setenv, runtimeUID, runtimeGID, inContainer); ensureRuntimeDockerConfigErr != nil {
+			return ensureRuntimeDockerConfigErr
 		}
 		return ensureSQLiteFilesExistInternal(cfg.DatabaseURL)
 	}
@@ -92,24 +92,26 @@ func ApplyRequestedRuntimeIdentity(ctx context.Context, cfg *RuntimeIdentityConf
 	if os.Geteuid() != 0 {
 		slog.WarnContext(ctx, "Runtime identity warning: process is not root, continuing as current user",
 			"euid", os.Geteuid(), "puid", runtimeUID, "pgid", runtimeGID)
-		if err := ensureRuntimeDockerConfigInternal(cfg, os.Setenv, runtimeUID, runtimeGID, inContainer); err != nil {
-			return err
+		if ensureRuntimeDockerConfigErr2 := ensureRuntimeDockerConfigInternal(cfg, os.Setenv, runtimeUID, runtimeGID, inContainer); ensureRuntimeDockerConfigErr2 != nil {
+			return ensureRuntimeDockerConfigErr2
 		}
 		return ensureSQLiteFilesExistInternal(cfg.DatabaseURL)
 	}
 
-	if err := ensureRuntimeDockerConfigInternal(cfg, os.Setenv, runtimeUID, runtimeGID, inContainer); err != nil {
-		return err
+	if ensureRuntimeDockerConfigErr3 := ensureRuntimeDockerConfigInternal(cfg, os.Setenv, runtimeUID, runtimeGID, inContainer); ensureRuntimeDockerConfigErr3 != nil {
+		return ensureRuntimeDockerConfigErr3
 	}
 
 	if inContainer {
-		mountpoints, err := loadMountpointsInternal(mountInfoPath)
-		if err != nil {
-			return fmt.Errorf("load mountpoints: %w", err)
+		mountpoints, loadMountpointsErr := loadMountpointsInternal(mountInfoPath)
+		if loadMountpointsErr != nil {
+			return fmt.Errorf("load mountpoints: %w", loadMountpointsErr)
 		}
 
-		if err := prepareWritablePathsWithRootsInternal(runtimeUID, runtimeGID, mountpoints, projectsDir, defaultDataDirectory, defaultBuildsDirectory); err != nil {
-			return err
+		if prepareWritablePathsWithRootsErr := prepareWritablePathsWithRootsInternal(
+			runtimeUID, runtimeGID, mountpoints, projectsDir, defaultDataDirectory, defaultBuildsDirectory,
+		); prepareWritablePathsWithRootsErr != nil {
+			return prepareWritablePathsWithRootsErr
 		}
 	}
 
@@ -203,13 +205,13 @@ func ensureRuntimeDockerConfigInternal(cfg *RuntimeIdentityConfig, setenv func(s
 		return nil
 	}
 
-	if err := os.MkdirAll(configDir, utils.DirPerm); err != nil {
-		return fmt.Errorf("create docker config directory: %w", err)
+	if mkdirAllErr := os.MkdirAll(configDir, utils.DirPerm); mkdirAllErr != nil {
+		return fmt.Errorf("create docker config directory: %w", mkdirAllErr)
 	}
 
 	if configDir == defaultDockerConfigDir && os.Geteuid() == 0 {
-		if err := os.Chown(configDir, uid, gid); err != nil {
-			return fmt.Errorf("chown docker config directory: %w", err)
+		if chownErr := os.Chown(configDir, uid, gid); chownErr != nil {
+			return fmt.Errorf("chown docker config directory: %w", chownErr)
 		}
 	}
 
@@ -305,38 +307,38 @@ func prepareWritablePathsWithRootsInternal(uid, gid int, mountpoints map[string]
 	for _, entry := range entries {
 		entryPath := filepath.Join(dataDirectory, entry.Name())
 		if _, mounted := mountpoints[entryPath]; mounted {
-			if err := os.Lchown(entryPath, uid, gid); err != nil {
-				return fmt.Errorf("chown mounted %s: %w", entryPath, err)
+			if lchownErr := os.Lchown(entryPath, uid, gid); lchownErr != nil {
+				return fmt.Errorf("chown mounted %s: %w", entryPath, lchownErr)
 			}
 			continue
 		}
 		if projectsDir != "" && filepath.Clean(entryPath) == projectsDir {
-			if err := lchownFn(entryPath, uid, gid); err != nil {
-				return fmt.Errorf("chown %s: %w", entryPath, err)
+			if lchownFnErr := lchownFn(entryPath, uid, gid); lchownFnErr != nil {
+				return fmt.Errorf("chown %s: %w", entryPath, lchownFnErr)
 			}
 			continue
 		}
-		if err := chownRecursiveInternal(entryPath, uid, gid, mountpoints, projectsDir); err != nil {
-			return fmt.Errorf("chown %s: %w", entryPath, err)
+		if chownRecursiveErr := chownRecursiveInternal(entryPath, uid, gid, mountpoints, projectsDir); chownRecursiveErr != nil {
+			return fmt.Errorf("chown %s: %w", entryPath, chownRecursiveErr)
 		}
 	}
 
 	if _, mounted := mountpoints[buildsDirectory]; mounted {
-		if err := os.Lchown(buildsDirectory, uid, gid); err != nil {
-			return fmt.Errorf("chown mounted builds directory: %w", err)
+		if lchownErr2 := os.Lchown(buildsDirectory, uid, gid); lchownErr2 != nil {
+			return fmt.Errorf("chown mounted builds directory: %w", lchownErr2)
 		}
 		return nil
 	}
 
-	if _, err := os.Stat(buildsDirectory); err != nil {
-		if os.IsNotExist(err) {
+	if _, statErr := os.Stat(buildsDirectory); statErr != nil {
+		if os.IsNotExist(statErr) {
 			return nil
 		}
-		return fmt.Errorf("stat builds directory: %w", err)
+		return fmt.Errorf("stat builds directory: %w", statErr)
 	}
 
-	if err := chownRecursiveInternal(buildsDirectory, uid, gid, mountpoints, projectsDir); err != nil {
-		return fmt.Errorf("chown builds directory: %w", err)
+	if chownRecursiveErr2 := chownRecursiveInternal(buildsDirectory, uid, gid, mountpoints, projectsDir); chownRecursiveErr2 != nil {
+		return fmt.Errorf("chown builds directory: %w", chownRecursiveErr2)
 	}
 
 	return nil
@@ -356,8 +358,8 @@ func ensureSQLiteFilesExistInternal(databaseURL string) error {
 	// prepareWritablePathsWithRootsInternal is not called.
 	dir := filepath.Dir(sqlitePath)
 	if dir != "" && dir != "." {
-		if err := os.MkdirAll(dir, utils.DirPerm); err != nil {
-			return fmt.Errorf("create sqlite directory %s: %w", dir, err)
+		if mkdirAllErr := os.MkdirAll(dir, utils.DirPerm); mkdirAllErr != nil {
+			return fmt.Errorf("create sqlite directory %s: %w", dir, mkdirAllErr)
 		}
 	}
 
@@ -365,8 +367,8 @@ func ensureSQLiteFilesExistInternal(databaseURL string) error {
 	if err != nil {
 		return fmt.Errorf("create sqlite file %s: %w", sqlitePath, err)
 	}
-	if err := file.Close(); err != nil {
-		return fmt.Errorf("close sqlite file %s: %w", sqlitePath, err)
+	if closeErr := file.Close(); closeErr != nil {
+		return fmt.Errorf("close sqlite file %s: %w", sqlitePath, closeErr)
 	}
 
 	return nil
@@ -413,8 +415,8 @@ func chownRecursiveInternal(path string, uid, gid int, mountpoints map[string]st
 			}
 		}
 		if projectsDir != "" && filepath.Clean(currentPath) == projectsDir {
-			if err := lchownFn(currentPath, uid, gid); err != nil {
-				return err
+			if lchownFnErr := lchownFn(currentPath, uid, gid); lchownFnErr != nil {
+				return lchownFnErr
 			}
 			return filepath.SkipDir
 		}

@@ -33,7 +33,7 @@ type Preferences struct {
 // Role assignments are managed separately via PUT /users/{userId}/role-assignments.
 // Fields tagged with unorm and trim are trimmed and normalized to Unicode NFC.
 type CreateUser struct {
-	Username    string      `json:"username" minLength:"1" maxLength:"255" pattern:"^[^@]+$" patternDescription:"username without an @ character" doc:"Username of the user; may not contain @" example:"johndoe"`
+	Username    string      `json:"username" minLength:"1" maxLength:"255" pattern:"^[^@]+$" patternDescription:"No @ character" doc:"Username; cannot contain @" example:"johndoe"`
 	Password    string      `json:"password" minLength:"8" doc:"Password of the user"`
 	DisplayName *string     `json:"displayName,omitempty" maxLength:"255" doc:"Display name of the user" example:"John Doe" unorm:"nfc" trim:"true"`
 	Email       *string     `json:"email,omitempty" doc:"Email address of the user" example:"john@example.com"`
@@ -44,7 +44,7 @@ type CreateUser struct {
 // UpdateUser represents the request body for updating a user.
 // Role assignments are managed separately via PUT /users/{userId}/role-assignments.
 type UpdateUser struct {
-	Username    *string     `json:"username,omitzero" minLength:"1" maxLength:"255" pattern:"^[^@]+$" patternDescription:"username without an @ character" doc:"Username of the user; may not contain @"`
+	Username    *string     `json:"username,omitzero" minLength:"1" maxLength:"255" pattern:"^[^@]+$" patternDescription:"No @ character" doc:"Username; cannot contain @"`
 	DisplayName *string     `json:"displayName,omitzero" maxLength:"255" doc:"Display name of the user" unorm:"nfc" trim:"true"`
 	Email       *string     `json:"email,omitzero" doc:"Email address of the user"`
 	Locale      *string     `json:"locale,omitzero" doc:"Locale preference of the user"`
@@ -70,7 +70,7 @@ type User struct {
 	OidcSubjectId          *string                 `json:"oidcSubjectId,omitempty" doc:"OIDC subject identifier for SSO users"`
 	Locale                 *string                 `json:"locale,omitempty" doc:"Locale preference of the user" example:"en-US"`
 	LastLogin              *string                 `json:"lastLogin,omitempty" doc:"Date and time of the user's most recent sign-in; omitted when the user has never signed in"`
-	PermissionsByEnv       map[string][]string     `json:"permissionsByEnv" doc:"Permissions the user effectively holds, keyed by environment ID. The 'global' key holds permissions that apply across every environment (and to org-level endpoints)."`
+	PermissionsByEnv       map[string][]string     `json:"permissionsByEnv" doc:"Permissions by environment ID; 'global' applies to all environments and organization endpoints"`
 	Preferences            Preferences             `json:"preferences" doc:"Personal display and UI preferences"`
 	ID                     string                  `json:"id" doc:"Unique identifier of the user" example:"550e8400-e29b-41d4-a716-446655440000"`
 	Username               string                  `json:"username" doc:"Username of the user" example:"johndoe"`

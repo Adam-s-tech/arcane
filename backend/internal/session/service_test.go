@@ -1,7 +1,6 @@
 package session
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -18,7 +17,7 @@ import (
 )
 
 func TestSessionService_RotateRefreshTokenRequiresCurrentHash(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupAuthServiceTestDB(t)
 	require.NoError(t, db.Create(&common.User{
 		ID:       "u-session",
@@ -40,7 +39,7 @@ func TestSessionService_RotateRefreshTokenRequiresCurrentHash(t *testing.T) {
 }
 
 func TestSessionService_DeleteExpiredSessions(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupAuthServiceTestDB(t)
 	require.NoError(t, db.Create(&common.User{
 		ID:       "u-cleanup",
@@ -91,7 +90,18 @@ func setupAuthServiceTestDB(t *testing.T) *database.DB {
 	))
 	// environments and api_keys live in packages that import this one; the
 	// in-package tests only need the tables to exist.
-	require.NoError(t, db.Exec("CREATE TABLE IF NOT EXISTS environments (id text PRIMARY KEY, created_at datetime, updated_at datetime, name text, api_url text, status text, enabled numeric, is_edge numeric, hidden numeric, last_seen datetime, last_edge_transport text, access_token text, api_key_id text, parent_environment_id text, swarm_node_id text)").Error)
-	require.NoError(t, db.Exec("CREATE TABLE IF NOT EXISTS api_keys (id text PRIMARY KEY, created_at datetime, updated_at datetime, name text, description text, key_hash text, key_prefix text, kind text, user_id text, environment_id text, managed_by text, expires_at datetime, last_used_at datetime)").Error)
+	require.NoError(
+		t,
+		db.Exec("CREATE TABLE IF NOT EXISTS environments (id text PRIMARY KEY, created_at datetime, updated_at dateti"+
+			"me, name text, api_url text, status text, enabled numeric, is_edge numeric, hidden numeric, last_see"+
+			"n datetime, last_edge_transport text, access_token text, api_key_id text, parent_environment_id text"+
+			", swarm_node_id text)").Error,
+	)
+	require.NoError(
+		t,
+		db.Exec("CREATE TABLE IF NOT EXISTS api_keys (id text PRIMARY KEY, created_at datetime, updated_at datetime, "+
+			"name text, description text, key_hash text, key_prefix text, kind text, user_id text, environment_id"+
+			" text, managed_by text, expires_at datetime, last_used_at datetime)").Error,
+	)
 	return &database.DB{DB: db}
 }

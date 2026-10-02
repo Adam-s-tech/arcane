@@ -12,6 +12,7 @@ import (
 	"github.com/getarcaneapp/arcane/types/v2/imagepatch"
 	"github.com/libtnb/sqlite"
 	"github.com/moby/moby/client"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
@@ -32,7 +33,7 @@ func patchFeatureSettingsInternal(t *testing.T) (*settings.SettingsService, *dat
 	db := &database.DB{DB: gdb}
 	svc, err := settings.NewSettingsService(t.Context(), db)
 	if err == nil {
-		t.Cleanup(func() { require.NoError(t, svc.Stop(context.Background())) })
+		t.Cleanup(func() { require.NoError(t, svc.Stop(context.WithoutCancel(t.Context()))) })
 	}
 	require.NoError(t, err)
 	return svc, db
@@ -99,7 +100,7 @@ func TestDisabledFeatureSkipsPatchVerificationScan(t *testing.T) {
 	defer server.Close()
 	dockerClient, err := client.New(client.WithHost(server.URL), client.WithAPIVersion("1.41"))
 	require.NoError(t, err)
-	defer dockerClient.Close()
+	defer func() { assert.NoError(t, dockerClient.Close()) }()
 	svc := &ImagePatchService{
 		settingsService: settingsSvc,
 		dockerService:   &docker.DockerClientService{Client: dockerClient},

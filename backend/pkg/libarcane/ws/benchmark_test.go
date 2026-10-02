@@ -20,7 +20,7 @@ import (
 func benchWSServer(b *testing.B) (url string, cleanup func()) {
 	b.Helper()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(b.Context())
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := websocket.Accept(w, r, nil)
@@ -30,7 +30,7 @@ func benchWSServer(b *testing.B) (url string, cleanup func()) {
 		go func() {
 			// Drain reads until context cancelled
 			for {
-				if _, _, err := conn.Read(ctx); err != nil {
+				if _, _, readErr := conn.Read(ctx); readErr != nil {
 					return
 				}
 			}
@@ -47,12 +47,12 @@ func benchWSServer(b *testing.B) (url string, cleanup func()) {
 }
 
 // benchHub creates a hub with N connected clients whose send channels are drained.
-// Returns the hub, a context cancel func, and a cleanup func.
-func benchHub(b *testing.B, numClients, hubBuf int) (*Hub, context.CancelFunc, func()) {
+// Returns the hub and its cleanup function.
+func benchHub(b *testing.B, numClients, hubBuf int) (*Hub, func()) {
 	b.Helper()
 
 	h := NewHub(hubBuf)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(b.Context())
 	go h.Run(ctx)
 
 	wsURL, serverCleanup := benchWSServer(b)
@@ -80,7 +80,7 @@ func benchHub(b *testing.B, numClients, hubBuf int) (*Hub, context.CancelFunc, f
 		time.Sleep(time.Millisecond)
 	}
 
-	return h, cancel, func() {
+	return h, func() {
 		cancel()
 		for _, c := range conns {
 			_ = c.CloseNow()
@@ -97,7 +97,7 @@ func benchHub(b *testing.B, numClients, hubBuf int) (*Hub, context.CancelFunc, f
 func BenchmarkHub_Broadcast(b *testing.B) {
 	for _, numClients := range []int{1, 10, 50, 100} {
 		b.Run(fmt.Sprintf("clients_%d", numClients), func(b *testing.B) {
-			h, _, cleanup := benchHub(b, numClients, 4096)
+			h, cleanup := benchHub(b, numClients, 4096)
 			defer cleanup()
 
 			msg := []byte(`{"level":"info","message":"benchmark log message","timestamp":"2024-01-15T10:30:45Z"}`)
@@ -116,7 +116,7 @@ func BenchmarkHub_Broadcast(b *testing.B) {
 func BenchmarkHub_BroadcastMessageSizes(b *testing.B) {
 	for _, size := range []int{64, 256, 1024, 4096, 16384} {
 		b.Run(fmt.Sprintf("bytes_%d", size), func(b *testing.B) {
-			h, _, cleanup := benchHub(b, 10, 4096)
+			h, cleanup := benchHub(b, 10, 4096)
 			defer cleanup()
 
 			msg := make([]byte, size)
@@ -240,13 +240,13 @@ func BenchmarkLogMessageBatch_Marshal(b *testing.B) {
 func BenchmarkForwardLogJSONBatched_Throughput(b *testing.B) {
 	for _, batchSize := range []int{1, 10, 50} {
 		b.Run(fmt.Sprintf("maxBatch_%d", batchSize), func(b *testing.B) {
-			h, _, cleanup := benchHub(b, 1, 8192)
+			h, cleanup := benchHub(b, 1, 8192)
 			defer cleanup()
 
 			b.ReportAllocs()
 			b.ResetTimer()
 
-			ctx := context.Background()
+			ctx := b.Context()
 			logs := make(chan LogMessage, b.N)
 			for range b.N {
 				logs <- LogMessage{
@@ -266,13 +266,13 @@ func BenchmarkForwardLogJSONBatched_Throughput(b *testing.B) {
 
 // BenchmarkForwardLines_Throughput measures plain text line forwarding throughput.
 func BenchmarkForwardLines_Throughput(b *testing.B) {
-	h, _, cleanup := benchHub(b, 1, 8192)
+	h, cleanup := benchHub(b, 1, 8192)
 	defer cleanup()
 
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	ctx := context.Background()
+	ctx := b.Context()
 	lines := make(chan string, b.N)
 	for range b.N {
 		lines <- "2024-01-15T10:30:45Z this is a benchmark log line for testing throughput performance"

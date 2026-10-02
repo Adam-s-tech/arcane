@@ -28,8 +28,8 @@ func (p RemoteJSONProxy) JSON[T any](
 	}
 
 	var output T
-	if err := p(ctx, environmentID, method, path, body, &output); err != nil {
-		return nil, TranslateRemoteProxyError(err)
+	if pErr := p(ctx, environmentID, method, path, body, &output); pErr != nil {
+		return nil, TranslateRemoteProxyError(pErr)
 	}
 
 	return &output, nil

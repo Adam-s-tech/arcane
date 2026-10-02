@@ -25,7 +25,8 @@ var apiKeysCmd = &cobra.Command{
 	Use:     "keys",
 	Aliases: []string{"apikeys", "key"},
 	Short:   "Manage your own API keys",
-	Long:    "Manage the current user's personal API keys. Personal keys inherit the owner's role permissions. Creating and deleting them requires a session login (an API key cannot mint or remove other keys).",
+	Long: "Manage the current user's personal API keys. Personal keys inherit the owner's role permissions. Creating and " +
+		"deleting them requires a session login (an API key cannot mint or remove other keys).",
 }
 
 var apiKeysListCmd = &cobra.Command{
@@ -74,8 +75,7 @@ var apiKeysListCmd = &cobra.Command{
 				key.CreatedAt.Format("2006-01-02 15:04"),
 			}
 		}
-		output.Table(headers, rows)
-		return nil
+		return output.Table(headers, rows)
 	},
 }
 
@@ -95,9 +95,9 @@ var apiKeysCreateCmd = &cobra.Command{
 			req.Description = &apiKeyCreateDescription
 		}
 		if apiKeyCreateExpiresAt != "" {
-			parsed, err := time.Parse(time.RFC3339, apiKeyCreateExpiresAt)
-			if err != nil {
-				return fmt.Errorf("invalid --expires-at format (use RFC3339): %w", err)
+			parsed, parseErr := time.Parse(time.RFC3339, apiKeyCreateExpiresAt)
+			if parseErr != nil {
+				return fmt.Errorf("invalid --expires-at format (use RFC3339): %w", parseErr)
 			}
 			req.ExpiresAt = &parsed
 		}
@@ -148,8 +148,8 @@ var apiKeysDeleteCmd = &cobra.Command{
 			return fmt.Errorf("failed to delete API key: %w", err)
 		}
 		defer func() { _ = resp.Body.Close() }()
-		if err := cmdutil.EnsureSuccessStatus(resp); err != nil {
-			return fmt.Errorf("failed to delete API key: %w", err)
+		if ensureSuccessStatusErr := cmdutil.EnsureSuccessStatus(resp); ensureSuccessStatusErr != nil {
+			return fmt.Errorf("failed to delete API key: %w", ensureSuccessStatusErr)
 		}
 
 		output.Success("API key deleted")

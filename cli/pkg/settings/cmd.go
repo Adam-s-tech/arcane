@@ -56,8 +56,8 @@ var updateCmd = &cobra.Command{
 		}
 
 		var req settings.Update
-		if err := json.Unmarshal(data, &req); err != nil {
-			return fmt.Errorf("failed to parse settings file: %w", err)
+		if unmarshalErr := json.Unmarshal(data, &req); unmarshalErr != nil {
+			return fmt.Errorf("failed to parse settings file: %w", unmarshalErr)
 		}
 
 		result, err := c.PutJSON[[]settings.SettingDto](cmd.Context(), types.Settings(c.EnvID()), req)
@@ -114,7 +114,9 @@ func runSettingsList(cmd *cobra.Command, cfg settingsListConfig) error {
 		rows[i] = []string{s.Key, s.Type, s.Value}
 	}
 
-	output.Table(headers, rows)
+	if tableErr := output.Table(headers, rows); tableErr != nil {
+		return tableErr
+	}
 	fmt.Printf("\nTotal: %d %s\n", len(result), cfg.totalLabel)
 	return nil
 }

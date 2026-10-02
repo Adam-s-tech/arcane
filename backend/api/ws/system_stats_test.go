@@ -79,7 +79,7 @@ func TestSystemStatsSamplerRearmsOnFasterSubscriber(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	slow := time.Hour
 	require.True(t, h.acquireSystemStatsSamplerInternal(ctx, slow))
 	defer h.releaseSystemStatsSamplerInternal(slow)

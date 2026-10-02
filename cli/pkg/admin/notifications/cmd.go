@@ -64,7 +64,9 @@ var settingsGetCmd = &cobra.Command{
 			}
 		}
 
-		output.Table(headers, rows)
+		if tableErr := output.Table(headers, rows); tableErr != nil {
+			return tableErr
+		}
 		fmt.Printf("\nTotal: %d notification settings\n", len(result))
 		return nil
 	},
@@ -124,8 +126,8 @@ var settingsSetCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("failed to read settings file: %w", err)
 			}
-			if err := json.Unmarshal(data, &req); err != nil {
-				return fmt.Errorf("failed to parse settings file: %w", err)
+			if unmarshalErr := json.Unmarshal(data, &req); unmarshalErr != nil {
+				return fmt.Errorf("failed to parse settings file: %w", unmarshalErr)
 			}
 		}
 

@@ -157,9 +157,9 @@ func parseArcaneComposeMetadataFromFileInternal(ctx context.Context, composeFile
 		if !filepath.IsAbs(resolvedPath) {
 			resolvedPath = filepath.Join(workdir, resolvedPath)
 		}
-		includedMeta, err := parseArcaneComposeMetadataFromFileInternal(ctx, resolvedPath, mergedEnv, visited)
-		if err != nil {
-			return meta, fmt.Errorf("load included Compose metadata %s: %w", resolvedPath, err)
+		includedMeta, parseArcaneComposeMetadataFromFileErr := parseArcaneComposeMetadataFromFileInternal(ctx, resolvedPath, mergedEnv, visited)
+		if parseArcaneComposeMetadataFromFileErr != nil {
+			return meta, fmt.Errorf("load included Compose metadata %s: %w", resolvedPath, parseArcaneComposeMetadataFromFileErr)
 		}
 		mergeArcaneComposeMetadata(&meta, includedMeta)
 	}
@@ -227,8 +227,8 @@ func parseComposeTagsInternal(value any) ([]projecttypes.TagOption, bool) {
 	seen := make(map[string]struct{}, len(values))
 	authoritative := true
 	for index, value := range values {
-		definition, ok := kit.AsStringMap(value)
-		if !ok {
+		definition, localOk := kit.AsStringMap(value)
+		if !localOk {
 			slog.Warn("skipping invalid x-arcane tag; expected a name/color object", "index", index)
 			authoritative = false
 			continue
@@ -412,8 +412,8 @@ func parseIncludePaths(composeFilePath string) ([]string, error) {
 	}
 
 	composeData := map[string]any{}
-	if err := yaml.Unmarshal(content, &composeData); err != nil {
-		return nil, fmt.Errorf("parse compose file: %w", err)
+	if unmarshalErr := yaml.Unmarshal(content, &composeData); unmarshalErr != nil {
+		return nil, fmt.Errorf("parse compose file: %w", unmarshalErr)
 	}
 
 	rawIncludes, ok := composeData["include"]
@@ -441,13 +441,13 @@ func parseIncludePaths(composeFilePath string) ([]string, error) {
 		case string:
 			paths = append(paths, v)
 		case map[string]any:
-			if p, ok := v["path"]; ok {
+			if p, localOk := v["path"]; localOk {
 				switch pathValue := p.(type) {
 				case string:
 					paths = append(paths, pathValue)
 				case []any:
 					for _, entry := range pathValue {
-						if s, ok := entry.(string); ok {
+						if s, localOk2 := entry.(string); localOk2 {
 							paths = append(paths, s)
 						}
 					}
@@ -599,14 +599,14 @@ func applyServiceLabelMetadataInternal(project *composetypes.Project) error {
 	}
 	maps.Copy(defaults, hiddenDefaults)
 	for name, service := range project.Services {
-		overrides, err := updaterMetadataLabelsInternal(service.Extensions[arcaneBlockKey])
-		if err != nil {
-			return fmt.Errorf("service %s x-arcane.updater: %w", name, err)
+		overrides, updaterMetadataLabelsErr := updaterMetadataLabelsInternal(service.Extensions[arcaneBlockKey])
+		if updaterMetadataLabelsErr != nil {
+			return fmt.Errorf("service %s x-arcane.updater: %w", name, updaterMetadataLabelsErr)
 		}
 		effective := maps.Clone(defaults)
-		hiddenOverrides, err := hiddenMetadataLabelInternal(service.Extensions[arcaneBlockKey])
-		if err != nil {
-			return fmt.Errorf("service %s x-arcane.hidden: %w", name, err)
+		hiddenOverrides, updaterMetadataLabelsErr := hiddenMetadataLabelInternal(service.Extensions[arcaneBlockKey])
+		if updaterMetadataLabelsErr != nil {
+			return fmt.Errorf("service %s x-arcane.hidden: %w", name, updaterMetadataLabelsErr)
 		}
 		maps.Copy(effective, overrides)
 		maps.Copy(effective, hiddenOverrides)
@@ -661,8 +661,8 @@ func updaterMetadataLabelsInternal(block any) (map[string]string, error) {
 		default:
 			return nil, fmt.Errorf("unknown updater option %q", key)
 		}
-		text, ok := value.(string)
-		if !ok {
+		text, localOk := value.(string)
+		if !localOk {
 			return nil, fmt.Errorf("updater %s must be a string", key)
 		}
 		text = strings.TrimSpace(text)

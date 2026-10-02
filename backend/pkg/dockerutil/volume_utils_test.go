@@ -34,7 +34,7 @@ func TestVolumeUsageCacheBehaviorInternal(t *testing.T) {
 
 		firstResult := make(chan error, 1)
 		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 			defer cancel()
 			_, err := GetVolumeUsageData(ctx, dockerClient)
 			firstResult <- err
@@ -46,7 +46,7 @@ func TestVolumeUsageCacheBehaviorInternal(t *testing.T) {
 			require.FailNow(t, "volume usage refresh did not start")
 		}
 
-		waiterCtx, waiterCancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+		waiterCtx, waiterCancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
 		defer waiterCancel()
 		waiterStartedAt := time.Now()
 		_, err := GetVolumeUsageData(waiterCtx, dockerClient)
@@ -80,7 +80,7 @@ func TestVolumeUsageCacheBehaviorInternal(t *testing.T) {
 			}
 		})
 
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 		defer cancel()
 		_, err := GetVolumeUsageData(ctx, dockerClient)
 		require.NoError(t, err)
@@ -123,7 +123,7 @@ func TestVolumeUsageCacheBehaviorInternal(t *testing.T) {
 			writeVolumeUsageResponseInternal(t, w, "host-b", 2)
 		})
 
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 		defer cancel()
 		_, err := GetVolumeUsageData(ctx, clientA)
 		require.NoError(t, err)

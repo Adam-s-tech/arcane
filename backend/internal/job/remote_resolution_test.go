@@ -42,7 +42,20 @@ func TestResolveRemoteRunConfirmsOwnerAfterLostResponse(t *testing.T) {
 				run.Outcome = st.Outcome{Status: st.NeedsAttention, Message: "original failure"}
 				return nil
 			}))
-			remote := st.Run{ID: local.ID, JobID: local.JobID, EnvironmentID: "0", Status: st.Running, Outcome: st.Outcome{Status: st.NeedsAttention, Message: "original failure", Targets: []st.TargetOutcome{{ID: "completed", Status: st.Succeeded}}}}
+			remote := st.Run{
+				ID:            local.ID,
+				JobID:         local.JobID,
+				EnvironmentID: "0",
+				Status:        st.Running,
+				Outcome: st.Outcome{
+					Status:  st.NeedsAttention,
+					Message: "original failure",
+					Targets: []st.TargetOutcome{{
+						ID:     "completed",
+						Status: st.Succeeded,
+					}},
+				},
+			}
 			mutations, acknowledgements := 0, 0
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				switch {

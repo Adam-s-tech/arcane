@@ -138,7 +138,7 @@ func setupFederatedCredentialServiceTestDBInternal(t *testing.T) *database.DB {
 func setupFederatedCredentialServiceInternal(t *testing.T, issuer *federatedTestIssuerInternal) (*FederatedCredentialService, *auth.AuthService, *database.DB) {
 	t.Helper()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupFederatedCredentialServiceTestDBInternal(t)
 	roleSvc := role.NewRoleService(db)
 	userSvc := user.NewUserService(db, roleSvc)
@@ -154,7 +154,7 @@ func setupFederatedCredentialServiceInternal(t *testing.T, issuer *federatedTest
 
 	keySetManager := oidcjwk.NewKeySetManager(t.Context())
 	t.Cleanup(func() {
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Second)
 		defer cancel()
 		require.NoError(t, keySetManager.Shutdown(shutdownCtx))
 	})
@@ -199,7 +199,7 @@ func setupFederatedCredentialServiceInternal(t *testing.T, issuer *federatedTest
 func TestFederatedCredentialServiceExchangeToken(t *testing.T) {
 	issuer := newFederatedTestIssuerInternal(t)
 	service, authSvc, db := setupFederatedCredentialServiceInternal(t, issuer)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	tests := []struct {
 		name      string
@@ -248,9 +248,9 @@ func TestFederatedCredentialServiceExchangeToken(t *testing.T) {
 			require.Positive(t, resp.ExpiresIn)
 			require.NotEmpty(t, resp.AccessToken)
 
-			user, sessionID, err := authSvc.VerifyToken(ctx, resp.AccessToken)
+			localUser, sessionID, err := authSvc.VerifyToken(ctx, resp.AccessToken)
 			require.NoError(t, err)
-			require.Equal(t, "user-federated-service", user.ID)
+			require.Equal(t, "user-federated-service", localUser.ID)
 
 			var userSession session.UserSession
 			require.NoError(t, db.WithContext(ctx).Where("id = ?", sessionID).First(&userSession).Error)
@@ -266,7 +266,7 @@ func TestFederatedCredentialServiceExchangeTokenRejectsIssuerWithoutCredentialIn
 	otherIssuer := newFederatedTestIssuerInternal(t)
 	service, _, _ := setupFederatedCredentialServiceInternal(t, issuer)
 
-	resp, err := service.ExchangeToken(context.Background(), federatedtypes.TokenExchangeRequest{
+	resp, err := service.ExchangeToken(t.Context(), federatedtypes.TokenExchangeRequest{
 		GrantType:        federatedtypes.TokenExchangeGrantType,
 		SubjectToken:     otherIssuer.tokenInternal(t, "repo:getarcaneapp/arcane:ref:refs/heads/main", []string{"arcane-ci"}),
 		SubjectTokenType: federatedtypes.SubjectTokenTypeJWT,
@@ -274,7 +274,7 @@ func TestFederatedCredentialServiceExchangeTokenRejectsIssuerWithoutCredentialIn
 	})
 
 	require.Error(t, err)
-	require.True(t, errors.Is(err, common.ErrFederatedCredentialInvalidGrant), "unexpected error: %v", err)
+	require.ErrorIs(t, err, common.ErrFederatedCredentialInvalidGrant, "unexpected error: %v", err)
 	require.Nil(t, resp)
 }
 
@@ -283,7 +283,7 @@ func TestFederatedCredentialServiceExchangeTokenDoesNotRequireGlobalFeatureFlagI
 	service, _, _ := setupFederatedCredentialServiceInternal(t, issuer)
 	service.settingsService = nil
 
-	resp, err := service.ExchangeToken(context.Background(), federatedtypes.TokenExchangeRequest{
+	resp, err := service.ExchangeToken(t.Context(), federatedtypes.TokenExchangeRequest{
 		GrantType:        federatedtypes.TokenExchangeGrantType,
 		SubjectToken:     issuer.tokenInternal(t, "repo:getarcaneapp/arcane:ref:refs/heads/main", []string{"arcane-ci"}),
 		SubjectTokenType: federatedtypes.SubjectTokenTypeJWT,
@@ -299,12 +299,12 @@ func TestFederatedCredentialServiceExchangeTokenRejectsExpiredCredentialInternal
 	issuer := newFederatedTestIssuerInternal(t)
 	service, _, db := setupFederatedCredentialServiceInternal(t, issuer)
 	expiredAt := time.Now().Add(-time.Minute)
-	require.NoError(t, db.WithContext(context.Background()).
+	require.NoError(t, db.WithContext(t.Context()).
 		Model(&FederatedCredential{}).
 		Where("id = ?", "cred-github-actions").
 		Update("expires_at", expiredAt).Error)
 
-	resp, err := service.ExchangeToken(context.Background(), federatedtypes.TokenExchangeRequest{
+	resp, err := service.ExchangeToken(t.Context(), federatedtypes.TokenExchangeRequest{
 		GrantType:        federatedtypes.TokenExchangeGrantType,
 		SubjectToken:     issuer.tokenInternal(t, "repo:getarcaneapp/arcane:ref:refs/heads/main", []string{"arcane-ci"}),
 		SubjectTokenType: federatedtypes.SubjectTokenTypeJWT,
@@ -312,14 +312,14 @@ func TestFederatedCredentialServiceExchangeTokenRejectsExpiredCredentialInternal
 	})
 
 	require.Error(t, err)
-	require.True(t, errors.Is(err, common.ErrFederatedCredentialInvalidGrant), "unexpected error: %v", err)
+	require.ErrorIs(t, err, common.ErrFederatedCredentialInvalidGrant, "unexpected error: %v", err)
 	require.Nil(t, resp)
 }
 
 func TestFederatedCredentialServiceUpdateDisableRevokesIssuedSessionsInternal(t *testing.T) {
 	issuer := newFederatedTestIssuerInternal(t)
 	service, authSvc, _ := setupFederatedCredentialServiceInternal(t, issuer)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	resp, err := service.ExchangeToken(ctx, federatedtypes.TokenExchangeRequest{
 		GrantType:        federatedtypes.TokenExchangeGrantType,
@@ -337,13 +337,13 @@ func TestFederatedCredentialServiceUpdateDisableRevokesIssuedSessionsInternal(t 
 
 	_, _, err = authSvc.VerifyToken(ctx, resp.AccessToken)
 	require.Error(t, err)
-	require.True(t, errors.Is(err, common.ErrSessionRevoked), "unexpected error: %v", err)
+	require.ErrorIs(t, err, common.ErrSessionRevoked, "unexpected error: %v", err)
 }
 
 func TestFederatedCredentialServiceRejectsReplayedSubjectTokenInternal(t *testing.T) {
 	issuer := newFederatedTestIssuerInternal(t)
 	service, _, _ := setupFederatedCredentialServiceInternal(t, issuer)
-	ctx := context.Background()
+	ctx := t.Context()
 	subjectToken := issuer.tokenInternal(t, "repo:getarcaneapp/arcane:ref:refs/heads/main", []string{"arcane-ci"})
 	req := federatedtypes.TokenExchangeRequest{
 		GrantType:        federatedtypes.TokenExchangeGrantType,
@@ -358,7 +358,7 @@ func TestFederatedCredentialServiceRejectsReplayedSubjectTokenInternal(t *testin
 
 	second, err := service.ExchangeToken(ctx, req)
 	require.Error(t, err)
-	require.True(t, errors.Is(err, common.ErrFederatedCredentialInvalidGrant), "unexpected error: %v", err)
+	require.ErrorIs(t, err, common.ErrFederatedCredentialInvalidGrant, "unexpected error: %v", err)
 	require.Nil(t, second)
 }
 
@@ -366,7 +366,7 @@ func TestFederatedCredentialServiceCreateRejectsBareWildcardGlob(t *testing.T) {
 	issuer := newFederatedTestIssuerInternal(t)
 	service, _, _ := setupFederatedCredentialServiceInternal(t, issuer)
 
-	_, err := service.Create(context.Background(), "admin-user", federatedtypes.CreateFederatedCredential{
+	_, err := service.Create(t.Context(), "admin-user", federatedtypes.CreateFederatedCredential{
 		Name:            "Unsafe wildcard",
 		IssuerURL:       "https://token.actions.githubusercontent.com",
 		Audiences:       []string{"arcane-ci"},
@@ -377,7 +377,7 @@ func TestFederatedCredentialServiceCreateRejectsBareWildcardGlob(t *testing.T) {
 	})
 
 	require.Error(t, err)
-	require.True(t, errors.Is(err, common.ErrFederatedCredentialInvalid), "unexpected error: %v", err)
+	require.ErrorIs(t, err, common.ErrFederatedCredentialInvalid, "unexpected error: %v", err)
 }
 
 // Test fixtures shared by this package's tests.
@@ -386,7 +386,7 @@ func newSettingsServiceForTestInternal(t testing.TB, ctx context.Context, db *da
 	t.Helper()
 	svc, err := settings.NewSettingsService(ctx, db)
 	if err == nil {
-		t.Cleanup(func() { require.NoError(t, svc.Stop(context.Background())) })
+		t.Cleanup(func() { require.NoError(t, svc.Stop(context.WithoutCancel(t.Context()))) })
 	}
 	return svc, err
 }

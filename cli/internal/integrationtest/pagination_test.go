@@ -55,9 +55,9 @@ func TestContainersListSendsLimitAndStart(t *testing.T) {
 
 	var got map[string]any
 	{
-		err := json.Unmarshal([]byte(strings.TrimSpace(outBuf)), &got)
-		require.NoError(t, err,
-			"json parse failed: %v\noutput=%s", err, outBuf)
+		unmarshalErr := json.Unmarshal([]byte(strings.TrimSpace(outBuf)), &got)
+		require.NoError(t, unmarshalErr,
+			"json parse failed: %v\noutput=%s", unmarshalErr, outBuf)
 	}
 	{
 
@@ -306,7 +306,7 @@ func TestTemplatesListJSONIncludesPaginatedEnvelope(t *testing.T) {
 		mu.Unlock()
 		require.FailNowf(t, "unexpected failure", "path = %q, want %q", gotPath, "/api/templates")
 	}
-	if !(strings.Contains(gotQuery, "limit=7") && strings.Contains(gotQuery, "start=14")) {
+	if !strings.Contains(gotQuery, "limit=7") || !strings.Contains(gotQuery, "start=14") {
 		mu.Unlock()
 		require.FailNowf(t, "unexpected failure", "query = %q, want limit=7 and start=14", gotQuery)
 	}
@@ -314,9 +314,9 @@ func TestTemplatesListJSONIncludesPaginatedEnvelope(t *testing.T) {
 
 	var got map[string]any
 	{
-		err := json.Unmarshal([]byte(strings.TrimSpace(outBuf)), &got)
-		require.NoError(t, err,
-			"json parse failed: %v\noutput=%s", err, outBuf)
+		unmarshalErr := json.Unmarshal([]byte(strings.TrimSpace(outBuf)), &got)
+		require.NoError(t, unmarshalErr,
+			"json parse failed: %v\noutput=%s", unmarshalErr, outBuf)
 	}
 	{
 

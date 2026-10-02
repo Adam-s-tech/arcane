@@ -51,8 +51,8 @@ func NewMissingIncludeStubLoader(projectPath string) *MissingIncludeStubLoader {
 	return &MissingIncludeStubLoader{projectPath: projectPath}
 }
 
-func (l *MissingIncludeStubLoader) Accept(path string) bool {
-	_, ok := l.resolveMissingIncludeInternal(path).Get()
+func (l *MissingIncludeStubLoader) Accept(localPath string) bool {
+	_, ok := l.resolveMissingIncludeInternal(localPath).Get()
 	return ok
 }
 
@@ -65,7 +65,7 @@ func (l *MissingIncludeStubLoader) Load(ctx context.Context, filePath string) (s
 	if l.stubs == nil {
 		l.stubs = make(map[string]string)
 	}
-	if stubPath, ok := l.stubs[validatedPath]; ok {
+	if stubPath, localOk := l.stubs[validatedPath]; localOk {
 		return stubPath, nil
 	}
 
@@ -87,32 +87,32 @@ func (l *MissingIncludeStubLoader) Load(ctx context.Context, filePath string) (s
 	if err != nil {
 		return "", fmt.Errorf("resolve validation include stub path: %w", err)
 	}
-	if err := acfs.MkdirAll(ctx, l.tempDir, path.Dir(stubLogical), 0o755); err != nil {
-		return "", fmt.Errorf("create validation include directory: %w", err)
+	if mkdirAllErr := acfs.MkdirAll(ctx, l.tempDir, path.Dir(stubLogical), 0o755); mkdirAllErr != nil {
+		return "", fmt.Errorf("create validation include directory: %w", mkdirAllErr)
 	}
-	if err := acfs.Write(ctx, l.tempDir, stubLogical, []byte("services: {}\n"), acfs.WriteOptions{Mode: 0o600}); err != nil {
-		return "", fmt.Errorf("write validation include stub: %w", err)
+	if writeErr := acfs.Write(ctx, l.tempDir, stubLogical, []byte("services: {}\n"), acfs.WriteOptions{Mode: 0o600}); writeErr != nil {
+		return "", fmt.Errorf("write validation include stub: %w", writeErr)
 	}
 
 	l.stubs[validatedPath] = stubPath
 	return stubPath, nil
 }
 
-func (l *MissingIncludeStubLoader) Dir(path string) string {
-	return filepath.Dir(path)
+func (l *MissingIncludeStubLoader) Dir(localPath string) string {
+	return filepath.Dir(localPath)
 }
 
-func (l *MissingIncludeStubLoader) resolveMissingIncludeInternal(path string) mo.Option[string] {
-	validatedPath, err := ValidateIncludePathForWrite(l.projectPath, path)
+func (l *MissingIncludeStubLoader) resolveMissingIncludeInternal(localPath string) mo.Option[string] {
+	validatedPath, err := ValidateIncludePathForWrite(l.projectPath, localPath)
 	if err != nil {
 		return mo.None[string]()
 	}
 
 	// os.Stat rather than acfs: the validated include target may live outside
 	// the project directory (#3556).
-	if _, err := os.Stat(validatedPath); err == nil {
+	if _, statErr := os.Stat(validatedPath); statErr == nil {
 		return mo.None[string]()
-	} else if !errors.Is(err, os.ErrNotExist) {
+	} else if !errors.Is(statErr, os.ErrNotExist) {
 		return mo.None[string]()
 	}
 
@@ -189,9 +189,9 @@ func parseIncludeItemInternal(item any, baseDir string, envMap EnvMap, includeCo
 
 	results := make([]IncludeFile, 0, len(includePaths))
 	for _, includePath := range includePaths {
-		inc, err := resolveIncludeFileInternal(includePath, baseDir, envMap, includeContent)
-		if err != nil {
-			return nil, err
+		inc, resolveIncludeFileErr := resolveIncludeFileInternal(includePath, baseDir, envMap, includeContent)
+		if resolveIncludeFileErr != nil {
+			return nil, resolveIncludeFileErr
 		}
 		results = append(results, inc)
 	}
@@ -252,7 +252,7 @@ func resolveIncludeFileInternal(includePath, baseDir string, envMap EnvMap, incl
 
 	relativePath := includePath
 	if filepath.IsAbs(includePath) {
-		if rel, err := filepath.Rel(baseDir, fullPath); err == nil {
+		if rel, relErr := filepath.Rel(baseDir, fullPath); relErr == nil {
 			relativePath = rel
 		}
 	}
@@ -301,7 +301,7 @@ func ValidateIncludePathForWrite(projectDir, includePath string) (string, error)
 	absProjectDir = filepath.Clean(absProjectDir)
 
 	// Try to resolve symlinks for the project directory if it exists
-	if evalProjectDir, err := filepath.EvalSymlinks(absProjectDir); err == nil {
+	if evalProjectDir, evalSymlinksErr := filepath.EvalSymlinks(absProjectDir); evalSymlinksErr == nil {
 		absProjectDir = evalProjectDir
 	}
 

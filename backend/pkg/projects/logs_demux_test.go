@@ -98,7 +98,7 @@ func TestLogsDemuxClientContainerLogsDecisionInternal(t *testing.T) {
 				inner.recordContainerTTYInternal(" CTR-1 ", tt.ttyRecorded)
 			}
 
-			got, err := inner.ContainerLogs(context.Background(), "ctr-1", client.ContainerLogsOptions{ShowStdout: tt.showStdout, ShowStderr: tt.showStderr})
+			got, err := inner.ContainerLogs(t.Context(), "ctr-1", client.ContainerLogsOptions{ShowStdout: tt.showStdout, ShowStderr: tt.showStderr})
 			require.NoError(t, err)
 
 			if !tt.wantWrapped {

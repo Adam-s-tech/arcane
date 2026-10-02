@@ -62,7 +62,7 @@ func TestSettingsHandlerUpdateLocalEnvironmentRejectsUnreadableProjectsDirectory
 		t.Skip("test requires a non-root UID to trigger permission-denied on ReadDir")
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	settingsService, err := newSettingsServiceForTestInternal(t, ctx, setupSettingsTestDB(t))
 	require.NoError(t, err)
 	originalDir := settingsService.GetSettingsConfig().ProjectsDirectory.Value
@@ -99,18 +99,18 @@ func TestSettingsHandlerRemoteWorkspaceSettingsVisibilityInternal(t *testing.T) 
 		return json.Unmarshal(payload, output)
 	}
 
-	settingsService, err := newSettingsServiceForTestInternal(t, context.Background(), setupSettingsTestDB(t))
+	settingsService, err := newSettingsServiceForTestInternal(t, t.Context(), setupSettingsTestDB(t))
 	require.NoError(t, err)
 	handler := &SettingsHandler{settingsService: settingsService, proxyRemoteJSON: proxy}
 
 	permissions := authz.NewPermissionSet()
 	permissions.AddEnv("env-remote", authz.PermSettingsRead)
-	ctx := context.WithValue(context.Background(), middleware.ContextKeyUserPermissions, permissions)
+	ctx := context.WithValue(t.Context(), middleware.ContextKeyUserPermissions, permissions)
 	output, err := handler.GetSettings(ctx, &GetSettingsInput{EnvironmentID: "env-remote"})
 	require.NoError(t, err)
 	require.Equal(t, []settingstypes.PublicSetting{remoteSettings[0], remoteSettings[3], remoteSettings[4]}, output.Body)
 
-	adminCtx := context.WithValue(context.Background(), middleware.ContextKeyUserPermissions, authz.SudoPermissionSet())
+	adminCtx := context.WithValue(t.Context(), middleware.ContextKeyUserPermissions, authz.SudoPermissionSet())
 	output, err = handler.GetSettings(adminCtx, &GetSettingsInput{EnvironmentID: "env-remote"})
 	require.NoError(t, err)
 	require.Equal(t, remoteSettings, output.Body)

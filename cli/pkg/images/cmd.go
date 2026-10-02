@@ -156,8 +156,8 @@ var imagesGetCmd = &cobra.Command{
 			Data    image.DetailSummary `json:"data"`
 		}
 
-		if err := json.Unmarshal(body, &result); err != nil {
-			return fmt.Errorf("failed to parse response: %w", err)
+		if unmarshalErr := json.Unmarshal(body, &result); unmarshalErr != nil {
+			return fmt.Errorf("failed to parse response: %w", unmarshalErr)
 		}
 
 		output.Header("Image Details")
@@ -228,9 +228,9 @@ var imagesRemoveCmd = &cobra.Command{
 		path := types.Image(c.EnvID(), resolved.ID)
 
 		if removeForce {
-			u, err := url.Parse(path)
-			if err != nil {
-				return fmt.Errorf("failed to parse path: %w", err)
+			u, parseErr := url.Parse(path)
+			if parseErr != nil {
+				return fmt.Errorf("failed to parse path: %w", parseErr)
 			}
 			q := u.Query()
 			q.Set("force", "true")
@@ -269,8 +269,8 @@ var imagesRemoveCmd = &cobra.Command{
 			} `json:"data"`
 		}
 
-		if err := json.Unmarshal(body, &result); err != nil {
-			return fmt.Errorf("failed to parse response: %w", err)
+		if unmarshalErr := json.Unmarshal(body, &result); unmarshalErr != nil {
+			return fmt.Errorf("failed to parse response: %w", unmarshalErr)
 		}
 
 		output.Success("%s", result.Data.Message)
@@ -340,11 +340,11 @@ var imagesPullCmd = &cobra.Command{
 				} `json:"progressDetail"`
 			}
 
-			if err := json.UnmarshalDecode(decoder, &event); err != nil {
-				if errors.Is(err, io.EOF) {
+			if unmarshalDecodeErr := json.UnmarshalDecode(decoder, &event); unmarshalDecodeErr != nil {
+				if errors.Is(unmarshalDecodeErr, io.EOF) {
 					break
 				}
-				return fmt.Errorf("failed to decode stream: %w", err)
+				return fmt.Errorf("failed to decode stream: %w", unmarshalDecodeErr)
 			}
 
 			// The stream opens with an activity frame that carries no Docker
@@ -468,8 +468,8 @@ var imagesPruneCmd = &cobra.Command{
 			} `json:"data"`
 		}
 
-		if err := json.Unmarshal(body, &result); err != nil {
-			return fmt.Errorf("failed to parse response: %w", err)
+		if unmarshalErr := json.Unmarshal(body, &result); unmarshalErr != nil {
+			return fmt.Errorf("failed to parse response: %w", unmarshalErr)
 		}
 
 		output.Success("Pruned %d images, reclaimed %s", len(result.Data.ImagesDeleted), output.Bytes(result.Data.SpaceReclaimed))
@@ -516,8 +516,8 @@ var imagesCountsCmd = &cobra.Command{
 			Data    image.UsageCounts `json:"data"`
 		}
 
-		if err := json.Unmarshal(body, &result); err != nil {
-			return fmt.Errorf("failed to parse response: %w", err)
+		if unmarshalErr := json.Unmarshal(body, &result); unmarshalErr != nil {
+			return fmt.Errorf("failed to parse response: %w", unmarshalErr)
 		}
 
 		output.Header("Image Usage Counts")
@@ -572,8 +572,8 @@ var imagesUploadCmd = &cobra.Command{
 			Data    image.LoadResult `json:"data"`
 		}
 
-		if err := json.Unmarshal(respBody, &result); err != nil {
-			return fmt.Errorf("failed to parse response: %w", err)
+		if unmarshalErr := json.Unmarshal(respBody, &result); unmarshalErr != nil {
+			return fmt.Errorf("failed to parse response: %w", unmarshalErr)
 		}
 
 		if !result.Success {

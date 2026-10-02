@@ -17,14 +17,12 @@ func TestInfoMarshalsEmbeddedDockerFieldsAtTopLevel(t *testing.T) {
 		APIVersion:        "1.55",
 	})
 
-	require.NoError(t, err,
-		"marshal Docker info: %v", err)
+	require.NoError(t, err, "marshal Docker info: %v", err)
 
 	var payload map[string]any
 	{
-		err := json.Unmarshal(data, &payload)
-		require.NoError(t, err,
-			"unmarshal Docker info payload: %v", err)
+		unmarshalErr := json.Unmarshal(data, &payload)
+		require.NoError(t, unmarshalErr, "unmarshal Docker info payload: %v", unmarshalErr)
 	}
 
 	for name, want := range map[string]any{

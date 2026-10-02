@@ -1,7 +1,6 @@
 package system
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -136,7 +135,7 @@ func TestUpsertPendingResult(t *testing.T) {
 }
 
 func TestUpdateAllFailedJobMarksUpdatingResultsFailed(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	gormDB, err := gorm.Open(sqlite.Open("file:"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
 
@@ -185,7 +184,7 @@ func TestUpdateAllFailedJobMarksUpdatingResultsFailed(t *testing.T) {
 // running and skips the recreate. The pending_restart job must then be finalized in
 // place, because no next boot is coming to do it.
 func TestUpdateAllFinalizesUpToDateManagerWithoutRestart(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	gormDB, err := gorm.Open(sqlite.Open("file:"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
 
@@ -289,7 +288,7 @@ func TestAgentAlreadyOnTarget(t *testing.T) {
 // phase already ran before the restart: resume must finalize the manager's own row
 // and complete the job, NOT re-run the agents phase.
 func TestResumeUpdateAllFinalizesManagerWithoutRerunningAgents(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	gormDB, err := gorm.Open(sqlite.Open("file:"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
 

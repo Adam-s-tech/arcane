@@ -3,7 +3,6 @@ package systembackup
 import (
 	"context"
 	"encoding/json/v2"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -87,16 +86,16 @@ func TestSystemBackupPoliciesRegisterIndependentJobs(t *testing.T) {
 		jobs:         entityjobs.New("system-backup:", backup.SystemAdmissionScope),
 	}
 	scheduler := &systemBackupPolicySchedulerInternal{jobs: make(map[string]schedulertypes.Job)}
-	require.NoError(t, service.SetScheduler(context.Background(), scheduler, newSystemBackupAdmissionGateForTestInternal(t)))
+	require.NoError(t, service.SetScheduler(t.Context(), scheduler, newSystemBackupAdmissionGateForTestInternal(t)))
 
-	status, err := service.SetRecoveryKey(context.Background(), "QWERTY-ABCDEF-234567-GHIJKL-MNOPQR-STUVWX-YZ2345-ZXCVBN")
+	status, err := service.SetRecoveryKey(t.Context(), "QWERTY-ABCDEF-234567-GHIJKL-MNOPQR-STUVWX-YZ2345-ZXCVBN")
 	require.NoError(t, err)
 	require.True(t, status.Configured)
-	storedKey, err := service.recoveryKeyInternal(context.Background(), "")
+	storedKey, err := service.recoveryKeyInternal(t.Context(), "")
 	require.NoError(t, err)
 	require.Equal(t, "QWERTY-ABCDEF-234567-GHIJKL-MNOPQR-STUVWX-YZ2345-ZXCVBN", storedKey)
 
-	collection, err := service.UpdatePolicies(context.Background(), []backuptypes.UpdateSystemBackupPolicy{
+	collection, err := service.UpdatePolicies(t.Context(), []backuptypes.UpdateSystemBackupPolicy{
 		{Enabled: true, Schedule: "0 0 2 * * *", RetentionCount: 5, LocalEnabled: true},
 		{Enabled: true, Schedule: "0 0 14 * * *", RetentionCount: 30, LocalEnabled: true},
 	})
@@ -106,7 +105,7 @@ func TestSystemBackupPoliciesRegisterIndependentJobs(t *testing.T) {
 	require.Len(t, scheduler.jobs, 2)
 
 	firstID := collection.Policies[0].ID
-	collection, err = service.UpdatePolicies(context.Background(), []backuptypes.UpdateSystemBackupPolicy{{
+	collection, err = service.UpdatePolicies(t.Context(), []backuptypes.UpdateSystemBackupPolicy{{
 		ID: firstID, Enabled: true, Schedule: "0 */30 * * * *", RetentionCount: 9, LocalEnabled: true,
 	}})
 	require.NoError(t, err)
@@ -132,8 +131,8 @@ func TestSystemBackupPoliciesRegisterIndependentJobs(t *testing.T) {
 		require.NoError(t, gormDB.Create(policy).Error)
 		require.NoError(t, gormDB.Model(policy).Update("local_enabled", local).Error)
 		service.rescheduleSystemBackupPolicyInternal(t.Context(), policy)
-		disabled, err := service.disableMissingS3Internal(t.Context(), policy)
-		require.NoError(t, err)
+		disabled, disableMissingS3Err := service.disableMissingS3Internal(t.Context(), policy)
+		require.NoError(t, disableMissingS3Err)
 		require.True(t, disabled)
 		require.NoError(t, gormDB.First(policy, "id = ?", policy.ID).Error)
 		require.Equal(t, local, policy.Enabled)
@@ -152,7 +151,7 @@ func TestSystemBackupPolicyRequiresConfiguredRecoveryKeyWhenEnabled(t *testing.T
 		recoveryKeys: backup.NewRecoveryKeyStore(&database.DB{DB: gormDB}),
 	}
 
-	_, err = service.UpdatePolicies(context.Background(), []backuptypes.UpdateSystemBackupPolicy{{
+	_, err = service.UpdatePolicies(t.Context(), []backuptypes.UpdateSystemBackupPolicy{{
 		Enabled: true, Schedule: "0 0 2 * * *", RetentionCount: 7, LocalEnabled: true,
 	}})
 	require.ErrorContains(t, err, "configure a recovery key")
@@ -166,7 +165,7 @@ func TestRecoveryEnvironmentInternalIncludesRuntimeSecrets(t *testing.T) {
 		OidcClientSecret:  "oidc-secret",
 		FilePerm:          0o640,
 	}
-	environment := (&SystemBackupService{config: cfg}).recoveryEnvironmentInternal(context.Background())
+	environment := (&SystemBackupService{config: cfg}).recoveryEnvironmentInternal(t.Context())
 	require.Equal(t, "jwt-secret", environment["JWT_SECRET"])
 	require.Equal(t, "encryption-secret", environment["ENCRYPTION_KEY"])
 	require.Equal(t, "admin-key", environment["ADMIN_STATIC_API_KEY"])
@@ -416,8 +415,8 @@ func TestProjectsSnapshotPathInternal(t *testing.T) {
 
 func TestProjectsDirectoryInternalUsesContainerPathOfMapping(t *testing.T) {
 	service := &SystemBackupService{config: &config.Config{ProjectsDirectory: "/app/data/projects:/host/projects"}}
-	require.Equal(t, "/app/data/projects", service.projectsDirectoryInternal(context.Background()))
-	require.Equal(t, "/app/data/projects:/host/projects", service.projectsSettingInternal(context.Background()))
+	require.Equal(t, "/app/data/projects", service.projectsDirectoryInternal(t.Context()))
+	require.Equal(t, "/app/data/projects:/host/projects", service.projectsSettingInternal(t.Context()))
 }
 
 func TestSourceMountsInternal(t *testing.T) {
@@ -449,7 +448,7 @@ func TestWriteManifestInternalRecordsVersionTwoLayout(t *testing.T) {
 	dataDirectory := t.TempDir()
 	service := &SystemBackupService{config: &config.Config{DatabaseURL: "file:" + filepath.Join(dataDirectory, "arcane.db"), ProjectsDirectory: "/srv/projects"}}
 	layout := backupSourceLayoutInternal{dataDirectory: dataDirectory, projectsDirectory: "/srv/projects", databaseName: "arcane.db", projectsPath: "/projects"}
-	require.NoError(t, service.writeManifestInternal(context.Background(), "backup-1", layout))
+	require.NoError(t, service.writeManifestInternal(t.Context(), "backup-1", layout))
 	data, err := os.ReadFile(filepath.Join(dataDirectory, systemRecoveryManifestName))
 	require.NoError(t, err)
 	var manifest recoverytypes.Manifest
@@ -501,7 +500,24 @@ func TestRestoreStagesInternal(t *testing.T) {
 		layout := snapshotLayoutInternal{dataPath: "/data", projectsPath: "/data/projects", databaseName: "arcane.db"}
 		stages, err := restoreStagesInternal(mounts, "/app/data", "/app/data/projects", repository, "snap", layout)
 		require.NoError(t, err)
-		require.Equal(t, []recoverytypes.RestoreStage{{Repository: repository, SnapshotID: "snap", SourcePath: "/data", Target: recoverytypes.RestoreTarget{Mounts: []mounttypes.Mount{dataVolume, nested}, Path: "/restore"}}}, stages)
+		require.Equal(
+			t,
+			[]recoverytypes.RestoreStage{
+				{
+					Repository: repository,
+					SnapshotID: "snap",
+					SourcePath: "/data",
+					Target: recoverytypes.RestoreTarget{
+						Mounts: []mounttypes.Mount{
+							dataVolume,
+							nested,
+						},
+						Path: "/restore",
+					},
+				},
+			},
+			stages,
+		)
 	})
 	t.Run("external projects restore separately", func(t *testing.T) {
 		layout := snapshotLayoutInternal{dataPath: "/data", projectsPath: "/projects", databaseName: "arcane.db"}
@@ -511,7 +527,20 @@ func TestRestoreStagesInternal(t *testing.T) {
 		require.Equal(t, "/data", stages[0].SourcePath)
 		require.Equal(t, []mounttypes.Mount{dataVolume, nested}, stages[0].Target.Mounts)
 		require.Equal(t, "/projects", stages[1].SourcePath)
-		require.Equal(t, recoverytypes.RestoreTarget{Mounts: []mounttypes.Mount{{Type: mounttypes.TypeBind, Source: "/host/external", Target: "/restore-projects"}}, Path: "/restore-projects"}, stages[1].Target)
+		require.Equal(
+			t,
+			recoverytypes.RestoreTarget{
+				Mounts: []mounttypes.Mount{
+					{
+						Type:   mounttypes.TypeBind,
+						Source: "/host/external",
+						Target: "/restore-projects",
+					},
+				},
+				Path: "/restore-projects",
+			},
+			stages[1].Target,
+		)
 	})
 	t.Run("changed projects directory excludes the nested mount from the data stage", func(t *testing.T) {
 		layout := snapshotLayoutInternal{dataPath: "/", projectsPath: "/projects", databaseName: "arcane.db"}
@@ -525,13 +554,39 @@ func TestRestoreStagesInternal(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, stages, 2)
 		require.Equal(t, []mounttypes.Mount{dataVolume}, stages[0].Target.Mounts)
-		require.Equal(t, recoverytypes.RestoreTarget{Mounts: []mounttypes.Mount{{Type: mounttypes.TypeBind, Source: "/host/nested", Target: "/restore-projects"}}, Path: "/restore-projects"}, stages[1].Target)
+		require.Equal(
+			t,
+			recoverytypes.RestoreTarget{
+				Mounts: []mounttypes.Mount{
+					{
+						Type:   mounttypes.TypeBind,
+						Source: "/host/nested",
+						Target: "/restore-projects",
+					},
+				},
+				Path: "/restore-projects",
+			},
+			stages[1].Target,
+		)
 
 		stages, err = restoreStagesInternal(mounts, "/app/data", "/app/data/custom/projects", repository, "snap", external)
 		require.NoError(t, err)
 		require.Len(t, stages, 2)
 		require.Equal(t, []mounttypes.Mount{dataVolume, nested}, stages[0].Target.Mounts)
-		require.Equal(t, recoverytypes.RestoreTarget{Mounts: []mounttypes.Mount{{Type: mounttypes.TypeVolume, Source: "arcane-data", Target: "/restore-projects"}}, Path: "/restore-projects/custom/projects"}, stages[1].Target)
+		require.Equal(
+			t,
+			recoverytypes.RestoreTarget{
+				Mounts: []mounttypes.Mount{
+					{
+						Type:   mounttypes.TypeVolume,
+						Source: "arcane-data",
+						Target: "/restore-projects",
+					},
+				},
+				Path: "/restore-projects/custom/projects",
+			},
+			stages[1].Target,
+		)
 	})
 	t.Run("version 1 backup without projects restores data only", func(t *testing.T) {
 		layout := snapshotLayoutInternal{dataPath: "/app/data", databaseName: "arcane.db"}
@@ -561,10 +616,9 @@ func TestSafetySnapshotContainsPathInternal(t *testing.T) {
 	require.True(t, safetySnapshotContainsPathInternal(safety, "demo"))
 	require.True(t, safetySnapshotContainsPathInternal(safety, "demo/compose.yaml"))
 	require.False(t, safetySnapshotContainsPathInternal(safety, "other"))
-	require.ErrorContains(t, removeProjectFileInternal(context.Background(), t.TempDir(), ""), "refusing to remove")
+	require.ErrorContains(t, removeProjectFileInternal(t.Context(), t.TempDir(), ""), "refusing to remove")
 }
 
 func TestLegacyLayoutOmittedProjectsIsActionable(t *testing.T) {
-	require.True(t, errors.Is(errProjectsNotInBackupInternal, errProjectsNotInBackupInternal))
 	require.Contains(t, errProjectsNotInBackupInternal.Error(), "create a new system backup")
 }

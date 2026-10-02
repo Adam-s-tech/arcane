@@ -169,7 +169,7 @@ var rootCmd = &cobra.Command{
 
 func Execute() {
 	if err := fang.Execute(
-		context.Background(),
+		context.Background(), //nolint:forbidigo // CLI entry point establishes the process context.
 		rootCmd,
 		fang.WithColorSchemeFunc(arcaneFangColorSchemeInternal),
 		fang.WithVersion(config.Version),

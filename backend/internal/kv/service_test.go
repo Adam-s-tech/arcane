@@ -1,7 +1,6 @@
 package kv
 
 import (
-	"context"
 	"testing"
 
 	"github.com/libtnb/sqlite"
@@ -22,7 +21,7 @@ func setupKVServiceInternal(t *testing.T) *KVService {
 }
 
 func TestKVService_Get_MissingKey(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc := setupKVServiceInternal(t)
 
 	value, ok, err := svc.Get(ctx, "missing")
@@ -32,7 +31,7 @@ func TestKVService_Get_MissingKey(t *testing.T) {
 }
 
 func TestKVService_Set_UpsertsValue(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc := setupKVServiceInternal(t)
 
 	require.NoError(t, svc.Set(ctx, "analytics.heartbeat.last_attempt_at", "2026-03-10T00:00:00Z"))

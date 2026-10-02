@@ -70,8 +70,8 @@ func (c *TunnelClient) connectAndServeGRPC(ctx context.Context) error {
 	}
 	defer func() { _ = conn.Close() }()
 
-	if err := c.waitForGRPCReadyInternal(ctx, conn); err != nil {
-		return fmt.Errorf("manager gRPC endpoint is not ready: %w", err)
+	if waitForGRPCReadyErr := c.waitForGRPCReadyInternal(ctx, conn); waitForGRPCReadyErr != nil {
+		return fmt.Errorf("manager gRPC endpoint is not ready: %w", waitForGRPCReadyErr)
 	}
 
 	// metadata.New lowercases the keys itself.
@@ -85,13 +85,16 @@ func (c *TunnelClient) connectAndServeGRPC(ctx context.Context) error {
 		return fmt.Errorf("failed to open tunnel stream: %w", err)
 	}
 
-	if err := c.serveTunnelSessionInternal(ctx, NewGRPCAgentTunnelConn(stream, streamCancel), managerAddr); err != nil {
-		if errors.Is(err, errTunnelRegistrationTimeout) {
+	if serveTunnelSessionErr := c.serveTunnelSessionInternal(ctx, NewGRPCAgentTunnelConn(stream, streamCancel), managerAddr); serveTunnelSessionErr != nil {
+		if errors.Is(serveTunnelSessionErr, errTunnelRegistrationTimeout) {
 			// The channel already reached Ready, so TCP/TLS works but gRPC
 			// framing was never answered end to end.
-			return fmt.Errorf("%s: %w", "manager accepted the TCP/TLS connection but never answered gRPC tunnel registration; if a reverse proxy (Traefik/Pangolin/Nginx) fronts the manager, it is likely not forwarding gRPC (HTTP/2 with trailers) on /api/tunnel/connect", err)
+			return fmt.Errorf("%s: %w",
+				"manager accepted the TCP/TLS connection but never answered gRPC tunnel registration; "+
+					"if a reverse proxy (Traefik/Pangolin/Nginx) fronts the manager, it is likely not forwarding gRPC (HTTP/2 with trailers) on /api/tunnel/connect",
+				serveTunnelSessionErr)
 		}
-		return err
+		return serveTunnelSessionErr
 	}
 	return nil
 }

@@ -1,7 +1,6 @@
 package volumes
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -28,7 +27,7 @@ func TestGetProjectVolumeCopyRuntimeInternal_UsesToolsImageWhenAvailable(t *test
 	}))
 	t.Cleanup(server.Close)
 
-	copyRuntime, err := getProjectVolumeCopyRuntimeInternal(context.Background(), newTestDockerClientInternal(t, server), volumehelper.ToolsImage(""))
+	copyRuntime, err := getProjectVolumeCopyRuntimeInternal(t.Context(), newTestDockerClientInternal(t, server), volumehelper.ToolsImage(""))
 
 	require.NoError(t, err)
 	require.Equal(t, volumehelper.ToolsImage(""), copyRuntime.Image)
@@ -58,7 +57,7 @@ func TestCreateProjectVolumeCopyHolderContainerInternal_UsesPassiveHolderCommand
 	t.Cleanup(server.Close)
 
 	_, cleanup, err := createProjectVolumeCopyHolderContainerInternal(
-		context.Background(),
+		t.Context(),
 		newTestDockerClientInternal(t, server),
 		projectVolumeCopyRuntimeInternal{Image: "arcane:local"},
 		"nginx_data",

@@ -3,7 +3,6 @@
 package auth
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -23,7 +22,7 @@ func enableAutoLoginFeature(t *testing.T) {
 
 func TestGetAutoLoginConfig_Enabled(t *testing.T) {
 	enableAutoLoginFeature(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupAuthServiceTestDB(t)
 
 	settingsSvc, err := newSettingsServiceForAuthTestInternal(t, ctx, db)
@@ -49,7 +48,7 @@ func TestGetAutoLoginConfig_Enabled(t *testing.T) {
 
 func TestGetAutoLoginConfig_DisabledWhenLocalAuthDisabled(t *testing.T) {
 	enableAutoLoginFeature(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupAuthServiceTestDB(t)
 
 	settingsSvc, err := newSettingsServiceForAuthTestInternal(t, ctx, db)

@@ -105,17 +105,17 @@ func (s *ImageService) GetImageAttestations(ctx context.Context, imageName strin
 
 	attestations := make([]imagetypes.Attestation, 0)
 	for _, subject := range subjects {
-		referrerAttestations, err := s.readReferrerAttestationsInternal(ctx, ref.Context(), subject, remoteOptions, query)
-		if err != nil {
-			return nil, err
+		referrerAttestations, readReferrerAttestationsErr := s.readReferrerAttestationsInternal(ctx, ref.Context(), subject, remoteOptions, query)
+		if readReferrerAttestationsErr != nil {
+			return nil, readReferrerAttestationsErr
 		}
 		attestations = append(attestations, referrerAttestations...)
 	}
 
 	if index != nil {
-		inlineAttestations, err := readInlineAttestationsInternal(ctx, index, subjects, query)
-		if err != nil {
-			return nil, err
+		inlineAttestations, readInlineAttestationsErr := readInlineAttestationsInternal(ctx, index, subjects, query)
+		if readInlineAttestationsErr != nil {
+			return nil, readInlineAttestationsErr
 		}
 		attestations = append(attestations, inlineAttestations...)
 	}
@@ -343,7 +343,18 @@ func dedupeSubjectsInternal(subjects []imageAttestationSubjectInternal) []imageA
 	return out
 }
 
-func (s *ImageService) readReferrerAttestationsInternal(ctx context.Context, repository name.Repository, subject imageAttestationSubjectInternal, remoteOptions []remote.Option, query ImageAttestationQuery) ([]imagetypes.Attestation, error) {
+func (
+	s *ImageService,
+) readReferrerAttestationsInternal(
+	ctx context.Context,
+	repository name.Repository,
+	subject imageAttestationSubjectInternal,
+	remoteOptions []remote.Option,
+	query ImageAttestationQuery,
+) (
+	[]imagetypes.Attestation,
+	error,
+) {
 	referrers, err := remote.Referrers(repository.Digest(subject.Digest), remoteOptions...)
 	if err != nil {
 		if shouldIgnoreReferrersErrorInternal(err) {
@@ -359,13 +370,13 @@ func (s *ImageService) readReferrerAttestationsInternal(ctx context.Context, rep
 
 	attestations := make([]imagetypes.Attestation, 0, len(manifest.Manifests))
 	for _, referrer := range manifest.Manifests {
-		referrerDescriptor, err := remote.Get(repository.Digest(referrer.Digest.String()), remoteOptions...)
-		if err != nil {
-			return nil, fmt.Errorf("get image referrer %s: %w", referrer.Digest.String(), err)
+		referrerDescriptor, getErr := remote.Get(repository.Digest(referrer.Digest.String()), remoteOptions...)
+		if getErr != nil {
+			return nil, fmt.Errorf("get image referrer %s: %w", referrer.Digest.String(), getErr)
 		}
 
-		referrerImage, err := referrerDescriptor.Image()
-		if err != nil {
+		referrerImage, getErr := referrerDescriptor.Image()
+		if getErr != nil {
 			continue
 		}
 
@@ -376,9 +387,9 @@ func (s *ImageService) readReferrerAttestationsInternal(ctx context.Context, rep
 			referrer.MediaType = referrerDescriptor.MediaType
 		}
 
-		items, err := readAttestationImageInternal(ctx, referrerImage, referrer, subject.Platform, query)
-		if err != nil {
-			return nil, err
+		items, getErr := readAttestationImageInternal(ctx, referrerImage, referrer, subject.Platform, query)
+		if getErr != nil {
+			return nil, getErr
 		}
 		attestations = append(attestations, items...)
 	}
@@ -422,14 +433,14 @@ func readInlineAttestationsInternal(ctx context.Context, index v1.ImageIndex, su
 			subject = firstSubjectInternal(subjects)
 		}
 
-		attestationImage, err := index.Image(descriptor.Digest)
-		if err != nil {
-			return nil, fmt.Errorf("read inline attestation image %s: %w", descriptor.Digest.String(), err)
+		attestationImage, imageErr := index.Image(descriptor.Digest)
+		if imageErr != nil {
+			return nil, fmt.Errorf("read inline attestation image %s: %w", descriptor.Digest.String(), imageErr)
 		}
 
-		items, err := readAttestationImageInternal(ctx, attestationImage, descriptor, subject.Platform, query)
-		if err != nil {
-			return nil, err
+		items, imageErr := readAttestationImageInternal(ctx, attestationImage, descriptor, subject.Platform, query)
+		if imageErr != nil {
+			return nil, imageErr
 		}
 		attestations = append(attestations, items...)
 	}
@@ -461,9 +472,9 @@ func readAttestationImageInternal(ctx context.Context, attestationImage v1.Image
 
 	attestations := make([]imagetypes.Attestation, 0, len(manifest.Layers))
 	for _, layerDescriptor := range manifest.Layers {
-		attestation, ok, err := readAttestationLayerInternal(ctx, attestationImage, layerDescriptor, artifactType, platform, query)
-		if err != nil {
-			return nil, err
+		attestation, ok, readAttestationLayerErr := readAttestationLayerInternal(ctx, attestationImage, layerDescriptor, artifactType, platform, query)
+		if readAttestationLayerErr != nil {
+			return nil, readAttestationLayerErr
 		}
 		if ok {
 			attestations = append(attestations, attestation)
@@ -472,7 +483,17 @@ func readAttestationImageInternal(ctx context.Context, attestationImage v1.Image
 	return attestations, nil
 }
 
-func readAttestationLayerInternal(ctx context.Context, attestationImage v1.Image, layerDescriptor v1.Descriptor, artifactType, platform string, query ImageAttestationQuery) (imagetypes.Attestation, bool, error) {
+func readAttestationLayerInternal(
+	ctx context.Context,
+	attestationImage v1.Image,
+	layerDescriptor v1.Descriptor,
+	artifactType, platform string,
+	query ImageAttestationQuery,
+) (
+	imagetypes.Attestation,
+	bool,
+	error,
+) {
 	if err := ctx.Err(); err != nil {
 		return imagetypes.Attestation{}, false, err
 	}

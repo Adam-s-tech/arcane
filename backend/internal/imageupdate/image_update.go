@@ -73,7 +73,15 @@ type localImageSnapshot struct {
 	IsLocalBuild  bool
 }
 
-func NewImageUpdateService(db *database.DB, settingsService *settings.SettingsService, registryService *registry.ContainerRegistryService, dockerService *docker.DockerClientService, eventService *event.EventService, notificationService *notification.NotificationService, activityService *activity.ActivityService) *ImageUpdateService {
+func NewImageUpdateService(
+	db *database.DB,
+	settingsService *settings.SettingsService,
+	registryService *registry.ContainerRegistryService,
+	dockerService *docker.DockerClientService,
+	eventService *event.EventService,
+	notificationService *notification.NotificationService,
+	activityService *activity.ActivityService,
+) *ImageUpdateService {
 	return &ImageUpdateService{
 		db:                  db,
 		settingsService:     settingsService,
@@ -169,7 +177,7 @@ func (s *ImageUpdateService) startImageUpdateActivityInternal(ctx context.Contex
 		return ""
 	}
 	resourceType := kit.Ternary(count > 1, "images", "image")
-	activity, err := s.activityService.StartActivity(ctx, activity.StartActivityRequest{
+	localActivity, err := s.activityService.StartActivity(ctx, activity.StartActivityRequest{
 		EnvironmentID: "0",
 		Type:          activitytypes.TypeImageUpdateCheck,
 		Queue:         true,
@@ -185,7 +193,7 @@ func (s *ImageUpdateService) startImageUpdateActivityInternal(ctx context.Contex
 		slog.DebugContext(ctx, "failed to start image update activity", "error", err)
 		return ""
 	}
-	return activity.ID
+	return localActivity.ID
 }
 
 func (s *ImageUpdateService) appendImageUpdateActivityMessageInternal(ctx context.Context, activityID string, level activitytypes.MessageLevel, message string, progress int, step string) {
@@ -403,7 +411,7 @@ func digestPinnedImageUpdateResultInternal(imageRef string) mo.Option[*imageupda
 
 	tag := "latest"
 	if named, err := ref.ParseNormalizedNamed(imageRef); err == nil {
-		if tagged, ok := named.(ref.NamedTagged); ok {
+		if tagged, localOk := named.(ref.NamedTagged); localOk {
 			tag = tagged.Tag()
 		}
 	}
@@ -569,9 +577,6 @@ func (s *ImageUpdateService) parseImageReference(imageRef string) *ImageParts {
 	tag := "latest"
 	if tagged, ok := named.(ref.NamedTagged); ok {
 		tag = tagged.Tag()
-	} else if _, ok := named.(ref.Digested); ok {
-		// If it's a digest reference, still use "latest" as the tag for registry queries
-		tag = "latest"
 	}
 
 	return &ImageParts{
@@ -1195,16 +1200,16 @@ func (s *ImageUpdateService) MarkImageRefUpToDateAfterPull(ctx context.Context, 
 				// Only clear synthetic ref:: records, not real sha256 image ID records.
 				// Clearing sha256 records would incorrectly mark containers that are still
 				// running the old image as up-to-date (see: #2453).
-				if err := tx.Model(&ImageUpdateRecord{}).
+				if clearStaleUpdatesErr := tx.Model(&ImageUpdateRecord{}).
 					Where("id LIKE 'ref::%' AND tag = ? AND repository IN ?", tag, repositories).
-					Update("has_update", false).Error; err != nil {
-					return fmt.Errorf("clear stale image updates: %w", err)
+					Update("has_update", false).Error; clearStaleUpdatesErr != nil {
+					return fmt.Errorf("clear stale image updates: %w", clearStaleUpdatesErr)
 				}
 			}
 		}
 
-		if err := savePreparedUpdateResultWithTxInternal(tx, snapshot.ImageID, snapshot.Repository, snapshot.Tag, result); err != nil {
-			return fmt.Errorf("save pulled image update state: %w", err)
+		if savePreparedUpdateResultWithTxErr := savePreparedUpdateResultWithTxInternal(tx, snapshot.ImageID, snapshot.Repository, snapshot.Tag, result); savePreparedUpdateResultWithTxErr != nil {
+			return fmt.Errorf("save pulled image update state: %w", savePreparedUpdateResultWithTxErr)
 		}
 
 		return nil
@@ -1293,13 +1298,13 @@ type batchImageProgressRecorder struct {
 	total     int
 }
 
-func (r *batchImageProgressRecorder) recordInternal(refs []string, res *imageupdate.Response) int {
+func (r *batchImageProgressRecorder) recordInternal(localRefs []string, res *imageupdate.Response) int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	r.completed++
 	progress := 10 + int(float64(r.completed)/float64(r.total)*80)
-	for _, imageRef := range refs {
+	for _, imageRef := range localRefs {
 		r.results[imageRef] = res
 	}
 	return progress
@@ -1346,7 +1351,17 @@ func (s *ImageUpdateService) parseAndGroupImagesInternal(imageRefs []string) (ma
 	return regRepos, results, images
 }
 
-func (s *ImageUpdateService) checkSingleImageInBatchInternal(ctx context.Context, externalCreds []containerregistry.Credential, parts *ImageParts, composeBuildRefs map[string]struct{}) (*imageupdate.Response, *localImageSnapshot) {
+func (
+	s *ImageUpdateService,
+) checkSingleImageInBatchInternal(
+	ctx context.Context,
+	externalCreds []containerregistry.Credential,
+	parts *ImageParts,
+	composeBuildRefs map[string]struct{},
+) (
+	*imageupdate.Response,
+	*localImageSnapshot,
+) {
 	if s.registryService == nil {
 		return &imageupdate.Response{
 			Error:          "registry service unavailable",
@@ -1487,7 +1502,16 @@ func (s *ImageUpdateService) resolveBatchCredentialsInternal(ctx context.Context
 	return credentials
 }
 
-func (s *ImageUpdateService) checkBatchImageInternal(ctx context.Context, activityID string, resolvedCreds []containerregistry.Credential, img batchImage, composeBuildRefs map[string]struct{}, recorder *batchImageProgressRecorder) error {
+func (
+	s *ImageUpdateService,
+) checkBatchImageInternal(
+	ctx context.Context,
+	activityID string,
+	resolvedCreds []containerregistry.Credential,
+	img batchImage,
+	composeBuildRefs map[string]struct{},
+	recorder *batchImageProgressRecorder,
+) error {
 	registryRecord := img.parts.Registry
 
 	if err := s.registryLimiter.Acquire(ctx, registryRecord); err != nil {
@@ -1522,7 +1546,16 @@ func (s *ImageUpdateService) checkBatchImageInternal(ctx context.Context, activi
 	return nil
 }
 
-func (s *ImageUpdateService) recordBatchImageCheckInternal(ctx context.Context, activityID string, img batchImage, res *imageupdate.Response, snapshot *localImageSnapshot, recorder *batchImageProgressRecorder) {
+func (
+	s *ImageUpdateService,
+) recordBatchImageCheckInternal(
+	ctx context.Context,
+	activityID string,
+	img batchImage,
+	res *imageupdate.Response,
+	snapshot *localImageSnapshot,
+	recorder *batchImageProgressRecorder,
+) {
 	progress := recorder.recordInternal(img.refs, res)
 
 	level, message := imageCheckResultMessageInternal(img.canonicalRef, res)
@@ -1777,8 +1810,8 @@ func (s *ImageUpdateService) CheckAllImages(ctx context.Context, limit int, exte
 		return nil, err
 	}
 
-	if err := s.CleanupOrphanedRecords(ctx); err != nil {
-		slog.WarnContext(ctx, "failed to cleanup orphaned image update records after check-all", "error", err.Error())
+	if cleanupOrphanedRecordsErr := s.CleanupOrphanedRecords(ctx); cleanupOrphanedRecordsErr != nil {
+		slog.WarnContext(ctx, "failed to cleanup orphaned image update records after check-all", "error", cleanupOrphanedRecordsErr.Error())
 	}
 
 	return results, nil

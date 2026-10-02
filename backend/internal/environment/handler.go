@@ -154,7 +154,14 @@ type DownloadEnvironmentMTLSFileInput struct {
 // ============================================================================
 
 // NewHandler builds the environment HTTP handler and its stream producer.
-func NewHandler(environmentService *EnvironmentService, settingsService *settings.SettingsService, apiKeyService *apikey.ApiKeyService, eventService *event.EventService, cfg *config.Config, activityService activitylib.Service) *EnvironmentHandler {
+func NewHandler(
+	environmentService *EnvironmentService,
+	settingsService *settings.SettingsService,
+	apiKeyService *apikey.ApiKeyService,
+	eventService *event.EventService,
+	cfg *config.Config,
+	activityService activitylib.Service,
+) *EnvironmentHandler {
 	return &EnvironmentHandler{
 		environmentService: environmentService,
 		settingsService:    settingsService,
@@ -672,7 +679,7 @@ func (h *EnvironmentHandler) UpdateEnvironment(ctx context.Context, input *Updat
 	// If regenerating API key, return the new key
 	var newApiKey *string
 	if input.Body.RegenerateApiKey != nil && *input.Body.RegenerateApiKey {
-		user, err := handlerutil.RequireUser(ctx)
+		localUser, err := handlerutil.RequireUser(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -688,7 +695,7 @@ func (h *EnvironmentHandler) UpdateEnvironment(ctx context.Context, input *Updat
 
 		// Use service method to update environment and create event
 		apiKey := apiKeyDto.Key
-		err = h.environmentService.RegenerateEnvironmentApiKey(ctx, input.ID, apiKeyDto.ID, apiKey, user.ID, user.Username, updated.Name)
+		err = h.environmentService.RegenerateEnvironmentApiKey(ctx, input.ID, apiKeyDto.ID, apiKey, localUser.ID, localUser.Username, updated.Name)
 		if err != nil {
 			// The new key was never linked; remove it so a failed rotation does
 			// not leave an orphaned valid credential behind.
@@ -706,8 +713,8 @@ func (h *EnvironmentHandler) UpdateEnvironment(ctx context.Context, input *Updat
 		// it as an error; the key stays visible and deletable on the API Keys
 		// page.
 		if oldApiKeyID != nil && *oldApiKeyID != apiKeyDto.ID {
-			if err := h.apiKeyService.DeleteApiKey(ctx, *oldApiKeyID); err != nil && !errors.Is(err, apikey.ErrApiKeyNotFound) {
-				slog.ErrorContext(ctx, "Failed to delete previous environment API key; the old key remains valid until deleted manually", "environmentID", input.ID, "error", err.Error())
+			if deleteApiKeyErr := h.apiKeyService.DeleteApiKey(ctx, *oldApiKeyID); deleteApiKeyErr != nil && !errors.Is(deleteApiKeyErr, apikey.ErrApiKeyNotFound) {
+				slog.ErrorContext(ctx, "Failed to delete previous environment API key; the old key remains valid until deleted manually", "environmentID", input.ID, "error", deleteApiKeyErr.Error())
 			}
 		}
 
@@ -1104,15 +1111,15 @@ func (h *EnvironmentHandler) GetEnvironmentVersion(ctx context.Context, input *G
 			}
 		}
 
-		statusCode, respBody, err := edge.DoRequest(reqCtx, input.ID, http.MethodGet, "/api/app-version", nil)
-		if err != nil {
-			return nil, huma.Error500InternalServerError("Request via tunnel failed: " + err.Error())
+		statusCode, respBody, doRequestErr := edge.DoRequest(reqCtx, input.ID, http.MethodGet, "/api/app-version", nil)
+		if doRequestErr != nil {
+			return nil, huma.Error500InternalServerError("Request via tunnel failed: " + doRequestErr.Error())
 		}
 		if statusCode != http.StatusOK {
 			return nil, huma.Error500InternalServerError(fmt.Sprintf("Unexpected status code: %d", statusCode))
 		}
 
-		if err := json.Unmarshal(respBody, &versionInfo); err != nil {
+		if unmarshalErr := json.Unmarshal(respBody, &versionInfo); unmarshalErr != nil {
 			return nil, huma.Error500InternalServerError("Failed to decode version response")
 		}
 	} else {
@@ -1125,15 +1132,15 @@ func (h *EnvironmentHandler) GetEnvironmentVersion(ctx context.Context, input *G
 		validatedURL.Fragment = ""
 		validatedURL.Path = strings.TrimRight(validatedURL.Path, "/") + "/api/app-version"
 
-		req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, validatedURL.String(), nil)
-		if err != nil {
+		req, newRequestWithContextErr := http.NewRequestWithContext(reqCtx, http.MethodGet, validatedURL.String(), http.NoBody)
+		if newRequestWithContextErr != nil {
 			return nil, huma.Error500InternalServerError("Failed to create request")
 		}
 
 		client := &http.Client{Timeout: 15 * time.Second}
-		resp, err := client.Do(req)
-		if err != nil {
-			return nil, huma.Error500InternalServerError("Request failed: " + err.Error())
+		resp, newRequestWithContextErr := client.Do(req)
+		if newRequestWithContextErr != nil {
+			return nil, huma.Error500InternalServerError("Request failed: " + newRequestWithContextErr.Error())
 		}
 		defer func() { _ = resp.Body.Close() }()
 
@@ -1141,7 +1148,7 @@ func (h *EnvironmentHandler) GetEnvironmentVersion(ctx context.Context, input *G
 			return nil, huma.Error500InternalServerError(fmt.Sprintf("Unexpected status code: %d", resp.StatusCode))
 		}
 
-		if err := json.UnmarshalRead(resp.Body, &versionInfo); err != nil {
+		if unmarshalReadErr := json.UnmarshalRead(resp.Body, &versionInfo); unmarshalReadErr != nil {
 			return nil, huma.Error500InternalServerError("Failed to decode version response")
 		}
 	}
@@ -1238,8 +1245,8 @@ func (h *EnvironmentHandler) DownloadEnvironmentMTLSBundle(ctx context.Context, 
 		}
 	}
 
-	if err := zipWriter.Close(); err != nil {
-		slog.ErrorContext(ctx, "Failed to finalize mTLS bundle", "environmentID", input.ID, "error", err.Error())
+	if closeErr := zipWriter.Close(); closeErr != nil {
+		slog.ErrorContext(ctx, "Failed to finalize mTLS bundle", "environmentID", input.ID, "error", closeErr.Error())
 		return nil, huma.Error500InternalServerError("Failed to build mTLS bundle")
 	}
 
@@ -1252,7 +1259,20 @@ func (h *EnvironmentHandler) DownloadEnvironmentMTLSBundle(ctx context.Context, 
 			humaCtx.SetHeader("Content-Length", strconv.Itoa(archive.Len()))
 
 			if written, writeErr := humaCtx.BodyWriter().Write(archive.Bytes()); writeErr != nil || written != archive.Len() {
-				slog.WarnContext(humaCtx.Context(), "Failed to stream edge mTLS bundle download", "environmentID", input.ID, "fileName", fileName, "bytesWritten", written, "bytesExpected", archive.Len(), "error", writeErr)
+				slog.WarnContext(
+					humaCtx.Context(),
+					"Failed to stream edge mTLS bundle download",
+					"environmentID",
+					input.ID,
+					"fileName",
+					fileName,
+					"bytesWritten",
+					written,
+					"bytesExpected",
+					archive.Len(),
+					"error",
+					writeErr,
+				)
 				return
 			}
 			h.logMTLSAuditEventInternal(humaCtx.Context(), env, event.EventTypeEnvironmentMTLSDownload,
@@ -1283,7 +1303,22 @@ func (h *EnvironmentHandler) DownloadEnvironmentMTLSFile(ctx context.Context, in
 			humaCtx.SetHeader("Content-Length", strconv.Itoa(len(fileContent)))
 
 			if written, writeErr := humaCtx.BodyWriter().Write(fileContent); writeErr != nil || written != len(fileContent) {
-				slog.WarnContext(humaCtx.Context(), "Failed to stream edge mTLS asset download", "environmentID", input.ID, "fileName", file.Name, "bytesWritten", written, "bytesExpected", len(fileContent), "error", writeErr)
+				slog.WarnContext(
+					humaCtx.Context(),
+					"Failed to stream edge mTLS asset download",
+					"environmentID",
+					input.ID,
+					"fileName",
+					file.Name,
+					"bytesWritten",
+					written,
+					"bytesExpected",
+					len(
+						fileContent,
+					),
+					"error",
+					writeErr,
+				)
 				return
 			}
 			h.logMTLSAuditEventInternal(humaCtx.Context(), env, event.EventTypeEnvironmentMTLSDownload,

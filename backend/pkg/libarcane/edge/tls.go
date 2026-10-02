@@ -130,8 +130,8 @@ func PrepareManagerMTLSAssetsWithContext(ctx context.Context, cfg *Config) error
 		return err
 	}
 
-	if _, _, _, err := ensureManagerCAInternal(ctx, assetsDir); err != nil {
-		return err
+	if _, _, _, ensureManagerCAErr := ensureManagerCAInternal(ctx, assetsDir); ensureManagerCAErr != nil {
+		return ensureManagerCAErr
 	}
 
 	cfg.EdgeMTLSCAFile = filepath.Join(assetsDir, generatedMTLSCACertFileName)
@@ -167,8 +167,8 @@ func AvailableManagerMTLSCAPath(cfg *Config) (string, error) {
 	}
 	// os.* rather than acfs: the assets dir may be user-configured to anywhere on
 	// the host, so no confinement root handle is in scope for this probe.
-	if _, err := os.Stat(caPath); err != nil {
-		return "", fmt.Errorf("stat edge mTLS CA: %w", err)
+	if _, statErr := os.Stat(caPath); statErr != nil {
+		return "", fmt.Errorf("stat edge mTLS CA: %w", statErr)
 	}
 	return caPath, nil
 }
@@ -272,10 +272,10 @@ func managerMTLSEnrollmentMarkerPathInternal(cfg *Config, envID string) (string,
 	return filepath.Join(assetsDir, generatedClientMTLSSubdir, safeEnvID, generatedMTLSEnrolledName), nil
 }
 
-func readMTLSEnrollmentMarkerInternal(path string) (time.Time, error) {
+func readMTLSEnrollmentMarkerInternal(localPath string) (time.Time, error) {
 	// Path-only helper; callers derive the path from the assets root, kept on
 	// os.* with the other path-only readers.
-	content, err := os.ReadFile(path)
+	content, err := os.ReadFile(localPath)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -285,7 +285,7 @@ func readMTLSEnrollmentMarkerInternal(path string) (time.Time, error) {
 	}
 	enrolledAt, err := time.Parse(time.RFC3339Nano, trimmed)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("failed to parse edge mTLS enrollment marker %s: %w", path, err)
+		return time.Time{}, fmt.Errorf("failed to parse edge mTLS enrollment marker %s: %w", localPath, err)
 	}
 	return enrolledAt, nil
 }
@@ -325,8 +325,8 @@ func EnsureAgentMTLSAssets(ctx context.Context, cfg *Config) error {
 		needsEnrollment, reason := agentMTLSAssetsNeedEnrollmentInternal(certPath, keyPath, time.Now())
 		if !needsEnrollment {
 			if !fileExistsInternal(filepath.Join(assetsDir, generatedMTLSEnrolledName)) {
-				if err := acfs.Write(ctx, assetsDir, "/"+generatedMTLSEnrolledName, []byte(time.Now().UTC().Format(time.RFC3339)+"\n"), acfs.WriteOptions{Mode: 0o600}); err != nil {
-					return fmt.Errorf("failed to write edge mTLS enrollment marker: %w", err)
+				if writeErr := acfs.Write(ctx, assetsDir, "/"+generatedMTLSEnrolledName, []byte(time.Now().UTC().Format(time.RFC3339)+"\n"), acfs.WriteOptions{Mode: 0o600}); writeErr != nil {
+					return fmt.Errorf("failed to write edge mTLS enrollment marker: %w", writeErr)
 				}
 			}
 			setAgentMTLSAssetPathsInternal(cfg, assetsDir)
@@ -335,12 +335,12 @@ func EnsureAgentMTLSAssets(ctx context.Context, cfg *Config) error {
 		slog.WarnContext(ctx, "Existing edge mTLS assets need renewal; enrolling new assets", "reason", reason, "cert_path", certPath)
 	}
 
-	if err := enrollAgentMTLSAssetsInternal(ctx, cfg, assetsDir, certPath, keyPath); err != nil {
+	if enrollAgentMTLSAssetsErr := enrollAgentMTLSAssetsInternal(ctx, cfg, assetsDir, certPath, keyPath); enrollAgentMTLSAssetsErr != nil {
 		if NormalizeEdgeMTLSMode(cfg.EdgeMTLSMode) != EdgeMTLSModeRequired {
-			slog.WarnContext(ctx, "Edge mTLS enrollment failed; proceeding without client certificate", "error", err)
+			slog.WarnContext(ctx, "Edge mTLS enrollment failed; proceeding without client certificate", "error", enrollAgentMTLSAssetsErr)
 			return nil
 		}
-		return err
+		return enrollAgentMTLSAssetsErr
 	}
 	return nil
 }
@@ -362,7 +362,7 @@ func enrollAgentMTLSAssetsInternal(ctx context.Context, cfg *Config, assetsDir, 
 		return fmt.Errorf("failed to configure edge mTLS enrollment client: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, managerBaseURL+"/api/tunnel/mtls/enroll", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, managerBaseURL+"/api/tunnel/mtls/enroll", http.NoBody)
 	if err != nil {
 		return fmt.Errorf("failed to create edge mTLS enrollment request: %w", err)
 	}
@@ -382,8 +382,8 @@ func enrollAgentMTLSAssetsInternal(ctx context.Context, cfg *Config, assetsDir, 
 	}
 
 	var enrollResp enrollMTLSResponse
-	if err := json.UnmarshalRead(io.LimitReader(resp.Body, maxEnrollResponseBytes), &enrollResp); err != nil {
-		return fmt.Errorf("failed to decode edge mTLS enrollment response: %w", err)
+	if unmarshalReadErr := json.UnmarshalRead(io.LimitReader(resp.Body, maxEnrollResponseBytes), &enrollResp); unmarshalReadErr != nil {
+		return fmt.Errorf("failed to decode edge mTLS enrollment response: %w", unmarshalReadErr)
 	}
 	if len(enrollResp.Files) == 0 {
 		return errors.New("edge mTLS enrollment response did not include any files")
@@ -391,21 +391,21 @@ func enrollAgentMTLSAssetsInternal(ctx context.Context, cfg *Config, assetsDir, 
 
 	// The assets dir is the confinement root for the writes below, so it is
 	// created through os before acfs opens it.
-	if err := os.MkdirAll(assetsDir, utils.DirPerm); err != nil {
-		return fmt.Errorf("failed to create edge mTLS asset dir: %w", err)
+	if mkdirAllErr := os.MkdirAll(assetsDir, utils.DirPerm); mkdirAllErr != nil {
+		return fmt.Errorf("failed to create edge mTLS asset dir: %w", mkdirAllErr)
 	}
 	for _, file := range enrollResp.Files {
 		perm := kit.Ternary(strings.TrimSpace(file.Permissions) == "0600", 0o600, utils.FilePerm)
-		if err := acfs.Write(ctx, assetsDir, "/"+filepath.Base(file.Name), []byte(file.Content), acfs.WriteOptions{Mode: perm}); err != nil {
-			return fmt.Errorf("failed to write edge mTLS asset %s: %w", file.Name, err)
+		if writeErr := acfs.Write(ctx, assetsDir, "/"+filepath.Base(file.Name), []byte(file.Content), acfs.WriteOptions{Mode: perm}); writeErr != nil {
+			return fmt.Errorf("failed to write edge mTLS asset %s: %w", file.Name, writeErr)
 		}
 	}
 	needsEnrollment, reason := agentMTLSAssetsNeedEnrollmentInternal(certPath, keyPath, time.Now())
 	if needsEnrollment {
 		return fmt.Errorf("edge mTLS enrollment wrote unusable assets: %s", reason)
 	}
-	if err := acfs.Write(ctx, assetsDir, "/"+generatedMTLSEnrolledName, []byte(time.Now().UTC().Format(time.RFC3339)+"\n"), acfs.WriteOptions{Mode: 0o600}); err != nil {
-		return fmt.Errorf("failed to write edge mTLS enrollment marker: %w", err)
+	if writeErr2 := acfs.Write(ctx, assetsDir, "/"+generatedMTLSEnrolledName, []byte(time.Now().UTC().Format(time.RFC3339)+"\n"), acfs.WriteOptions{Mode: 0o600}); writeErr2 != nil {
+		return fmt.Errorf("failed to write edge mTLS enrollment marker: %w", writeErr2)
 	}
 
 	setAgentMTLSAssetPathsInternal(cfg, assetsDir)
@@ -764,15 +764,15 @@ func ensureManagerCAInternal(ctx context.Context, assetsDir string) (string, str
 		return "", "", false, fmt.Errorf("failed to create CA certificate: %w", err)
 	}
 
-	if err := writePEMFileInternal(caCertPath, "CERTIFICATE", certDER, utils.FilePerm); err != nil {
-		return "", "", false, err
+	if writePEMFileErr := writePEMFileInternal(caCertPath, "CERTIFICATE", certDER, utils.FilePerm); writePEMFileErr != nil {
+		return "", "", false, writePEMFileErr
 	}
 	caKeyDER, err := x509.MarshalPKCS8PrivateKey(privateKey)
 	if err != nil {
 		return "", "", false, fmt.Errorf("failed to marshal CA private key: %w", err)
 	}
-	if err := writeCAKeyFileInternal(caKeyPath, caKeyDER); err != nil {
-		return "", "", false, err
+	if writeCAKeyFileErr := writeCAKeyFileInternal(caKeyPath, caKeyDER); writeCAKeyFileErr != nil {
+		return "", "", false, writeCAKeyFileErr
 	}
 
 	slog.Info("generated edge mTLS CA", "cert_path", caCertPath)
@@ -820,8 +820,8 @@ func ensureClientCertificateInternal(ctx context.Context, assetsDir, envID, envN
 
 	safeEnvID := generatedAssetNameSanitizer.ReplaceAllString(strings.TrimSpace(envID), "_")
 	clientDir := filepath.Join(assetsDir, generatedClientMTLSSubdir, safeEnvID)
-	if err := acfs.MkdirAll(ctx, assetsDir, path.Join("/", generatedClientMTLSSubdir, safeEnvID), utils.DirPerm); err != nil {
-		return "", "", false, fmt.Errorf("failed to create client cert dir: %w", err)
+	if mkdirAllErr := acfs.MkdirAll(ctx, assetsDir, path.Join("/", generatedClientMTLSSubdir, safeEnvID), utils.DirPerm); mkdirAllErr != nil {
+		return "", "", false, fmt.Errorf("failed to create client cert dir: %w", mkdirAllErr)
 	}
 	unlock, err := lockEdgeMTLSPathInternal(ctx, clientDir, ".client.lock")
 	if err != nil {
@@ -836,7 +836,7 @@ func ensureClientCertificateInternal(ctx context.Context, assetsDir, envID, envN
 	if fileExistsInternal(clientCertPath) && fileExistsInternal(clientKeyPath) {
 		// The URI SAN is the stable edge identity. Common Name is display metadata
 		// for newly issued certs only, so environment renames must not rotate keys.
-		if err := validateGeneratedClientCertificateInternal(clientCertPath, clientKeyPath, "", expectedURISAN); err == nil {
+		if validateGeneratedClientCertificateErr := validateGeneratedClientCertificateInternal(clientCertPath, clientKeyPath, "", expectedURISAN); validateGeneratedClientCertificateErr == nil {
 			return clientCertPath, clientKeyPath, false, nil
 		}
 		_ = acfs.Remove(ctx, clientDir, "/"+generatedMTLSClientCertName)
@@ -858,8 +858,8 @@ func ensureClientCertificateInternal(ctx context.Context, assetsDir, envID, envN
 		return "", "", false, fmt.Errorf("failed to create client certificate: %w", err)
 	}
 
-	if err := writePEMFileInternal(clientCertPath, "CERTIFICATE", certDER, utils.FilePerm); err != nil {
-		return "", "", false, err
+	if writePEMFileErr := writePEMFileInternal(clientCertPath, "CERTIFICATE", certDER, utils.FilePerm); writePEMFileErr != nil {
+		return "", "", false, writePEMFileErr
 	}
 	// P-384 leaves keep the SEC1 framing so agents from before the ML-DSA
 	// migration can still parse keys issued during a rolling upgrade.
@@ -874,8 +874,8 @@ func ensureClientCertificateInternal(ctx context.Context, assetsDir, envID, envN
 	if err != nil {
 		return "", "", false, fmt.Errorf("failed to marshal client private key: %w", err)
 	}
-	if err := writePEMFileInternal(clientKeyPath, keyPEMType, clientKeyDER, 0o600); err != nil {
-		return "", "", false, err
+	if writePEMFileErr2 := writePEMFileInternal(clientKeyPath, keyPEMType, clientKeyDER, 0o600); writePEMFileErr2 != nil {
+		return "", "", false, writePEMFileErr2
 	}
 
 	return clientCertPath, clientKeyPath, true, nil
@@ -940,8 +940,8 @@ func validateGeneratedCAInternal(certPath, keyPath string) error {
 	if !cert.IsCA {
 		return errors.New("generated CA certificate is not a CA")
 	}
-	if err := validateGeneratedKeyTypeInternal(cert.PublicKey, "generated CA certificate"); err != nil {
-		return err
+	if validateGeneratedKeyTypeErr := validateGeneratedKeyTypeInternal(cert.PublicKey, "generated CA certificate"); validateGeneratedKeyTypeErr != nil {
+		return validateGeneratedKeyTypeErr
 	}
 	keyPEM, err := readCAKeyPEMInternal(keyPath)
 	if err != nil {
@@ -951,8 +951,8 @@ func validateGeneratedCAInternal(certPath, keyPath string) error {
 	if err != nil {
 		return err
 	}
-	if err := validateCertificateKeyPairInternal(cert, privateKey, "generated CA"); err != nil {
-		return err
+	if validateCertificateKeyPairErr := validateCertificateKeyPairInternal(cert, privateKey, "generated CA"); validateCertificateKeyPairErr != nil {
+		return validateCertificateKeyPairErr
 	}
 	return nil
 }
@@ -972,15 +972,15 @@ func validateGeneratedClientCertificateInternal(certPath, keyPath, expectedCommo
 	if expectedURISAN != nil && !certificateHasURISANInternal(cert, expectedURISAN) {
 		return fmt.Errorf("generated client certificate URI SAN does not match expected %s", expectedURISAN.String())
 	}
-	if err := validateGeneratedKeyTypeInternal(cert.PublicKey, "generated client certificate"); err != nil {
-		return err
+	if validateGeneratedKeyTypeErr := validateGeneratedKeyTypeInternal(cert.PublicKey, "generated client certificate"); validateGeneratedKeyTypeErr != nil {
+		return validateGeneratedKeyTypeErr
 	}
 	privateKey, err := readPrivateKeyInternal(keyPath)
 	if err != nil {
 		return err
 	}
-	if err := validateCertificateKeyPairInternal(cert, privateKey, "generated client"); err != nil {
-		return err
+	if validateCertificateKeyPairErr := validateCertificateKeyPairInternal(cert, privateKey, "generated client"); validateCertificateKeyPairErr != nil {
+		return validateCertificateKeyPairErr
 	}
 	return nil
 }
@@ -1014,8 +1014,8 @@ func agentMTLSAssetsNeedEnrollmentInternal(certPath, keyPath string, now time.Ti
 	if err != nil {
 		return true, err.Error()
 	}
-	if err := validateCertificateKeyPairInternal(cert, privateKey, "edge mTLS client"); err != nil {
-		return true, err.Error()
+	if validateCertificateKeyPairErr := validateCertificateKeyPairInternal(cert, privateKey, "edge mTLS client"); validateCertificateKeyPairErr != nil {
+		return true, validateCertificateKeyPairErr.Error()
 	}
 	if now.IsZero() {
 		now = time.Now()
@@ -1095,32 +1095,32 @@ func parsePrivateKeyPEMInternal(pemBytes []byte, label string) (crypto.Signer, e
 	return key, nil
 }
 
-func readCertificateInternal(path string) (*x509.Certificate, error) {
+func readCertificateInternal(localPath string) (*x509.Certificate, error) {
 	// os.* rather than acfs: callers pass both generated-asset paths and
 	// user-configured absolute cert paths, so no single confinement root exists.
-	pemBytes, err := os.ReadFile(path)
+	pemBytes, err := os.ReadFile(localPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read certificate %s: %w", path, err)
+		return nil, fmt.Errorf("failed to read certificate %s: %w", localPath, err)
 	}
 	block, _ := pem.Decode(pemBytes)
 	if block == nil {
-		return nil, fmt.Errorf("failed to parse certificate PEM %s", path)
+		return nil, fmt.Errorf("failed to parse certificate PEM %s", localPath)
 	}
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse certificate %s: %w", path, err)
+		return nil, fmt.Errorf("failed to parse certificate %s: %w", localPath, err)
 	}
 	return cert, nil
 }
 
-func readPrivateKeyInternal(path string) (crypto.Signer, error) {
+func readPrivateKeyInternal(localPath string) (crypto.Signer, error) {
 	// os.* rather than acfs: callers pass both generated-asset paths and
 	// user-configured absolute key paths, so no single confinement root exists.
-	pemBytes, err := os.ReadFile(path)
+	pemBytes, err := os.ReadFile(localPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read private key %s: %w", path, err)
+		return nil, fmt.Errorf("failed to read private key %s: %w", localPath, err)
 	}
-	return parsePrivateKeyPEMInternal(pemBytes, path)
+	return parsePrivateKeyPEMInternal(pemBytes, localPath)
 }
 
 func lockEdgeMTLSPathInternal(ctx context.Context, dir, lockName string) (func(), error) {
@@ -1136,15 +1136,15 @@ func lockEdgeMTLSPathInternal(ctx context.Context, dir, lockName string) (func()
 	for {
 		unlock, held := managerCALocks.TryLock(lockPath)
 		if !held {
-			if err := waitForEdgeMTLSLockPollInternal(ctx); err != nil {
-				return nil, err
+			if waitForEdgeMTLSLockPollErr := waitForEdgeMTLSLockPollInternal(ctx); waitForEdgeMTLSLockPollErr != nil {
+				return nil, waitForEdgeMTLSLockPollErr
 			}
 			continue
 		}
 		// os.* rather than acfs, here and in the stale-lock helpers below: acfs
 		// has no exclusive-create (O_EXCL) lockfile API.
-		file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-		if err == nil {
+		file, openFileErr := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if openFileErr == nil {
 			_, _ = fmt.Fprintf(file, "%d %s\n", os.Getpid(), time.Now().UTC().Format(time.RFC3339Nano))
 			_ = file.Close()
 			return func() {
@@ -1152,9 +1152,9 @@ func lockEdgeMTLSPathInternal(ctx context.Context, dir, lockName string) (func()
 				unlock()
 			}, nil
 		}
-		if !os.IsExist(err) {
+		if !os.IsExist(openFileErr) {
 			unlock()
-			return nil, fmt.Errorf("failed to acquire edge mTLS CA lock: %w", err)
+			return nil, fmt.Errorf("failed to acquire edge mTLS CA lock: %w", openFileErr)
 		}
 		if time.Now().After(deadline) {
 			if removeStaleEdgeMTLSLockInternal(lockPath) {
@@ -1169,8 +1169,8 @@ func lockEdgeMTLSPathInternal(ctx context.Context, dir, lockName string) (func()
 			return nil, fmt.Errorf("timed out waiting for edge mTLS CA lock %s", lockPath)
 		}
 		unlock()
-		if err := waitForEdgeMTLSLockPollInternal(ctx); err != nil {
-			return nil, err
+		if waitForEdgeMTLSLockPollErr2 := waitForEdgeMTLSLockPollInternal(ctx); waitForEdgeMTLSLockPollErr2 != nil {
+			return nil, waitForEdgeMTLSLockPollErr2
 		}
 	}
 }
@@ -1243,19 +1243,19 @@ func edgeMTLSLockPIDAliveInternal(pid int) bool {
 	return err == nil || errors.Is(err, syscall.EPERM)
 }
 
-func writePEMFileInternal(path, blockType string, bytes []byte, perm os.FileMode) error {
-	pemBytes := pem.EncodeToMemory(&pem.Block{Type: blockType, Bytes: bytes})
+func writePEMFileInternal(localPath, blockType string, derBytes []byte, perm os.FileMode) error {
+	pemBytes := pem.EncodeToMemory(&pem.Block{Type: blockType, Bytes: derBytes})
 	if pemBytes == nil {
-		return fmt.Errorf("failed to encode PEM file %s", path)
+		return fmt.Errorf("failed to encode PEM file %s", localPath)
 	}
-	return atomic.WriteFile(path, pemBytes, perm)
+	return atomic.WriteFile(localPath, pemBytes, perm)
 }
 
 var caKeyEncryptInternal = libcrypto.Encrypt
 
 // writeCAKeyFileInternal writes the edge CA private key to disk using envelope
 // encryption via libcrypto.
-func writeCAKeyFileInternal(path string, derBytes []byte) error {
+func writeCAKeyFileInternal(localPath string, derBytes []byte) error {
 	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: derBytes})
 	if pemBytes == nil {
 		return errors.New("failed to encode CA private key to PEM")
@@ -1269,36 +1269,36 @@ func writeCAKeyFileInternal(path string, derBytes []byte) error {
 		return errors.New("failed to encrypt edge mTLS CA private key: encrypted payload is empty")
 	}
 
-	return atomic.WriteFile(path, []byte(caKeyEncryptedPrefix+ciphertext), 0o600)
+	return atomic.WriteFile(localPath, []byte(caKeyEncryptedPrefix+ciphertext), 0o600)
 }
 
 // readCAKeyPEMInternal returns the plain PEM bytes of the edge CA private key,
 // reading a libcrypto-envelope-encrypted file written by writeCAKeyFileInternal.
 // os.* rather than acfs: callers pass paths derived from a possibly
 // user-configured assets dir, so no confinement root handle is in scope.
-func readCAKeyPEMInternal(path string) ([]byte, error) {
-	raw, err := os.ReadFile(path)
+func readCAKeyPEMInternal(localPath string) ([]byte, error) {
+	raw, err := os.ReadFile(localPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read CA private key %s: %w", path, err)
+		return nil, fmt.Errorf("failed to read CA private key %s: %w", localPath, err)
 	}
 	trimmed := strings.TrimSpace(string(raw))
 	if !strings.HasPrefix(trimmed, caKeyEncryptedPrefix) {
-		return nil, fmt.Errorf("CA private key %s is not in the expected encrypted envelope format", path)
+		return nil, fmt.Errorf("CA private key %s is not in the expected encrypted envelope format", localPath)
 	}
 	ciphertext := strings.TrimPrefix(trimmed, caKeyEncryptedPrefix)
 	plaintext, err := libcrypto.Decrypt(ciphertext)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt CA private key %s: %w", path, err)
+		return nil, fmt.Errorf("failed to decrypt CA private key %s: %w", localPath, err)
 	}
 	return []byte(plaintext), nil
 }
 
-func fileExistsInternal(path string) bool {
-	if strings.TrimSpace(path) == "" {
+func fileExistsInternal(localPath string) bool {
+	if strings.TrimSpace(localPath) == "" {
 		return false
 	}
 	// os.* rather than acfs: callers probe both generated-asset paths and
 	// user-configured absolute paths, so no single confinement root exists.
-	info, err := os.Stat(path)
+	info, err := os.Stat(localPath)
 	return err == nil && !info.IsDir()
 }

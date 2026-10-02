@@ -72,10 +72,10 @@ func TestNewHumaMiddleware_AcceptsEnvironmentAccessTokenViaAPIKey(t *testing.T) 
 		Path:        "/secure",
 		Security:    []map[string][]string{{"ApiKeyAuth": {}}},
 	}, func(ctx context.Context, _ *secureInput) (*secureOutput, error) {
-		user, ok := common.CurrentUserFromContext(ctx)
+		localUser, ok := common.CurrentUserFromContext(ctx)
 		require.True(t, ok)
-		require.Equal(t, "environment:env-self", user.ID)
-		require.Equal(t, "Self Target", user.Username)
+		require.Equal(t, "environment:env-self", localUser.ID)
+		require.Equal(t, "Self Target", localUser.Username)
 
 		ps, ok := middleware.PermissionsFromContext(ctx)
 		require.True(t, ok)
@@ -85,11 +85,11 @@ func TestNewHumaMiddleware_AcceptsEnvironmentAccessTokenViaAPIKey(t *testing.T) 
 		require.False(t, ps.IsGlobalAdmin())
 
 		resp := &secureOutput{}
-		resp.Body.UserID = user.ID
+		resp.Body.UserID = localUser.ID
 		return resp, nil
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/secure", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/secure", http.NoBody)
 	req.Header.Set("X-API-Key", token)
 	rec := httptest.NewRecorder()
 
@@ -144,16 +144,16 @@ func TestNewHumaMiddleware_UsesBearerWhenLoopbackProxySendsEnvironmentAccessToke
 		CID string `path:"cid"`
 	},
 	) (*secureOutput, error) {
-		user, ok := common.CurrentUserFromContext(ctx)
+		localUser, ok := common.CurrentUserFromContext(ctx)
 		require.True(t, ok)
-		require.Equal(t, "u-loopback", user.ID)
+		require.Equal(t, "u-loopback", localUser.ID)
 
 		resp := &secureOutput{}
-		resp.Body.UserID = user.ID
+		resp.Body.UserID = localUser.ID
 		return resp, nil
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/environments/0/containers/c/start", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/environments/0/containers/c/start", http.NoBody)
 	req.Header.Set("Authorization", "Bearer "+bearerToken)
 	req.Header.Set("X-API-Key", envToken)
 	req.Header.Set("X-Arcane-Agent-Token", envToken)
@@ -191,7 +191,7 @@ func TestNewHumaMiddleware_RejectsApiKeyOnBearerOnlyOperation(t *testing.T) {
 		return &secureOutput{}, nil
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/bearer-only", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/bearer-only", http.NoBody)
 	req.Header.Set("X-API-Key", "arc_whatever-valid-or-not-never-consulted")
 	rec := httptest.NewRecorder()
 
@@ -271,14 +271,14 @@ func TestNewHumaMiddleware_OpportunisticAuthOnPublicRoute(t *testing.T) {
 	cfg := &config.Config{JWTRefreshExpiry: 24 * time.Hour}
 	authSvc := NewAuthService(userSvc, nil, nil, sessionSvc, nil, cfg).WithSigningKey(signingKey)
 
-	_, err := userSvc.CreateUser(context.Background(), &common.User{
+	_, err := userSvc.CreateUser(t.Context(), &common.User{
 		ID:       "u-logout",
 		Username: "logouttest",
 	})
 	require.NoError(t, err)
 
 	exp := time.Now().Add(5 * time.Minute)
-	session, _, err := sessionSvc.CreateSession(context.Background(), "u-logout", exp, authtypes.SessionMeta{})
+	localSession, _, err := sessionSvc.CreateSession(t.Context(), "u-logout", exp, authtypes.SessionMeta{})
 	require.NoError(t, err)
 
 	claims := map[string]any{
@@ -286,7 +286,7 @@ func TestNewHumaMiddleware_OpportunisticAuthOnPublicRoute(t *testing.T) {
 		"sub":      "access",
 		"iat":      time.Now().Unix(),
 		"exp":      exp.Unix(),
-		"sid":      session.ID,
+		"sid":      localSession.ID,
 		"user_id":  "u-logout",
 		"username": "logouttest",
 		"roles":    []string{"user"},
@@ -317,17 +317,17 @@ func TestNewHumaMiddleware_OpportunisticAuthOnPublicRoute(t *testing.T) {
 
 	t.Run("populates session ID when valid token presented", func(t *testing.T) {
 		sawSessionID = ""
-		req := httptest.NewRequest(http.MethodPost, "/api/public", nil)
+		req := httptest.NewRequest(http.MethodPost, "/api/public", http.NoBody)
 		req.AddCookie(&http.Cookie{Name: cookie.InsecureTokenCookieName, Value: token})
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 		require.Equal(t, http.StatusOK, rec.Code)
-		require.Equal(t, session.ID, sawSessionID)
+		require.Equal(t, localSession.ID, sawSessionID)
 	})
 
 	t.Run("succeeds with no token", func(t *testing.T) {
 		sawSessionID = ""
-		req := httptest.NewRequest(http.MethodPost, "/api/public", nil)
+		req := httptest.NewRequest(http.MethodPost, "/api/public", http.NoBody)
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 		require.Equal(t, http.StatusOK, rec.Code)
@@ -336,7 +336,7 @@ func TestNewHumaMiddleware_OpportunisticAuthOnPublicRoute(t *testing.T) {
 
 	t.Run("succeeds with invalid token (does not block)", func(t *testing.T) {
 		sawSessionID = ""
-		req := httptest.NewRequest(http.MethodPost, "/api/public", nil)
+		req := httptest.NewRequest(http.MethodPost, "/api/public", http.NoBody)
 		req.Header.Set("Authorization", "Bearer not-a-valid-token")
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
@@ -360,14 +360,14 @@ func TestNewHumaMiddleware_VersionMismatchIsRecoverable(t *testing.T) {
 	authSvc := NewAuthService(userSvc, nil, nil, sessionSvc, nil, cfg).WithSigningKey(signingKey)
 	authSvc.browserSigningKey = browserSigningKey
 
-	_, err := userSvc.CreateUser(context.Background(), &common.User{
+	_, err := userSvc.CreateUser(t.Context(), &common.User{
 		ID:       "u-ver",
 		Username: "vertest",
 	})
 	require.NoError(t, err)
 
 	exp := time.Now().Add(5 * time.Minute)
-	session, _, err := sessionSvc.CreateSession(context.Background(), "u-ver", exp, authtypes.SessionMeta{})
+	localSession, _, err := sessionSvc.CreateSession(t.Context(), "u-ver", exp, authtypes.SessionMeta{})
 	require.NoError(t, err)
 
 	// An empty appVersion omits the claim, which passes the version check (no pin).
@@ -377,15 +377,15 @@ func TestNewHumaMiddleware_VersionMismatchIsRecoverable(t *testing.T) {
 			Subject(browserTokenSubject).
 			IssuedAt(time.Now()).
 			Expiration(exp).
-			Claim(claimSessionID, session.ID).
+			Claim(claimSessionID, localSession.ID).
 			Claim(claimUserID, "u-ver")
 		if appVersion != "" {
 			builder.Claim(claimAppVersion, appVersion)
 		}
-		token, err := builder.Build()
-		require.NoError(t, err)
-		signed, err := jwt.Sign(token, jwt.WithKey(jwa.HS512(), browserSigningKey))
-		require.NoError(t, err)
+		token, buildErr := builder.Build()
+		require.NoError(t, buildErr)
+		signed, buildErr := jwt.Sign(token, jwt.WithKey(jwa.HS512(), browserSigningKey))
+		require.NoError(t, buildErr)
 		return string(signed)
 	}
 
@@ -408,7 +408,7 @@ func TestNewHumaMiddleware_VersionMismatchIsRecoverable(t *testing.T) {
 	})
 
 	t.Run("version mismatch returns a recoverable 401 without clearing cookies", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/protected", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/protected", http.NoBody)
 		req.AddCookie(&http.Cookie{Name: cookie.InsecureTokenCookieName, Value: mintToken("v0.0.0-stale")})
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
@@ -422,13 +422,13 @@ func TestNewHumaMiddleware_VersionMismatchIsRecoverable(t *testing.T) {
 
 	t.Run("token without a version pin still authenticates", func(t *testing.T) {
 		token := mintToken("")
-		req := httptest.NewRequest(http.MethodGet, "/api/protected", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/protected", http.NoBody)
 		req.AddCookie(&http.Cookie{Name: cookie.InsecureTokenCookieName, Value: token})
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 		require.Equal(t, http.StatusOK, rec.Code)
 
-		req = httptest.NewRequest(http.MethodGet, "/api/protected", nil)
+		req = httptest.NewRequest(http.MethodGet, "/api/protected", http.NoBody)
 		req.Header.Set("Authorization", "Bearer "+token)
 		rec = httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
@@ -458,17 +458,17 @@ func TestNewHumaMiddleware_AgentAuthAppliesForwardedIconCatalog(t *testing.T) {
 		Path:        "/secure-agent-icon-catalog",
 		Security:    []map[string][]string{{"ApiKeyAuth": {}}},
 	}, func(ctx context.Context, _ *secureInput) (*secureOutput, error) {
-		user, ok := common.CurrentUserFromContext(ctx)
+		localUser, ok := common.CurrentUserFromContext(ctx)
 		require.True(t, ok)
-		require.NotNil(t, user.Preferences.IconCatalog)
-		require.Equal(t, "dashboard-icons", *user.Preferences.IconCatalog)
+		require.NotNil(t, localUser.Preferences.IconCatalog)
+		require.Equal(t, "dashboard-icons", *localUser.Preferences.IconCatalog)
 
 		resp := &secureOutput{}
-		resp.Body.UserID = user.ID
+		resp.Body.UserID = localUser.ID
 		return resp, nil
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/secure-agent-icon-catalog", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/secure-agent-icon-catalog", http.NoBody)
 	req.Header.Set(middleware.HeaderAgentToken, agentToken)
 	req.Header.Set(middleware.HeaderIconCatalog, "dashboard-icons")
 	rec := httptest.NewRecorder()
@@ -496,14 +496,14 @@ func setupAuthMiddlewareTestDBInternal(t *testing.T) *database.DB {
 func mintHumaMiddlewareTestTokenInternal(t *testing.T, userSvc *user.UserService, sessionSvc *session.SessionService, signingKey *mldsa.PrivateKey, userID string) string {
 	t.Helper()
 
-	_, err := userSvc.CreateUser(context.Background(), &common.User{
+	_, err := userSvc.CreateUser(t.Context(), &common.User{
 		ID:       userID,
 		Username: userID,
 	})
 	require.NoError(t, err)
 
 	exp := time.Now().Add(5 * time.Minute)
-	session, _, err := sessionSvc.CreateSession(context.Background(), userID, exp, authtypes.SessionMeta{})
+	localSession, _, err := sessionSvc.CreateSession(t.Context(), userID, exp, authtypes.SessionMeta{})
 	require.NoError(t, err)
 
 	claims := map[string]any{
@@ -511,11 +511,15 @@ func mintHumaMiddlewareTestTokenInternal(t *testing.T, userSvc *user.UserService
 		"sub":      "access",
 		"iat":      time.Now().Unix(),
 		"exp":      exp.Unix(),
-		"sid":      session.ID,
+		"sid":      localSession.ID,
 		"user_id":  userID,
 		"username": userID,
 	}
 	return signJWXTokenInternal(t, signingKey, claims)
+}
+
+type staticPermissionResolverInternal struct {
+	ps *authz.PermissionSet
 }
 
 func (r staticPermissionResolverInternal) ResolvePermissions(_ context.Context, _ *common.User) (*authz.PermissionSet, error) {
@@ -524,10 +528,6 @@ func (r staticPermissionResolverInternal) ResolvePermissions(_ context.Context, 
 
 func (r staticPermissionResolverInternal) ResolveApiKeyPermissions(_ context.Context, _ string) (*authz.PermissionSet, error) {
 	return r.ps, nil
-}
-
-type staticPermissionResolverInternal struct {
-	ps *authz.PermissionSet
 }
 
 type testOperationProvider struct {

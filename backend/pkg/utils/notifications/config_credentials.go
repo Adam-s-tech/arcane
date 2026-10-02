@@ -19,8 +19,8 @@ func DecodeConfig[T any](config database.JSON, providerName string) (T, error) {
 	if err != nil {
 		return out, fmt.Errorf("failed to marshal %s config: %w", providerName, err)
 	}
-	if err := json.Unmarshal(configBytes, &out); err != nil {
-		return out, fmt.Errorf("failed to unmarshal %s config: %w", providerName, err)
+	if unmarshalErr := json.Unmarshal(configBytes, &out); unmarshalErr != nil {
+		return out, fmt.Errorf("failed to unmarshal %s config: %w", providerName, unmarshalErr)
 	}
 	return out, nil
 }
@@ -62,8 +62,8 @@ func PrepareSlackConfig(config database.JSON, providerName string, requireToken 
 	if requireToken && slackConfig.Token == "" {
 		return SlackConfig{}, errors.New("slack token not configured")
 	}
-	if err := DecryptStringCredential(&slackConfig.Token); err != nil {
-		return SlackConfig{}, err
+	if decryptStringCredentialErr := DecryptStringCredential(&slackConfig.Token); decryptStringCredentialErr != nil {
+		return SlackConfig{}, decryptStringCredentialErr
 	}
 	return slackConfig, nil
 }
@@ -83,8 +83,8 @@ func PrepareNtfyConfig(config database.JSON, providerName string, requireTopic b
 	if _, ok := config["firebase"]; !ok {
 		ntfyConfig.Firebase = true
 	}
-	if err := DecryptStringCredential(&ntfyConfig.Password); err != nil {
-		return NtfyConfig{}, err
+	if decryptStringCredentialErr := DecryptStringCredential(&ntfyConfig.Password); decryptStringCredentialErr != nil {
+		return NtfyConfig{}, decryptStringCredentialErr
 	}
 	return ntfyConfig, nil
 }
@@ -95,8 +95,8 @@ func PreparePushoverConfig(config database.JSON, providerName string) (PushoverC
 	if err != nil {
 		return PushoverConfig{}, err
 	}
-	if err := DecryptStringCredential(&pushoverConfig.Token); err != nil {
-		return PushoverConfig{}, err
+	if decryptStringCredentialErr := DecryptStringCredential(&pushoverConfig.Token); decryptStringCredentialErr != nil {
+		return PushoverConfig{}, decryptStringCredentialErr
 	}
 	return pushoverConfig, nil
 }
@@ -107,8 +107,8 @@ func PrepareGotifyConfig(config database.JSON, providerName string) (GotifyConfi
 	if err != nil {
 		return GotifyConfig{}, err
 	}
-	if err := DecryptStringCredential(&gotifyConfig.Token); err != nil {
-		return GotifyConfig{}, err
+	if decryptStringCredentialErr := DecryptStringCredential(&gotifyConfig.Token); decryptStringCredentialErr != nil {
+		return GotifyConfig{}, decryptStringCredentialErr
 	}
 	return gotifyConfig, nil
 }
@@ -119,8 +119,8 @@ func PrepareMatrixConfig(config database.JSON) (MatrixConfig, error) {
 	if err != nil {
 		return MatrixConfig{}, err
 	}
-	if err := DecryptStringCredential(&matrixConfig.Password); err != nil {
-		return MatrixConfig{}, err
+	if decryptStringCredentialErr := DecryptStringCredential(&matrixConfig.Password); decryptStringCredentialErr != nil {
+		return MatrixConfig{}, decryptStringCredentialErr
 	}
 	return matrixConfig, nil
 }

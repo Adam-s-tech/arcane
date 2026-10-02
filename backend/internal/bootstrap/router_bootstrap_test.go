@@ -37,7 +37,7 @@ func TestNewEchoInternal_DecodesPathParams(t *testing.T) {
 	// RFC 3986 §6.2.2.2: these are all the same URI and must resolve identically.
 	for _, segment := range []string{"sha256:abc", "sha256%3Aabc", "%73ha256:abc"} {
 		got = ""
-		req := httptest.NewRequest(http.MethodGet, "/api/environments/0/images/"+segment, nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/environments/0/images/"+segment, http.NoBody)
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 
@@ -57,7 +57,7 @@ func TestSecureCookieContextMiddleware_TrustGating(t *testing.T) {
 	runRequest := func(t *testing.T, nets []*net.IPNet, remoteAddr, forwardedProto string) bool {
 		t.Helper()
 		e := echo.New()
-		req := httptest.NewRequest("GET", "/", nil)
+		req := httptest.NewRequest("GET", "/", http.NoBody)
 		req.RemoteAddr = remoteAddr
 		if forwardedProto != "" {
 			req.Header.Set("X-Forwarded-Proto", forwardedProto)
@@ -71,9 +71,9 @@ func TestSecureCookieContextMiddleware_TrustGating(t *testing.T) {
 			return nil
 		})
 		{
-			err := handler(c)
-			require.NoError(t, err,
-				"handler: %v", err)
+			handlerErr := handler(c)
+			require.NoError(t, handlerErr,
+				"handler: %v", handlerErr)
 		}
 
 		return observed

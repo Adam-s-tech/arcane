@@ -1,14 +1,13 @@
 package kv
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestKVService_ListByPrefix_EscapesLikeWildcards(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc := setupKVServiceInternal(t)
 
 	entries := map[string]string{

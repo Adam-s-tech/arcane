@@ -114,14 +114,21 @@ func (r *TunnelRegistry) Register(envID string, tunnel *AgentTunnel) {
 		slog.Error("Failed to register edge agent tunnel", "environment_id", envID, "error", "tunnel is required")
 		return
 	}
-	previous, err := r.tunnels.ApplyTyped(context.Background(), "register edge tunnel", func(tunnels map[string]*AgentTunnel) (*AgentTunnel, bool, error) {
-		if r.stopped.Load() {
-			return nil, false, errors.New("edge tunnel registry stopped")
-		}
-		previous := tunnels[envID]
-		tunnels[envID] = tunnel
-		return previous, true, nil
-	})
+	//nolint:forbidigo // Legacy registry operation has no caller context and only mutates in-memory state.
+	previous,
+		err := r.tunnels.ApplyTyped(context.Background(),
+		"register edge tunnel",
+		func(tunnels map[string]*AgentTunnel) (*AgentTunnel,
+			bool,
+			error,
+		) {
+			if r.stopped.Load() {
+				return nil, false, errors.New("edge tunnel registry stopped")
+			}
+			previous := tunnels[envID]
+			tunnels[envID] = tunnel
+			return previous, true, nil
+		})
 	if err != nil {
 		slog.Error("Failed to register edge agent tunnel", "environment_id", envID, "error", err)
 		return
@@ -191,7 +198,7 @@ func (r *TunnelRegistry) RegisterSession(ctx context.Context, tunnel *AgentTunne
 
 // Unregister removes a tunnel from the registry
 func (r *TunnelRegistry) Unregister(envID string) {
-	tunnel, removed, err := r.tunnels.Remove(context.Background(), "unregister edge tunnel", envID)
+	tunnel, removed, err := r.tunnels.Remove(context.Background(), "unregister edge tunnel", envID) //nolint:forbidigo // Legacy registry operation has no caller context and only mutates in-memory state.
 	if err != nil {
 		slog.Error("Failed to unregister edge agent tunnel", "environment_id", envID, "error", err)
 		return

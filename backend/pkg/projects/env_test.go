@@ -1,7 +1,6 @@
 package projects
 
 import (
-	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -36,10 +35,10 @@ func TestLoadEnvironment(t *testing.T) {
 
 	t.Run("AutoInjectEnv=false", func(t *testing.T) {
 		loader := NewEnvLoader(projectsDir, workdir, false)
-		ctx := context.Background()
+		ctx := t.Context()
 
-		envMap, injectionVars, err := loader.LoadEnvironment(ctx)
-		require.NoError(t, err)
+		envMap, injectionVars, loadEnvironmentErr := loader.LoadEnvironment(ctx)
+		require.NoError(t, loadEnvironmentErr)
 
 		// Verify envMap (should contain all vars, project overrides global)
 		assert.Equal(t, "global_value", envMap["GLOBAL_VAR"])
@@ -56,10 +55,10 @@ func TestLoadEnvironment(t *testing.T) {
 
 	t.Run("AutoInjectEnv=true", func(t *testing.T) {
 		loader := NewEnvLoader(projectsDir, workdir, true)
-		ctx := context.Background()
+		ctx := t.Context()
 
-		envMap, injectionVars, err := loader.LoadEnvironment(ctx)
-		require.NoError(t, err)
+		envMap, injectionVars, loadEnvironmentErr := loader.LoadEnvironment(ctx)
+		require.NoError(t, loadEnvironmentErr)
 
 		// Verify envMap
 		assert.Equal(t, "global_value", envMap["GLOBAL_VAR"])
@@ -82,7 +81,7 @@ func TestLoadEnvironment_DoesNotCreateMissingGlobalEnvFile(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(workdir, ".env"), []byte("PROJECT_VAR=project_value\n"), utils.FilePerm))
 
 	loader := NewEnvLoader(projectsDir, workdir, false)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	envMap, injectionVars, err := loader.LoadEnvironment(ctx)
 	require.NoError(t, err)
@@ -381,35 +380,35 @@ func TestParseComposeEnvOptions(t *testing.T) {
 
 		_, err = ParseComposeEnvOptions(dir, EnvMap{"COMPOSE_ENV_FILES": "../outside.env"})
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, common.ErrComposeFileEnvInvalid))
+		assert.ErrorIs(t, err, common.ErrComposeFileEnvInvalid)
 	})
 
 	t.Run("absolute entry rejected", func(t *testing.T) {
 		t.Parallel()
 		_, err := ParseComposeEnvOptions(dir, EnvMap{"COMPOSE_FILE": filepath.Join(dir, "base.yml")})
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, common.ErrComposeFileEnvInvalid))
+		assert.ErrorIs(t, err, common.ErrComposeFileEnvInvalid)
 	})
 
 	t.Run("escaping entry rejected", func(t *testing.T) {
 		t.Parallel()
 		_, err := ParseComposeEnvOptions(dir, EnvMap{"COMPOSE_FILE": "../base.yml"})
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, common.ErrComposeFileEnvInvalid))
+		assert.ErrorIs(t, err, common.ErrComposeFileEnvInvalid)
 	})
 
 	t.Run("non-root first entry rejected", func(t *testing.T) {
 		t.Parallel()
 		_, err := ParseComposeEnvOptions(dir, EnvMap{"COMPOSE_FILE": "sub/extra.yml:base.yml"})
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, common.ErrComposeFileEnvInvalid))
+		assert.ErrorIs(t, err, common.ErrComposeFileEnvInvalid)
 	})
 
 	t.Run("missing entry rejected", func(t *testing.T) {
 		t.Parallel()
 		_, err := ParseComposeEnvOptions(dir, EnvMap{"COMPOSE_FILE": "base.yml:sub/missing.yml"})
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, common.ErrComposeFileEnvInvalid))
+		assert.ErrorIs(t, err, common.ErrComposeFileEnvInvalid)
 	})
 }
 

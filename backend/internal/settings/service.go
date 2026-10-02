@@ -315,7 +315,16 @@ func DefaultSettingsConfig() *Settings {
 
 func (s *SettingsService) loadDatabaseSettingsInternal(ctx context.Context, db *database.DB) (*Settings, error) {
 	if config.Load().UIConfigurationDisabled || config.Load().AgentMode {
-		slog.DebugContext(ctx, "loadDatabaseSettingsInternal: using env path", "UIConfigurationDisabled", config.Load().UIConfigurationDisabled, "AgentMode", config.Load().AgentMode, "Environment", config.Load().Environment)
+		slog.DebugContext(
+			ctx,
+			"loadDatabaseSettingsInternal: using env path",
+			"UIConfigurationDisabled",
+			config.Load().UIConfigurationDisabled,
+			"AgentMode",
+			config.Load().AgentMode,
+			"Environment",
+			config.Load().Environment,
+		)
 		return s.loadDatabaseConfigFromEnv(ctx, db)
 	}
 
@@ -378,7 +387,7 @@ func (s *SettingsService) loadDatabaseConfigFromEnv(ctx context.Context, db *dat
 		// debug: log each env name checked and whether a value exists
 		if val, ok, _ := utils.LookupEnvOrFile(envVarName); ok {
 			mask := "<empty>"
-			if len(val) > 0 {
+			if val != "" {
 				mask = fmt.Sprintf("%d chars", len(val))
 			}
 			slog.DebugContext(ctx, "loadDatabaseConfigFromEnv: env override found", "key", key, "env", envVarName, "valueMasked", mask)
@@ -641,7 +650,16 @@ func (s *SettingsService) updateSettingsInternal(ctx context.Context, updates se
 		}
 		for _, field := range required {
 			if strings.TrimSpace(field.value) == "" {
-				return settingsUpdateResultInternal{}, common.Classify(common.ErrValidation, &base.FieldError{Field: field.key, Err: fmt.Errorf("Enabling OIDC requires %s", field.key)}) //nolint:staticcheck // Preserve the existing error message.
+				return settingsUpdateResultInternal{}, common.Classify(
+					common.ErrValidation,
+					&base.FieldError{
+						Field: field.key,
+						Err: fmt.Errorf(
+							"enabling OIDC requires %s",
+							field.key,
+						),
+					},
+				)
 			}
 		}
 	}
@@ -668,12 +686,12 @@ func (s *SettingsService) updateSettingsInternal(ctx context.Context, updates se
 		valuesToUpdate = append(valuesToUpdate, SettingVariable{Key: "trivyServerToken", Value: *updates.TrivyServerToken})
 	}
 
-	if err := s.persistSettings(ctx, valuesToUpdate); err != nil {
-		return settingsUpdateResultInternal{}, err
+	if persistSettingsErr := s.persistSettings(ctx, valuesToUpdate); persistSettingsErr != nil {
+		return settingsUpdateResultInternal{}, persistSettingsErr
 	}
 
-	if err := s.refreshSettingsCacheInternal(context.WithoutCancel(ctx)); err != nil {
-		return settingsUpdateResultInternal{}, err
+	if refreshSettingsCacheErr := s.refreshSettingsCacheInternal(context.WithoutCancel(ctx)); refreshSettingsCacheErr != nil {
+		return settingsUpdateResultInternal{}, refreshSettingsCacheErr
 	}
 	settingsCfg := s.GetSettingsConfig()
 	changes := make([]libarcane.SettingUpdate, 0, len(valuesToUpdate))
@@ -805,14 +823,14 @@ func (s *SettingsService) EnsureDefaultSettings(ctx context.Context) error {
 
 			switch {
 			case errors.Is(err, gorm.ErrRecordNotFound):
-				if err := tx.Create(&defaultSetting).Error; err != nil {
-					return fmt.Errorf("failed to create default setting %s: %w", defaultSetting.Key, err)
+				if createDefaultSettingErr := tx.Create(&defaultSetting).Error; createDefaultSettingErr != nil {
+					return fmt.Errorf("failed to create default setting %s: %w", defaultSetting.Key, createDefaultSettingErr)
 				}
 			case err != nil:
 				return fmt.Errorf("failed to check for existing setting %s: %w", defaultSetting.Key, err)
 			case slices.Contains(retiredSettingValuesInternal[defaultSetting.Key], existing.Value):
-				if err := tx.Model(&SettingVariable{}).Where("key = ?", defaultSetting.Key).Update("value", defaultSetting.Value).Error; err != nil {
-					return fmt.Errorf("failed to replace retired default for setting %s: %w", defaultSetting.Key, err)
+				if replaceDefaultSettingErr := tx.Model(&SettingVariable{}).Where("key = ?", defaultSetting.Key).Update("value", defaultSetting.Value).Error; replaceDefaultSettingErr != nil {
+					return fmt.Errorf("failed to replace retired default for setting %s: %w", defaultSetting.Key, replaceDefaultSettingErr)
 				}
 			}
 		}
@@ -922,16 +940,16 @@ func (s *SettingsService) upsertEnvSetting(ctx context.Context, tx *gorm.DB, key
 	switch {
 	case errors.Is(err, gorm.ErrRecordNotFound):
 		newVar := SettingVariable{Key: key, Value: envVal}
-		if err := tx.Create(&newVar).Error; err != nil {
-			return fmt.Errorf("persist env setting %s: %w", key, err)
+		if createEnvSettingErr := tx.Create(&newVar).Error; createEnvSettingErr != nil {
+			return fmt.Errorf("persist env setting %s: %w", key, createEnvSettingErr)
 		}
 		slog.DebugContext(ctx, "Created setting from environment", "key", key)
 	case err != nil:
 		return fmt.Errorf("check setting %s: %w", key, err)
 	default:
 		if existing.Value != envVal {
-			if err := tx.Model(&existing).Update("value", envVal).Error; err != nil {
-				return fmt.Errorf("update env setting %s: %w", key, err)
+			if updateEnvSettingErr := tx.Model(&existing).Update("value", envVal).Error; updateEnvSettingErr != nil {
+				return fmt.Errorf("update env setting %s: %w", key, updateEnvSettingErr)
 			}
 			slog.DebugContext(ctx, "Updated setting from environment", "key", key)
 		}
@@ -1152,15 +1170,15 @@ func (s *SettingsService) ensureEncryptedKeyInternal(ctx context.Context, keyNam
 		}
 
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			if err := tx.Create(&SettingVariable{Key: keyName, Value: encrypted}).Error; err != nil {
-				return fmt.Errorf("failed to persist signing key: %w", err)
+			if createSigningKeyErr := tx.Create(&SettingVariable{Key: keyName, Value: encrypted}).Error; createSigningKeyErr != nil {
+				return fmt.Errorf("failed to persist signing key: %w", createSigningKeyErr)
 			}
 			return nil
 		}
-		if err := tx.Model(&SettingVariable{}).
+		if updateSigningKeyErr := tx.Model(&SettingVariable{}).
 			Where("key = ?", keyName).
-			Update("value", encrypted).Error; err != nil {
-			return fmt.Errorf("failed to update signing key: %w", err)
+			Update("value", encrypted).Error; updateSigningKeyErr != nil {
+			return fmt.Errorf("failed to update signing key: %w", updateSigningKeyErr)
 		}
 		return nil
 	})
@@ -1206,11 +1224,11 @@ func (s *SettingsService) NormalizeProjectsDirectory(ctx context.Context, projec
 		return fmt.Errorf("failed to resolve relative path to absolute: %w", absErr)
 	}
 	slog.InfoContext(ctx, "Normalizing projects directory from relative to absolute path", "from", value, "to", absPath, "base", cwd)
-	if err := s.updateSettingValueNoRefreshInternal(ctx, "projectsDirectory", absPath); err != nil {
-		return fmt.Errorf("failed to update projectsDirectory: %w", err)
+	if updateSettingValueNoRefreshErr := s.updateSettingValueNoRefreshInternal(ctx, "projectsDirectory", absPath); updateSettingValueNoRefreshErr != nil {
+		return fmt.Errorf("failed to update projectsDirectory: %w", updateSettingValueNoRefreshErr)
 	}
-	if err := s.refreshSettingsCacheInternal(context.WithoutCancel(ctx)); err != nil {
-		return err
+	if refreshSettingsCacheErr := s.refreshSettingsCacheInternal(context.WithoutCancel(ctx)); refreshSettingsCacheErr != nil {
+		return refreshSettingsCacheErr
 	}
 	slog.InfoContext(ctx, "Successfully normalized projects directory")
 	s.publishSettingsChangesInternal([]libarcane.SettingUpdate{{Key: "projectsDirectory", Value: absPath}})
@@ -1253,11 +1271,11 @@ func (s *SettingsService) NormalizeBuildsDirectory(ctx context.Context) error {
 		return fmt.Errorf("failed to resolve relative path to absolute: %w", absErr)
 	}
 	slog.InfoContext(ctx, "Normalizing builds directory from relative to absolute path", "from", value, "to", absPath, "base", cwd)
-	if err := s.updateSettingValueNoRefreshInternal(ctx, buildsKey, absPath); err != nil {
-		return fmt.Errorf("failed to update buildsDirectory: %w", err)
+	if updateSettingValueNoRefreshErr := s.updateSettingValueNoRefreshInternal(ctx, buildsKey, absPath); updateSettingValueNoRefreshErr != nil {
+		return fmt.Errorf("failed to update buildsDirectory: %w", updateSettingValueNoRefreshErr)
 	}
-	if err := s.refreshSettingsCacheInternal(context.WithoutCancel(ctx)); err != nil {
-		return err
+	if refreshSettingsCacheErr := s.refreshSettingsCacheInternal(context.WithoutCancel(ctx)); refreshSettingsCacheErr != nil {
+		return refreshSettingsCacheErr
 	}
 	slog.InfoContext(ctx, "Successfully normalized builds directory")
 	s.publishSettingsChangesInternal([]libarcane.SettingUpdate{{Key: buildsKey, Value: absPath}})

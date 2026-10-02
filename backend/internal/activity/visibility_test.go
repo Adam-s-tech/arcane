@@ -18,8 +18,27 @@ func TestJobActivityVisibilityFiltersBeforePagination(t *testing.T) {
 	db := setupActivityServiceTestDBInternal(t)
 	service := NewActivityService(db, nil)
 	for _, environmentID := range []string{"0", "private"} {
-		require.NoError(t, db.Create(&Activity{ID: environmentID + "-job", EnvironmentID: environmentID, Type: activitytypes.TypeJobRun, Status: activitytypes.StatusSuccess, StartedAt: time.Now(), Metadata: database.JSON{"environmentId": environmentID}}).Error)
-		require.NoError(t, db.Create(&Activity{ID: environmentID + "-pull", EnvironmentID: environmentID, Type: activitytypes.TypeImagePull, Status: activitytypes.StatusSuccess, StartedAt: time.Now()}).Error)
+		require.NoError(
+			t,
+			db.Create(&Activity{
+				ID:            environmentID + "-job",
+				EnvironmentID: environmentID,
+				Type:          activitytypes.TypeJobRun,
+				Status:        activitytypes.StatusSuccess,
+				StartedAt:     time.Now(),
+				Metadata:      database.JSON{"environmentId": environmentID},
+			}).Error,
+		)
+		require.NoError(
+			t,
+			db.Create(&Activity{
+				ID:            environmentID + "-pull",
+				EnvironmentID: environmentID,
+				Type:          activitytypes.TypeImagePull,
+				Status:        activitytypes.StatusSuccess,
+				StartedAt:     time.Now(),
+			}).Error,
+		)
 	}
 	permissions := authz.NewPermissionSet()
 	permissions.PerEnv["0"] = map[string]struct{}{authz.PermActivitiesRead: {}}
@@ -40,7 +59,17 @@ func TestJobActivityVisibilityFiltersBeforePagination(t *testing.T) {
 	require.EqualValues(t, 1, response.TotalItems)
 	require.Len(t, activities, 1)
 	require.Equal(t, "private-pull", activities[0].ID)
-	require.False(t, canReadJobActivityInternal(ctx, activitytypes.Activity{Type: activitytypes.TypeJobRun, EnvironmentID: "private", Metadata: map[string]any{"environmentId": "allowed"}}))
+	require.False(
+		t,
+		canReadJobActivityInternal(
+			ctx,
+			activitytypes.Activity{
+				Type:          activitytypes.TypeJobRun,
+				EnvironmentID: "private",
+				Metadata:      map[string]any{"environmentId": "allowed"},
+			},
+		),
+	)
 	require.True(t, canReadJobActivityInternal(ctx, activitytypes.Activity{Type: activitytypes.TypeJobRun, Metadata: map[string]any{"environmentId": "allowed"}}))
 	privileged := context.WithValue(t.Context(), middleware.ContextKeyUserPermissions, authz.SudoPermissionSet())
 	activities, response, err = service.ListActivitiesPaginated(privileged, "private", pagination.QueryParams{Limit: 10})

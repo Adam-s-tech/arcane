@@ -76,8 +76,8 @@ func EnsureTemplateDir(ctx context.Context, templatesDir, base string) (dir, com
 	if err != nil {
 		return "", "", "", fmt.Errorf("template directory is outside the templates root: %w", err)
 	}
-	if err := acfs.MkdirAll(ctx, baseDir, dirLogical, utils.DirPerm); err != nil {
-		return "", "", "", fmt.Errorf("failed to create template directory: %w", err)
+	if mkdirAllErr := acfs.MkdirAll(ctx, baseDir, dirLogical, utils.DirPerm); mkdirAllErr != nil {
+		return "", "", "", fmt.Errorf("failed to create template directory: %w", mkdirAllErr)
 	}
 	composePath = filepath.Join(dir, "compose.yaml")
 	envPath = filepath.Join(dir, ".env.example")
@@ -156,24 +156,24 @@ func EnsureDefaultTemplates(ctx context.Context, configuredTemplatesDir string) 
 		{"/.env.template", "env", getDefaultEnvTemplate(), retiredDefaultEnvTemplate},
 	}
 	for _, tmpl := range defaults {
-		exists, err := acfs.Exists(ctx, templatesDir, tmpl.path)
-		if err != nil {
-			return fmt.Errorf("write default %s template: %w", tmpl.name, err)
+		exists, existsErr := acfs.Exists(ctx, templatesDir, tmpl.path)
+		if existsErr != nil {
+			return fmt.Errorf("write default %s template: %w", tmpl.name, existsErr)
 		}
 		if exists {
 			if tmpl.retired == "" {
 				continue
 			}
-			current, err := acfs.ReadFile(ctx, templatesDir, tmpl.path)
-			if err != nil {
-				return fmt.Errorf("read default %s template: %w", tmpl.name, err)
+			current, readFileErr := acfs.ReadFile(ctx, templatesDir, tmpl.path)
+			if readFileErr != nil {
+				return fmt.Errorf("read default %s template: %w", tmpl.name, readFileErr)
 			}
 			if string(current) != tmpl.retired {
 				continue
 			}
 		}
-		if err := acfs.Write(ctx, templatesDir, tmpl.path, []byte(tmpl.content), acfs.WriteOptions{Mode: utils.FilePerm}); err != nil {
-			return fmt.Errorf("write default %s template: %w", tmpl.name, err)
+		if writeErr := acfs.Write(ctx, templatesDir, tmpl.path, []byte(tmpl.content), acfs.WriteOptions{Mode: utils.FilePerm}); writeErr != nil {
+			return fmt.Errorf("write default %s template: %w", tmpl.name, writeErr)
 		}
 	}
 
@@ -294,8 +294,8 @@ func ParseComposeServices(ctx context.Context, composeContent string) []string {
 
 	// Create a dummy .env file to prevent env file errors
 	envPath := filepath.Join(tmpDir, ".env")
-	if err := WriteFileWithPerm(envPath, "", utils.FilePerm); err != nil {
-		slog.WarnContext(ctx, "Failed to create dummy env file", "error", err)
+	if writeFileWithPermErr := WriteFileWithPerm(envPath, "", utils.FilePerm); writeFileWithPermErr != nil {
+		slog.WarnContext(ctx, "Failed to create dummy env file", "error", writeFileWithPermErr)
 	}
 
 	// Parse using compose-go
@@ -338,8 +338,8 @@ func ResolveTemplateIconURL(ctx context.Context, composeContent, envContent stri
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	envPath := filepath.Join(tmpDir, ".env")
-	if err := WriteFileWithPerm(envPath, envContent, utils.FilePerm); err != nil {
-		slog.WarnContext(ctx, "failed to create temp env file for template icon parsing", "error", err)
+	if writeFileWithPermErr := WriteFileWithPerm(envPath, envContent, utils.FilePerm); writeFileWithPermErr != nil {
+		slog.WarnContext(ctx, "failed to create temp env file for template icon parsing", "error", writeFileWithPermErr)
 	}
 
 	envMap := make(composetypes.Mapping)

@@ -38,11 +38,31 @@ func (s *SystemBackupService) StartBackup(ctx context.Context, user common.User,
 		return nil, err
 	}
 	activityID, workCtx := activitylib.StartHandlerActivity(ctx, s.activityService, "0", activitytypes.TypeResourceAction, "system_backup", "arcane", "Arcane", &user,
-		"Creating system backup", "Creating Arcane system backup", database.JSON{"action": "create_system_backup", "backupId": prepared.run.ID, "destination": prepared.run.Destination, "s3DestinationId": prepared.run.S3DestinationID, "policyId": prepared.run.PolicyID}, false)
+		"Creating system backup", "Creating Arcane system backup", database.JSON{
+			"action":          "create_system_backup",
+			"backupId":        prepared.run.ID,
+			"destination":     prepared.run.Destination,
+			"s3DestinationId": prepared.run.S3DestinationID,
+			"policyId":        prepared.run.PolicyID,
+		}, false)
 	finish := func(runErr error) {
 		defer lease.Release(ctx)
 		if runErr != nil {
-			if saveErr := s.db.WithContext(context.WithoutCancel(workCtx)).Model(&SystemBackupRun{}).Where("id = ?", prepared.run.ID).Updates(map[string]any{"status": SystemBackupStatusFailed, "error": runErr.Error()}).Error; saveErr != nil {
+			if saveErr := s.db.WithContext(
+				context.WithoutCancel(
+					workCtx,
+				),
+			).Model(
+				&SystemBackupRun{},
+			).Where(
+				"id = ?",
+				prepared.run.ID,
+			).Updates(
+				map[string]any{
+					"status": SystemBackupStatusFailed,
+					"error":  runErr.Error(),
+				},
+			).Error; saveErr != nil {
 				runErr = errors.Join(runErr, fmt.Errorf("save backup failure: %w", saveErr))
 			}
 		}
@@ -61,9 +81,33 @@ func (s *SystemBackupService) StartBackup(ctx context.Context, user common.User,
 		finish(keyErr)
 		return nil, keyErr
 	}
-	payload, err := json.Marshal(manualSystemBackupInternal{Checkpoint: systemBackupRecoveryInternal{BackupID: prepared.run.ID, LocalEnabled: prepared.localEnabled, S3Enabled: prepared.s3Enabled}, EncryptedKey: encryptedKey, ActivityID: activityID, UserID: user.ID})
+	payload, err := json.Marshal(
+		manualSystemBackupInternal{
+			Checkpoint: systemBackupRecoveryInternal{
+				BackupID:     prepared.run.ID,
+				LocalEnabled: prepared.localEnabled,
+				S3Enabled:    prepared.s3Enabled,
+			},
+			EncryptedKey: encryptedKey,
+			ActivityID:   activityID,
+			UserID:       user.ID,
+		},
+	)
 	if err == nil {
-		err = s.engine.SubmitDurableRun(workCtx, backuptypes.DurableRunCommand{Kind: "system", RunID: prepared.run.ID, ActivityID: activityID, Payload: payload, UserID: user.ID, EnvironmentID: "0", Permission: authz.PermSystemBackupsManage, RequestedWithKey: keyID}, lease)
+		err = s.engine.SubmitDurableRun(
+			workCtx,
+			backuptypes.DurableRunCommand{
+				Kind:             "system",
+				RunID:            prepared.run.ID,
+				ActivityID:       activityID,
+				Payload:          payload,
+				UserID:           user.ID,
+				EnvironmentID:    "0",
+				Permission:       authz.PermSystemBackupsManage,
+				RequestedWithKey: keyID,
+			},
+			lease,
+		)
 	}
 	if err != nil {
 		finish(err)
@@ -95,7 +139,18 @@ func (s *SystemBackupService) StartSystemVolumeBackups(ctx context.Context, user
 		names[i] = candidate.Name
 	}
 	activityID, workCtx := activitylib.StartHandlerActivity(ctx, s.activityService, "0", activitytypes.TypeResourceAction, "system_backup", "volumes", "Volumes", &user,
-		"Backing up volumes", "Creating system-managed volume backups", database.JSON{"action": "run_system_volume_backups", "policyId": policy.ID, "volumeNames": names, "matched": len(candidates), "succeeded": 0, "failed": 0, "skipped": 0, "failures": []backuptypes.SystemVolumeBackupFailure{}}, false)
+		"Backing up volumes", "Creating system-managed volume backups", database.JSON{
+			"action":      "run_system_volume_backups",
+			"policyId":    policy.ID,
+			"volumeNames": names,
+			"matched": len(
+				candidates,
+			),
+			"succeeded": 0,
+			"failed":    0,
+			"skipped":   0,
+			"failures":  []backuptypes.SystemVolumeBackupFailure{},
+		}, false)
 	if activityID == "" {
 		lease.Release(ctx)
 		return nil, errors.New("failed to create system-managed volume backup activity")
@@ -107,7 +162,20 @@ func (s *SystemBackupService) StartSystemVolumeBackups(ctx context.Context, user
 	keyID, _ := ctx.Value(middleware.ContextKeyApiKeyID).(string)
 	payload, err := json.Marshal(manualSystemVolumesInternal{Policy: policy, ManualPolicy: manualPolicy, Candidates: candidates, ActivityID: activityID, UserID: user.ID})
 	if err == nil {
-		err = s.engine.SubmitDurableRun(workCtx, backuptypes.DurableRunCommand{Kind: "system-volumes", RunID: activityID, ActivityID: activityID, Payload: payload, UserID: user.ID, EnvironmentID: "0", Permission: authz.PermSystemBackupsManage, RequestedWithKey: keyID}, lease)
+		err = s.engine.SubmitDurableRun(
+			workCtx,
+			backuptypes.DurableRunCommand{
+				Kind:             "system-volumes",
+				RunID:            activityID,
+				ActivityID:       activityID,
+				Payload:          payload,
+				UserID:           user.ID,
+				EnvironmentID:    "0",
+				Permission:       authz.PermSystemBackupsManage,
+				RequestedWithKey: keyID,
+			},
+			lease,
+		)
 	}
 
 	if err != nil {
@@ -117,7 +185,14 @@ func (s *SystemBackupService) StartSystemVolumeBackups(ctx context.Context, user
 	return &backuptypes.BackupRunAccepted{ActivityID: activityID, Status: "running"}, nil
 }
 
-func (s *SystemBackupService) updateSystemVolumeProgressInternal(ctx context.Context, activityID, policyID string, candidates []backuptypes.SystemVolumeBackupOption, result *backuptypes.SystemVolumeBackupRunResult) {
+func (
+	s *SystemBackupService,
+) updateSystemVolumeProgressInternal(
+	ctx context.Context,
+	activityID, policyID string,
+	candidates []backuptypes.SystemVolumeBackupOption,
+	result *backuptypes.SystemVolumeBackupRunResult,
+) {
 	if activityID == "" {
 		return
 	}
@@ -163,13 +238,13 @@ func (s *SystemBackupService) reconcileBackupInternal(ctx context.Context, previ
 			if !admitted {
 				return outcome, nil
 			}
-			defer lease.Release(ctx)
+			defer lease.Release(ctx) //nolint:gocritic // The matching recovery target always returns before the loop advances.
 			key := ""
 			if len(suppliedKeys) > 0 {
 				key = suppliedKeys[0]
 			}
-			if err := s.resumeBackupInternal(ctx, previous, &run, checkpoint, key); err != nil {
-				return outcome, err
+			if resumeBackupErr := s.resumeBackupInternal(ctx, previous, &run, checkpoint, key); resumeBackupErr != nil {
+				return outcome, resumeBackupErr
 			}
 		}
 		target.Status = schedulertypes.Succeeded
@@ -204,7 +279,21 @@ func systemBackupRemoteAttemptedInternal(previous schedulertypes.Run, runID stri
 	return false
 }
 
-func (s *SystemBackupService) observeBackupSnapshotsInternal(ctx context.Context, dockerClient *client.Client, previous schedulertypes.Run, run *SystemBackupRun, checkpoint systemBackupRecoveryInternal, key string) (backup.Snapshot, backup.Repository, backup.Repository, error) {
+func (
+	s *SystemBackupService,
+) observeBackupSnapshotsInternal(
+	ctx context.Context,
+	dockerClient *client.Client,
+	previous schedulertypes.Run,
+	run *SystemBackupRun,
+	checkpoint systemBackupRecoveryInternal,
+	key string,
+) (
+	backup.Snapshot,
+	backup.Repository,
+	backup.Repository,
+	error,
+) {
 	var staged backup.Snapshot
 	var remote backup.Repository
 	local, err := s.localRepositoryInternal(ctx, dockerClient, false)
@@ -230,9 +319,9 @@ func (s *SystemBackupService) observeBackupSnapshotsInternal(ctx context.Context
 	}
 	attempted := (stageAttempted && staged.ID == "") || systemBackupRemoteAttemptedInternal(previous, run.ID)
 	if attempted || run.RemoteSnapshotID != "" {
-		snapshot, found, err := s.engine.FindRunSnapshot(ctx, dockerClient, remote, key, run.ID, run.RemoteSnapshotID)
-		if err != nil {
-			return staged, local, remote, err
+		snapshot, found, findRunSnapshotErr := s.engine.FindRunSnapshot(ctx, dockerClient, remote, key, run.ID, run.RemoteSnapshotID)
+		if findRunSnapshotErr != nil {
+			return staged, local, remote, findRunSnapshotErr
 		}
 		if found {
 			run.RemoteSnapshotID = snapshot.ID
@@ -244,7 +333,17 @@ func (s *SystemBackupService) observeBackupSnapshotsInternal(ctx context.Context
 	return staged, local, remote, nil
 }
 
-func (s *SystemBackupService) finishRecoveredDestinationsInternal(ctx context.Context, dockerClient *client.Client, run *SystemBackupRun, checkpoint systemBackupRecoveryInternal, key string, staged backup.Snapshot, local, remote backup.Repository) error {
+func (
+	s *SystemBackupService,
+) finishRecoveredDestinationsInternal(
+	ctx context.Context,
+	dockerClient *client.Client,
+	run *SystemBackupRun,
+	checkpoint systemBackupRecoveryInternal,
+	key string,
+	staged backup.Snapshot,
+	local, remote backup.Repository,
+) error {
 	if checkpoint.LocalEnabled && staged.ID == "" && run.RemoteSnapshotID != "" {
 		var err error
 		staged, err = s.engine.Replicate(ctx, dockerClient, remote, run.RemoteSnapshotID, local, key, "arcane-system-recovery", backup.RunSnapshotTag(run.ID))
@@ -288,8 +387,8 @@ func (s *SystemBackupService) resumeBackupInternal(ctx context.Context, previous
 	if err != nil {
 		return err
 	}
-	if err := s.finishRecoveredDestinationsInternal(ctx, dockerClient, run, checkpoint, key, staged, local, remote); err != nil {
-		return err
+	if finishRecoveredDestinationsErr := s.finishRecoveredDestinationsInternal(ctx, dockerClient, run, checkpoint, key, staged, local, remote); finishRecoveredDestinationsErr != nil {
+		return finishRecoveredDestinationsErr
 	}
 	run.Status, run.Error = SystemBackupStatusSucceeded, ""
 	return s.db.WithContext(ctx).Save(run).Error
@@ -312,8 +411,8 @@ type manualSystemVolumesInternal struct {
 
 func (s *SystemBackupService) executeDurableBackupInternal(ctx context.Context, runID string, payload []byte, interrupted bool) (err error) {
 	var command manualSystemBackupInternal
-	if err = json.Unmarshal(payload, &command); err != nil {
-		return err
+	if decodeErr := json.Unmarshal(payload, &command); decodeErr != nil {
+		return decodeErr
 	}
 	defer func() {
 		if ctx.Err() == nil {
@@ -325,8 +424,8 @@ func (s *SystemBackupService) executeDurableBackupInternal(ctx context.Context, 
 		}
 	}()
 	var run SystemBackupRun
-	if err = s.db.WithContext(ctx).Where("id = ?", command.Checkpoint.BackupID).First(&run).Error; err != nil {
-		return err
+	if loadBackupErr := s.db.WithContext(ctx).Where("id = ?", command.Checkpoint.BackupID).First(&run).Error; loadBackupErr != nil {
+		return loadBackupErr
 	}
 	if run.Status == SystemBackupStatusSucceeded {
 		return nil
@@ -358,8 +457,17 @@ func (s *SystemBackupService) executeDurableBackupInternal(ctx context.Context, 
 	if err != nil {
 		return err
 	}
-	if err = jobcontext.Progress(ctx, schedulertypes.TargetOutcome{ResourceType: "system_backup", ID: runID, Status: schedulertypes.Running, RecoveryData: checkpoint, ActivityID: command.ActivityID}); err != nil {
-		return err
+	if progressErr := jobcontext.Progress(
+		ctx,
+		schedulertypes.TargetOutcome{
+			ResourceType: "system_backup",
+			ID:           runID,
+			Status:       schedulertypes.Running,
+			RecoveryData: checkpoint,
+			ActivityID:   command.ActivityID,
+		},
+	); progressErr != nil {
+		return progressErr
 	}
 	_, err = s.executeBackupInternal(ctx, &preparedSystemBackupInternal{run: &run, recoveryKey: key, localEnabled: command.Checkpoint.LocalEnabled, s3Enabled: command.Checkpoint.S3Enabled})
 	return err
@@ -367,8 +475,8 @@ func (s *SystemBackupService) executeDurableBackupInternal(ctx context.Context, 
 
 func (s *SystemBackupService) executeDurableVolumeBackupsInternal(ctx context.Context, runID string, payload []byte, interrupted bool) (err error) {
 	var command manualSystemVolumesInternal
-	if err = json.Unmarshal(payload, &command); err != nil {
-		return err
+	if decodeErr := json.Unmarshal(payload, &command); decodeErr != nil {
+		return decodeErr
 	}
 	defer func() {
 		if ctx.Err() == nil {

@@ -74,29 +74,29 @@ type ProjectService struct {
 
 // EnsureGitOpsProjectLinked persists the bidirectional GitOps/project binding
 // and refreshes the compose-name cache as one domain operation.
-func (s *ProjectService) EnsureGitOpsProjectLinked(ctx context.Context, sync *GitOpsSync, project *Project) error {
-	if sync == nil || project == nil {
+func (s *ProjectService) EnsureGitOpsProjectLinked(ctx context.Context, gitOpsSync *GitOpsSync, project *Project) error {
+	if gitOpsSync == nil || project == nil {
 		return nil
 	}
-	if project.GitOpsManagedBy != nil && *project.GitOpsManagedBy != "" && *project.GitOpsManagedBy != sync.ID {
+	if project.GitOpsManagedBy != nil && *project.GitOpsManagedBy != "" && *project.GitOpsManagedBy != gitOpsSync.ID {
 		return fmt.Errorf("project %s is already managed by a different GitOps sync", project.ID)
 	}
 
 	cacheBinding := func() {
 		s.composeNames.putInternal(projects.NormalizeProjectName(project.Name), project.ID)
 	}
-	if sync.ProjectID != nil && *sync.ProjectID == project.ID && project.GitOpsManagedBy != nil && *project.GitOpsManagedBy == sync.ID {
+	if gitOpsSync.ProjectID != nil && *gitOpsSync.ProjectID == project.ID && project.GitOpsManagedBy != nil && *project.GitOpsManagedBy == gitOpsSync.ID {
 		cacheBinding()
 		return nil
 	}
 
 	updatesSync := map[string]any{}
 	updatesProject := map[string]any{}
-	if sync.ProjectID == nil || *sync.ProjectID != project.ID {
+	if gitOpsSync.ProjectID == nil || *gitOpsSync.ProjectID != project.ID {
 		updatesSync["project_id"] = project.ID
 	}
-	if project.GitOpsManagedBy == nil || *project.GitOpsManagedBy != sync.ID {
-		updatesProject["gitops_managed_by"] = sync.ID
+	if project.GitOpsManagedBy == nil || *project.GitOpsManagedBy != gitOpsSync.ID {
+		updatesProject["gitops_managed_by"] = gitOpsSync.ID
 	}
 	if len(updatesSync) == 0 && len(updatesProject) == 0 {
 		cacheBinding()
@@ -105,13 +105,13 @@ func (s *ProjectService) EnsureGitOpsProjectLinked(ctx context.Context, sync *Gi
 
 	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if len(updatesSync) > 0 {
-			if err := tx.Model(&GitOpsSync{}).Where("id = ?", sync.ID).Updates(updatesSync).Error; err != nil {
-				return fmt.Errorf("failed to relink GitOps sync %s: %w", sync.ID, err)
+			if err := tx.Model(&GitOpsSync{}).Where("id = ?", gitOpsSync.ID).Updates(updatesSync).Error; err != nil {
+				return fmt.Errorf("failed to relink GitOps sync %s: %w", gitOpsSync.ID, err)
 			}
 		}
 		if len(updatesProject) > 0 {
 			if err := tx.Model(&Project{}).Where("id = ?", project.ID).Updates(updatesProject).Error; err != nil {
-				return fmt.Errorf("failed to relink project %s to GitOps sync %s: %w", project.ID, sync.ID, err)
+				return fmt.Errorf("failed to relink project %s to GitOps sync %s: %w", project.ID, gitOpsSync.ID, err)
 			}
 		}
 		return nil
@@ -119,8 +119,8 @@ func (s *ProjectService) EnsureGitOpsProjectLinked(ctx context.Context, sync *Gi
 		return err
 	}
 
-	sync.ProjectID = &project.ID
-	project.GitOpsManagedBy = &sync.ID
+	gitOpsSync.ProjectID = &project.ID
+	project.GitOpsManagedBy = &gitOpsSync.ID
 	cacheBinding()
 	return nil
 }
@@ -152,18 +152,18 @@ func (s *ProjectService) ValidateComposeDirectory(ctx context.Context, projectNa
 
 // CreateGitOpsManagedProject persists a promoted GitOps project, links both
 // records, updates the compose-name cache, and records the creation event.
-func (s *ProjectService) CreateGitOpsManagedProject(ctx context.Context, sync *GitOpsSync, project *Project, actor common.User, logEventOptions ...bool) error {
-	if sync == nil || project == nil {
+func (s *ProjectService) CreateGitOpsManagedProject(ctx context.Context, gitOpsSync *GitOpsSync, project *Project, actor common.User, logEventOptions ...bool) error {
+	if gitOpsSync == nil || project == nil {
 		return errors.New("GitOps sync and project are required")
 	}
 	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(project).Error; err != nil {
 			return fmt.Errorf("failed to create project: %w", err)
 		}
-		if err := tx.Model(&GitOpsSync{}).Where("id = ?", sync.ID).Update("project_id", project.ID).Error; err != nil {
+		if err := tx.Model(&GitOpsSync{}).Where("id = ?", gitOpsSync.ID).Update("project_id", project.ID).Error; err != nil {
 			return fmt.Errorf("failed to update sync with project ID: %w", err)
 		}
-		if err := tx.Model(&Project{}).Where("id = ?", project.ID).Update("gitops_managed_by", sync.ID).Error; err != nil {
+		if err := tx.Model(&Project{}).Where("id = ?", project.ID).Update("gitops_managed_by", gitOpsSync.ID).Error; err != nil {
 			return fmt.Errorf("failed to mark project as GitOps-managed: %w", err)
 		}
 		return nil
@@ -171,8 +171,8 @@ func (s *ProjectService) CreateGitOpsManagedProject(ctx context.Context, sync *G
 		return err
 	}
 
-	sync.ProjectID = &project.ID
-	project.GitOpsManagedBy = &sync.ID
+	gitOpsSync.ProjectID = &project.ID
+	project.GitOpsManagedBy = &gitOpsSync.ID
 	s.composeNames.putInternal(projects.NormalizeProjectName(project.Name), project.ID)
 	if err := s.reconcileComposeTagsForProjectInternal(ctx, project); err != nil {
 		slog.WarnContext(ctx, "failed to reconcile Compose project tags during GitOps project creation", "projectID", project.ID, "error", err)
@@ -304,7 +304,24 @@ func (env *projectMetadataEnvInternal) composeFileInternal(projectID string, res
 	return path, nil
 }
 
-func NewProjectService(db *database.DB, settingsService *settings.SettingsService, eventService *event.EventService, imageService *image.ImageService, dockerService *docker.DockerClientService, buildService buildServiceInternal, lifecycleService *LifecycleService, containerRegistryService *registry.ContainerRegistryService, cfg *config.Config, kvService *kv.KVService, registryCredentialsProvider func(context.Context) ([]containerregistry.Credential, error)) *ProjectService {
+func NewProjectService(
+	db *database.DB,
+	settingsService *settings.SettingsService,
+	eventService *event.EventService,
+	imageService *image.ImageService,
+	dockerService *docker.DockerClientService,
+	buildService buildServiceInternal,
+	lifecycleService *LifecycleService,
+	containerRegistryService *registry.ContainerRegistryService,
+	cfg *config.Config,
+	kvService *kv.KVService,
+	registryCredentialsProvider func(
+		context.Context,
+	) (
+		[]containerregistry.Credential,
+		error,
+	),
+) *ProjectService {
 	return &ProjectService{
 		KVService:                   kvService,
 		RegistryCredentialsProvider: registryCredentialsProvider,
@@ -454,8 +471,8 @@ func (s *ProjectService) GetProjectByComposeName(ctx context.Context, name strin
 		return cachedProject, nil
 	}
 
-	if err := s.rebuildComposeNameCacheInternal(ctx); err != nil {
-		return nil, fmt.Errorf("failed to list projects by compose name: %w", err)
+	if rebuildComposeNameCacheErr := s.rebuildComposeNameCacheInternal(ctx); rebuildComposeNameCacheErr != nil {
+		return nil, fmt.Errorf("failed to list projects by compose name: %w", rebuildComposeNameCacheErr)
 	}
 
 	if cachedProject, found, cacheErr := s.lookupProjectByCachedComposeNameInternal(ctx, normalized); cacheErr != nil {
@@ -736,7 +753,26 @@ func (s *ProjectService) loadComposeProjectForProjectInternal(ctx context.Contex
 
 	pathMapper := s.projectPathMapperInternal(ctx)
 
-	composeProject, loadErr := projects.LoadComposeProject(ctx, composeFileFullPath, projects.NormalizeProjectName(proj.Name), projectsDirectory, kit.ParseOrDefault(cfg.AutoInjectEnv.Value, false, strconv.ParseBool), pathMapper, nil, nil, false, nil, services, prepare)
+	composeProject, loadErr := projects.LoadComposeProject(
+		ctx,
+		composeFileFullPath,
+		projects.NormalizeProjectName(
+			proj.Name,
+		),
+		projectsDirectory,
+		kit.ParseOrDefault(
+			cfg.AutoInjectEnv.Value,
+			false,
+			strconv.ParseBool,
+		),
+		pathMapper,
+		nil,
+		nil,
+		false,
+		nil,
+		services,
+		prepare,
+	)
 	if loadErr != nil {
 		return nil, "", loadErr
 	}
@@ -759,7 +795,28 @@ func (s *ProjectService) getCachedComposeProjectInternal(ctx context.Context, pr
 	if err != nil {
 		return nil, err
 	}
-	return projects.LoadCachedComposeProject(ctx, s.parsedCompose, proj.ID, proj.Path, composePath, projects.NormalizeProjectName(proj.Name), getProjectsDirectoryOrDefaultInternal(ctx, cfg), kit.ParseOrDefault(cfg.AutoInjectEnv.Value, false, strconv.ParseBool), s.projectPathMapperInternal(ctx))
+	return projects.LoadCachedComposeProject(
+		ctx,
+		s.parsedCompose,
+		proj.ID,
+		proj.Path,
+		composePath,
+		projects.NormalizeProjectName(
+			proj.Name,
+		),
+		getProjectsDirectoryOrDefaultInternal(
+			ctx,
+			cfg,
+		),
+		kit.ParseOrDefault(
+			cfg.AutoInjectEnv.Value,
+			false,
+			strconv.ParseBool,
+		),
+		s.projectPathMapperInternal(
+			ctx,
+		),
+	)
 }
 
 func (s *ProjectService) refreshComposeProjectNameInternal(ctx context.Context, proj *Project) {
@@ -795,11 +852,11 @@ func (s *ProjectService) refreshComposeProjectNameInternal(ctx context.Context, 
 	}
 
 	updates["updated_at"] = time.Now()
-	if err := s.db.WithContext(ctx).
+	if persistComposeNameErr := s.db.WithContext(ctx).
 		Model(&Project{}).
 		Where("id = ?", proj.ID).
-		Updates(updates).Error; err != nil {
-		slog.WarnContext(ctx, "failed to persist refreshed compose project name", "projectID", proj.ID, "error", err)
+		Updates(updates).Error; persistComposeNameErr != nil {
+		slog.WarnContext(ctx, "failed to persist refreshed compose project name", "projectID", proj.ID, "error", persistComposeNameErr)
 		return
 	}
 

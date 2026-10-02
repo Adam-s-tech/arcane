@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -82,7 +80,7 @@ func TestRunHealthCommandInternal(t *testing.T) {
 
 	cfg := &config.Config{Port: port}
 	{
-		err := runHealthCommandInternal(context.Background(), cfg, 2*time.Second)
+		err := runHealthCommandInternal(t.Context(), cfg, 2*time.Second)
 		require.NoError(t, err,
 			"health command failed: %v", err)
 	}
@@ -104,7 +102,7 @@ func TestRunHealthCommandInternalNon2xx(t *testing.T) {
 	}
 
 	cfg := &config.Config{Port: port}
-	err := runHealthCommandInternal(context.Background(), cfg, 2*time.Second)
+	err := runHealthCommandInternal(t.Context(), cfg, 2*time.Second)
 
 	require.Error(t, err,
 		"expected non-2xx response to fail")
@@ -114,14 +112,14 @@ func TestRunHealthCommandInternalNon2xx(t *testing.T) {
 }
 
 func TestRunHealthCommandInternalConnectionFailure(t *testing.T) {
-	err := runHealthCommandInternal(context.Background(), &config.Config{Port: "1"}, 200*time.Millisecond)
+	err := runHealthCommandInternal(t.Context(), &config.Config{Port: "1"}, 200*time.Millisecond)
 
 	require.Error(t, err,
 		"expected connection failure")
 }
 
 func TestRunHealthCommandInternalDefaultTimeoutFallback(t *testing.T) {
-	err := runHealthCommandInternal(context.Background(), &config.Config{Port: "1"}, 0)
+	err := runHealthCommandInternal(t.Context(), &config.Config{Port: "1"}, 0)
 
 	require.Error(t, err,
 		"expected connection failure")
@@ -131,6 +129,6 @@ func TestRunHealthCommandInternalDefaultTimeoutFallback(t *testing.T) {
 
 	// Ensure timeout path is exercised by checking the string formatting path.
 
-	require.Contains(t, fmt.Sprint(defaultHealthTimeout), "5s",
+	require.Contains(t, defaultHealthTimeout.String(), "5s",
 		"unexpected default timeout: %s", defaultHealthTimeout)
 }

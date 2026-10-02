@@ -32,7 +32,25 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/runs"
 )
 
-func newJobScheduler(appCtx context.Context, lc fx.Lifecycle, cfg *config.Config, runtime *runs.Coordinator, _ *runs.Admission, imageUpdateWatcher *scheduler.ImageUpdateWatcher, analytics *scheduler.AnalyticsJob, systemUpgrade *system.SystemUpgradeService, jobService *job.JobService, backupEngine *backup.Engine, updaterService *updater.UpdaterService, volumes *volume.VolumeService, systemBackups *systembackup.SystemBackupService, gitopsSync *gitops.GitOpsSyncService) (schedulertypes.JobScheduler, error) {
+func newJobScheduler(
+	appCtx context.Context,
+	lc fx.Lifecycle,
+	cfg *config.Config,
+	runtime *runs.Coordinator,
+	_ *runs.Admission,
+	imageUpdateWatcher *scheduler.ImageUpdateWatcher,
+	analytics *scheduler.AnalyticsJob,
+	systemUpgrade *system.SystemUpgradeService,
+	jobService *job.JobService,
+	backupEngine *backup.Engine,
+	updaterService *updater.UpdaterService,
+	volumes *volume.VolumeService,
+	systemBackups *systembackup.SystemBackupService,
+	gitopsSync *gitops.GitOpsSyncService,
+) (
+	schedulertypes.JobScheduler,
+	error,
+) {
 	schedulerCtx, cancelScheduler := context.WithCancel(appCtx)
 	jobScheduler, err := scheduler.NewJobScheduler(schedulerCtx, jobService.Coordinator(), cfg.GetLocation())
 	if err != nil {
@@ -51,11 +69,11 @@ func newJobScheduler(appCtx context.Context, lc fx.Lifecycle, cfg *config.Config
 				}
 			}()
 			slog.InfoContext(appCtx, "Starting scheduler")
-			if err := jobService.Coordinator().Start(ctx, schedulerCtx); err != nil {
-				return fmt.Errorf("initialize scheduler: %w", err)
+			if startErr := jobService.Coordinator().Start(ctx, schedulerCtx); startErr != nil {
+				return fmt.Errorf("initialize scheduler: %w", startErr)
 			}
-			if err := reconcileCoordinatorStartupInternal(ctx, jobService, backupEngine, updaterService, volumes, systemBackups, gitopsSync); err != nil {
-				return fmt.Errorf("reconcile scheduler startup: %w", err)
+			if reconcileCoordinatorStartupErr := reconcileCoordinatorStartupInternal(ctx, jobService, backupEngine, updaterService, volumes, systemBackups, gitopsSync); reconcileCoordinatorStartupErr != nil {
+				return fmt.Errorf("reconcile scheduler startup: %w", reconcileCoordinatorStartupErr)
 			}
 			if gitopsSync != nil {
 				gitopsSync.RegisterAutoSyncJobsOnStartup(ctx)
@@ -63,12 +81,12 @@ func newJobScheduler(appCtx context.Context, lc fx.Lifecycle, cfg *config.Config
 			}
 			if imageUpdateWatcher != nil {
 				imageUpdateWatcher.SetCoordinator(jobService.Coordinator())
-				if err := jobScheduler.RegisterBusWatcher(imageUpdateWatcher, true); err != nil {
-					return err
+				if registerBusWatcherErr := jobScheduler.RegisterBusWatcher(imageUpdateWatcher, true); registerBusWatcherErr != nil {
+					return registerBusWatcherErr
 				}
 			}
-			if err := jobScheduler.StartScheduler(ctx); err != nil {
-				return fmt.Errorf("start scheduler: %w", err)
+			if startSchedulerErr := jobScheduler.StartScheduler(ctx); startSchedulerErr != nil {
+				return fmt.Errorf("start scheduler: %w", startSchedulerErr)
 			}
 			jobService.Coordinator().Activate()
 			if backupEngine != nil {
@@ -79,16 +97,16 @@ func newJobScheduler(appCtx context.Context, lc fx.Lifecycle, cfg *config.Config
 				}()
 			}
 			if analytics != nil {
-				if _, err := jobService.Coordinator().Submit(ctx, schedulertypes.Request{JobID: analytics.Name(), EnvironmentID: "0", Trigger: "startup"}); err != nil {
-					return fmt.Errorf("submit startup job %q: %w", analytics.Name(), err)
+				if _, submitErr := jobService.Coordinator().Submit(ctx, schedulertypes.Request{JobID: analytics.Name(), EnvironmentID: "0", Trigger: "startup"}); submitErr != nil {
+					return fmt.Errorf("submit startup job %q: %w", analytics.Name(), submitErr)
 				}
 			}
 			if !cfg.AgentMode && systemUpgrade != nil {
 				resumeDone = make(chan struct{})
 				go func() { defer close(resumeDone); systemUpgrade.ResumeUpdateAllOnStartup(schedulerCtx) }()
 			}
-			if err := ctx.Err(); err != nil {
-				return fmt.Errorf("complete scheduler startup: %w", err)
+			if startupCancellationErr := ctx.Err(); startupCancellationErr != nil {
+				return fmt.Errorf("complete scheduler startup: %w", startupCancellationErr)
 			}
 			started = true
 			return nil
@@ -120,24 +138,32 @@ func stopJobSchedulerInternal(ctx context.Context, cancelScheduler context.Cance
 	return nil
 }
 
-func reconcileCoordinatorStartupInternal(ctx context.Context, jobs *job.JobService, engine *backup.Engine, updates *updater.UpdaterService, volumes *volume.VolumeService, systemBackups *systembackup.SystemBackupService, syncService *gitops.GitOpsSyncService) error {
+func reconcileCoordinatorStartupInternal(
+	ctx context.Context,
+	jobs *job.JobService,
+	engine *backup.Engine,
+	updates *updater.UpdaterService,
+	volumes *volume.VolumeService,
+	systemBackups *systembackup.SystemBackupService,
+	syncService *gitops.GitOpsSyncService,
+) error {
 	activities, backups, err := startupProtectionInternal(ctx, jobs, engine, updates)
 	if err != nil {
 		return err
 	}
 	if volumes != nil {
-		if err := volumes.ReconcileInterruptedBackups(ctx, backups...); err != nil {
-			return err
+		if reconcileInterruptedBackupsErr := volumes.ReconcileInterruptedBackups(ctx, backups...); reconcileInterruptedBackupsErr != nil {
+			return reconcileInterruptedBackupsErr
 		}
 	}
 	if systemBackups != nil {
-		if err := systemBackups.ReconcileInterruptedBackups(ctx, backups...); err != nil {
-			return err
+		if reconcileSystemBackupsErr := systemBackups.ReconcileInterruptedBackups(ctx, backups...); reconcileSystemBackupsErr != nil {
+			return reconcileSystemBackupsErr
 		}
 	}
 	if syncService != nil {
-		if err := syncService.ReconcileInterruptedBackupsOnStartup(ctx, backups...); err != nil {
-			return err
+		if reconcileInterruptedBackupsOnStartupErr := syncService.ReconcileInterruptedBackupsOnStartup(ctx, backups...); reconcileInterruptedBackupsOnStartupErr != nil {
+			return reconcileInterruptedBackupsOnStartupErr
 		}
 	}
 	return jobs.ReconcileStartupActivities(ctx, activities...)
@@ -156,23 +182,23 @@ func startupProtectionInternal(ctx context.Context, jobs *job.JobService, engine
 	activities := []string{}
 	backups := make([]string, 0, len(scheduled))
 	if engine != nil {
-		var err error
-		activities, err = engine.ActiveActivityIDs(ctx)
-		if err != nil {
-			return nil, nil, err
+		var loadActivityIDsErr error
+		activities, loadActivityIDsErr = engine.ActiveActivityIDs(ctx)
+		if loadActivityIDsErr != nil {
+			return nil, nil, loadActivityIDsErr
 		}
-		backups, err = engine.ActiveRunIDs(ctx)
-		if err != nil {
-			return nil, nil, err
+		backups, loadActivityIDsErr = engine.ActiveRunIDs(ctx)
+		if loadActivityIDsErr != nil {
+			return nil, nil, loadActivityIDsErr
 		}
-		if err := engine.ReconcileDispatches(ctx); err != nil {
-			return nil, nil, err
+		if reconcileDispatchesErr := engine.ReconcileDispatches(ctx); reconcileDispatchesErr != nil {
+			return nil, nil, reconcileDispatchesErr
 		}
 	}
 	if updates != nil {
-		ids, err := updates.ActiveUpdateActivityIDs(ctx)
-		if err != nil {
-			return nil, nil, err
+		ids, activeUpdateActivityIDsErr := updates.ActiveUpdateActivityIDs(ctx)
+		if activeUpdateActivityIDsErr != nil {
+			return nil, nil, activeUpdateActivityIDsErr
 		}
 		activities = append(activities, ids...)
 	}
@@ -556,8 +582,8 @@ func setupTimeoutSettingsSubscriptionInternal(params settingsSubscriptionsParams
 }
 
 // syncTimeoutSettingsToAgentsInternal syncs timeout settings to all connected remote environments
-func syncTimeoutSettingsToAgentsInternal(ctx context.Context, environment timeoutSettingsEnvironmentInternal, timeoutSettings []libarcane.SettingUpdate) {
-	envs, err := environment.ListRemoteEnvironments(ctx)
+func syncTimeoutSettingsToAgentsInternal(ctx context.Context, localEnvironment timeoutSettingsEnvironmentInternal, timeoutSettings []libarcane.SettingUpdate) {
+	envs, err := localEnvironment.ListRemoteEnvironments(ctx)
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to list remote environments for timeout sync", "error", err)
 		return
@@ -583,9 +609,9 @@ func syncTimeoutSettingsToAgentsInternal(ctx context.Context, environment timeou
 	slog.InfoContext(ctx, "Syncing environment settings to remote environments", "count", len(envs), "keys", keys)
 
 	for _, env := range envs {
-		responseBody, statusCode, err := environment.ProxyRequest(ctx, env.ID, http.MethodPut, "/api/environments/0/settings", body)
-		if err != nil {
-			slog.WarnContext(ctx, "Failed to sync timeout settings to environment", "environmentID", env.ID, "environmentName", env.Name, "error", err)
+		responseBody, statusCode, proxyRequestErr := localEnvironment.ProxyRequest(ctx, env.ID, http.MethodPut, "/api/environments/0/settings", body)
+		if proxyRequestErr != nil {
+			slog.WarnContext(ctx, "Failed to sync timeout settings to environment", "environmentID", env.ID, "environmentName", env.Name, "error", proxyRequestErr)
 			continue
 		}
 		if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {

@@ -40,9 +40,9 @@ func TestContainersListJSONContract(t *testing.T) {
 
 	var got map[string]any
 	{
-		err := json.Unmarshal([]byte(strings.TrimSpace(outBuf)), &got)
-		require.NoError(t, err,
-			"json parse failed: %v\noutput=%s", err, outBuf)
+		unmarshalErr := json.Unmarshal([]byte(strings.TrimSpace(outBuf)), &got)
+		require.NoError(t, unmarshalErr,
+			"json parse failed: %v\noutput=%s", unmarshalErr, outBuf)
 	}
 
 	for _, key := range []string{"success", "data", "pagination"} {

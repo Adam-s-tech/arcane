@@ -1,7 +1,6 @@
 package imagepatch
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -56,7 +55,7 @@ func TestResolvePatchedRef(t *testing.T) {
 }
 
 func TestListPatchTargets_ExcludesUntaggedImages(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	dsn := fmt.Sprintf("file:image-patch-test-%d?mode=memory&cache=shared", time.Now().UnixNano())
 	gdb, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	require.NoError(t, err)

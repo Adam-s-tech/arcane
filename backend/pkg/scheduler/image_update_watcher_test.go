@@ -184,7 +184,12 @@ func (b *lockedBufferInternal) stringInternal() string {
 	return b.String()
 }
 
-func newImageUpdateWatcherForTestInternal(t *testing.T, scanner imageUpdateScannerInternal, settings pollingSettingReaderInternal, eventBus *bus.DockerEventBus, backfiller projectImageRefsBackfillerInternal) *ImageUpdateWatcher {
+func newImageUpdateWatcherForTestInternal(t *testing.T,
+	scanner imageUpdateScannerInternal,
+	settings pollingSettingReaderInternal,
+	eventBus *bus.DockerEventBus,
+	backfiller projectImageRefsBackfillerInternal,
+) *ImageUpdateWatcher {
 	t.Helper()
 	if backfiller == nil {
 		backfiller = &projectImageRefsBackfillerFakeInternal{}
@@ -215,9 +220,9 @@ func newImageUpdateWatcherForTestInternal(t *testing.T, scanner imageUpdateScann
 	return watcher
 }
 
-func startImageUpdateWatcherForTestInternal(t *testing.T, watcher *ImageUpdateWatcher) (context.CancelFunc, <-chan error) {
+func startImageUpdateWatcherForTestInternal(t *testing.T, watcher *ImageUpdateWatcher) {
 	t.Helper()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- watcher.Start(ctx)
@@ -226,7 +231,6 @@ func startImageUpdateWatcherForTestInternal(t *testing.T, watcher *ImageUpdateWa
 		cancel()
 		require.NoError(t, <-errCh)
 	})
-	return cancel, errCh
 }
 
 func TestImageUpdateWatcher_StartScansAtStartupAndCoalescesAllImageEvents(t *testing.T) {
@@ -355,12 +359,12 @@ func TestImageUpdateWatcher_RunNowReturnsInProgressErrorDuringActiveScan(t *test
 	startImageUpdateWatcherForTestInternal(t, watcher)
 	require.Equal(t, 1, <-scanner.startedCh)
 
-	require.ErrorIs(t, watcher.RunNow(context.Background()), common.ErrImageScanInProgress)
+	require.ErrorIs(t, watcher.RunNow(t.Context()), common.ErrImageScanInProgress)
 	require.Equal(t, 1, scanner.countInternal())
 
 	close(releaseCh)
 	require.Eventually(t, func() bool {
-		return watcher.RunNow(context.Background()) == nil
+		return watcher.RunNow(t.Context()) == nil
 	}, time.Second, time.Millisecond)
 	require.Equal(t, 2, scanner.countInternal())
 	require.Equal(t, 1, scanner.maxActiveInternal())
@@ -374,10 +378,10 @@ func TestImageUpdateWatcher_RunNowReturnsCompletedResultInternal(t *testing.T) {
 
 	require.Eventually(t, func() bool { return scanner.countInternal() == 1 }, time.Second, time.Millisecond)
 	require.Eventually(t, func() bool {
-		return watcher.RunNow(context.Background()) == nil
+		return watcher.RunNow(t.Context()) == nil
 	}, time.Second, time.Millisecond)
 	for range 10 {
-		require.NoError(t, watcher.RunNow(context.Background()))
+		require.NoError(t, watcher.RunNow(t.Context()))
 	}
 }
 
@@ -391,7 +395,7 @@ func TestImageUpdateWatcher_RunNowReturnsContainedScanPanicInternal(t *testing.T
 		return scanner.countInternal() == 1 && watcher.triggerGeneration.Load() == watcher.acknowledgedGeneration.Load()
 	}, time.Second, time.Millisecond)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
 	require.ErrorContains(t, watcher.RunNow(ctx), "image update scan worker panicked")
 	require.Equal(t, 2, scanner.countInternal())
@@ -416,7 +420,7 @@ func TestImageUpdateWatcher_TriggeredScanRetriesAfterManualScanFinishes(t *testi
 	manualErrCh := make(chan error, 1)
 	go func() {
 		for {
-			err := watcher.RunNow(context.Background())
+			err := watcher.RunNow(t.Context())
 			if errors.Is(err, common.ErrImageScanInProgress) {
 				time.Sleep(time.Millisecond)
 				continue
@@ -551,7 +555,7 @@ func TestImageUpdateWatcher_CancellationStopsBackfillWithoutScanning(t *testing.
 	scanner := &imageUpdateScannerFakeInternal{}
 	settings := &pollingSettingReaderFakeInternal{enabled: true}
 	watcher := newImageUpdateWatcherForTestInternal(t, scanner, settings, bus.NewDockerEventBus(), backfiller)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	errCh := make(chan error, 1)
 	go func() { errCh <- watcher.Start(ctx) }()
 
@@ -577,8 +581,8 @@ func TestImageUpdateWatcher_ScheduledPollTriggersScanWithoutEvents(t *testing.T)
 
 	require.Eventually(t, func() bool { return scanner.countInternal() == 1 }, time.Second, 5*time.Millisecond)
 	require.Eventually(t, func() bool {
-		record, err := watcher.coordinator.ScheduleState(t.Context(), watcher.Name())
-		return err == nil && record.Schedule == settings.schedule && !record.NextRun.IsZero()
+		record, scheduleStateErr := watcher.coordinator.ScheduleState(t.Context(), watcher.Name())
+		return scheduleStateErr == nil && record.Schedule == settings.schedule && !record.NextRun.IsZero()
 	}, time.Second, 5*time.Millisecond)
 	require.NoError(t, jobScheduler.StartScheduler(t.Context()))
 	record, err := watcher.coordinator.ScheduleState(t.Context(), watcher.Name())
@@ -587,8 +591,8 @@ func TestImageUpdateWatcher_ScheduledPollTriggersScanWithoutEvents(t *testing.T)
 	require.False(t, record.NextRun.IsZero())
 	require.Eventually(t, func() bool { return scanner.countInternal() >= 3 }, 5*time.Second, 10*time.Millisecond)
 	require.Eventually(t, func() bool {
-		history, err := watcher.coordinator.List(t.Context(), "0", watcher.Name(), 1, 10)
-		if err != nil {
+		history, listErr := watcher.coordinator.List(t.Context(), "0", watcher.Name(), 1, 10)
+		if listErr != nil {
 			return false
 		}
 		for _, run := range history.Runs {
@@ -638,7 +642,7 @@ func TestImageUpdateWatcher_RunNowWaitsForMetadataReadiness(t *testing.T) {
 	settings := &pollingSettingReaderFakeInternal{enabled: true}
 	watcher := newImageUpdateWatcherForTestInternal(t, scanner, settings, bus.NewDockerEventBus(), nil)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
 	defer cancel()
 	require.ErrorIs(t, watcher.RunNow(ctx), context.DeadlineExceeded)
 	require.Zero(t, scanner.countInternal())

@@ -73,13 +73,13 @@ func (s *ProjectService) updateProjectStatusandCountsInternal(ctx context.Contex
 	}
 
 	serviceCount, runningCount := getServiceCounts(services)
-	if err := s.db.WithContext(ctx).Model(&Project{}).Where("id = ?", projectID).Updates(map[string]any{
+	if updateStatusErr := s.db.WithContext(ctx).Model(&Project{}).Where("id = ?", projectID).Updates(map[string]any{
 		"status":        status,
 		"service_count": serviceCount,
 		"running_count": runningCount,
 		"updated_at":    time.Now(),
-	}).Error; err != nil {
-		return fmt.Errorf("failed to update project status and counts: %w", err)
+	}).Error; updateStatusErr != nil {
+		return fmt.Errorf("failed to update project status and counts: %w", updateStatusErr)
 	}
 	return nil
 }
@@ -272,8 +272,8 @@ func (s *ProjectService) GetProjectDetails(ctx context.Context, projectID string
 	}
 
 	var resp project.Details
-	if err := mapping.MapStruct(proj, &resp); err != nil {
-		return project.Details{}, fmt.Errorf("failed to map project: %w", err)
+	if mapStructErr := mapping.MapStruct(proj, &resp); mapStructErr != nil {
+		return project.Details{}, fmt.Errorf("failed to map project: %w", mapStructErr)
 	}
 
 	resp.CreatedAt = proj.CreatedAt.Format(time.RFC3339)
@@ -312,17 +312,17 @@ func (s *ProjectService) GetProjectDetails(ctx context.Context, projectID string
 	resp.ComposeFiles = composeSelectionRelativePathsInternal(proj.Path, composeSelection)
 	resp.ConfigurationError = projects.CheckProjectEnvAccess(ctx, projectsDir, proj.Path)
 
-	if err := s.populateDetailsComposeContentInternal(ctx, proj, opts, composeSelection, &resp); err != nil {
-		return project.Details{}, err
+	if populateDetailsComposeContentErr := s.populateDetailsComposeContentInternal(ctx, proj, opts, composeSelection, &resp); populateDetailsComposeContentErr != nil {
+		return project.Details{}, populateDetailsComposeContentErr
 	}
 	if opts.IncludeEnvState {
-		envState, err := projects.ReadProjectEnvState(proj.Path)
-		if err != nil {
-			return project.Details{}, fmt.Errorf("failed to read project env state: %w", err)
+		envState, readProjectEnvStateErr := projects.ReadProjectEnvState(proj.Path)
+		if readProjectEnvStateErr != nil {
+			return project.Details{}, fmt.Errorf("failed to read project env state: %w", readProjectEnvStateErr)
 		}
-		effectiveEnvContent, err := resolveStoredEffectiveEnvContentInternal(envState)
-		if err != nil {
-			return project.Details{}, err
+		effectiveEnvContent, readProjectEnvStateErr := resolveStoredEffectiveEnvContentInternal(envState)
+		if readProjectEnvStateErr != nil {
+			return project.Details{}, readProjectEnvStateErr
 		}
 		resp.EnvContent = effectiveEnvContent
 	}
@@ -599,7 +599,17 @@ func (s *ProjectService) enrichProjectsWithUpdateInfoInternal(
 	scoped := s.getProjectContainerUpdateInfoInternal(ctx, details)
 	for i := range details {
 		if services := servicesByProjectID[details[i].ID]; services != nil {
-			details[i].UpdateInfo = BuildConfiguredUpdateInfo(details[i].ID, services, updateInfoByRef, recordsByProjectID[details[i].ID], configuredRuntimeServiceUpdateInfoInternal(services, details[i].RuntimeServices, scoped))
+			details[i].UpdateInfo = BuildConfiguredUpdateInfo(
+				details[i].ID,
+				services,
+				updateInfoByRef,
+				recordsByProjectID[details[i].ID],
+				configuredRuntimeServiceUpdateInfoInternal(
+					services,
+					details[i].RuntimeServices,
+					scoped,
+				),
+			)
 			continue
 		}
 		refs := imageRefsByProjectID[details[i].ID]
@@ -610,7 +620,18 @@ func (s *ProjectService) enrichProjectsWithUpdateInfoInternal(
 	}
 }
 
-func (s *ProjectService) resolveProjectUpdateServicesInternal(ctx context.Context, proj Project, env *projectMetadataEnvInternal, includeHidden bool, hiddenRuntimeServices, hiddenRuntimeRefs map[string]bool) ([]string, []composetypes.ServiceConfig) {
+func (
+	s *ProjectService,
+) resolveProjectUpdateServicesInternal(
+	ctx context.Context,
+	proj Project,
+	env *projectMetadataEnvInternal,
+	includeHidden bool,
+	hiddenRuntimeServices, hiddenRuntimeRefs map[string]bool,
+) (
+	[]string,
+	[]composetypes.ServiceConfig,
+) {
 	composeProject, err := s.getCachedComposeProjectInternal(ctx, &proj, env)
 	if err != nil {
 		slog.WarnContext(ctx, "failed to resolve project services for update summary", "projectID", proj.ID, "projectName", proj.Name, "error", err)
@@ -649,7 +670,13 @@ func groupUpdateRecordsByProjectInternal(records []imageupdate.ImageUpdateRecord
 }
 
 // BuildConfiguredUpdateInfo matches checks to current services and aggregates their results.
-func BuildConfiguredUpdateInfo(projectID string, services []composetypes.ServiceConfig, byRef map[string]*imagetypes.UpdateInfo, records []imageupdate.ImageUpdateRecord, runtimeUpdates ...map[string]*imagetypes.UpdateInfo) *project.UpdateInfo {
+func BuildConfiguredUpdateInfo(
+	projectID string,
+	services []composetypes.ServiceConfig,
+	byRef map[string]*imagetypes.UpdateInfo,
+	records []imageupdate.ImageUpdateRecord,
+	runtimeUpdates ...map[string]*imagetypes.UpdateInfo,
+) *project.UpdateInfo {
 	checks := make(map[string]*imageupdate.ImageUpdateRecord)
 	for i := range records {
 		if records[i].ProjectID == projectID {
@@ -675,7 +702,23 @@ func BuildConfiguredUpdateInfo(projectID string, services []composetypes.Service
 		}
 
 		if len(runtimeUpdates) > 0 && runtimeUpdates[0][service.Name] != nil {
-			info = mergeProjectContainerUpdateInfoInternal(nil, []project.RuntimeService{{ContainerID: "preview", Image: imageRef}, {ContainerID: "runtime", Image: imageRef}}, map[string]*imagetypes.UpdateInfo{"preview": info, "runtime": runtimeUpdates[0][service.Name]})[imageRef]
+			info = mergeProjectContainerUpdateInfoInternal(
+				nil,
+				[]project.RuntimeService{
+					{
+						ContainerID: "preview",
+						Image:       imageRef,
+					},
+					{
+						ContainerID: "runtime",
+						Image:       imageRef,
+					},
+				},
+				map[string]*imagetypes.UpdateInfo{
+					"preview": info,
+					"runtime": runtimeUpdates[0][service.Name],
+				},
+			)[imageRef]
 		}
 		serviceUpdates[service.Name] = project.ServiceUpdateInfo{ImageRef: imageRef, UpdateInfo: info}
 		selected[service.Name] = info
@@ -969,9 +1012,9 @@ func (s *ProjectService) StreamProjectLogs(ctx context.Context, projectID string
 
 	// Writer goroutine: compose logs -> pipe
 	go func() {
-		err := projects.ComposeLogs(ctx, projects.NormalizeProjectName(proj.Name), pw, follow, tail, since, timestamps)
+		composeLogsErr := projects.ComposeLogs(ctx, projects.NormalizeProjectName(proj.Name), pw, follow, tail, since, timestamps)
 		_ = pw.Close()
-		done <- err
+		done <- composeLogsErr
 	}()
 
 	// Wait for both goroutines to finish to avoid sending on a closed channel

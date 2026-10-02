@@ -1,7 +1,6 @@
 package systembackup
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -78,7 +77,7 @@ func TestListBackupHistoryClassifiesAndFiltersOrigins(t *testing.T) {
 	}).Error)
 	service := &SystemBackupService{db: &database.DB{DB: gormDB}}
 
-	systemRows, page, err := service.ListBackupHistory(context.Background(), pagination.QueryParams{
+	systemRows, page, err := service.ListBackupHistory(t.Context(), pagination.QueryParams{
 		Sort: "createdAt", Order: pagination.SortDesc, Limit: 20,
 		Filters: map[string]string{"type": "system"},
 	})
@@ -89,7 +88,7 @@ func TestListBackupHistoryClassifiesAndFiltersOrigins(t *testing.T) {
 	require.Equal(t, "app-data", systemRows[0].ResourceName)
 	require.Equal(t, "volume", systemRows[0].ResourceType)
 
-	volumeRows, page, err := service.ListBackupHistory(context.Background(), pagination.QueryParams{
+	volumeRows, page, err := service.ListBackupHistory(t.Context(), pagination.QueryParams{
 		Search: "cache", Sort: "createdAt", Order: pagination.SortDesc, Limit: 1,
 		Filters: map[string]string{"type": "volume"},
 	})

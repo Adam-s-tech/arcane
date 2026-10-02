@@ -85,7 +85,7 @@ func NewVariableService(db *database.DB, environmentService *environment.Environ
 func (s *VariableService) ListVariables(ctx context.Context) ([]env.GlobalVariable, error) {
 	variables, err := s.loadVariablesInternal(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to retrieve global variables: %w", err) //nolint:staticcheck // Preserve the existing error message.
+		return nil, fmt.Errorf("failed to retrieve global variables: %w", err)
 	}
 
 	result := make([]env.GlobalVariable, 0, len(variables))
@@ -98,7 +98,7 @@ func (s *VariableService) ListVariables(ctx context.Context) ([]env.GlobalVariab
 func (s *VariableService) CreateVariable(ctx context.Context, req env.CreateGlobalVariableRequest) (*env.GlobalVariable, error) {
 	key := strings.TrimSpace(req.Key)
 	if !envKeyPattern.MatchString(key) {
-		return nil, common.Classify(common.ErrInvalidEnvKey, fmt.Errorf("Invalid env key %q (must match [A-Za-z_][A-Za-z0-9_]*)", key)) //nolint:staticcheck // Preserve the existing error message.
+		return nil, common.Classify(common.ErrInvalidEnvKey, fmt.Errorf("invalid env key %q (must match [A-Za-z_][A-Za-z0-9_]*)", key))
 	}
 
 	envIDs, err := s.normalizeScopeInternal(ctx, req.AllEnvironments, req.EnvironmentIDs)
@@ -110,7 +110,7 @@ func (s *VariableService) CreateVariable(ctx context.Context, req env.CreateGlob
 	value := req.Value
 	if req.IsSecret {
 		if value, err = crypto.Encrypt(value); err != nil {
-			return nil, fmt.Errorf("Failed to update global variables: %w", err) //nolint:staticcheck // Preserve the existing error message.
+			return nil, fmt.Errorf("failed to update global variables: %w", err)
 		}
 	}
 
@@ -122,11 +122,11 @@ func (s *VariableService) CreateVariable(ctx context.Context, req env.CreateGlob
 	}
 
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := s.validateScopeConflictInternal(tx, key, "", allEnvironments, envIDs); err != nil {
-			return err
+		if validateScopeConflictErr := s.validateScopeConflictInternal(tx, key, "", allEnvironments, envIDs); validateScopeConflictErr != nil {
+			return validateScopeConflictErr
 		}
-		if err := tx.Omit("Environments").Create(&variable).Error; err != nil {
-			return fmt.Errorf("failed to create global variable: %w", err)
+		if createVariableErr := tx.Omit("Environments").Create(&variable).Error; createVariableErr != nil {
+			return fmt.Errorf("failed to create global variable: %w", createVariableErr)
 		}
 		return replaceVariableScopeRowsInternal(tx, variable.ID, envIDs)
 	})
@@ -143,16 +143,16 @@ func (s *VariableService) UpdateVariable(ctx context.Context, id string, req env
 	var variable GlobalVariable
 	if err := s.db.WithContext(ctx).Preload("Environments").First(&variable, "id = ?", id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, common.Classify(common.ErrGlobalVariableNotFound, errors.New("Global variable not found")) //nolint:staticcheck // Preserve the existing error message.
+			return nil, common.Classify(common.ErrGlobalVariableNotFound, errors.New("global variable not found"))
 		}
-		return nil, fmt.Errorf("Failed to retrieve global variables: %w", err) //nolint:staticcheck // Preserve the existing error message.
+		return nil, fmt.Errorf("failed to retrieve global variables: %w", err)
 	}
 
 	key := variable.Key
 	if req.Key != nil {
 		key = strings.TrimSpace(*req.Key)
 		if !envKeyPattern.MatchString(key) {
-			return nil, common.Classify(common.ErrInvalidEnvKey, fmt.Errorf("Invalid env key %q (must match [A-Za-z_][A-Za-z0-9_]*)", key)) //nolint:staticcheck // Preserve the existing error message.
+			return nil, common.Classify(common.ErrInvalidEnvKey, fmt.Errorf("invalid env key %q (must match [A-Za-z_][A-Za-z0-9_]*)", key))
 		}
 	}
 
@@ -177,11 +177,11 @@ func (s *VariableService) UpdateVariable(ctx context.Context, id string, req env
 	variable.AllEnvironments = allEnvironments
 
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := s.validateScopeConflictInternal(tx, key, variable.ID, allEnvironments, envIDs); err != nil {
-			return err
+		if validateScopeConflictErr := s.validateScopeConflictInternal(tx, key, variable.ID, allEnvironments, envIDs); validateScopeConflictErr != nil {
+			return validateScopeConflictErr
 		}
-		if err := tx.Omit("Environments").Save(&variable).Error; err != nil {
-			return fmt.Errorf("failed to update global variable: %w", err)
+		if updateVariableErr := tx.Omit("Environments").Save(&variable).Error; updateVariableErr != nil {
+			return fmt.Errorf("failed to update global variable: %w", updateVariableErr)
 		}
 		return replaceVariableScopeRowsInternal(tx, variable.ID, envIDs)
 	})
@@ -199,7 +199,12 @@ func (s *VariableService) UpdateVariable(ctx context.Context, id string, req env
 // made readable without a replacement value (revealing the stored one).
 func resolveUpdatedValueInternal(variable *GlobalVariable, reqValue *string, isSecret bool) (string, error) {
 	if variable.IsSecret && !isSecret && reqValue == nil {
-		return "", common.Classify(common.ErrGlobalVariableSecretValueRequired, errors.New("A new value is required when making a secret variable readable")) //nolint:staticcheck // Preserve the existing error message.
+		return "", common.Classify(
+			common.ErrGlobalVariableSecretValueRequired,
+			errors.New(
+				"a new value is required when making a secret variable readable",
+			),
+		)
 	}
 
 	switch {
@@ -209,14 +214,14 @@ func resolveUpdatedValueInternal(variable *GlobalVariable, reqValue *string, isS
 		}
 		encrypted, err := crypto.Encrypt(*reqValue)
 		if err != nil {
-			return "", fmt.Errorf("Failed to update global variables: %w", err) //nolint:staticcheck // Preserve the existing error message.
+			return "", fmt.Errorf("failed to update global variables: %w", err)
 		}
 		return encrypted, nil
 	case isSecret && !variable.IsSecret:
 		// Readable value becoming secret keeps its current plaintext, encrypted.
 		encrypted, err := crypto.Encrypt(variable.Value)
 		if err != nil {
-			return "", fmt.Errorf("Failed to update global variables: %w", err) //nolint:staticcheck // Preserve the existing error message.
+			return "", fmt.Errorf("failed to update global variables: %w", err)
 		}
 		return encrypted, nil
 	default:
@@ -255,7 +260,7 @@ func (s *VariableService) DeleteVariable(ctx context.Context, id string) error {
 			return fmt.Errorf("failed to delete global variable: %w", result.Error)
 		}
 		if result.RowsAffected == 0 {
-			return common.Classify(common.ErrGlobalVariableNotFound, errors.New("Global variable not found")) //nolint:staticcheck // Preserve the existing error message.
+			return common.Classify(common.ErrGlobalVariableNotFound, errors.New("global variable not found"))
 		}
 		return tx.Exec("DELETE FROM global_variable_environments WHERE global_variable_id = ?", id).Error
 	})
@@ -289,10 +294,10 @@ func (s *VariableService) resolveEffectiveVariablesInternal(ctx context.Context,
 			}
 			value := variable.Value
 			if variable.IsSecret {
-				decrypted, err := crypto.Decrypt(value)
-				if err != nil {
+				decrypted, decryptErr := crypto.Decrypt(value)
+				if decryptErr != nil {
 					slog.WarnContext(ctx, "Failed to decrypt global variable for sync; skipping",
-						"variable_id", variable.ID, "key", variable.Key, "error", err)
+						"variable_id", variable.ID, "key", variable.Key, "error", decryptErr)
 					continue
 				}
 				value = decrypted
@@ -531,8 +536,8 @@ func (s *VariableService) ReadLocalEnvFile(ctx context.Context) ([]env.Variable,
 		})
 	}
 
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading global variables file: %w", err)
+	if readVariablesErr := scanner.Err(); readVariablesErr != nil {
+		return nil, fmt.Errorf("error reading global variables file: %w", readVariablesErr)
 	}
 
 	return vars, nil
@@ -547,8 +552,8 @@ func (s *VariableService) WriteLocalEnvFile(ctx context.Context, vars []env.Vari
 	// The data directory is the confinement root for the write, so it is created
 	// through os before acfs opens it.
 	projectsDirectory := filepath.Dir(envPath)
-	if err := os.MkdirAll(projectsDirectory, utils.DirPerm); err != nil {
-		return fmt.Errorf("failed to create projects directory: %w", err)
+	if mkdirAllErr := os.MkdirAll(projectsDirectory, utils.DirPerm); mkdirAllErr != nil {
+		return fmt.Errorf("failed to create projects directory: %w", mkdirAllErr)
 	}
 
 	var builder strings.Builder
@@ -562,14 +567,14 @@ func (s *VariableService) WriteLocalEnvFile(ctx context.Context, vars []env.Vari
 
 		key := strings.TrimSpace(v.Key)
 		if !envKeyPattern.MatchString(key) {
-			return common.Classify(common.ErrInvalidEnvKey, fmt.Errorf("Invalid env key %q (must match [A-Za-z_][A-Za-z0-9_]*)", key)) //nolint:staticcheck // Preserve the existing error message.
+			return common.Classify(common.ErrInvalidEnvKey, fmt.Errorf("invalid env key %q (must match [A-Za-z_][A-Za-z0-9_]*)", key))
 		}
 
 		// Preserve intentional whitespace inside the quoted value.
 		value := v.Value
 
 		if strings.ContainsAny(value, " \t\n\r#") {
-			value = fmt.Sprintf(`"%s"`, strings.ReplaceAll(value, `"`, `\"`))
+			value = `"` + strings.ReplaceAll(value, `"`, `\"`) + `"`
 		}
 
 		_, _ = fmt.Fprintf(&builder, "%s=%s\n", key, value)
@@ -579,8 +584,8 @@ func (s *VariableService) WriteLocalEnvFile(ctx context.Context, vars []env.Vari
 	if entry, statErr := acfs.Stat(ctx, projectsDirectory, "/"+projects.GlobalEnvFileName, false); statErr == nil {
 		mode = os.FileMode(entry.UnixMode).Perm()
 	}
-	if err := acfs.Write(ctx, projectsDirectory, "/"+projects.GlobalEnvFileName, []byte(builder.String()), acfs.WriteOptions{Mode: mode, InPlace: true}); err != nil {
-		return fmt.Errorf("failed to write global variables file: %w", err)
+	if writeErr := acfs.Write(ctx, projectsDirectory, "/"+projects.GlobalEnvFileName, []byte(builder.String()), acfs.WriteOptions{Mode: mode, InPlace: true}); writeErr != nil {
+		return fmt.Errorf("failed to write global variables file: %w", writeErr)
 	}
 
 	slog.InfoContext(ctx, "Updated global variables",
@@ -611,8 +616,8 @@ func (s *VariableService) ImportLegacyLocalEnvFile(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := s.importVariablesInternal(ctx, vars, ""); err != nil {
-		return err
+	if importVariablesErr := s.importVariablesInternal(ctx, vars, ""); importVariablesErr != nil {
+		return importVariablesErr
 	}
 
 	return s.kvService.SetBool(ctx, flag, true)
@@ -636,12 +641,12 @@ func (s *VariableService) importRemoteLegacyVarsOnceInternal(ctx context.Context
 		Success bool           `json:"success"`
 		Data    []env.Variable `json:"data"`
 	}
-	if err := s.proxyEnvironmentJSON(ctx, envID, http.MethodGet, agentVariablesPath, nil, &out); err != nil {
-		return err
+	if proxyEnvironmentJSONErr := s.proxyEnvironmentJSON(ctx, envID, http.MethodGet, agentVariablesPath, nil, &out); proxyEnvironmentJSONErr != nil {
+		return proxyEnvironmentJSONErr
 	}
 
-	if err := s.importVariablesInternal(ctx, out.Data, envID); err != nil {
-		return err
+	if importVariablesErr := s.importVariablesInternal(ctx, out.Data, envID); importVariablesErr != nil {
+		return importVariablesErr
 	}
 
 	return s.kvService.SetBool(ctx, flag, true)
@@ -678,17 +683,17 @@ func (s *VariableService) importVariablesInternal(ctx context.Context, vars []en
 			Value:           entry.Value,
 			AllEnvironments: scopeEnvID == "",
 		}
-		err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-			if err := tx.Omit("Environments").Create(&variable).Error; err != nil {
-				return err
+		transactionErr := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			if createImportedVariableErr := tx.Omit("Environments").Create(&variable).Error; createImportedVariableErr != nil {
+				return createImportedVariableErr
 			}
 			if scopeEnvID == "" {
 				return nil
 			}
 			return replaceVariableScopeRowsInternal(tx, variable.ID, []string{scopeEnvID})
 		})
-		if err != nil {
-			return fmt.Errorf("failed to import legacy variable %q: %w", key, err)
+		if transactionErr != nil {
+			return fmt.Errorf("failed to import legacy variable %q: %w", key, transactionErr)
 		}
 		covered[key] = true
 		slog.InfoContext(ctx, "Imported legacy global variable", "key", key, "environment_id", scopeEnvID)
@@ -726,15 +731,20 @@ func (s *VariableService) normalizeScopeInternal(ctx context.Context, allEnviron
 	// An explicitly specific scope with no environments must not silently
 	// widen to all environments.
 	if len(unique) == 0 {
-		return nil, common.Classify(common.ErrGlobalVariableScopeRequired, errors.New("At least one environment is required when a variable is not scoped to all environments")) //nolint:staticcheck // Preserve the existing error message.
+		return nil, common.Classify(
+			common.ErrGlobalVariableScopeRequired,
+			errors.New(
+				"at least one environment is required when a variable is not scoped to all environments",
+			),
+		)
 	}
 
 	var count int64
 	if err := s.db.WithContext(ctx).Model(&environment.Environment{}).Where("id IN ?", unique).Count(&count).Error; err != nil {
-		return nil, fmt.Errorf("Failed to update global variables: %w", err) //nolint:staticcheck // Preserve the existing error message.
+		return nil, fmt.Errorf("failed to update global variables: %w", err)
 	}
 	if count != int64(len(unique)) {
-		return nil, errors.New("Failed to update global variables: one or more environments do not exist") //nolint:staticcheck // Preserve the existing error message.
+		return nil, errors.New("failed to update global variables: one or more environments do not exist")
 	}
 	return unique, nil
 }
@@ -757,12 +767,24 @@ func (s *VariableService) validateScopeConflictInternal(tx *gorm.DB, key, exclud
 			continue
 		}
 		if allEnvironments {
-			return common.Classify(common.ErrGlobalVariableConflict, fmt.Errorf("A variable named %q already exists for an overlapping environment scope", key)) //nolint:staticcheck // Preserve the existing error message.
+			return common.Classify(
+				common.ErrGlobalVariableConflict,
+				fmt.Errorf(
+					"a variable named %q already exists for an overlapping environment scope",
+					key,
+				),
+			)
 		}
 		otherIDs := scopedEnvironmentIDsInternal(other.Environments)
 		for _, id := range envIDs {
 			if slices.Contains(otherIDs, id) {
-				return common.Classify(common.ErrGlobalVariableConflict, fmt.Errorf("A variable named %q already exists for an overlapping environment scope", key)) //nolint:staticcheck // Preserve the existing error message.
+				return common.Classify(
+					common.ErrGlobalVariableConflict,
+					fmt.Errorf(
+						"a variable named %q already exists for an overlapping environment scope",
+						key,
+					),
+				)
 			}
 		}
 	}
@@ -787,7 +809,7 @@ func wrapVariableMutationErrorInternal(err error) error {
 	if err == nil || errors.Is(err, common.ErrGlobalVariableConflict) || errors.Is(err, common.ErrGlobalVariableNotFound) || errors.Is(err, common.ErrInvalidEnvKey) {
 		return err
 	}
-	return fmt.Errorf("Failed to update global variables: %w", err) //nolint:staticcheck // Preserve the existing error message.
+	return fmt.Errorf("failed to update global variables: %w", err)
 }
 
 func scopedEnvironmentIDsInternal(environments []environment.Environment) []string {

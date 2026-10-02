@@ -44,7 +44,7 @@ func (m *mockSettingsPruner) PruneUnknownSettings(ctx context.Context) error {
 }
 
 func TestLoadAgentToken(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Run("loads token when agent mode and token empty", func(t *testing.T) {
 		cfg := &RuntimeConfig{
@@ -96,7 +96,7 @@ func TestLoadAgentToken(t *testing.T) {
 }
 
 func TestEnsureEncryptionKey(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Run("sets key when in agent mode", func(t *testing.T) {
 		cfg := &RuntimeConfig{
@@ -160,7 +160,7 @@ func TestEnsureEncryptionKey(t *testing.T) {
 }
 
 func TestInitializeDefaultSettings(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	cfg := &RuntimeConfig{}
 
 	t.Run("calls all initialization methods", func(t *testing.T) {
@@ -196,7 +196,7 @@ func TestInitializeDefaultSettings(t *testing.T) {
 }
 
 func TestCleanupUnknownSettings(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Run("calls prune method", func(t *testing.T) {
 		pruner := &mockSettingsPruner{}
@@ -218,7 +218,7 @@ func TestCleanupUnknownSettings(t *testing.T) {
 }
 
 func TestTestDockerConnection(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Run("executes test function", func(t *testing.T) {
 		called := false
@@ -242,7 +242,7 @@ func TestTestDockerConnection(t *testing.T) {
 }
 
 func TestInitializeNonAgentFeatures(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Run("skips in agent mode", func(t *testing.T) {
 		cfg := &RuntimeConfig{AgentMode: true}

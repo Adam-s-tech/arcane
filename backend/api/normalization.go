@@ -120,8 +120,8 @@ func readNormalizationBodyInternal(ctx huma.Context) ([]byte, error) {
 			}
 		} else if op.BodyReadTimeout > 0 {
 			defer func() {
-				if err := controller.SetReadDeadline(time.Time{}); err != nil {
-					slog.WarnContext(ctx.Context(), "failed to clear request body read deadline", "error", err)
+				if setReadDeadlineErr := controller.SetReadDeadline(time.Time{}); setReadDeadlineErr != nil {
+					slog.WarnContext(ctx.Context(), "failed to clear request body read deadline", "error", setReadDeadlineErr)
 				}
 			}()
 		}

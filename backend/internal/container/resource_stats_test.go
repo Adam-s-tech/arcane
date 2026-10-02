@@ -96,7 +96,16 @@ func (f *resourceStatsServerInternal) handler() http.Handler {
 			defer f.mu.Unlock()
 			for _, summary := range f.containers {
 				if summary.ID == id {
-					inspect := container.InspectResponse{ID: summary.ID, Name: summary.Names[0], Image: summary.ImageID, Config: &container.Config{Image: summary.Image, Labels: summary.Labels}, State: &container.State{Status: summary.State}}
+					inspect := container.InspectResponse{
+						ID:    summary.ID,
+						Name:  summary.Names[0],
+						Image: summary.ImageID,
+						Config: &container.Config{
+							Image:  summary.Image,
+							Labels: summary.Labels,
+						},
+						State: &container.State{Status: summary.State},
+					}
 					if err := json.NewEncoder(w).Encode(inspect); err != nil {
 						http.Error(w, err.Error(), http.StatusInternalServerError)
 					}

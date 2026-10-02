@@ -54,9 +54,9 @@ func TestContainersListUpdatesJSONContract(t *testing.T) {
 
 	var got map[string]any
 	{
-		err := json.Unmarshal([]byte(strings.TrimSpace(outBuf)), &got)
-		require.NoError(t, err,
-			"json parse failed: %v\noutput=%s", err, outBuf)
+		unmarshalErr := json.Unmarshal([]byte(strings.TrimSpace(outBuf)), &got)
+		require.NoError(t, unmarshalErr,
+			"json parse failed: %v\noutput=%s", unmarshalErr, outBuf)
 	}
 
 	for _, key := range []string{"success", "data", "pagination"} {
@@ -159,9 +159,9 @@ func TestProjectsListUpdatesJSONContract(t *testing.T) {
 
 	var got map[string]any
 	{
-		err := json.Unmarshal([]byte(strings.TrimSpace(outBuf)), &got)
-		require.NoError(t, err,
-			"json parse failed: %v\noutput=%s", err, outBuf)
+		unmarshalErr := json.Unmarshal([]byte(strings.TrimSpace(outBuf)), &got)
+		require.NoError(t, unmarshalErr,
+			"json parse failed: %v\noutput=%s", unmarshalErr, outBuf)
 	}
 
 	for _, key := range []string{"success", "data", "pagination"} {
@@ -270,9 +270,9 @@ func TestImagesUpdatesCheckEncodesImageRefAndDecodesSingleResponse(t *testing.T)
 
 	var result imageupdate.Response
 	{
-		err := json.Unmarshal([]byte(strings.TrimSpace(outBuf)), &result)
-		require.NoError(t, err,
-			"single response JSON parse failed: %v\noutput=%s", err, outBuf)
+		unmarshalErr := json.Unmarshal([]byte(strings.TrimSpace(outBuf)), &result)
+		require.NoError(t, unmarshalErr,
+			"single response JSON parse failed: %v\noutput=%s", unmarshalErr, outBuf)
 	}
 
 	require.False(t, !result.HasUpdate || result.CurrentVersion != "1.0.0" || result.LatestVersion != "1.1.0",
@@ -346,9 +346,9 @@ func TestImageUpdateCommandsDecodeExpectedResponseTypes(t *testing.T) {
 
 	var batch imageupdate.BatchResponse
 	{
-		err := json.Unmarshal([]byte(strings.TrimSpace(outBuf)), &batch)
-		require.NoError(t, err,
-			"batch response JSON parse failed: %v\noutput=%s", err, outBuf)
+		unmarshalErr := json.Unmarshal([]byte(strings.TrimSpace(outBuf)), &batch)
+		require.NoError(t, unmarshalErr,
+			"batch response JSON parse failed: %v\noutput=%s", unmarshalErr, outBuf)
 	}
 
 	require.False(t, batch["nginx:latest"] == nil || !batch["nginx:latest"].HasUpdate,
@@ -364,9 +364,9 @@ func TestImageUpdateCommandsDecodeExpectedResponseTypes(t *testing.T) {
 
 	var single imageupdate.Response
 	{
-		err := json.Unmarshal([]byte(strings.TrimSpace(outBuf)), &single)
-		require.NoError(t, err,
-			"single response JSON parse failed: %v\noutput=%s", err, outBuf)
+		decodeSingleResponseErr := json.Unmarshal([]byte(strings.TrimSpace(outBuf)), &single)
+		require.NoError(t, decodeSingleResponseErr,
+			"single response JSON parse failed: %v\noutput=%s", decodeSingleResponseErr, outBuf)
 	}
 
 	require.False(t, single.HasUpdate || single.CurrentVersion != "1.1.0",
@@ -382,9 +382,9 @@ func TestImageUpdateCommandsDecodeExpectedResponseTypes(t *testing.T) {
 
 	var summary imageupdate.Summary
 	{
-		err := json.Unmarshal([]byte(strings.TrimSpace(outBuf)), &summary)
-		require.NoError(t, err,
-			"summary response JSON parse failed: %v\noutput=%s", err, outBuf)
+		decodeSummaryResponseErr := json.Unmarshal([]byte(strings.TrimSpace(outBuf)), &summary)
+		require.NoError(t, decodeSummaryResponseErr,
+			"summary response JSON parse failed: %v\noutput=%s", decodeSummaryResponseErr, outBuf)
 	}
 
 	require.False(t, summary.TotalImages != 4 || summary.ImagesWithUpdates != 2 || summary.DigestUpdates != 1,

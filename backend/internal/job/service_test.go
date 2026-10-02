@@ -63,7 +63,7 @@ func newJobServiceForTestInternal(t *testing.T, db *database.DB, settingsService
 }
 
 func TestJobService_GetJobSchedules_DefaultDockerClientRefreshInterval(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDBInternal(t)
 
 	settingsSvc, err := newSettingsServiceForTestInternal(t, ctx, db)
@@ -77,7 +77,7 @@ func TestJobService_GetJobSchedules_DefaultDockerClientRefreshInterval(t *testin
 }
 
 func TestJobService_ListJobs_AnalyticsHeartbeatIsManagedInternally(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDBInternal(t)
 
 	settingsSvc, err := newSettingsServiceForTestInternal(t, ctx, db)
@@ -96,7 +96,7 @@ func TestJobService_ListJobs_AnalyticsHeartbeatIsManagedInternally(t *testing.T)
 }
 
 func TestJobService_ListJobs_IncludesDisabledAutoHealJob(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDBInternal(t)
 
 	settingsSvc, err := newSettingsServiceForTestInternal(t, ctx, db)
@@ -113,7 +113,7 @@ func TestJobService_ListJobs_IncludesDisabledAutoHealJob(t *testing.T) {
 }
 
 func TestJobService_ListJobs_IncludesDockerClientRefreshJob(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDBInternal(t)
 
 	settingsSvc, err := newSettingsServiceForTestInternal(t, ctx, db)
@@ -132,7 +132,7 @@ func TestJobService_ListJobs_IncludesDockerClientRefreshJob(t *testing.T) {
 }
 
 func TestJobService_ListJobs_UsesRuntimeScheduleAndNextRun(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDBInternal(t)
 
 	settingsSvc, err := newSettingsServiceForTestInternal(t, ctx, db)
@@ -160,7 +160,14 @@ func TestJobService_ListJobs_UsesRuntimeScheduleAndNextRun(t *testing.T) {
 		ID: "failed", EnvironmentID: "0", Status: schedulertypes.Failed, CreatedAt: now.Add(-time.Hour), UpdatedAt: now,
 		Outcome: schedulertypes.Outcome{Status: schedulertypes.Failed, Message: "clone failed"},
 	}
-	succeeded := schedulertypes.Run{ID: "succeeded", EnvironmentID: "0", Status: schedulertypes.Succeeded, CreatedAt: now.Add(-time.Minute), UpdatedAt: now.Add(-time.Minute), FinishedAt: new(now.Add(-time.Minute))}
+	succeeded := schedulertypes.Run{
+		ID:            "succeeded",
+		EnvironmentID: "0",
+		Status:        schedulertypes.Succeeded,
+		CreatedAt:     now.Add(-time.Minute),
+		UpdatedAt:     now.Add(-time.Minute),
+		FinishedAt:    new(now.Add(-time.Minute)),
+	}
 	for _, history := range [][]schedulertypes.Run{{failed, succeeded}, {succeeded, failed}} {
 		status := jobschedule.JobStatus{LastRun: new(failed), LastError: failed.Outcome.Message}
 		applyRunStatusInternal(&status, history)
@@ -227,7 +234,7 @@ func TestJobService_ListJobs_UsesRuntimeScheduleAndNextRun(t *testing.T) {
 }
 
 func TestJobService_ListJobs_ImageUpdateWatcherIsContinuousAndRespectsEnabled(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDBInternal(t)
 
 	settingsSvc, err := newSettingsServiceForTestInternal(t, ctx, db)
@@ -249,7 +256,7 @@ func TestJobService_ListJobs_ImageUpdateWatcherIsContinuousAndRespectsEnabled(t 
 }
 
 func TestJobService_UpdateJobSchedules_ReschedulesChangedJob(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDBInternal(t)
 
 	settingsSvc, err := newSettingsServiceForTestInternal(t, ctx, db)
@@ -268,7 +275,7 @@ func TestJobService_UpdateJobSchedules_ReschedulesChangedJob(t *testing.T) {
 }
 
 func TestJobService_UpdateJobSchedules_DeprecatedPollingIntervalDoesNotReschedule(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDBInternal(t)
 
 	settingsSvc, err := newSettingsServiceForTestInternal(t, ctx, db)
@@ -287,15 +294,15 @@ func TestJobService_UpdateJobSchedules_DeprecatedPollingIntervalDoesNotReschedul
 }
 
 func TestJobService_UpdateJobSchedules_UsesLifecycleContextForReschedule(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDBInternal(t)
 
 	settingsSvc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
 
 	type lifecycleContextKey struct{}
-	lifecycleCtx := context.WithValue(context.Background(), lifecycleContextKey{}, true)
-	requestCtx, cancelRequest := context.WithCancel(context.Background())
+	lifecycleCtx := context.WithValue(t.Context(), lifecycleContextKey{}, true)
+	requestCtx, cancelRequest := context.WithCancel(t.Context())
 
 	jobSvc := newJobServiceForTestInternal(t, db, settingsSvc, &config.Config{})
 	scheduler := newFakeJobSchedulerInternal("auto-update")
@@ -314,7 +321,7 @@ func TestJobService_UpdateJobSchedules_UsesLifecycleContextForReschedule(t *test
 }
 
 func TestJobService_UpdateJobSchedules_RejectsInvalidCronWithoutChangingSetting(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDBInternal(t)
 
 	settingsSvc, err := newSettingsServiceForTestInternal(t, ctx, db)
@@ -335,7 +342,7 @@ func TestJobService_UpdateJobSchedules_RejectsInvalidCronWithoutChangingSetting(
 }
 
 func TestJobService_UpdateJobSchedules_UnchangedScheduleDoesNotReschedule(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDBInternal(t)
 
 	settingsSvc, err := newSettingsServiceForTestInternal(t, ctx, db)
@@ -350,7 +357,7 @@ func TestJobService_UpdateJobSchedules_UnchangedScheduleDoesNotReschedule(t *tes
 }
 
 func TestJobService_UpdateJobSchedules_RestoresPreviousScheduleWhenRescheduleFails(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDBInternal(t)
 
 	settingsSvc, err := newSettingsServiceForTestInternal(t, ctx, db)
@@ -375,7 +382,7 @@ func TestJobService_UpdateJobSchedules_RestoresPreviousScheduleWhenRescheduleFai
 }
 
 func TestJobService_UpdateJobSchedules_SkipsManagerOnlyJobsInAgentMode(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDBInternal(t)
 
 	settingsSvc, err := newSettingsServiceForTestInternal(t, ctx, db)
@@ -394,7 +401,7 @@ func TestJobService_UpdateJobSchedules_SkipsManagerOnlyJobsInAgentMode(t *testin
 }
 
 func TestJobService_UpdateJobSchedules_DelegatesEnvironmentHealthReschedule(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupSettingsTestDBInternal(t)
 
 	settingsSvc, err := newSettingsServiceForTestInternal(t, ctx, db)

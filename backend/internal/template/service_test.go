@@ -2,7 +2,6 @@ package template
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -71,7 +70,7 @@ func makePublicTestClient(t *testing.T, server *httptest.Server) (*http.Client, 
 		return []net.IP{net.ParseIP("93.184.216.34")}, nil
 	}
 
-	baseURL := fmt.Sprintf("http://templates.example.test:%s", parsedURL.Port())
+	baseURL := "http://templates.example.test:" + parsedURL.Port()
 	return client, lookupIP, baseURL
 }
 
@@ -152,7 +151,7 @@ services:
 		Enabled: true,
 	}
 
-	templates, err := service.fetchRegistryTemplatesInternal(context.Background(), registry, service.remoteGeneration.Load())
+	templates, err := service.fetchRegistryTemplatesInternal(t.Context(), registry, service.remoteGeneration.Load())
 	require.NoError(t, err)
 	require.Len(t, templates, 2)
 	require.NotNil(t, templates[0].Metadata)
@@ -161,7 +160,7 @@ services:
 	require.Nil(t, templates[1].Metadata.IconURL)
 	require.EqualValues(t, 1, composeHits.Load())
 
-	cachedTemplates, err := service.fetchRegistryTemplatesInternal(context.Background(), registry, service.remoteGeneration.Load())
+	cachedTemplates, err := service.fetchRegistryTemplatesInternal(t.Context(), registry, service.remoteGeneration.Load())
 	require.NoError(t, err)
 	require.Len(t, cachedTemplates, 2)
 	require.NotNil(t, cachedTemplates[0].Metadata)
@@ -194,7 +193,7 @@ services:
 	client, lookupIP, baseURL := makePublicTestClient(t, server)
 
 	settingsSvc := minimalSettingsServiceForTest(t)
-	require.NoError(t, settingsSvc.UpdateSetting(context.Background(), "templatesDirectory", filepath.Join(tempDir, "templates")))
+	require.NoError(t, settingsSvc.UpdateSetting(t.Context(), "templatesDirectory", filepath.Join(tempDir, "templates")))
 
 	service := &TemplateService{
 		db:                setupTemplateServiceTestDB(t),
@@ -218,7 +217,7 @@ services:
 		},
 	}
 
-	downloaded, err := service.DownloadTemplate(context.Background(), remoteTemplate)
+	downloaded, err := service.DownloadTemplate(t.Context(), remoteTemplate)
 	require.NoError(t, err)
 	require.NotNil(t, downloaded)
 	require.False(t, downloaded.IsRemote)
@@ -227,7 +226,7 @@ services:
 	require.Equal(t, "https://cdn.example/download.png", *downloaded.Metadata.IconURL)
 
 	var stored ComposeTemplate
-	require.NoError(t, service.db.WithContext(context.Background()).First(&stored, "id = ?", downloaded.ID).Error)
+	require.NoError(t, service.db.WithContext(t.Context()).First(&stored, "id = ?", downloaded.ID).Error)
 	require.NotNil(t, stored.Metadata)
 	require.NotNil(t, stored.Metadata.IconURL)
 	require.Equal(t, "https://cdn.example/download.png", *stored.Metadata.IconURL)
@@ -257,9 +256,9 @@ func TestGetAllTemplatesPaginated_FiltersByType(t *testing.T) {
 			IsRemote:    false,
 		},
 	}
-	require.NoError(t, db.WithContext(context.Background()).Create(&localTemplates).Error)
+	require.NoError(t, db.WithContext(t.Context()).Create(&localTemplates).Error)
 
-	service := NewTemplateService(context.Background(), db, http.DefaultClient, nil)
+	service := NewTemplateService(t.Context(), db, http.DefaultClient, nil)
 	service.remoteCache.Set(service.remoteGeneration.Load(), []ComposeTemplate{
 		{
 			ID: "remote-one", CreatedAt: now, UpdatedAt: &now,
@@ -283,7 +282,7 @@ func TestGetAllTemplatesPaginated_FiltersByType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			templates, _, err := service.GetAllTemplatesPaginated(context.Background(), pagination.QueryParams{
+			templates, _, err := service.GetAllTemplatesPaginated(t.Context(), pagination.QueryParams{
 				Start: 0, Limit: 20,
 				Filters: map[string]string{"type": tt.typeFilter},
 			})
@@ -308,7 +307,7 @@ func TestFetchRaw_BlocksUnsafeRemoteURL(t *testing.T) {
 		registryFetchMeta: make(map[string]*registryFetchMeta),
 	}
 
-	_, err := service.FetchRaw(context.Background(), "http://127.0.0.1:8080/registry.json")
+	_, err := service.FetchRaw(t.Context(), "http://127.0.0.1:8080/registry.json")
 	require.Error(t, err)
 	require.ErrorIs(t, err, common.ErrUnsafeRemoteURL)
 }
@@ -327,7 +326,7 @@ services:
 `), 0o644))
 
 	settingsSvc := minimalSettingsServiceForTest(t)
-	require.NoError(t, settingsSvc.UpdateSetting(context.Background(), "templatesDirectory", templatesRoot))
+	require.NoError(t, settingsSvc.UpdateSetting(t.Context(), "templatesDirectory", templatesRoot))
 
 	service := &TemplateService{
 		db:                setupTemplateServiceTestDB(t),
@@ -336,10 +335,10 @@ services:
 		registryFetchMeta: make(map[string]*registryFetchMeta),
 	}
 
-	require.NoError(t, service.syncFilesystemTemplatesInternal(context.Background()))
+	require.NoError(t, service.syncFilesystemTemplatesInternal(t.Context()))
 
 	var stored ComposeTemplate
-	require.NoError(t, service.db.WithContext(context.Background()).First(&stored, "name = ?", "example").Error)
+	require.NoError(t, service.db.WithContext(t.Context()).First(&stored, "name = ?", "example").Error)
 	require.NotNil(t, stored.Metadata)
 	require.NotNil(t, stored.Metadata.IconURL)
 	require.Equal(t, "https://cdn.example/local.png", *stored.Metadata.IconURL)
@@ -387,20 +386,20 @@ func TestGetTemplate_ForceRefreshesRemoteCacheOnMiss(t *testing.T) {
 		URL:     baseURL + "/registry.json",
 		Enabled: true,
 	}
-	require.NoError(t, db.WithContext(context.Background()).Create(registry).Error)
+	require.NoError(t, db.WithContext(t.Context()).Create(registry).Error)
 
 	settingsSvc := minimalSettingsServiceForTest(t)
 	// Point templates+projects directories at tempDir so sync calls don't try to
 	// touch the real /app filesystem during tests.
-	require.NoError(t, settingsSvc.UpdateSetting(context.Background(), "templatesDirectory", filepath.Join(tempDir, "templates")))
-	require.NoError(t, settingsSvc.UpdateSetting(context.Background(), "projectsDirectory", filepath.Join(tempDir, "projects")))
+	require.NoError(t, settingsSvc.UpdateSetting(t.Context(), "templatesDirectory", filepath.Join(tempDir, "templates")))
+	require.NoError(t, settingsSvc.UpdateSetting(t.Context(), "projectsDirectory", filepath.Join(tempDir, "projects")))
 
-	service := NewTemplateService(context.Background(), db, client, settingsSvc)
+	service := NewTemplateService(t.Context(), db, client, settingsSvc)
 	service.lookupIP = lookupIP
 	service.safeHTTPClient = service.newSafeHTTPClientInternal()
 
 	// Cache starts empty; GetTemplate for a remote ID should force a refresh and find the template.
-	got, err := service.GetTemplate(context.Background(), "remote:reg-1:affine")
+	got, err := service.GetTemplate(t.Context(), "remote:reg-1:affine")
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	require.True(t, got.IsRemote)
@@ -408,7 +407,7 @@ func TestGetTemplate_ForceRefreshesRemoteCacheOnMiss(t *testing.T) {
 	require.GreaterOrEqual(t, registryHits.Load(), int32(1), "registry should be fetched at least once")
 
 	// Unknown remote ID still surfaces a clear error after the forced refresh.
-	_, err = service.GetTemplate(context.Background(), "remote:reg-1:does-not-exist")
+	_, err = service.GetTemplate(t.Context(), "remote:reg-1:does-not-exist")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "not found")
 }
@@ -418,7 +417,7 @@ func minimalSettingsServiceForTest(t *testing.T) *settings.SettingsService {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&settings.SettingVariable{}))
-	svc, err := newSettingsServiceForTestInternal(t, context.Background(), &database.DB{DB: db})
+	svc, err := newSettingsServiceForTestInternal(t, t.Context(), &database.DB{DB: db})
 	require.NoError(t, err)
 	return svc
 }
@@ -427,7 +426,7 @@ func newSettingsServiceForTestInternal(t testing.TB, ctx context.Context, db *da
 	t.Helper()
 	svc, err := settings.NewSettingsService(ctx, db)
 	if err == nil {
-		t.Cleanup(func() { require.NoError(t, svc.Stop(context.Background())) })
+		t.Cleanup(func() { require.NoError(t, svc.Stop(context.WithoutCancel(t.Context()))) })
 	}
 	return svc, err
 }

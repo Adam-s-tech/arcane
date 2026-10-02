@@ -104,7 +104,7 @@ func waitForGoroutineCount(t *testing.T, target, tolerance int, timeout time.Dur
 func TestLeak_HubRunExitsOnContextCancel(t *testing.T) {
 	baseline := goroutineCount()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	h := NewHub(64)
 	go h.Run(ctx)
 
@@ -127,7 +127,7 @@ func TestLeak_ServeClientFullLifecycle(t *testing.T) {
 	baseline := goroutineCount()
 
 	h := NewHub(64)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	go h.Run(ctx)
 
 	// Set up WebSocket server that calls ServeClient (mirrors ws_handler.go pattern)
@@ -175,7 +175,7 @@ func TestLeak_OnEmptyCallbackCancelsContext(t *testing.T) {
 	baseline := goroutineCount()
 
 	h := NewHub(64)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	h.SetOnEmpty(func() {
 		cancel() // This is what ws_handler.go does
@@ -273,7 +273,7 @@ func TestLeak_HubWithForwardLinesLifecycle(t *testing.T) {
 		if err != nil {
 			return
 		}
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		hub := NewHub(1024)
 		hub.SetOnEmpty(func() { cancel() })
 		go hub.Run(ctx) //nolint:contextcheck // intentional: context must outlive the HTTP request for WebSocket streaming
@@ -329,7 +329,7 @@ func TestLeak_HubWithForwardLogJSONBatchedLifecycle(t *testing.T) {
 		if err != nil {
 			return
 		}
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		hub := NewHub(1024)
 		hub.SetOnEmpty(func() { cancel() })
 		go hub.Run(ctx) //nolint:contextcheck // intentional: context must outlive the HTTP request
@@ -486,7 +486,7 @@ func TestLeak_ContainerStatsHubPattern(t *testing.T) {
 		if err != nil {
 			return
 		}
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		hub := NewHub(64)
 		hub.SetOnEmpty(func() { cancel() })
 		go hub.Run(ctx)                              //nolint:contextcheck // intentional: context must outlive the HTTP request
@@ -565,7 +565,7 @@ func TestLeak_MultipleClientsOnSameHub(t *testing.T) {
 	baseline := goroutineCount()
 
 	h := NewHub(64)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	h.SetOnEmpty(func() {
 		cancel()

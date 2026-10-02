@@ -75,7 +75,19 @@ type volumeWorkspaceLockContextInternal struct {
 
 const internalVolumePruneFilterValue = libarcane.InternalResourceLabel + "=true"
 
-func NewVolumeService(db *database.DB, dockerService *docker.DockerClientService, eventService *event.EventService, activityService *activity.ActivityService, settingsService *settings.SettingsService, containerService *container.ContainerService, imageService *image.ImageService, engine *backup.Engine, s3Destinations *s3domain.S3DestinationService, cfg *config.Config, recoveryKeys *backup.RecoveryKeyStore) *VolumeService {
+func NewVolumeService(
+	db *database.DB,
+	dockerService *docker.DockerClientService,
+	eventService *event.EventService,
+	activityService *activity.ActivityService,
+	settingsService *settings.SettingsService,
+	containerService *container.ContainerService,
+	imageService *image.ImageService,
+	engine *backup.Engine,
+	s3Destinations *s3domain.S3DestinationService,
+	cfg *config.Config,
+	recoveryKeys *backup.RecoveryKeyStore,
+) *VolumeService {
 	slog.Debug("volume service: new")
 	backupVolumeName := ""
 	encryptionKey := ""
@@ -130,8 +142,8 @@ func (s *VolumeService) GetVolumeByName(ctx context.Context, name string) (*volu
 	}
 	vol := volResult.Volume
 
-	settings := s.settingsService.GetSettingsConfig()
-	usageCtx, usageCancel := context.WithTimeout(ctx, timeouts.GetDuration(settings.DockerAPITimeout.AsInt(), timeouts.DefaultDockerAPI))
+	localSettings := s.settingsService.GetSettingsConfig()
+	usageCtx, usageCancel := context.WithTimeout(ctx, timeouts.GetDuration(localSettings.DockerAPITimeout.AsInt(), timeouts.DefaultDockerAPI))
 	defer usageCancel()
 	if usageVolumes, ok := dockerutil.GetVolumeUsageDataStaleWhileRevalidate(usageCtx, dockerClient).Get(); ok {
 		for _, uv := range usageVolumes {
@@ -176,7 +188,22 @@ func (s *VolumeService) CreateVolume(ctx context.Context, options client.VolumeC
 	defer s.eventService.BeginDockerResourceSuppressionWindow("volume", created.Volume.Name, created.Volume.Name)()
 	vol, err := dockerClient.VolumeInspect(ctx, created.Volume.Name, client.VolumeInspectOptions{})
 	if err != nil {
-		s.eventService.LogErrorEvent(ctx, event.EventTypeVolumeError, "volume", created.Volume.Name, created.Volume.Name, user.ID, user.Username, "0", err, database.JSON{"action": "create", "driver": options.Driver, "step": "inspect"})
+		s.eventService.LogErrorEvent(
+			ctx,
+			event.EventTypeVolumeError,
+			"volume",
+			created.Volume.Name,
+			created.Volume.Name,
+			user.ID,
+			user.Username,
+			"0",
+			err,
+			database.JSON{
+				"action": "create",
+				"driver": options.Driver,
+				"step":   "inspect",
+			},
+		)
 		return nil, fmt.Errorf("failed to inspect created volume: %w", err)
 	}
 
@@ -209,11 +236,11 @@ func (s *VolumeService) DeleteVolume(ctx context.Context, name string, force boo
 	}
 
 	defer s.eventService.BeginDockerResourceSuppressionWindow("volume", name, name)()
-	if _, err := dockerClient.VolumeRemove(ctx, name, client.VolumeRemoveOptions{
+	if _, volumeRemoveErr := dockerClient.VolumeRemove(ctx, name, client.VolumeRemoveOptions{
 		Force: force,
-	}); err != nil {
-		s.eventService.LogErrorEvent(ctx, event.EventTypeVolumeError, "volume", name, name, user.ID, user.Username, "0", err, database.JSON{"action": "delete", "force": force})
-		return fmt.Errorf("failed to remove volume: %w", err)
+	}); volumeRemoveErr != nil {
+		s.eventService.LogErrorEvent(ctx, event.EventTypeVolumeError, "volume", name, name, user.ID, user.Username, "0", volumeRemoveErr, database.JSON{"action": "delete", "force": force})
+		return fmt.Errorf("failed to remove volume: %w", volumeRemoveErr)
 	}
 
 	metadata := database.JSON{

@@ -70,9 +70,9 @@ var renameCmd = &cobra.Command{
 		}
 
 		if !forceFlag {
-			confirmed, err := cmdutil.Confirm(cmd, fmt.Sprintf("Rename volume %s to %s? The volume is copied and the source is removed.", resolved.Name, args[1]))
-			if err != nil {
-				return err
+			confirmed, confirmErr := cmdutil.Confirm(cmd, fmt.Sprintf("Rename volume %s to %s? The volume is copied and the source is removed.", resolved.Name, args[1]))
+			if confirmErr != nil {
+				return confirmErr
 			}
 			if !confirmed {
 				fmt.Println("Cancelled")
@@ -120,8 +120,7 @@ var backupsPolicyCmd = &cobra.Command{
 			return cmdutil.PrintJSON(result.Data)
 		}
 
-		printBackupPolicies(resolved.Name, result.Data)
-		return nil
+		return printBackupPolicies(resolved.Name, result.Data)
 	},
 }
 
@@ -144,12 +143,12 @@ var backupsPolicyUpdateCmd = &cobra.Command{
 
 		var payload volume.UpdateBackupPolicies
 		if policyFile != "" {
-			raw, err := os.ReadFile(policyFile)
-			if err != nil {
-				return fmt.Errorf("failed to read policy file: %w", err)
+			raw, readFileErr := os.ReadFile(policyFile)
+			if readFileErr != nil {
+				return fmt.Errorf("failed to read policy file: %w", readFileErr)
 			}
-			if err := json.Unmarshal(raw, &payload); err != nil {
-				return fmt.Errorf("failed to parse policy file: %w", err)
+			if unmarshalErr := json.Unmarshal(raw, &payload); unmarshalErr != nil {
+				return fmt.Errorf("failed to parse policy file: %w", unmarshalErr)
 			}
 		} else {
 			payload, err = buildPolicyUpdate(cmd, c, resolved.Name)
@@ -168,8 +167,7 @@ var backupsPolicyUpdateCmd = &cobra.Command{
 		}
 
 		output.Success("Backup policies for volume %s saved successfully", resolved.Name)
-		printBackupPolicies(resolved.Name, result.Data)
-		return nil
+		return printBackupPolicies(resolved.Name, result.Data)
 	},
 }
 
@@ -243,12 +241,12 @@ func buildPolicyUpdate(cmd *cobra.Command, c *client.Client, volumeName string) 
 	return payload, nil
 }
 
-func printBackupPolicies(volumeName string, collection volume.BackupPolicyCollection) {
+func printBackupPolicies(volumeName string, collection volume.BackupPolicyCollection) error {
 	output.Header("Backup Policies: %s", volumeName)
 	output.KeyValue("S3 Available", collection.S3Available)
 	if len(collection.Policies) == 0 {
-		fmt.Println("No backup policies configured")
-		return
+		_, writeErr := fmt.Println("No backup policies configured")
+		return writeErr
 	}
 
 	headers := []string{"ID", "ENABLED", "SCHEDULE", "RETENTION", "STOP CONTAINERS", "LOCAL", "S3", "S3 DESTINATION"}
@@ -266,7 +264,7 @@ func printBackupPolicies(volumeName string, collection volume.BackupPolicyCollec
 			s3Destination,
 		}
 	}
-	output.Table(headers, rows)
+	return output.Table(headers, rows)
 }
 
 func yesNo(v bool) string {
@@ -336,7 +334,9 @@ func runListBackups(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	output.Table(headers, rows)
+	if tableErr := output.Table(headers, rows); tableErr != nil {
+		return tableErr
+	}
 	output.Showing(len(result.Data), result.Pagination.TotalItems, "backups")
 	for _, warning := range result.Warnings {
 		output.Warning("%s", warning)
@@ -429,9 +429,9 @@ and restored instead (no backup ID).`,
 		}
 
 		if !forceFlag {
-			confirmed, err := cmdutil.Confirm(cmd, fmt.Sprintf("Restore volume %s from backup %s? Current volume contents will be replaced.", resolved.Name, backupID))
-			if err != nil {
-				return err
+			confirmed, confirmErr := cmdutil.Confirm(cmd, fmt.Sprintf("Restore volume %s from backup %s? Current volume contents will be replaced.", resolved.Name, backupID))
+			if confirmErr != nil {
+				return confirmErr
 			}
 			if !confirmed {
 				fmt.Println("Cancelled")
@@ -540,8 +540,8 @@ var backupsDeleteCmd = &cobra.Command{
 			return err
 		}
 
-		if _, err := c.DeleteJSON[base.MessageResponse](cmd.Context(), types.VolumeBackup(c.EnvID(), args[0])); err != nil {
-			return fmt.Errorf("failed to delete backup: %w", err)
+		if _, deleteBackupErr := c.DeleteJSON[base.MessageResponse](cmd.Context(), types.VolumeBackup(c.EnvID(), args[0])); deleteBackupErr != nil {
+			return fmt.Errorf("failed to delete backup: %w", deleteBackupErr)
 		}
 
 		output.Success("Backup %s deleted successfully", args[0])
@@ -597,8 +597,8 @@ var backupsDownloadCmd = &cobra.Command{
 			return fmt.Errorf("failed to download backup: %w", err)
 		}
 		defer func() { _ = resp.Body.Close() }()
-		if err := cmdutil.EnsureSuccessStatus(resp); err != nil {
-			return fmt.Errorf("failed to download backup: %w", err)
+		if ensureSuccessStatusErr := cmdutil.EnsureSuccessStatus(resp); ensureSuccessStatusErr != nil {
+			return fmt.Errorf("failed to download backup: %w", ensureSuccessStatusErr)
 		}
 
 		outputFile := ""
@@ -609,8 +609,8 @@ var backupsDownloadCmd = &cobra.Command{
 			outputFile = downloadFilename(resp, args[0]+".tar.gz")
 		}
 
-		if err := writeResponseToFile(resp.Body, outputFile); err != nil {
-			return err
+		if writeResponseToFileErr := writeResponseToFile(resp.Body, outputFile); writeResponseToFileErr != nil {
+			return writeResponseToFileErr
 		}
 
 		output.Success("Backup downloaded to %s", outputFile)
@@ -634,12 +634,12 @@ func writeResponseToFile(body io.Reader, path string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create file %s: %w", path, err)
 	}
-	if _, err := io.Copy(file, body); err != nil {
+	if _, copyErr := io.Copy(file, body); copyErr != nil {
 		_ = file.Close()
-		return fmt.Errorf("failed to write file %s: %w", path, err)
+		return fmt.Errorf("failed to write file %s: %w", path, copyErr)
 	}
-	if err := file.Close(); err != nil {
-		return fmt.Errorf("failed to write file %s: %w", path, err)
+	if closeErr := file.Close(); closeErr != nil {
+		return fmt.Errorf("failed to write file %s: %w", path, closeErr)
 	}
 	return nil
 }

@@ -37,8 +37,19 @@ func setupAuthServiceTestDBInternal(t *testing.T) *database.DB {
 	require.NoError(t, db.Exec("CREATE UNIQUE INDEX idx_users_username_unique ON users(username)").Error)
 	// environments and api_keys live in packages that import this one; the
 	// in-package tests only need the tables to exist.
-	require.NoError(t, db.Exec("CREATE TABLE IF NOT EXISTS environments (id text PRIMARY KEY, created_at datetime, updated_at datetime, name text, api_url text, status text, enabled numeric, is_edge numeric, hidden numeric, last_seen datetime, last_edge_transport text, access_token text, api_key_id text, parent_environment_id text, swarm_node_id text)").Error)
-	require.NoError(t, db.Exec("CREATE TABLE IF NOT EXISTS api_keys (id text PRIMARY KEY, created_at datetime, updated_at datetime, name text, description text, key_hash text, key_prefix text, kind text, user_id text, environment_id text, managed_by text, expires_at datetime, last_used_at datetime)").Error)
+	require.NoError(
+		t,
+		db.Exec("CREATE TABLE IF NOT EXISTS environments (id text PRIMARY KEY, created_at datetime, updated_at dateti"+
+			"me, name text, api_url text, status text, enabled numeric, is_edge numeric, hidden numeric, last_see"+
+			"n datetime, last_edge_transport text, access_token text, api_key_id text, parent_environment_id text"+
+			", swarm_node_id text)").Error,
+	)
+	require.NoError(
+		t,
+		db.Exec("CREATE TABLE IF NOT EXISTS api_keys (id text PRIMARY KEY, created_at datetime, updated_at datetime, "+
+			"name text, description text, key_hash text, key_prefix text, kind text, user_id text, environment_id"+
+			" text, managed_by text, expires_at datetime, last_used_at datetime)").Error,
+	)
 	return &database.DB{DB: db}
 }
 
@@ -47,15 +58,15 @@ func setupAuthServiceTestDBInternal(t *testing.T) *database.DB {
 func setupUserAndRoleServices(t *testing.T) (*UserService, *role.RoleService) {
 	t.Helper()
 	db := setupAuthServiceTestDBInternal(t)
-	role := role.NewRoleService(db)
-	require.NoError(t, role.EnsureBuiltInRoles(context.Background()))
-	userRecord := NewUserService(db, role)
-	return userRecord, role
+	localRole := role.NewRoleService(db)
+	require.NoError(t, localRole.EnsureBuiltInRoles(t.Context()))
+	userRecord := NewUserService(db, localRole)
+	return userRecord, localRole
 }
 
 func createTestUser(t *testing.T, svc *UserService, id, username string) *common.User {
 	t.Helper()
-	created, err := svc.CreateUser(context.Background(), &common.User{
+	created, err := svc.CreateUser(t.Context(), &common.User{
 		ID:       id,
 		Username: username,
 	})
@@ -66,14 +77,14 @@ func createTestUser(t *testing.T, svc *UserService, id, username string) *common
 // grantGlobalAdmin assigns the built-in Admin role globally to the user.
 func grantGlobalAdmin(t *testing.T, roleSvc *role.RoleService, userID string) {
 	t.Helper()
-	require.NoError(t, roleSvc.SetUserAssignments(context.Background(), userID, []role.UserRoleAssignment{
+	require.NoError(t, roleSvc.SetUserAssignments(t.Context(), userID, []role.UserRoleAssignment{
 		{RoleID: authz.BuiltInRoleAdmin, EnvironmentID: nil},
 	}))
 }
 
 func TestDeleteUserRejectsDeletingOnlyAdmin(t *testing.T) {
 	userSvc, roleSvc := setupUserAndRoleServices(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	admin := createTestUser(t, userSvc, "admin-1", "arcane")
 	grantGlobalAdmin(t, roleSvc, admin.ID)
@@ -88,11 +99,11 @@ func TestDeleteUserRejectsDeletingOnlyAdmin(t *testing.T) {
 
 func TestSetPasswordUpdatesHashAndClearsPasswordChangeRequirement(t *testing.T) {
 	userSvc, _ := setupUserAndRoleServices(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	oldHash, err := userSvc.HashPassword("old-password")
 	require.NoError(t, err)
-	user, err := userSvc.CreateUser(ctx, &common.User{
+	localUser, err := userSvc.CreateUser(ctx, &common.User{
 		ID:                     "password-user",
 		Username:               "password-user",
 		PasswordHash:           oldHash,
@@ -100,10 +111,10 @@ func TestSetPasswordUpdatesHashAndClearsPasswordChangeRequirement(t *testing.T) 
 	})
 	require.NoError(t, err)
 
-	_, err = userSvc.SetPassword(ctx, user, "new-password")
+	_, err = userSvc.SetPassword(ctx, localUser, "new-password")
 	require.NoError(t, err)
 
-	updated, err := userSvc.GetUserByID(ctx, user.ID)
+	updated, err := userSvc.GetUserByID(ctx, localUser.ID)
 	require.NoError(t, err)
 	require.NoError(t, userSvc.ValidatePassword(updated.PasswordHash, "new-password"))
 	require.Error(t, userSvc.ValidatePassword(updated.PasswordHash, "old-password"))
@@ -112,7 +123,7 @@ func TestSetPasswordUpdatesHashAndClearsPasswordChangeRequirement(t *testing.T) 
 
 func TestDeleteUserAllowsDeletingNonAdmin(t *testing.T) {
 	userSvc, roleSvc := setupUserAndRoleServices(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	admin := createTestUser(t, userSvc, "admin-1", "arcane")
 	grantGlobalAdmin(t, roleSvc, admin.ID)
@@ -127,7 +138,7 @@ func TestDeleteUserAllowsDeletingNonAdmin(t *testing.T) {
 
 func TestDeleteUserAllowsDeletingAdminWhenAnotherAdminExists(t *testing.T) {
 	userSvc, roleSvc := setupUserAndRoleServices(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	adminToDelete := createTestUser(t, userSvc, "admin-1", "arcane")
 	grantGlobalAdmin(t, roleSvc, adminToDelete.ID)
@@ -143,7 +154,7 @@ func TestDeleteUserAllowsDeletingAdminWhenAnotherAdminExists(t *testing.T) {
 
 func TestListUsersPaginatedSetsCanDeleteFromGlobalAdminCount(t *testing.T) {
 	userSvc, roleSvc := setupUserAndRoleServices(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	lastAdmin := createTestUser(t, userSvc, "admin-1", "arcane")
 	grantGlobalAdmin(t, roleSvc, lastAdmin.ID)
@@ -181,7 +192,7 @@ func TestListUsersPaginatedSetsCanDeleteFromGlobalAdminCount(t *testing.T) {
 
 func TestDeleteUserRejectsDeletingOnlyCustomAllPermissionsAdmin(t *testing.T) {
 	userSvc, roleSvc := setupUserAndRoleServices(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	customAdmin := createTestUser(t, userSvc, "custom-admin", "custom-admin")
 	customRole, err := roleSvc.CreateRole(ctx, "Custom Admin", nil, authz.AllPermissions())
@@ -209,7 +220,7 @@ func TestDeleteUserRejectsDeletingOnlyCustomAllPermissionsAdmin(t *testing.T) {
 
 func TestUserProfileValidationAndPersistence(t *testing.T) {
 	userSvc, _ := setupUserAndRoleServices(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	u := createTestUser(t, userSvc, "user-1", "  fontuser  ")
 	require.Equal(t, "fontuser", u.Username)
@@ -243,7 +254,7 @@ func TestUserProfileValidationAndPersistence(t *testing.T) {
 
 func TestUserDtoExposesLastLogin(t *testing.T) {
 	userSvc, _ := setupUserAndRoleServices(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	u := createTestUser(t, userSvc, "user-1", "last-login-user")
 
@@ -266,7 +277,7 @@ func TestUserDtoExposesLastLogin(t *testing.T) {
 
 func TestUpdateUserPersistsTimeFormatAndMapsToDto(t *testing.T) {
 	userSvc, _ := setupUserAndRoleServices(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	u := createTestUser(t, userSvc, "user-1", "time-format-user")
 	require.Equal(t, user.TimeFormatAuto, u.TimeFormat)
@@ -294,7 +305,7 @@ func TestUpdateUserPersistsTimeFormatAndMapsToDto(t *testing.T) {
 
 func TestUpdateUserRejectsNonAdminActorEditingAdmin(t *testing.T) {
 	userSvc, roleSvc := setupUserAndRoleServices(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	admin := createTestUser(t, userSvc, "admin-1", "arcane")
 	grantGlobalAdmin(t, roleSvc, admin.ID)
@@ -318,7 +329,7 @@ func TestUpdateUserRejectsNonAdminActorEditingAdmin(t *testing.T) {
 
 func TestUpdateUserAllowsGlobalAdminActorEditingAdmin(t *testing.T) {
 	userSvc, roleSvc := setupUserAndRoleServices(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	admin := createTestUser(t, userSvc, "admin-1", "arcane")
 	grantGlobalAdmin(t, roleSvc, admin.ID)
@@ -335,7 +346,7 @@ func TestUpdateUserAllowsGlobalAdminActorEditingAdmin(t *testing.T) {
 
 func TestUpdateUserAllowsNonAdminActorEditingNonAdmin(t *testing.T) {
 	userSvc, roleSvc := setupUserAndRoleServices(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	admin := createTestUser(t, userSvc, "admin-1", "arcane")
 	grantGlobalAdmin(t, roleSvc, admin.ID)
@@ -356,7 +367,7 @@ func TestUpdateUserAllowsNonAdminActorEditingNonAdmin(t *testing.T) {
 
 func TestUpdateUserAllowsSelfEditByNonAdmin(t *testing.T) {
 	userSvc, roleSvc := setupUserAndRoleServices(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	admin := createTestUser(t, userSvc, "admin-1", "arcane")
 	grantGlobalAdmin(t, roleSvc, admin.ID)
@@ -371,7 +382,7 @@ func TestUpdateUserAllowsSelfEditByNonAdmin(t *testing.T) {
 
 func TestDeleteUserRejectsNonAdminActorDeletingAdmin(t *testing.T) {
 	userSvc, roleSvc := setupUserAndRoleServices(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	admin := createTestUser(t, userSvc, "admin-1", "arcane")
 	grantGlobalAdmin(t, roleSvc, admin.ID)
@@ -398,7 +409,7 @@ func TestDeleteUserRejectsNonAdminActorDeletingAdmin(t *testing.T) {
 
 func TestDeleteUserAllowsGlobalAdminActorDeletingAdmin(t *testing.T) {
 	userSvc, roleSvc := setupUserAndRoleServices(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	admin := createTestUser(t, userSvc, "admin-1", "arcane")
 	grantGlobalAdmin(t, roleSvc, admin.ID)
@@ -413,7 +424,7 @@ func TestDeleteUserAllowsGlobalAdminActorDeletingAdmin(t *testing.T) {
 
 func TestCreateDefaultAdminDoesNotPromoteRenamedArcaneUser(t *testing.T) {
 	userSvc, roleSvc := setupUserAndRoleServices(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	admin := createTestUser(t, userSvc, "admin-1", "boss")
 	grantGlobalAdmin(t, roleSvc, admin.ID)
@@ -428,7 +439,7 @@ func TestCreateDefaultAdminDoesNotPromoteRenamedArcaneUser(t *testing.T) {
 
 func TestCreateDefaultAdminRecoversArcaneUserWhenNoGlobalAdminExists(t *testing.T) {
 	userSvc, roleSvc := setupUserAndRoleServices(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	orphan := createTestUser(t, userSvc, "user-1", "arcane")
 
@@ -443,7 +454,7 @@ func TestCreateDefaultAdminRecoversArcaneUserWhenNoGlobalAdminExists(t *testing.
 
 func TestUserDisplayNameNormalization(t *testing.T) {
 	svc := NewUserService(setupAuthServiceTestDBInternal(t), nil)
-	ctx := context.Background()
+	ctx := t.Context()
 	created, err := svc.CreateUser(ctx, &common.User{ID: "normalized", Username: " Jose\u0301 ", Email: new(" Jose\u0301@example.com "), DisplayName: new(" Jose\u0301 ")})
 	require.NoError(t, err)
 	require.Equal(t, "Jose\u0301", created.Username)

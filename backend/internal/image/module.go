@@ -23,7 +23,15 @@ type Module struct {
 	upload      *upload.UploadService
 }
 
-func New(service *ImageService, dockerService *docker.DockerClientService, imageUpdate *imageupdate.ImageUpdateService, settingsService *settings.SettingsService, buildService *build.BuildService, activityService *activity.ActivityService, uploadService *upload.UploadService) *Module {
+func New(
+	service *ImageService,
+	dockerService *docker.DockerClientService,
+	imageUpdate *imageupdate.ImageUpdateService,
+	settingsService *settings.SettingsService,
+	buildService *build.BuildService,
+	activityService *activity.ActivityService,
+	uploadService *upload.UploadService,
+) *Module {
 	return &Module{service: service, docker: dockerService, imageUpdate: imageUpdate, settings: settingsService, build: buildService, activity: activityService, upload: uploadService}
 }
 

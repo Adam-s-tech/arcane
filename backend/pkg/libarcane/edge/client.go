@@ -508,8 +508,8 @@ func (c *TunnelClient) serveTunnelSessionInternal(ctx context.Context, conn Tunn
 
 	workers.Go(func() { c.heartbeatLoop(connCtx, conn) })
 
-	if err := c.messageLoop(connCtx, conn, &workers); err != nil {
-		return fmt.Errorf("%w: %w", errEstablishedTunnelSessionEnded, err)
+	if messageLoopErr := c.messageLoop(connCtx, conn, &workers); messageLoopErr != nil {
+		return fmt.Errorf("%w: %w", errEstablishedTunnelSessionEnded, messageLoopErr)
 	}
 	return nil
 }
@@ -710,8 +710,8 @@ func (c *TunnelClient) handleCommandRequest(ctx context.Context, conn TunnelConn
 
 	recorder := newCommandResponseRecorderInternal(msg.ID, msg.Command, conn)
 	c.handler.ServeHTTP(recorder, req)
-	if err := recorder.Close(); err != nil {
-		slog.WarnContext(reqCtx, "Failed to finalize command response", "id", msg.ID, "command", msg.Command, "error", err)
+	if closeErr := recorder.Close(); closeErr != nil {
+		slog.WarnContext(reqCtx, "Failed to finalize command response", "id", msg.ID, "command", msg.Command, "error", closeErr)
 	}
 }
 
@@ -806,8 +806,8 @@ func (c *TunnelClient) handleRequest(ctx context.Context, conn TunnelConnection,
 		Body:    rw.body.Bytes(),
 	}
 
-	if err := conn.Send(resp); err != nil {
-		slog.ErrorContext(reqCtx, "Failed to send response", "id", msg.ID, "error", err)
+	if sendErr := conn.Send(resp); sendErr != nil {
+		slog.ErrorContext(reqCtx, "Failed to send response", "id", msg.ID, "error", sendErr)
 	} else {
 		slog.DebugContext(reqCtx, "Sent tunneled response", "id", msg.ID, "status", rw.statusCode)
 	}
@@ -836,8 +836,8 @@ func (c *TunnelClient) handleRequestStreaming(ctx context.Context, conn TunnelCo
 	recorder := newStreamingResponseRecorder(msg.ID, conn)
 	c.handler.ServeHTTP(recorder, req)
 
-	if err := recorder.Close(); err != nil {
-		slog.WarnContext(reqCtx, "Failed to finalize streamed response", "id", msg.ID, "error", err)
+	if closeErr := recorder.Close(); closeErr != nil {
+		slog.WarnContext(reqCtx, "Failed to finalize streamed response", "id", msg.ID, "error", closeErr)
 	}
 }
 
@@ -1033,7 +1033,7 @@ func (c *TunnelClient) closeAllStreams() {
 		if !ok {
 			return true
 		}
-		if stream, ok := value.(*activeWSStream); ok {
+		if stream, localOk := value.(*activeWSStream); localOk {
 			c.closeWebSocketStream(streamID, stream)
 		}
 		return true
@@ -1055,8 +1055,8 @@ func (c *TunnelClient) startLocalWebSocketReadLoop(ctx, streamCtx context.Contex
 			return
 		}
 
-		if err := c.sendWebSocketData(stream.conn, streamID, int(msgType), data); err != nil {
-			slog.DebugContext(ctx, "Failed to send WebSocket data to manager", "error", err)
+		if sendWebSocketDataErr := c.sendWebSocketData(stream.conn, streamID, int(msgType), data); sendWebSocketDataErr != nil {
+			slog.DebugContext(ctx, "Failed to send WebSocket data to manager", "error", sendWebSocketDataErr)
 			return
 		}
 	}

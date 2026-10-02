@@ -1,7 +1,7 @@
 package notifications
 
 import (
-	"fmt"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -311,26 +311,26 @@ func TestSendSignal_ValidConfigurations(t *testing.T) {
 // Helper function to extract validation logic for testing
 func validateSignalConfig(config SignalConfig) error {
 	if config.Host == "" {
-		return fmt.Errorf("signal host is empty")
+		return errors.New("signal host is empty")
 	}
 	if config.Port == 0 {
-		return fmt.Errorf("signal port is not set")
+		return errors.New("signal port is not set")
 	}
 	if config.Source == "" {
-		return fmt.Errorf("signal source phone number is empty")
+		return errors.New("signal source phone number is empty")
 	}
 	if len(config.Recipients) == 0 {
-		return fmt.Errorf("no signal recipients configured")
+		return errors.New("no signal recipients configured")
 	}
 
 	// Validate authentication
 	hasBasicAuth := config.User != "" && config.Password != ""
 	hasTokenAuth := config.Token != ""
 	if !hasBasicAuth && !hasTokenAuth {
-		return fmt.Errorf("signal requires either basic auth (user/password) or token authentication")
+		return errors.New("signal requires either basic auth (user/password) or token authentication")
 	}
 	if hasBasicAuth && hasTokenAuth {
-		return fmt.Errorf("signal cannot use both basic auth and token authentication simultaneously")
+		return errors.New("signal cannot use both basic auth and token authentication simultaneously")
 	}
 
 	return nil

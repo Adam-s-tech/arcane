@@ -88,8 +88,8 @@ GitHub Actions example:
 			cfg.JWTToken = tokenResp.AccessToken
 			cfg.APIKey = ""
 			cfg.RefreshToken = ""
-			if err := config.Save(cfg); err != nil {
-				return fmt.Errorf("failed to save federated token: %w", err)
+			if saveErr := config.Save(cfg); saveErr != nil {
+				return fmt.Errorf("failed to save federated token: %w", saveErr)
 			}
 		}
 
@@ -201,8 +201,8 @@ func exchangeFederatedTokenInternal(cmd *cobra.Command, c *client.Client, subjec
 	}
 
 	var tokenResp federatedtypes.FederatedTokenResponse
-	if err := json.Unmarshal(body, &tokenResp); err != nil {
-		return nil, fmt.Errorf("failed to parse federated token response: %w", err)
+	if unmarshalErr := json.Unmarshal(body, &tokenResp); unmarshalErr != nil {
+		return nil, fmt.Errorf("failed to parse federated token response: %w", unmarshalErr)
 	}
 	return &tokenResp, nil
 }

@@ -1,7 +1,6 @@
 package scheduler
 
 import (
-	"context"
 	"testing"
 
 	"github.com/getarcaneapp/arcane/types/v2/system"
@@ -20,14 +19,14 @@ func setupScheduledPruneSettingsServiceInternal(t *testing.T) *settings.Settings
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&settings.SettingVariable{}))
 
-	svc, err := newSettingsServiceForTestInternal(t, context.Background(), &database.DB{DB: db})
+	svc, err := newSettingsServiceForTestInternal(t, t.Context(), &database.DB{DB: db})
 	require.NoError(t, err)
 
 	return svc
 }
 
 func TestBuildScheduledPruneRequestInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	settingsService := setupScheduledPruneSettingsServiceInternal(t)
 
 	require.NoError(t, settingsService.UpdateSetting(ctx, "pruneContainerMode", "olderThan"))
@@ -59,7 +58,7 @@ func TestBuildScheduledPruneRequestInternal(t *testing.T) {
 }
 
 func TestBuildScheduledPruneRequestInternal_SkipsWhenAllModesAreNone(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	settingsService := setupScheduledPruneSettingsServiceInternal(t)
 
 	require.NoError(t, settingsService.UpdateSetting(ctx, "pruneContainerMode", "none"))

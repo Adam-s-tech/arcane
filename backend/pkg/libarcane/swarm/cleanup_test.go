@@ -46,7 +46,7 @@ func TestCleanupStaleManagedResourcesMatchesCurrentAndLegacyLabels(t *testing.T)
 	}
 
 	err := cleanupStaleManagedResourcesInternal(
-		context.Background(),
+		t.Context(),
 		"stack",
 		map[string]struct{}{"desired": {}},
 		adapter,
@@ -75,12 +75,12 @@ func TestCleanupStaleManagedResourcesFailsWhenResourceStaysInUse(t *testing.T) {
 		},
 	}
 
-	err := cleanupStaleManagedResourcesInternal(context.Background(), "stack", map[string]struct{}{}, adapter, false, false)
+	err := cleanupStaleManagedResourcesInternal(t.Context(), "stack", map[string]struct{}{}, adapter, false, false)
 	require.Error(t, err)
 	require.Equal(t, staleSwarmResourceRemoveAttemptsInternal, removeCalls)
 
 	removeCalls = 0
-	err = cleanupStaleManagedResourcesInternal(context.Background(), "stack", map[string]struct{}{}, adapter, false, true)
+	err = cleanupStaleManagedResourcesInternal(t.Context(), "stack", map[string]struct{}{}, adapter, false, true)
 	require.NoError(t, err)
 	require.Equal(t, 1, removeCalls)
 }

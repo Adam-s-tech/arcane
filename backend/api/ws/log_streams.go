@@ -155,10 +155,8 @@ func (h *WebSocketHandler) serveLogStreamInternal(
 		unregister()
 		h.releaseLogStreamInternal(streamKey, stream)
 	}
-	// WebSocket connections use context.Background() because they are long-lived and should not
-	// be tied to the HTTP request context. Cleanup is handled via the hub's OnEmpty callback
-	// which triggers when all clients disconnect.
-	if !wshub.ServeClientWithOnRemove(context.Background(), stream.hub, conn, release) {
+	// The hub owns connection cleanup; preserve request values without request cancellation.
+	if !wshub.ServeClientWithOnRemove(context.WithoutCancel(c.Request().Context()), stream.hub, conn, release) {
 		// The stream refcount normally keeps this hub alive, so a stopped hub
 		// here means it was torn down out from under us; drop our reference
 		// rather than leaking the connection and the metrics entry.
@@ -247,7 +245,7 @@ func newWSLogStreamInternal(key, format string) (*wsLogStream, context.Context) 
 		close(ls.firstSubscriber)
 	})
 
-	ctx, cancel := context.WithCancel(context.Background()) //nolint:gosec // cancel is intentionally retained and invoked by the hub OnEmpty callback.
+	ctx, cancel := context.WithCancel(context.Background()) //nolint:gosec,forbidigo // Shared log hubs own their lifecycle and idle cancellation across requests.
 	ls.cancel = cancel
 
 	go ls.hub.Run(ctx)

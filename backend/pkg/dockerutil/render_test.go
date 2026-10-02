@@ -10,7 +10,8 @@ import (
 
 func TestRenderJSONMessageStream(t *testing.T) {
 	t.Run("renders docker CLI text for pull messages", func(t *testing.T) {
-		stream := strings.NewReader("{\"status\":\"Pulling from library/nginx\",\"id\":\"stable-alpine\"}\n{\"status\":\"Pull complete\",\"id\":\"abc123\"}\n{\"status\":\"Status: Downloaded newer image for nginx:stable-alpine\"}\n")
+		stream := strings.NewReader("{\"status\":\"Pulling from library/nginx\",\"id\":\"stable-alpine\"}\n{\"status\":\"Pull complete\",\"id\":\"abc123\"" +
+			"}\n{\"status\":\"Status: Downloaded newer image for nginx:stable-alpine\"}\n")
 		var out strings.Builder
 		{
 

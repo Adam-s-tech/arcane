@@ -234,23 +234,23 @@ func (q *Coordinator) Start(ctx, appCtx context.Context) error {
 		if !changed {
 			continue
 		}
-		if err := q.mutateInternal(ctx, record.EnvironmentID, record.JobID, func(current *st.QueueRecord) error {
+		if mutateErr := q.mutateInternal(ctx, record.EnvironmentID, record.JobID, func(current *st.QueueRecord) error {
 			for i := range current.Runs {
 				normalizeLegacyRunInternal(&current.Runs[i])
 			}
 			return nil
-		}); err != nil {
-			return fmt.Errorf("normalize startup job %q in environment %q: %w", record.JobID, record.EnvironmentID, err)
+		}); mutateErr != nil {
+			return fmt.Errorf("normalize startup job %q in environment %q: %w", record.JobID, record.EnvironmentID, mutateErr)
 		}
 	}
-	if err := q.pruneInternal(ctx); err != nil {
-		return fmt.Errorf("prune startup job history: %w", err)
+	if pruneErr := q.pruneInternal(ctx); pruneErr != nil {
+		return fmt.Errorf("prune startup job history: %w", pruneErr)
 	}
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("initialize job coordinator: %w", err)
+	if errErr := ctx.Err(); errErr != nil {
+		return fmt.Errorf("initialize job coordinator: %w", errErr)
 	}
-	if err := appCtx.Err(); err != nil {
-		return fmt.Errorf("start job dispatcher: %w", err)
+	if errErr2 := appCtx.Err(); errErr2 != nil {
+		return fmt.Errorf("start job dispatcher: %w", errErr2)
 	}
 
 	runCtx, cancel := context.WithCancel(appCtx)

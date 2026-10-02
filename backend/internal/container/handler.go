@@ -137,7 +137,14 @@ type GenerateComposeInput struct {
 	Body          containertypes.GenerateComposeRequest
 }
 
-func RegisterContainers(api huma.API, containerSvc *ContainerService, dockerSvc *docker.DockerClientService, settingsSvc *settings.SettingsService, activitySvc *activity.ActivityService, appCtx handlerutil.ActivityAppContext) {
+func RegisterContainers(
+	api huma.API,
+	containerSvc *ContainerService,
+	dockerSvc *docker.DockerClientService,
+	settingsSvc *settings.SettingsService,
+	activitySvc *activity.ActivityService,
+	appCtx handlerutil.ActivityAppContext,
+) {
 	h := &ContainerHandler{
 		containerService: containerSvc,
 		dockerService:    dockerSvc,
@@ -476,9 +483,9 @@ func applyHostConfigPortBindings(config *dockercontainer.Config, portBindings ne
 		for _, binding := range bindingList {
 			pb := network.PortBinding{HostPort: binding.HostPort}
 			if hostIP := strings.TrimSpace(binding.HostIP); hostIP != "" {
-				parsedIP, err := netip.ParseAddr(hostIP)
-				if err != nil {
-					return err
+				parsedIP, parseAddrErr := netip.ParseAddr(hostIP)
+				if parseAddrErr != nil {
+					return parseAddrErr
 				}
 				pb.HostIP = parsedIP
 			}
@@ -598,16 +605,16 @@ func (h *ContainerHandler) CreateContainer(ctx context.Context, input *CreateCon
 
 	config := buildContainerConfig(input.Body)
 	portBindings := network.PortMap{}
-	if err := applyLegacyPortBindings(input.Body, config, portBindings); err != nil {
-		return nil, huma.Error400BadRequest("Invalid port format: " + err.Error())
+	if applyLegacyPortBindingsErr := applyLegacyPortBindings(input.Body, config, portBindings); applyLegacyPortBindingsErr != nil {
+		return nil, huma.Error400BadRequest("Invalid port format: " + applyLegacyPortBindingsErr.Error())
 	}
-	if err := applyExposedPorts(input.Body.ExposedPorts, config); err != nil {
-		return nil, huma.Error400BadRequest("Invalid port format: " + err.Error())
+	if applyExposedPortsErr := applyExposedPorts(input.Body.ExposedPorts, config); applyExposedPortsErr != nil {
+		return nil, huma.Error400BadRequest("Invalid port format: " + applyExposedPortsErr.Error())
 	}
 
 	hostConfig := buildHostConfigBase(input.Body, portBindings)
-	if err := applyHostConfigOverrides(input.Body, config, hostConfig, portBindings); err != nil {
-		return nil, huma.Error400BadRequest("Invalid port format: " + err.Error())
+	if applyHostConfigOverridesErr := applyHostConfigOverrides(input.Body, config, hostConfig, portBindings); applyHostConfigOverridesErr != nil {
+		return nil, huma.Error400BadRequest("Invalid port format: " + applyHostConfigOverridesErr.Error())
 	}
 	applyLegacyResourceLimits(input.Body, hostConfig)
 
@@ -823,10 +830,28 @@ func (h *ContainerHandler) runContainerActionInternal(ctx context.Context, input
 	}
 
 	runtimeCtx := utils.ActivityRuntimeContext(ctx, h.appCtx)
-	activityID, runtimeCtx := activitylib.StartHandlerActivity(runtimeCtx, h.activityService, input.EnvironmentID, cfg.ActivityType, "container", input.ContainerID, h.containerActivityNameInternal(runtimeCtx, input.ContainerID), user, cfg.Step, cfg.StartMessage, database.JSON{"containerID": input.ContainerID}, false)
-	if err := cfg.Action(runtimeCtx, input.ContainerID, *user); err != nil {
-		activitylib.CompleteHandlerActivity(runtimeCtx, h.activityService, activityID, cfg.CompleteMessage, err)
-		return nil, cfg.Error(err)
+	activityID, runtimeCtx := activitylib.StartHandlerActivity(
+		runtimeCtx,
+		h.activityService,
+		input.EnvironmentID,
+		cfg.ActivityType,
+		"container",
+		input.ContainerID,
+		h.containerActivityNameInternal(
+			runtimeCtx,
+			input.ContainerID,
+		),
+		user,
+		cfg.Step,
+		cfg.StartMessage,
+		database.JSON{
+			"containerID": input.ContainerID,
+		},
+		false,
+	)
+	if actionErr := cfg.Action(runtimeCtx, input.ContainerID, *user); actionErr != nil {
+		activitylib.CompleteHandlerActivity(runtimeCtx, h.activityService, activityID, cfg.CompleteMessage, actionErr)
+		return nil, cfg.Error(actionErr)
 	}
 	activitylib.CompleteHandlerActivity(runtimeCtx, h.activityService, activityID, cfg.CompleteMessage, nil)
 
@@ -868,7 +893,25 @@ func (h *ContainerHandler) RedeployContainer(ctx context.Context, input *Contain
 	}
 
 	runtimeCtx := utils.ActivityRuntimeContext(ctx, h.appCtx)
-	activityID, runtimeCtx := activitylib.StartHandlerActivity(runtimeCtx, h.activityService, input.EnvironmentID, activitytypes.TypeContainerRedeploy, "container", input.ContainerID, h.containerActivityNameInternal(runtimeCtx, input.ContainerID), user, "Starting redeploy", "Container redeploy requested", database.JSON{"containerID": input.ContainerID}, true)
+	activityID, runtimeCtx := activitylib.StartHandlerActivity(
+		runtimeCtx,
+		h.activityService,
+		input.EnvironmentID,
+		activitytypes.TypeContainerRedeploy,
+		"container",
+		input.ContainerID,
+		h.containerActivityNameInternal(
+			runtimeCtx,
+			input.ContainerID,
+		),
+		user,
+		"Starting redeploy",
+		"Container redeploy requested",
+		database.JSON{
+			"containerID": input.ContainerID,
+		},
+		true,
+	)
 	activitylib.AwaitHandlerActivitySlot(runtimeCtx, h.activityService, activityID, input.EnvironmentID)
 	activityWriter := activitylib.NewWriter(runtimeCtx, h.activityService, activityID, io.Discard, "Redeploying container")
 	redeployCtx := context.WithValue(runtimeCtx, dockerutils.ProgressWriterKey{}, activityWriter)
@@ -939,7 +982,25 @@ func (h *ContainerHandler) EditContainer(ctx context.Context, input *EditContain
 	}
 
 	runtimeCtx := utils.ActivityRuntimeContext(ctx, h.appCtx)
-	activityID, runtimeCtx := activitylib.StartHandlerActivity(runtimeCtx, h.activityService, input.EnvironmentID, activitytypes.TypeContainerEdit, "container", input.ContainerID, h.containerActivityNameInternal(runtimeCtx, input.ContainerID), user, "Starting edit", "Container edit requested", database.JSON{"containerID": input.ContainerID}, true)
+	activityID, runtimeCtx := activitylib.StartHandlerActivity(
+		runtimeCtx,
+		h.activityService,
+		input.EnvironmentID,
+		activitytypes.TypeContainerEdit,
+		"container",
+		input.ContainerID,
+		h.containerActivityNameInternal(
+			runtimeCtx,
+			input.ContainerID,
+		),
+		user,
+		"Starting edit",
+		"Container edit requested",
+		database.JSON{
+			"containerID": input.ContainerID,
+		},
+		true,
+	)
 	activitylib.AwaitHandlerActivitySlot(runtimeCtx, h.activityService, activityID, input.EnvironmentID)
 	activityWriter := activitylib.NewWriter(runtimeCtx, h.activityService, activityID, io.Discard, "Editing container")
 	editCtx := context.WithValue(runtimeCtx, dockerutils.ProgressWriterKey{}, activityWriter)
@@ -985,10 +1046,30 @@ func (h *ContainerHandler) DeleteContainer(ctx context.Context, input *DeleteCon
 	}
 
 	runtimeCtx := utils.ActivityRuntimeContext(ctx, h.appCtx)
-	activityID, runtimeCtx := activitylib.StartHandlerActivity(runtimeCtx, h.activityService, input.EnvironmentID, activitytypes.TypeContainerDelete, "container", input.ContainerID, h.containerActivityNameInternal(runtimeCtx, input.ContainerID), user, "Deleting container", "Container delete requested", database.JSON{"containerID": input.ContainerID, "force": input.Force, "removeVolumes": input.RemoveVolumes}, false)
-	if err := h.containerService.DeleteContainer(runtimeCtx, input.ContainerID, input.Force, input.RemoveVolumes, *user); err != nil {
-		activitylib.CompleteHandlerActivity(runtimeCtx, h.activityService, activityID, "Container deleted", err)
-		return nil, huma.Error500InternalServerError("Failed to delete container: " + err.Error())
+	activityID, runtimeCtx := activitylib.StartHandlerActivity(
+		runtimeCtx,
+		h.activityService,
+		input.EnvironmentID,
+		activitytypes.TypeContainerDelete,
+		"container",
+		input.ContainerID,
+		h.containerActivityNameInternal(
+			runtimeCtx,
+			input.ContainerID,
+		),
+		user,
+		"Deleting container",
+		"Container delete requested",
+		database.JSON{
+			"containerID":   input.ContainerID,
+			"force":         input.Force,
+			"removeVolumes": input.RemoveVolumes,
+		},
+		false,
+	)
+	if deleteContainerErr := h.containerService.DeleteContainer(runtimeCtx, input.ContainerID, input.Force, input.RemoveVolumes, *user); deleteContainerErr != nil {
+		activitylib.CompleteHandlerActivity(runtimeCtx, h.activityService, activityID, "Container deleted", deleteContainerErr)
+		return nil, huma.Error500InternalServerError("Failed to delete container: " + deleteContainerErr.Error())
 	}
 	activitylib.CompleteHandlerActivity(runtimeCtx, h.activityService, activityID, "Container deleted", nil)
 
@@ -1008,7 +1089,7 @@ func (h *ContainerHandler) SetAutoUpdate(ctx context.Context, input *SetAutoUpda
 	}
 
 	excluded := !input.Body.Enabled
-	if err := h.settingsService.SetContainerAutoUpdateExclusionInternal(ctx, containerName, excluded); err != nil {
+	if setContainerAutoUpdateExclusionErr := h.settingsService.SetContainerAutoUpdateExclusionInternal(ctx, containerName, excluded); setContainerAutoUpdateExclusionErr != nil {
 		return nil, huma.Error500InternalServerError("failed to update auto-update setting")
 	}
 

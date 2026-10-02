@@ -69,7 +69,15 @@ func ComposeStop(ctx context.Context, proj *composetypes.Project, services []str
 	return c.svc.Stop(stopCtx, proj.Name, api.StopOptions{Services: services})
 }
 
-func ComposeUp(ctx context.Context, proj *composetypes.Project, services []string, removeOrphans, forceRecreate, recreateVolumes bool, authConfigs map[string]registry.AuthConfig, waitTimeout time.Duration) error {
+func ComposeUp(ctx context.Context,
+	proj *composetypes.Project,
+	services []string,
+	removeOrphans,
+	forceRecreate,
+	recreateVolumes bool,
+	authConfigs map[string]registry.AuthConfig,
+	waitTimeout time.Duration,
+) error {
 	selected, err := SelectServices(proj, services)
 	if err != nil {
 		return err
@@ -136,7 +144,14 @@ func ComposeCreate(ctx context.Context, proj *composetypes.Project, services []s
 	return c.svc.Create(createCtx, selected, api.CreateOptions{Services: services, Recreate: api.RecreateForce, RecreateDependencies: api.RecreateDiverged})
 }
 
-func composeUpOptionsInternal(proj *composetypes.Project, services []string, removeOrphans, forceRecreate bool, waitTimeout time.Duration, envOpts ComposeEnvOptions) (api.CreateOptions, api.StartOptions) {
+func composeUpOptionsInternal(proj *composetypes.Project,
+	services []string,
+	removeOrphans,
+	forceRecreate bool,
+	waitTimeout time.Duration,
+	envOpts ComposeEnvOptions) (api.CreateOptions,
+	api.StartOptions,
+) {
 	recreatePolicy := kit.Ternary(forceRecreate, api.RecreateForce, api.RecreateDiverged)
 
 	upOptions := api.CreateOptions{

@@ -2,7 +2,6 @@ package api
 
 import (
 	"bytes"
-	"context"
 	"net/http"
 	"reflect"
 	"sort"
@@ -341,7 +340,7 @@ func TestVariableMaterializationRoutesAreAgentOnly(t *testing.T) {
 	agentAPI := SetupAPI(
 		router,
 		router.Group("/api"),
-		handlerutil.NewActivityAppContext(context.Background()),
+		handlerutil.NewActivityAppContext(t.Context()),
 		&config.Config{AgentMode: true},
 		HandlerDeps{},
 	)

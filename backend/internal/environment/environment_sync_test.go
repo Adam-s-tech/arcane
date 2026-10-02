@@ -31,7 +31,17 @@ func setupSyncDBInternal(t *testing.T) *database.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "sync.db")), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&environment.Environment{}, &registry.ContainerRegistry{}, &gitrepo.GitRepository{}, &s3domain.S3Destination{}, &activity.Activity{}, &activity.ActivityMessage{}))
+	require.NoError(
+		t,
+		db.AutoMigrate(
+			&environment.Environment{},
+			&registry.ContainerRegistry{},
+			&gitrepo.GitRepository{},
+			&s3domain.S3Destination{},
+			&activity.Activity{},
+			&activity.ActivityMessage{},
+		),
+	)
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, sqlDB.Close()) })
@@ -145,7 +155,7 @@ func TestSyncCredentialDecryptionAbortsSnapshot(t *testing.T) {
 			err := syncResource(t.Context(), "remote")
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "bad-credential")
-			require.NotNil(t, errors.Unwrap(err))
+			require.Error(t, errors.Unwrap(err))
 			require.Zero(t, calls.Load(), "an incomplete snapshot must never reach the agent")
 		})
 	}
@@ -192,30 +202,30 @@ func TestSyncSkipsUnchangedPayloadUntilForgotten(t *testing.T) {
 	require.NoError(t, db.Create(&registry.ContainerRegistry{ID: "ghcr", URL: "ghcr.io", RegistryType: registry.RegistryTypeGeneric, Username: "user", Token: token}).Error)
 	require.NoError(t, db.Create(&environment.Environment{ID: "remote", ApiUrl: server.URL, AccessToken: new("agent-token")}).Error)
 	service := environment.NewEnvironmentService(db, server.Client(), nil, nil, nil, nil)
-	sync := func() error { return service.SyncRegistriesToEnvironment(t.Context(), "remote") }
+	localSync := func() error { return service.SyncRegistriesToEnvironment(t.Context(), "remote") }
 	changeRegistry := func(url string) {
 		require.NoError(t, db.Model(&registry.ContainerRegistry{}).Where("id = ?", "ghcr").Update("url", url).Error)
 	}
 
-	require.NoError(t, sync())
-	require.NoError(t, sync())
+	require.NoError(t, localSync())
+	require.NoError(t, localSync())
 	require.EqualValues(t, 1, calls.Load(), "an unchanged payload is not resent")
 
 	changeRegistry("ghcr.io/v2")
-	require.NoError(t, sync())
+	require.NoError(t, localSync())
 	require.EqualValues(t, 2, calls.Load(), "a changed payload is resent")
 
 	service.ForgetSyncState("remote")
-	require.NoError(t, sync())
+	require.NoError(t, localSync())
 	require.EqualValues(t, 3, calls.Load(), "forgetting forces a resend")
 
 	reject.Store(true)
 	changeRegistry("ghcr.io/v3")
-	require.Error(t, sync())
+	require.Error(t, localSync())
 	require.EqualValues(t, 4, calls.Load())
 	reject.Store(false)
-	require.NoError(t, sync())
+	require.NoError(t, localSync())
 	require.EqualValues(t, 5, calls.Load(), "a rejected payload is retried")
-	require.NoError(t, sync())
+	require.NoError(t, localSync())
 	require.EqualValues(t, 5, calls.Load(), "an accepted payload is remembered")
 }

@@ -114,8 +114,8 @@ func TestJobActivityVisibilityAndGrouping(t *testing.T) {
 			require.Equal(t, test.visible, run.ActivityID != "")
 			if test.visible {
 				require.Equal(t, test.environment, run.ActivityEnvironmentID)
-				detail, err := activities.GetActivityDetail(t.Context(), test.environment, run.ActivityID, 10)
-				require.NoError(t, err)
+				detail, getActivityDetailErr := activities.GetActivityDetail(t.Context(), test.environment, run.ActivityID, 10)
+				require.NoError(t, getActivityDetailErr)
 				require.Equal(t, test.environment, detail.Activity.Metadata["environmentId"])
 			}
 			child, err := activities.StartActivity(svc.runContextInternal(t.Context(), run), activity.StartActivityRequest{Type: activitytypes.TypeImagePull})
@@ -142,7 +142,7 @@ func TestJobActivityRestartRepairsFailedProjection(t *testing.T) {
 	restarted := NewJobService(db, nil, &config.Config{}, svc.runs, nil, nil, activities)
 	require.NoError(t, restarted.runs.Start(ctx, ctx))
 	t.Cleanup(func() {
-		stopCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Second)
 		defer cancel()
 		require.NoError(t, restarted.runs.Stop(stopCtx))
 	})

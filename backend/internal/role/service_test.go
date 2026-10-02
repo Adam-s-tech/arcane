@@ -1,8 +1,6 @@
 package role
 
 import (
-	"context"
-	"errors"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -30,7 +28,7 @@ func TestValidatePermissionsAgainstCallerRejectsEscalation(t *testing.T) {
 		authz.PermUsersDelete,
 	})
 	require.Error(t, err)
-	require.True(t, errors.Is(err, common.ErrRolePermissionEscalation))
+	require.ErrorIs(t, err, common.ErrRolePermissionEscalation)
 
 	require.NoError(t, roleSvc.ValidatePermissionsAgainstCaller(caller, []string{authz.PermRolesRead}))
 	require.NoError(t, roleSvc.ValidatePermissionsAgainstCaller(authz.SudoPermissionSet(), []string{authz.PermUsersDelete}))
@@ -44,7 +42,7 @@ func TestValidatePermissionsAgainstCallerRejectsEnvOnlyGrantForGlobalRole(t *tes
 
 	err := roleSvc.ValidatePermissionsAgainstCaller(caller, []string{authz.PermContainersStart})
 	require.Error(t, err)
-	require.True(t, errors.Is(err, common.ErrRolePermissionEscalation))
+	require.ErrorIs(t, err, common.ErrRolePermissionEscalation)
 }
 
 func TestValidatePermissionsAgainstCallerRejectsUnknownPermissionBeforeEscalation(t *testing.T) {
@@ -55,12 +53,12 @@ func TestValidatePermissionsAgainstCallerRejectsUnknownPermissionBeforeEscalatio
 	// not as an opaque escalation 403 or a silent pass.
 	err := roleSvc.ValidatePermissionsAgainstCaller(authz.SudoPermissionSet(), []string{"containrs:start"})
 	require.Error(t, err)
-	require.True(t, errors.Is(err, common.ErrUnknownPermission))
-	require.False(t, errors.Is(err, common.ErrRolePermissionEscalation))
+	require.ErrorIs(t, err, common.ErrUnknownPermission)
+	require.NotErrorIs(t, err, common.ErrRolePermissionEscalation)
 }
 
 func TestBackfillLegacyRoleAssignments(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Run("no-op without legacy column", func(t *testing.T) {
 		_, roleSvc := setupUserAndRoleServices(t)
@@ -124,7 +122,7 @@ func TestBackfillLegacyRoleAssignments(t *testing.T) {
 
 func assignedRoleIDs(t *testing.T, roleSvc *RoleService, userID string) []string {
 	t.Helper()
-	assignments, err := roleSvc.ListUserAssignments(context.Background(), userID)
+	assignments, err := roleSvc.ListUserAssignments(t.Context(), userID)
 	require.NoError(t, err)
 	ids := make([]string, 0, len(assignments))
 	for _, a := range assignments {
@@ -134,7 +132,7 @@ func assignedRoleIDs(t *testing.T, roleSvc *RoleService, userID string) []string
 }
 
 func TestEnsureBuiltInRolesMigratesVariablePermissionsWithoutBackfillingCustomGrants(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	userSvc, roleSvc := setupUserAndRoleServices(t)
 
 	customRole, err := roleSvc.CreateRole(ctx, "Template Reader", nil, []string{authz.PermTemplatesRead})
@@ -207,7 +205,7 @@ func TestEnsureBuiltInRolesMigratesVariablePermissionsWithoutBackfillingCustomGr
 }
 
 func TestSetUserAssignmentsRejectsUnknownRole(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	userSvc, roleSvc := setupUserAndRoleServices(t)
 	user := createTestUser(t, userSvc, "victim", "victim")
 
@@ -215,11 +213,11 @@ func TestSetUserAssignmentsRejectsUnknownRole(t *testing.T) {
 		{RoleID: "role_does_not_exist"},
 	})
 	require.Error(t, err)
-	require.True(t, errors.Is(err, common.ErrInvalidRoleAssignment))
+	require.ErrorIs(t, err, common.ErrInvalidRoleAssignment)
 }
 
 func TestReplaceOidcAssignmentsRejectsUnknownRole(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	userSvc, roleSvc := setupUserAndRoleServices(t)
 	user := createTestUser(t, userSvc, "oidc-user", "oidc-user")
 
@@ -227,11 +225,11 @@ func TestReplaceOidcAssignmentsRejectsUnknownRole(t *testing.T) {
 		{RoleID: "role_does_not_exist"},
 	})
 	require.Error(t, err)
-	require.True(t, errors.Is(err, common.ErrInvalidRoleAssignment))
+	require.ErrorIs(t, err, common.ErrInvalidRoleAssignment)
 }
 
 func TestReplaceOidcAssignmentsRejectsUnknownEnvironment(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	userSvc, roleSvc := setupUserAndRoleServices(t)
 	user := createTestUser(t, userSvc, "oidc-user-env", "oidc-user-env")
 	missingEnv := "env_does_not_exist"
@@ -242,11 +240,11 @@ func TestReplaceOidcAssignmentsRejectsUnknownEnvironment(t *testing.T) {
 		{RoleID: authz.BuiltInRoleViewer, EnvironmentID: &missingEnv},
 	})
 	require.Error(t, err)
-	require.True(t, errors.Is(err, common.ErrInvalidRoleAssignment))
+	require.ErrorIs(t, err, common.ErrInvalidRoleAssignment)
 }
 
 func TestEffectiveGlobalAdminCountIncludesCustomAllPermissionsRole(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	userSvc, roleSvc := setupUserAndRoleServices(t)
 	user := createTestUser(t, userSvc, "custom-admin", "custom-admin")
 	customRole, err := roleSvc.CreateRole(ctx, "Custom Admin", nil, authz.AllPermissions())
@@ -263,11 +261,11 @@ func TestEffectiveGlobalAdminCountIncludesCustomAllPermissionsRole(t *testing.T)
 
 	err = roleSvc.SetUserAssignments(ctx, user.ID, nil)
 	require.Error(t, err)
-	require.True(t, errors.Is(err, common.ErrNoGlobalAdminRemains))
+	require.ErrorIs(t, err, common.ErrNoGlobalAdminRemains)
 }
 
 func TestEffectiveGlobalAdminCountIgnoresEnvScopedAndServiceAccounts(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	userSvc, roleSvc := setupUserAndRoleServices(t)
 	customRole, err := roleSvc.CreateRole(ctx, "Custom Admin", nil, authz.AllPermissions())
 	require.NoError(t, err)
@@ -320,20 +318,20 @@ func setupUserAndRoleServices(t *testing.T) (*database.DB, *RoleService) {
 	t.Helper()
 	db := setupAuthServiceTestDB(t)
 	roleService := NewRoleService(db)
-	require.NoError(t, roleService.EnsureBuiltInRoles(context.Background()))
+	require.NoError(t, roleService.EnsureBuiltInRoles(t.Context()))
 	return db, roleService
 }
 
 func createTestUser(t *testing.T, db *database.DB, id, username string) *common.User {
 	t.Helper()
 	created := &common.User{ID: id, Username: username}
-	require.NoError(t, db.WithContext(context.Background()).Create(created).Error)
+	require.NoError(t, db.WithContext(t.Context()).Create(created).Error)
 	return created
 }
 
 func grantGlobalAdmin(t *testing.T, roleService *RoleService, userID string) {
 	t.Helper()
-	require.NoError(t, roleService.SetUserAssignments(context.Background(), userID, []UserRoleAssignment{
+	require.NoError(t, roleService.SetUserAssignments(t.Context(), userID, []UserRoleAssignment{
 		{RoleID: authz.BuiltInRoleAdmin},
 	}))
 }
@@ -341,7 +339,7 @@ func grantGlobalAdmin(t *testing.T, roleService *RoleService, userID string) {
 func createTestEnvironment(t *testing.T, db *database.DB, id, apiURL string, accessToken *string) {
 	t.Helper()
 	now := time.Now()
-	require.NoError(t, db.WithContext(context.Background()).Create(&testEnvironmentRow{
+	require.NoError(t, db.WithContext(t.Context()).Create(&testEnvironmentRow{
 		ID: id, CreatedAt: now, UpdatedAt: &now,
 		Name:        "env-" + id,
 		ApiUrl:      apiURL,

@@ -24,7 +24,7 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
 )
 
-func setupGitRepositoryServiceTestInternal(t *testing.T) (*GitRepositoryService, *database.DB) {
+func setupGitRepositoryServiceTestInternal(t *testing.T) *GitRepositoryService {
 	t.Helper()
 
 	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared", strings.NewReplacer("/", "_", " ", "_").Replace(t.Name()))
@@ -50,19 +50,19 @@ func setupGitRepositoryServiceTestInternal(t *testing.T) (*GitRepositoryService,
 	})
 
 	wrappedDB := &database.DB{DB: db}
-	settingsService, err := newSettingsServiceForTestInternal(t, context.Background(), wrappedDB)
+	settingsService, err := newSettingsServiceForTestInternal(t, t.Context(), wrappedDB)
 	require.NoError(t, err)
 
 	eventService := event.NewEventService(wrappedDB, &config.Config{}, nil)
 
-	return NewGitRepositoryService(wrappedDB, t.TempDir(), eventService, settingsService), wrappedDB
+	return NewGitRepositoryService(wrappedDB, t.TempDir(), eventService, settingsService)
 }
 
 func newSettingsServiceForTestInternal(t testing.TB, ctx context.Context, db *database.DB) (*settings.SettingsService, error) {
 	t.Helper()
 	svc, err := settings.NewSettingsService(ctx, db)
 	if err == nil {
-		t.Cleanup(func() { require.NoError(t, svc.Stop(context.Background())) })
+		t.Cleanup(func() { require.NoError(t, svc.Stop(context.WithoutCancel(t.Context()))) })
 	}
 	return svc, err
 }
@@ -70,7 +70,7 @@ func newSettingsServiceForTestInternal(t testing.TB, ctx context.Context, db *da
 func createGitRepositoryServiceTestRepoInternal(t *testing.T, svc *GitRepositoryService, req gitops.CreateRepositoryRequest) *GitRepository {
 	t.Helper()
 
-	repo, err := svc.CreateRepository(context.Background(), req, common.User{
+	repo, err := svc.CreateRepository(t.Context(), req, common.User{
 		ID:       "admin-1",
 		Username: "admin",
 	})
@@ -88,7 +88,7 @@ func createGitRepositoryServiceTestRepoInternal(t *testing.T, svc *GitRepository
 }
 
 func TestGitRepositoryService_UpdateRepository_RejectsURLChangeWhenStoredTokenWouldBeReused(t *testing.T) {
-	svc, _ := setupGitRepositoryServiceTestInternal(t)
+	svc := setupGitRepositoryServiceTestInternal(t)
 	repo := createGitRepositoryServiceTestRepoInternal(t, svc, gitops.CreateRepositoryRequest{
 		Name:     "prod-repo",
 		URL:      "https://github.com/acme/private.git",
@@ -97,7 +97,7 @@ func TestGitRepositoryService_UpdateRepository_RejectsURLChangeWhenStoredTokenWo
 		Token:    "ghp_old_token",
 	})
 
-	_, err := svc.UpdateRepository(context.Background(), repo.ID, gitops.UpdateRepositoryRequest{
+	_, err := svc.UpdateRepository(t.Context(), repo.ID, gitops.UpdateRepositoryRequest{
 		URL: new("https://attacker.tld/repo.git"),
 	}, common.User{})
 	require.Error(t, err)
@@ -108,14 +108,14 @@ func TestGitRepositoryService_UpdateRepository_RejectsURLChangeWhenStoredTokenWo
 	assert.Equal(t, "token", fieldErr.Field)
 	assert.Contains(t, err.Error(), "repository URL")
 
-	stored, loadErr := svc.GetRepositoryByID(context.Background(), repo.ID)
+	stored, loadErr := svc.GetRepositoryByID(t.Context(), repo.ID)
 	require.NoError(t, loadErr)
 	assert.Equal(t, "https://github.com/acme/private.git", stored.URL)
 	assert.Equal(t, repo.Token, stored.Token)
 }
 
 func TestGitRepositoryService_UpdateRepository_RejectsURLChangeWhenStoredSSHKeyWouldBeReused(t *testing.T) {
-	svc, _ := setupGitRepositoryServiceTestInternal(t)
+	svc := setupGitRepositoryServiceTestInternal(t)
 	repo := createGitRepositoryServiceTestRepoInternal(t, svc, gitops.CreateRepositoryRequest{
 		Name:     "infra-repo",
 		URL:      "git@github.com:acme/private.git",
@@ -123,7 +123,7 @@ func TestGitRepositoryService_UpdateRepository_RejectsURLChangeWhenStoredSSHKeyW
 		SSHKey:   "-----BEGIN OPENSSH PRIVATE KEY-----\nkey-material\n-----END OPENSSH PRIVATE KEY-----",
 	})
 
-	_, err := svc.UpdateRepository(context.Background(), repo.ID, gitops.UpdateRepositoryRequest{
+	_, err := svc.UpdateRepository(t.Context(), repo.ID, gitops.UpdateRepositoryRequest{
 		URL: new("git@attacker.tld:acme/private.git"),
 	}, common.User{})
 	require.Error(t, err)
@@ -134,14 +134,14 @@ func TestGitRepositoryService_UpdateRepository_RejectsURLChangeWhenStoredSSHKeyW
 	assert.Equal(t, "sshKey", fieldErr.Field)
 	assert.Contains(t, err.Error(), "repository URL")
 
-	stored, loadErr := svc.GetRepositoryByID(context.Background(), repo.ID)
+	stored, loadErr := svc.GetRepositoryByID(t.Context(), repo.ID)
 	require.NoError(t, loadErr)
 	assert.Equal(t, "git@github.com:acme/private.git", stored.URL)
 	assert.Equal(t, repo.SSHKey, stored.SSHKey)
 }
 
 func TestGitRepositoryService_UpdateRepository_RejectsURLChangeWhenStoredTokenAndSSHKeyWouldBeReused(t *testing.T) {
-	svc, _ := setupGitRepositoryServiceTestInternal(t)
+	svc := setupGitRepositoryServiceTestInternal(t)
 	repo := createGitRepositoryServiceTestRepoInternal(t, svc, gitops.CreateRepositoryRequest{
 		Name:     "hybrid-repo",
 		URL:      "https://github.com/acme/private.git",
@@ -151,7 +151,7 @@ func TestGitRepositoryService_UpdateRepository_RejectsURLChangeWhenStoredTokenAn
 		SSHKey:   "-----BEGIN OPENSSH PRIVATE KEY-----\nkey-material\n-----END OPENSSH PRIVATE KEY-----",
 	})
 
-	_, err := svc.UpdateRepository(context.Background(), repo.ID, gitops.UpdateRepositoryRequest{
+	_, err := svc.UpdateRepository(t.Context(), repo.ID, gitops.UpdateRepositoryRequest{
 		URL: new("https://attacker.tld/repo.git"),
 	}, common.User{})
 	require.Error(t, err)
@@ -164,7 +164,7 @@ func TestGitRepositoryService_UpdateRepository_RejectsURLChangeWhenStoredTokenAn
 }
 
 func TestGitRepositoryService_UpdateRepository_AllowsURLChangeWhenTokenIsResupplied(t *testing.T) {
-	svc, _ := setupGitRepositoryServiceTestInternal(t)
+	svc := setupGitRepositoryServiceTestInternal(t)
 	repo := createGitRepositoryServiceTestRepoInternal(t, svc, gitops.CreateRepositoryRequest{
 		Name:     "prod-repo",
 		URL:      "https://github.com/acme/private.git",
@@ -173,7 +173,7 @@ func TestGitRepositoryService_UpdateRepository_AllowsURLChangeWhenTokenIsResuppl
 		Token:    "ghp_old_token",
 	})
 
-	updated, err := svc.UpdateRepository(context.Background(), repo.ID, gitops.UpdateRepositoryRequest{
+	updated, err := svc.UpdateRepository(t.Context(), repo.ID, gitops.UpdateRepositoryRequest{
 		URL:   new("https://github.com/acme/private-rotated.git"),
 		Token: new("ghp_new_token"),
 	}, common.User{})
@@ -190,7 +190,7 @@ func TestGitRepositoryService_UpdateRepository_AllowsURLChangeWhenTokenIsResuppl
 }
 
 func TestGitRepositoryService_UpdateRepository_AllowsURLChangeWhenTokenIsCleared(t *testing.T) {
-	svc, _ := setupGitRepositoryServiceTestInternal(t)
+	svc := setupGitRepositoryServiceTestInternal(t)
 	repo := createGitRepositoryServiceTestRepoInternal(t, svc, gitops.CreateRepositoryRequest{
 		Name:     "prod-repo",
 		URL:      "https://github.com/acme/private.git",
@@ -199,7 +199,7 @@ func TestGitRepositoryService_UpdateRepository_AllowsURLChangeWhenTokenIsCleared
 		Token:    "ghp_old_token",
 	})
 
-	updated, err := svc.UpdateRepository(context.Background(), repo.ID, gitops.UpdateRepositoryRequest{
+	updated, err := svc.UpdateRepository(t.Context(), repo.ID, gitops.UpdateRepositoryRequest{
 		URL:   new("https://github.com/acme/public.git"),
 		Token: new(""),
 	}, common.User{})
@@ -214,7 +214,7 @@ func TestGitRepositoryService_UpdateRepository_AllowsURLChangeWhenTokenIsCleared
 }
 
 func TestGitRepositoryService_UpdateRepository_AllowsSameURLWithoutCredentialResupply(t *testing.T) {
-	svc, _ := setupGitRepositoryServiceTestInternal(t)
+	svc := setupGitRepositoryServiceTestInternal(t)
 	repo := createGitRepositoryServiceTestRepoInternal(t, svc, gitops.CreateRepositoryRequest{
 		Name:     "prod-repo",
 		URL:      "https://github.com/acme/private.git",
@@ -223,7 +223,7 @@ func TestGitRepositoryService_UpdateRepository_AllowsSameURLWithoutCredentialRes
 		Token:    "ghp_old_token",
 	})
 
-	updated, err := svc.UpdateRepository(context.Background(), repo.ID, gitops.UpdateRepositoryRequest{
+	updated, err := svc.UpdateRepository(t.Context(), repo.ID, gitops.UpdateRepositoryRequest{
 		URL:      new("https://github.com/acme/private.git"),
 		Username: new("deploy-bot"),
 	}, common.User{})

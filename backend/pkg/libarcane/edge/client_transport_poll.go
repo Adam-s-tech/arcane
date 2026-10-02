@@ -53,37 +53,37 @@ func (c *TunnelClient) connectAndServePoll(ctx context.Context) error {
 		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), defaultPollManagedSessionStopTimeout)
 		defer cancel()
 
-		if err := c.stopPollManagedSessionInternal(shutdownCtx, session); err != nil {
-			slog.WarnContext(ctx, "Failed to stop poll-managed websocket session during shutdown", "error", err)
+		if stopPollManagedSessionErr := c.stopPollManagedSessionInternal(shutdownCtx, session); stopPollManagedSessionErr != nil {
+			slog.WarnContext(ctx, "Failed to stop poll-managed websocket session during shutdown", "error", stopPollManagedSessionErr)
 		}
 	}()
 
 	for {
-		var err error
-		session, err = consumePollManagedSessionInternal(session)
-		if err != nil {
-			return err
+		var operationErr error
+		session, operationErr = consumePollManagedSessionInternal(session)
+		if operationErr != nil {
+			return operationErr
 		}
 
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 
-		status, err := c.pollTunnelControlInternal(ctx, httpClient, pollURL, session != nil)
-		if err != nil {
+		status, operationErr := c.pollTunnelControlInternal(ctx, httpClient, pollURL, session != nil)
+		if operationErr != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
 
 			retryInterval := retryBackoff.NextBackOff()
 			slog.WarnContext(ctx, "Poll control request failed, retrying after interval",
-				"error", err,
+				"error", operationErr,
 				"interval", retryInterval,
 			)
 
-			session, err = waitForNextPollCycleInternal(ctx, session, retryInterval)
-			if err != nil {
-				return err
+			session, operationErr = waitForNextPollCycleInternal(ctx, session, retryInterval)
+			if operationErr != nil {
+				return operationErr
 			}
 			continue
 		}
@@ -96,17 +96,17 @@ func (c *TunnelClient) connectAndServePoll(ctx context.Context) error {
 		retryBackoff.InitialInterval = interval
 		retryBackoff.Reset()
 
-		session, err = c.syncPollManagedSessionInternal(ctx, session, status.Status)
-		if err != nil {
-			if !errors.Is(err, errPollManagedSessionStopTimeout) {
-				return err
+		session, operationErr = c.syncPollManagedSessionInternal(ctx, session, status.Status)
+		if operationErr != nil {
+			if !errors.Is(operationErr, errPollManagedSessionStopTimeout) {
+				return operationErr
 			}
-			slog.WarnContext(ctx, "Poll-managed tunnel is still draining; replacement remains fenced", "error", err)
+			slog.WarnContext(ctx, "Poll-managed tunnel is still draining; replacement remains fenced", "error", operationErr)
 		}
 
-		session, err = waitForNextPollCycleInternal(ctx, session, interval)
-		if err != nil {
-			return err
+		session, operationErr = waitForNextPollCycleInternal(ctx, session, interval)
+		if operationErr != nil {
+			return operationErr
 		}
 	}
 }
@@ -220,8 +220,8 @@ func (c *TunnelClient) pollTunnelControlInternal(ctx context.Context, httpClient
 	}
 
 	var pollResp TunnelPollResponse
-	if err := json.UnmarshalRead(resp.Body, &pollResp); err != nil {
-		return nil, fmt.Errorf("failed to decode poll response: %w", err)
+	if unmarshalReadErr := json.UnmarshalRead(resp.Body, &pollResp); unmarshalReadErr != nil {
+		return nil, fmt.Errorf("failed to decode poll response: %w", unmarshalReadErr)
 	}
 	return &pollResp, nil
 }

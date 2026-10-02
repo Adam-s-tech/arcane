@@ -59,8 +59,17 @@ func (s *SystemService) PruneScheduled(ctx context.Context, environmentID string
 	if err != nil {
 		return fail(err)
 	}
-	if err := jobcontext.Progress(ctx, schedulertypes.TargetOutcome{ResourceType: "prune_plan", ID: "prune-plan", Status: schedulertypes.Succeeded, RecoveryData: payload, ActivityID: prune.activityID}); err != nil {
-		return fail(err)
+	if progressErr := jobcontext.Progress(
+		ctx,
+		schedulertypes.TargetOutcome{
+			ResourceType: "prune_plan",
+			ID:           "prune-plan",
+			Status:       schedulertypes.Succeeded,
+			RecoveryData: payload,
+			ActivityID:   prune.activityID,
+		},
+	); progressErr != nil {
+		return fail(progressErr)
 	}
 	previous, _ := jobcontext.Run(ctx)
 	err = s.executePrunePlanInternal(ctx, plan, previous, result, false)
@@ -84,19 +93,19 @@ func (s *SystemService) preparePrunePlanInternal(ctx context.Context, req system
 	if err != nil {
 		return plan, err
 	}
-	if err := s.selectPruneContainersInternal(&plan, usage); err != nil {
-		return plan, err
+	if selectPruneContainersErr := s.selectPruneContainersInternal(&plan, usage); selectPruneContainersErr != nil {
+		return plan, selectPruneContainersErr
 	}
 	selectedContainers, imageRefs, volumeRefs := pruneSelectedReferencesInternal(plan.Resources, usage)
-	if err := s.selectPruneImagesInternal(&plan, usage, imageRefs); err != nil {
-		return plan, err
+	if selectPruneImagesErr := s.selectPruneImagesInternal(&plan, usage, imageRefs); selectPruneImagesErr != nil {
+		return plan, selectPruneImagesErr
 	}
 	selectPruneVolumesInternal(&plan, usage, volumeRefs)
-	if err := s.selectPruneNetworksInternal(ctx, dockerClient, &plan, selectedContainers); err != nil {
-		return plan, err
+	if selectPruneNetworksErr := s.selectPruneNetworksInternal(ctx, dockerClient, &plan, selectedContainers); selectPruneNetworksErr != nil {
+		return plan, selectPruneNetworksErr
 	}
-	if err := s.selectPruneBuildCacheInternal(&plan, usage); err != nil {
-		return plan, err
+	if selectPruneBuildCacheErr := s.selectPruneBuildCacheInternal(&plan, usage); selectPruneBuildCacheErr != nil {
+		return plan, selectPruneBuildCacheErr
 	}
 	return plan, nil
 }
@@ -137,7 +146,16 @@ func (s *SystemService) selectPruneImagesInternal(plan *prunePlanInternal, usage
 		}
 	}
 	for _, item := range usage.Images.Items {
-		if item.Containers > int64(imageRefs[item.ID]) || (req.Images.Mode == systemtypes.PruneImageModeDangling && len(item.RepoTags) > 0) || (!until.IsZero() && !time.Unix(item.Created, 0).Before(until)) {
+		if item.Containers > int64(
+			imageRefs[item.ID],
+		) || (req.Images.Mode == systemtypes.PruneImageModeDangling && len(
+			item.RepoTags,
+		) > 0) || (!until.IsZero() && !time.Unix(
+			item.Created,
+			0,
+		).Before(
+			until,
+		)) {
 			continue
 		}
 		plan.Resources = append(plan.Resources, pruneResourceInternal{Kind: "image", ID: item.ID, Size: item.Size, Names: slices.Clone(item.RepoTags)})
@@ -183,9 +201,9 @@ func (s *SystemService) selectPruneNetworksInternal(ctx context.Context, dockerC
 		if item.Name == "bridge" || item.Name == "host" || item.Name == "none" || item.Ingress || item.Scope != "local" || (!until.IsZero() && !item.Created.Before(until)) {
 			continue
 		}
-		inspect, err := compat.NetworkInspectWithCompatibility(ctx, dockerClient, item.ID, client.NetworkInspectOptions{})
-		if err != nil {
-			return err
+		inspect, networkInspectWithCompatibilityErr := compat.NetworkInspectWithCompatibility(ctx, dockerClient, item.ID, client.NetworkInspectOptions{})
+		if networkInspectWithCompatibilityErr != nil {
+			return networkInspectWithCompatibilityErr
 		}
 		eligible := true
 		for id := range inspect.Network.Containers {
@@ -282,12 +300,12 @@ func (s *SystemService) executePrunePlanInternal(ctx context.Context, plan prune
 		if pruneTargetCompletedInternal(previous, target.ID) {
 			continue
 		}
-		if err := jobcontext.Progress(ctx, target); err != nil {
-			return err
+		if progressErr := jobcontext.Progress(ctx, target); progressErr != nil {
+			return progressErr
 		}
-		eligible, exists, err := s.pruneResourceEligibleInternal(ctx, dockerClient, plan, resource)
-		if err != nil {
-			return err
+		eligible, exists, pruneResourceEligibleErr := s.pruneResourceEligibleInternal(ctx, dockerClient, plan, resource)
+		if pruneResourceEligibleErr != nil {
+			return pruneResourceEligibleErr
 		}
 		switch {
 		case !exists:
@@ -295,24 +313,24 @@ func (s *SystemService) executePrunePlanInternal(ctx context.Context, plan prune
 		case !eligible:
 			target.Status = schedulertypes.Skipped
 		default:
-			err = s.removePruneResourceInternal(ctx, dockerClient, resource)
-			if err != nil && !errdefs.IsNotFound(err) {
+			pruneResourceEligibleErr = s.removePruneResourceInternal(ctx, dockerClient, resource)
+			if pruneResourceEligibleErr != nil && !errdefs.IsNotFound(pruneResourceEligibleErr) {
 				target.Status = schedulertypes.Failed
-				target.Message = err.Error()
+				target.Message = pruneResourceEligibleErr.Error()
 				result.Success = false
-				result.Errors = append(result.Errors, err.Error())
+				result.Errors = append(result.Errors, pruneResourceEligibleErr.Error())
 			} else {
 				target.Status = schedulertypes.Succeeded
 				recordPrunedResourceInternal(resource, result)
 			}
 		}
-		if err := jobcontext.Progress(ctx, target); err != nil {
-			return err
+		if targetProgressErr := jobcontext.Progress(ctx, target); targetProgressErr != nil {
+			return targetProgressErr
 		}
 	}
 	if len(result.ImagesDeleted) > 0 {
-		if err := s.imageUpdateService.DeleteRecordsForImages(ctx, result.ImagesDeleted); err != nil {
-			return err
+		if deleteRecordsForImagesErr := s.imageUpdateService.DeleteRecordsForImages(ctx, result.ImagesDeleted); deleteRecordsForImagesErr != nil {
+			return deleteRecordsForImagesErr
 		}
 	}
 	return s.executePruneCacheInternal(ctx, dockerClient, plan, result, recovery)
@@ -432,12 +450,12 @@ func (s *SystemService) executePruneCacheInternal(ctx context.Context, dockerCli
 
 func (s *SystemService) pruneResourceEligibleInternal(ctx context.Context, dockerClient *client.Client, plan prunePlanInternal, resource pruneResourceInternal) (eligible, exists bool, err error) {
 	if resource.Kind == "network" {
-		inspected, err := compat.NetworkInspectWithCompatibility(ctx, dockerClient, resource.ID, client.NetworkInspectOptions{})
-		if errdefs.IsNotFound(err) {
+		inspected, networkInspectWithCompatibilityErr := compat.NetworkInspectWithCompatibility(ctx, dockerClient, resource.ID, client.NetworkInspectOptions{})
+		if errdefs.IsNotFound(networkInspectWithCompatibilityErr) {
 			return false, false, nil
 		}
-		if err != nil {
-			return false, false, err
+		if networkInspectWithCompatibilityErr != nil {
+			return false, false, networkInspectWithCompatibilityErr
 		}
 		return len(inspected.Network.Containers) == 0 && !inspected.Network.Ingress, true, nil
 	}
@@ -495,7 +513,7 @@ func (s *SystemService) ReconcileScheduledPrune(ctx context.Context, previous sc
 		if prune.started.IsAbsent() {
 			return outcome, nil
 		}
-		defer s.finishSystemPruneInternal(previous.EnvironmentID)
+		defer s.finishSystemPruneInternal(previous.EnvironmentID) //nolint:gocritic // The matching recovery target always returns before the loop advances.
 		result := &systemtypes.PruneAllResult{Success: true}
 		err := s.executePrunePlanInternal(ctx, plan, previous, result, true)
 		if err != nil {
@@ -510,8 +528,8 @@ func (s *SystemService) ReconcileScheduledPrune(ctx context.Context, previous sc
 		if !result.Success {
 			return schedulertypes.Outcome{Status: schedulertypes.Partial, Targets: previous.Outcome.Targets}, nil
 		}
-		if err := jobcontext.Progress(ctx, schedulertypes.TargetOutcome{ID: "scheduled-prune", Status: schedulertypes.Succeeded}); err != nil {
-			return outcome, err
+		if progressErr := jobcontext.Progress(ctx, schedulertypes.TargetOutcome{ID: "scheduled-prune", Status: schedulertypes.Succeeded}); progressErr != nil {
+			return outcome, progressErr
 		}
 		return schedulertypes.Outcome{Status: schedulertypes.Succeeded}, nil
 	}

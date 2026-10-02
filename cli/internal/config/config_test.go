@@ -275,9 +275,9 @@ func TestBackupFileMovesConfig(t *testing.T) {
 		"backup path = %q, want %q", backupPath, path+".bak")
 	{
 
-		_, err := os.Stat(path)
-		require.True(t, os.IsNotExist(err),
-			"expected original config to be removed, stat err=%v", err)
+		_, statErr := os.Stat(path)
+		require.True(t, os.IsNotExist(statErr),
+			"expected original config to be removed, stat err=%v", statErr)
 	}
 
 	raw, err := os.ReadFile(backupPath)

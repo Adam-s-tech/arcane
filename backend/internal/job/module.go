@@ -12,8 +12,8 @@ type Module struct {
 	environment *environment.EnvironmentService
 }
 
-func New(service *JobService, environment *environment.EnvironmentService) *Module {
-	return &Module{service: service, environment: environment}
+func New(service *JobService, localEnvironment *environment.EnvironmentService) *Module {
+	return &Module{service: service, environment: localEnvironment}
 }
 
 func (m *Module) Service() *JobService {

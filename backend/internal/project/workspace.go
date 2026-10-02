@@ -30,8 +30,8 @@ func (s *ProjectService) GetProjectWorkspace(ctx context.Context, projectID stri
 	if err != nil {
 		return nil, err
 	}
-	if err := s.EnsureProjectPathUnderRoot(ctx, proj, false); err != nil {
-		return nil, err
+	if ensureProjectPathUnderRootErr := s.EnsureProjectPathUnderRoot(ctx, proj, false); ensureProjectPathUnderRootErr != nil {
+		return nil, ensureProjectPathUnderRootErr
 	}
 	composeFileName := projects.DefaultComposeFileName
 	if composeFile, resolveErr := s.ResolveProjectComposeFile(ctx, proj); resolveErr == nil {
@@ -129,7 +129,18 @@ func (s *ProjectService) DownloadProjectWorkspaceFile(ctx context.Context, proje
 	return file, size, filepath.Base(rel), nil
 }
 
-func (s *ProjectService) UpdateProjectWorkspace(ctx context.Context, projectID string, manifest projecttypes.WorkspaceUpdateManifest, uploads map[int][]byte, user common.User) (*workspacetypes.Workspace, error) {
+func (
+	s *ProjectService,
+) UpdateProjectWorkspace(
+	ctx context.Context,
+	projectID string,
+	manifest projecttypes.WorkspaceUpdateManifest,
+	uploads map[int][]byte,
+	user common.User,
+) (
+	*workspacetypes.Workspace,
+	error,
+) {
 	if err := workspacepkg.ValidateUpdateManifest(manifest.FileTreeRevision, len(manifest.FileChanges), 500); err != nil {
 		return nil, common.Classify(common.ErrProjectWorkspaceBadRequest, err)
 	}
@@ -144,19 +155,19 @@ func (s *ProjectService) UpdateProjectWorkspace(ctx context.Context, projectID s
 	if err != nil {
 		return nil, err
 	}
-	if err := validateWorkspaceChangesAgainstGitOpsInternal(manifest.FileChanges, ownedPaths); err != nil {
-		return nil, err
+	if validateWorkspaceChangesAgainstGitOpsErr := validateWorkspaceChangesAgainstGitOpsInternal(manifest.FileChanges, ownedPaths); validateWorkspaceChangesAgainstGitOpsErr != nil {
+		return nil, validateWorkspaceChangesAgainstGitOpsErr
 	}
-	if err := s.EnsureProjectPathUnderRoot(ctx, proj, true); err != nil {
-		return nil, err
+	if ensureProjectPathUnderRootErr := s.EnsureProjectPathUnderRoot(ctx, proj, true); ensureProjectPathUnderRootErr != nil {
+		return nil, ensureProjectPathUnderRootErr
 	}
 
 	projectsDirectory, err := s.GetProjectsDirectory(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if err := ensureProjectEnvReadableInternal(ctx, projectsDirectory, proj.Path); err != nil {
-		return nil, err
+	if ensureProjectEnvReadableErr := ensureProjectEnvReadableInternal(ctx, projectsDirectory, proj.Path); ensureProjectEnvReadableErr != nil {
+		return nil, ensureProjectEnvReadableErr
 	}
 	scope := projects.ProjectUpdateBackupScope{}
 	for _, change := range manifest.FileChanges {
@@ -169,16 +180,16 @@ func (s *ProjectService) UpdateProjectWorkspace(ctx context.Context, projectID s
 	defer cleanup()
 
 	opts := s.projectWorkspaceApplyOptionsInternal(ctx, proj, manifest.FileTreeRevision)
-	if err := projects.ApplyProjectWorkspaceChanges(proj.Path, manifest.FileChanges, uploads, opts); err != nil {
+	if applyProjectWorkspaceChangesErr := projects.ApplyProjectWorkspaceChanges(proj.Path, manifest.FileChanges, uploads, opts); applyProjectWorkspaceChangesErr != nil {
 		if restoreErr := projects.RestoreProjectUpdateBackup(ctx, proj.Path, backup); restoreErr != nil {
-			return nil, errors.Join(wrapProjectWorkspaceErrorInternal(err), fmt.Errorf("rollback project workspace: %w", restoreErr))
+			return nil, errors.Join(wrapProjectWorkspaceErrorInternal(applyProjectWorkspaceChangesErr), fmt.Errorf("rollback project workspace: %w", restoreErr))
 		}
-		return nil, wrapProjectWorkspaceErrorInternal(err)
+		return nil, wrapProjectWorkspaceErrorInternal(applyProjectWorkspaceChangesErr)
 	}
 
 	s.refreshProjectImageRefsInternal(ctx, proj)
-	if err := s.updateProjectStatusandCountsInternal(ctx, proj.ID, proj.Status); err != nil {
-		return nil, fmt.Errorf("refresh project after workspace update: %w", err)
+	if updateProjectStatusandCountsErr := s.updateProjectStatusandCountsInternal(ctx, proj.ID, proj.Status); updateProjectStatusandCountsErr != nil {
+		return nil, fmt.Errorf("refresh project after workspace update: %w", updateProjectStatusandCountsErr)
 	}
 	s.logProjectEventInternal(ctx, event.EventTypeProjectUpdate, proj.ID, proj.Name, user, database.JSON{
 		"action":          "update_project_workspace",
@@ -269,7 +280,7 @@ func (s *ProjectService) gitOpsOwnedWorkspacePathsInternal(ctx context.Context, 
 
 	owned := make(map[string]struct{})
 	add := func(p string) {
-		if rel, err := kit.NormalizeRelativePath(p); err == nil {
+		if rel, normalizeRelativePathErr := kit.NormalizeRelativePath(p); normalizeRelativePathErr == nil {
 			owned[rel] = struct{}{}
 		}
 	}
@@ -277,8 +288,8 @@ func (s *ProjectService) gitOpsOwnedWorkspacePathsInternal(ctx context.Context, 
 		var files []string
 		// Fail closed: an incomplete ownership set would expose synced files
 		// as editable, and the next sync would silently overwrite the edits.
-		if err := json.Unmarshal([]byte(*sync.SyncedFiles), &files); err != nil {
-			return nil, fmt.Errorf("parse gitops synced files for workspace: %w", err)
+		if unmarshalErr := json.Unmarshal([]byte(*sync.SyncedFiles), &files); unmarshalErr != nil {
+			return nil, fmt.Errorf("parse gitops synced files for workspace: %w", unmarshalErr)
 		}
 		for _, f := range files {
 			add(f)

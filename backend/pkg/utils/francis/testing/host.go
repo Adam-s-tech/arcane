@@ -25,11 +25,16 @@ func New(t stdtesting.TB, databaseURLs ...string) *francis.Runtime {
 		t.Fatal(err)
 	}
 	port := strings.TrimPrefix(listener.LocalAddr().String(), "127.0.0.1:")
-	if err := listener.Close(); err != nil {
-		t.Fatal(err)
+	if closeErr := listener.Close(); closeErr != nil {
+		t.Fatal(closeErr)
 	}
 	databaseURL := "file:actor-test-unused.db"
-	options := []local.HostOption{local.WithShutdownGracePeriod(time.Second), local.WithAlarmsPollInterval(110 * time.Millisecond), local.WithAlarmsFetchAheadInterval(time.Second), local.WithAlarmsLeaseDuration(2 * time.Second)}
+	options := []local.HostOption{
+		local.WithShutdownGracePeriod(time.Second),
+		local.WithAlarmsPollInterval(110 * time.Millisecond),
+		local.WithAlarmsFetchAheadInterval(time.Second),
+		local.WithAlarmsLeaseDuration(2 * time.Second),
+	}
 	if len(databaseURLs) > 0 {
 		databaseURL = databaseURLs[0]
 	} else {

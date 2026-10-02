@@ -52,7 +52,11 @@ func TestNormalizationBeforeHumaValidation(t *testing.T) {
 			registerNormalizationInternal(api)
 			called := false
 			var received normalizationTestBody
-			huma.Register(api, huma.Operation{OperationID: "normalize", Method: http.MethodPost, Path: "/normalize"}, func(_ context.Context, input *struct{ Body normalizationTestBody }) (*struct{ Body normalizationTestBody }, error) {
+			huma.Register(api, huma.Operation{
+				OperationID: "normalize",
+				Method:      http.MethodPost,
+				Path:        "/normalize",
+			}, func(_ context.Context, input *struct{ Body normalizationTestBody }) (*struct{ Body normalizationTestBody }, error) {
 				called = true
 				received = input.Body
 				return &struct{ Body normalizationTestBody }{Body: input.Body}, nil
@@ -86,12 +90,21 @@ func TestNormalizationBeforeHumaValidation(t *testing.T) {
 		api := humaecho.New(router, huma.DefaultConfig("test", "1"))
 		registerNormalizationInternal(api)
 		var received usertypes.CreateUser
-		huma.Register(api, huma.Operation{OperationID: "create", Method: http.MethodPost, Path: "/create"}, func(_ context.Context, input *struct{ Body usertypes.CreateUser }) (*struct{}, error) {
+		huma.Register(api, huma.Operation{
+			OperationID: "create",
+			Method:      http.MethodPost,
+			Path:        "/create",
+		}, func(_ context.Context, input *struct{ Body usertypes.CreateUser }) (*struct{}, error) {
 			received = input.Body
 			return &struct{}{}, nil
 		})
 		recorder := httptest.NewRecorder()
-		request := httptest.NewRequest(http.MethodPost, "/create", strings.NewReader(`{"username":" Jose\u0301 ","email":" Jose\u0301@example.com ","displayName":" Jose\u0301 ","password":" password "}`))
+		request := httptest.NewRequest(
+			http.MethodPost,
+			"/create",
+			strings.NewReader("{\"username\":\" Jose\\u0301 \",\"email\":\" Jose\\u0301@example.com \",\"displayName\":\" Jose\\u0301 \",\"password"+
+				"\":\" password \"}"),
+		)
 		router.ServeHTTP(recorder, request)
 		require.Equal(t, http.StatusNoContent, recorder.Code, recorder.Body.String())
 		require.Equal(t, " Jose\u0301 ", received.Username)
@@ -100,7 +113,11 @@ func TestNormalizationBeforeHumaValidation(t *testing.T) {
 		require.Equal(t, " password ", received.Password)
 
 		var login authtypes.Login
-		huma.Register(api, huma.Operation{OperationID: "login", Method: http.MethodPost, Path: "/login"}, func(_ context.Context, input *struct{ Body authtypes.Login }) (*struct{}, error) {
+		huma.Register(api, huma.Operation{
+			OperationID: "login",
+			Method:      http.MethodPost,
+			Path:        "/login",
+		}, func(_ context.Context, input *struct{ Body authtypes.Login }) (*struct{}, error) {
 			login = input.Body
 			return &struct{}{}, nil
 		})
@@ -117,7 +134,12 @@ func TestNormalizationBodyLimits(t *testing.T) {
 	router := echo.New()
 	api := humaecho.New(router, huma.DefaultConfig("test", "1"))
 	registerNormalizationInternal(api)
-	huma.Register(api, huma.Operation{OperationID: "limit", Method: http.MethodPost, Path: "/limit", MaxBodyBytes: 32}, func(_ context.Context, _ *struct{ Body normalizationTestBody }) (*struct{}, error) {
+	huma.Register(api, huma.Operation{
+		OperationID:  "limit",
+		Method:       http.MethodPost,
+		Path:         "/limit",
+		MaxBodyBytes: 32,
+	}, func(_ context.Context, _ *struct{ Body normalizationTestBody }) (*struct{}, error) {
 		t.Fatal("oversized body must not reach application code")
 		return nil, nil
 	})
@@ -198,7 +220,12 @@ func TestNormalizationReadTimeout(t *testing.T) {
 			api := humaecho.New(router, huma.DefaultConfig("test", "1"))
 			registerNormalizationInternal(api)
 			called := false
-			huma.Register(api, huma.Operation{OperationID: "timeout", Method: http.MethodPost, Path: "/timeout", BodyReadTimeout: tc.timeout}, func(_ context.Context, _ *struct{ Body normalizationTestBody }) (*struct{}, error) {
+			huma.Register(api, huma.Operation{
+				OperationID:     "timeout",
+				Method:          http.MethodPost,
+				Path:            "/timeout",
+				BodyReadTimeout: tc.timeout,
+			}, func(_ context.Context, _ *struct{ Body normalizationTestBody }) (*struct{}, error) {
 				called = true
 				return &struct{}{}, nil
 			})
@@ -207,7 +234,7 @@ func TestNormalizationReadTimeout(t *testing.T) {
 			if !tc.readTimeout {
 				body.body = strings.NewReader(`{"name":"x"}`)
 			}
-			request := httptest.NewRequest(http.MethodPost, "/timeout", nil)
+			request := httptest.NewRequest(http.MethodPost, "/timeout", http.NoBody)
 			request.Body = body
 			router.ServeHTTP(recorder, request)
 			require.Equal(t, tc.status, recorder.Code, recorder.Body.String())

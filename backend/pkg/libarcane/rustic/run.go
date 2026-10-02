@@ -59,24 +59,24 @@ func Run(ctx context.Context, dockerClient *client.Client, password string, comm
 		cleanupCtx := context.WithoutCancel(ctx)
 		for {
 			attemptCtx, cancel := context.WithTimeout(cleanupCtx, timeouts.DefaultDockerAPI)
-			_, err := dockerClient.ContainerRemove(attemptCtx, created.ID, volumehelper.RemoveOptions())
+			_, containerRemoveErr := dockerClient.ContainerRemove(attemptCtx, created.ID, volumehelper.RemoveOptions())
 			cancel()
-			if err == nil || cerrdefs.IsNotFound(err) {
+			if containerRemoveErr == nil || cerrdefs.IsNotFound(containerRemoveErr) {
 				return
 			}
-			slog.WarnContext(cleanupCtx, "failed to remove Rustic container, retrying", "container_id", created.ID, "error", err)
+			slog.WarnContext(cleanupCtx, "failed to remove Rustic container, retrying", "container_id", created.ID, "error", containerRemoveErr)
 			time.Sleep(5 * time.Second)
 		}
 	}()
-	if _, err := dockerClient.ContainerStart(ctx, created.ID, client.ContainerStartOptions{}); err != nil {
-		return "", fmt.Errorf("failed to start Rustic container: %w", err)
+	if _, containerStartErr := dockerClient.ContainerStart(ctx, created.ID, client.ContainerStartOptions{}); containerStartErr != nil {
+		return "", fmt.Errorf("failed to start Rustic container: %w", containerStartErr)
 	}
 	wait := dockerClient.ContainerWait(ctx, created.ID, client.ContainerWaitOptions{Condition: container.WaitConditionNotRunning})
 	var status container.WaitResponse
 	select {
-	case err := <-wait.Error:
-		if err != nil {
-			return "", fmt.Errorf("failed to wait for Rustic container: %w", err)
+	case operationErr := <-wait.Error:
+		if operationErr != nil {
+			return "", fmt.Errorf("failed to wait for Rustic container: %w", operationErr)
 		}
 	case status = <-wait.Result:
 	}
@@ -87,8 +87,8 @@ func Run(ctx context.Context, dockerClient *client.Client, password string, comm
 	defer func() { _ = logs.Close() }()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	if _, err := stdcopy.StdCopy(&stdout, &stderr, logs); err != nil {
-		return "", fmt.Errorf("failed to decode Rustic output: %w", err)
+	if _, stdCopyErr := stdcopy.StdCopy(&stdout, &stderr, logs); stdCopyErr != nil {
+		return "", fmt.Errorf("failed to decode Rustic output: %w", stdCopyErr)
 	}
 	if status.StatusCode != 0 {
 		message := cmp.Or(strings.TrimSpace(stderr.String()), strings.TrimSpace(stdout.String()))

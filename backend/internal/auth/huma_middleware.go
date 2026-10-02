@@ -187,7 +187,19 @@ func createEnvironmentUserInternal(env *environment.Environment) *common.User {
 // enforces security requirements defined on operations. It also resolves the
 // caller's effective PermissionSet via permResolver and stashes it on the
 // request context for downstream middleware.RequirePermission checks.
-func NewHumaMiddleware(api huma.API, authService *AuthService, apiKeyService *apikey.ApiKeyService, permResolver PermissionResolver, envTokenResolver EnvironmentAccessTokenResolver, cfg *config.Config) func(ctx huma.Context, next func(huma.Context)) {
+func NewHumaMiddleware(
+	api huma.API,
+	authService *AuthService,
+	apiKeyService *apikey.ApiKeyService,
+	permResolver PermissionResolver,
+	envTokenResolver EnvironmentAccessTokenResolver,
+	cfg *config.Config,
+) func(
+	ctx huma.Context,
+	next func(
+		huma.Context,
+	),
+) {
 	return func(ctx huma.Context, next func(huma.Context)) {
 		ctx = huma.WithContext(ctx, context.WithValue(ctx.Context(), middleware.ContextKeyRemoteAddr, ctx.RemoteAddr()))
 		if authService == nil {
@@ -277,7 +289,18 @@ func opportunisticBearerAuthInternal(ctx huma.Context, authService *AuthService,
 // handleApiKeyAuthInternal handles the API-key-present branch. Invalid user
 // keys fail closed; only recognized environment tokens defer to bearer auth
 // when both credentials are present on a bearer-capable operation.
-func handleApiKeyAuthInternal(api huma.API, ctx huma.Context, authService *AuthService, apiKeyService *apikey.ApiKeyService, permResolver PermissionResolver, envTokenResolver EnvironmentAccessTokenResolver, allowBearerFallback bool, next func(huma.Context)) {
+func handleApiKeyAuthInternal(
+	api huma.API,
+	ctx huma.Context,
+	authService *AuthService,
+	apiKeyService *apikey.ApiKeyService,
+	permResolver PermissionResolver,
+	envTokenResolver EnvironmentAccessTokenResolver,
+	allowBearerFallback bool,
+	next func(
+		huma.Context,
+	),
+) {
 	if user, key, ok := tryApiKeyAuthInternal(ctx, apiKeyService); ok {
 		// Personal keys inherit the owner's role permissions (same resolution
 		// as session auth); scoped keys are limited to their own grants.

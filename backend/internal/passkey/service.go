@@ -302,12 +302,12 @@ func (s *PasskeyService) BeginPasskeyLogin(ctx context.Context) (*PasskeyChallen
 		return nil, err
 	}
 
-	assertion, session, err := s.webAuthn.BeginDiscoverableLogin(webauthn.WithUserVerification(protocol.VerificationRequired))
+	assertion, localSession, err := s.webAuthn.BeginDiscoverableLogin(webauthn.WithUserVerification(protocol.VerificationRequired))
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin passkey login: %w", err)
 	}
 
-	ceremony, err := s.createCeremonyInternal(ctx, passkeyCeremonyPurposeLogin, nil, nil, nil, session)
+	ceremony, err := s.createCeremonyInternal(ctx, passkeyCeremonyPurposeLogin, nil, nil, nil, localSession)
 	if err != nil {
 		return nil, err
 	}
@@ -335,8 +335,8 @@ func (s *PasskeyService) BeginMFAAuthentication(ctx context.Context, userID stri
 	}
 
 	transaction := newAuthTransactionInternal(userID, authTransactionKindMFA, source, meta, nil)
-	if err := s.db.WithContext(ctx).Create(transaction).Error; err != nil {
-		return nil, fmt.Errorf("failed to create MFA transaction: %w", err)
+	if createMFATransactionErr := s.db.WithContext(ctx).Create(transaction).Error; createMFATransactionErr != nil {
+		return nil, fmt.Errorf("failed to create MFA transaction: %w", createMFATransactionErr)
 	}
 	challenge, err := s.beginMFAForTransactionInternal(ctx, transaction)
 	if err != nil {
@@ -376,10 +376,10 @@ func (s *PasskeyService) beginMFAForTransactionInternal(ctx context.Context, tra
 	}
 	// A transaction has one active assertion at a time. Replacing an older
 	// pending ceremony prevents a client from accumulating reusable challenges.
-	if err := s.db.WithContext(ctx).
+	if invalidateMFACeremoniesErr := s.db.WithContext(ctx).
 		Where("auth_transaction_id = ? AND purpose = ? AND consumed_at IS NULL", transaction.ID, passkeyCeremonyPurposeMFA).
-		Delete(&PasskeyCeremony{}).Error; err != nil {
-		return nil, fmt.Errorf("failed to replace MFA ceremony: %w", err)
+		Delete(&PasskeyCeremony{}).Error; invalidateMFACeremoniesErr != nil {
+		return nil, fmt.Errorf("failed to replace MFA ceremony: %w", invalidateMFACeremoniesErr)
 	}
 
 	assertion, webSession, err := s.webAuthn.BeginLogin(adapter, webauthn.WithUserVerification(protocol.VerificationRequired))
@@ -422,11 +422,11 @@ func (s *PasskeyService) BeginStepUp(ctx context.Context, userID, sessionID stri
 	}
 
 	transaction := newAuthTransactionInternal(userID, authTransactionKindStepUp, session.UserSessionSourceLocal, meta, &sessionID)
-	if err := s.db.WithContext(ctx).Create(transaction).Error; err != nil {
-		return nil, fmt.Errorf("failed to create step-up transaction: %w", err)
+	if createStepUpTransactionErr := s.db.WithContext(ctx).Create(transaction).Error; createStepUpTransactionErr != nil {
+		return nil, fmt.Errorf("failed to create step-up transaction: %w", createStepUpTransactionErr)
 	}
 
-	assertion, session, err := s.webAuthn.BeginLogin(adapter, webauthn.WithUserVerification(protocol.VerificationRequired))
+	assertion, localSession, err := s.webAuthn.BeginLogin(adapter, webauthn.WithUserVerification(protocol.VerificationRequired))
 	if err != nil {
 		_ = s.db.WithContext(ctx).Delete(transaction).Error
 		return nil, fmt.Errorf("failed to begin step-up passkey ceremony: %w", err)
@@ -434,7 +434,7 @@ func (s *PasskeyService) BeginStepUp(ctx context.Context, userID, sessionID stri
 
 	transactionID := transaction.ID
 	userIDPointer := userID
-	ceremony, err := s.createCeremonyInternal(ctx, passkeyCeremonyPurposeStepUp, &userIDPointer, &sessionID, &transactionID, session)
+	ceremony, err := s.createCeremonyInternal(ctx, passkeyCeremonyPurposeStepUp, &userIDPointer, &sessionID, &transactionID, localSession)
 	if err != nil {
 		_ = s.db.WithContext(ctx).Delete(transaction).Error
 		return nil, err
@@ -464,7 +464,7 @@ func (s *PasskeyService) BeginRegistration(ctx context.Context, userID, sessionI
 		return nil, err
 	}
 	exclusions := webauthn.Credentials(adapter.credentials).CredentialDescriptors()
-	creation, session, err := s.webAuthn.BeginRegistration(
+	creation, localSession, err := s.webAuthn.BeginRegistration(
 		adapter,
 		webauthn.WithCredentialParameters(webauthn.CredentialParametersPQCRecommendedL3()),
 		webauthn.WithExclusions(exclusions),
@@ -476,7 +476,7 @@ func (s *PasskeyService) BeginRegistration(ctx context.Context, userID, sessionI
 	}
 
 	userIDPointer := userID
-	ceremony, err := s.createCeremonyInternal(ctx, passkeyCeremonyPurposeRegistration, &userIDPointer, &sessionID, nil, session)
+	ceremony, err := s.createCeremonyInternal(ctx, passkeyCeremonyPurposeRegistration, &userIDPointer, &sessionID, nil, localSession)
 	if err != nil {
 		return nil, err
 	}
@@ -503,8 +503,8 @@ func (s *PasskeyService) FinishRegistration(ctx context.Context, userID, session
 		return nil, ErrPasskeyCeremony
 	}
 
-	var session webauthn.SessionData
-	if err := json.Unmarshal([]byte(ceremony.SessionData), &session); err != nil {
+	var localSession webauthn.SessionData
+	if unmarshalErr := json.Unmarshal([]byte(ceremony.SessionData), &localSession); unmarshalErr != nil {
 		return nil, ErrPasskeyCeremony
 	}
 	adapter, err := s.loadWebAuthnUserInternal(ctx, userID)
@@ -515,7 +515,7 @@ func (s *PasskeyService) FinishRegistration(ctx context.Context, userID, session
 	if err != nil {
 		return nil, ErrPasskeyResponse
 	}
-	credential, err := s.webAuthn.CreateCredential(adapter, session, parsed)
+	credential, err := s.webAuthn.CreateCredential(adapter, localSession, parsed)
 	if err != nil {
 		return nil, ErrPasskeyResponse
 	}
@@ -547,8 +547,8 @@ func (s *PasskeyService) FinishPasskeyLogin(ctx context.Context, ceremonyID stri
 	if err != nil {
 		return nil, err
 	}
-	var session webauthn.SessionData
-	if err := json.Unmarshal([]byte(ceremony.SessionData), &session); err != nil {
+	var localSession webauthn.SessionData
+	if unmarshalErr := json.Unmarshal([]byte(ceremony.SessionData), &localSession); unmarshalErr != nil {
 		return nil, ErrPasskeyCeremony
 	}
 	parsed, err := protocol.ParseCredentialRequestResponseBytes(payload)
@@ -556,7 +556,7 @@ func (s *PasskeyService) FinishPasskeyLogin(ctx context.Context, ceremonyID stri
 		slog.WarnContext(ctx, "passkey login validation failed", "stage", "parse", "error", err)
 		return nil, ErrPasskeyResponse
 	}
-	utils.NormalizePasskeyAssertionExtensions(session.Extensions, parsed)
+	utils.NormalizePasskeyAssertionExtensions(localSession.Extensions, parsed)
 
 	var resolved *webAuthnUser
 	user, credential, err := s.webAuthn.ValidatePasskeyLogin(func(_, userHandle []byte) (webauthn.User, error) {
@@ -566,14 +566,14 @@ func (s *PasskeyService) FinishPasskeyLogin(ctx context.Context, ceremonyID stri
 		}
 		resolved = adapter
 		return adapter, nil
-	}, session, parsed)
+	}, localSession, parsed)
 	if err != nil || user == nil || credential == nil || resolved == nil {
 		slog.WarnContext(ctx, "passkey login validation failed", "stage", "assertion", "error", err)
 		return nil, ErrPasskeyResponse
 	}
 
-	if err := s.updateCredentialAfterAssertionInternal(ctx, resolved, credential); err != nil {
-		return nil, err
+	if updateCredentialAfterAssertionErr := s.updateCredentialAfterAssertionInternal(ctx, resolved, credential); updateCredentialAfterAssertionErr != nil {
+		return nil, updateCredentialAfterAssertionErr
 	}
 	return &resolved.model, nil
 }
@@ -590,8 +590,8 @@ func (s *PasskeyService) FinishMobilePasskeyLogin(ctx context.Context, ceremonyI
 
 	transaction := newAuthTransactionInternal(user.ID, authTransactionKindMobilePasskey, session.UserSessionSourcePasskey, auth.SessionMeta{}, nil)
 	transaction.SecretHash = &codeChallenge
-	if err := s.db.WithContext(ctx).Create(transaction).Error; err != nil {
-		return nil, fmt.Errorf("failed to create mobile passkey transaction: %w", err)
+	if createMobileTransactionErr := s.db.WithContext(ctx).Create(transaction).Error; createMobileTransactionErr != nil {
+		return nil, fmt.Errorf("failed to create mobile passkey transaction: %w", createMobileTransactionErr)
 	}
 	return &auth.MobilePasskeyCompletion{TransactionID: transaction.ID, ExpiresAt: transaction.ExpiresAt}, nil
 }
@@ -607,11 +607,20 @@ func (s *PasskeyService) ExchangeMobilePasskeyLogin(ctx context.Context, transac
 
 	var transaction AuthTransaction
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("id = ? AND kind = ? AND status = ? AND secret_hash = ? AND expires_at > ?", transactionID, authTransactionKindMobilePasskey, authTransactionPending, codeChallenge, time.Now()).First(&transaction).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
+		if loadMobileTransactionErr := tx.Where(
+			"id = ? AND kind = ? AND status = ? AND secret_hash = ? AND expires_at > ?",
+			transactionID,
+			authTransactionKindMobilePasskey,
+			authTransactionPending,
+			codeChallenge,
+			time.Now(),
+		).First(
+			&transaction,
+		).Error; loadMobileTransactionErr != nil {
+			if errors.Is(loadMobileTransactionErr, gorm.ErrRecordNotFound) {
 				return ErrPasskeyTransaction
 			}
-			return fmt.Errorf("failed to load mobile passkey transaction: %w", err)
+			return fmt.Errorf("failed to load mobile passkey transaction: %w", loadMobileTransactionErr)
 		}
 
 		now := time.Now()
@@ -638,8 +647,8 @@ func (s *PasskeyService) FinishMFA(ctx context.Context, transactionID string, pa
 	if err != nil {
 		return nil, err
 	}
-	if err := s.completeTransactionInternal(ctx, transaction.ID); err != nil {
-		return nil, err
+	if completeTransactionErr := s.completeTransactionInternal(ctx, transaction.ID); completeTransactionErr != nil {
+		return nil, completeTransactionErr
 	}
 
 	now := time.Now()
@@ -662,7 +671,19 @@ func (s *PasskeyService) FinishRecoveryCode(ctx context.Context, transactionID, 
 	hash := kit.SHA256Hex(normalized)
 	var transaction AuthTransaction
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND kind = ? AND status = ? AND expires_at > ?", transactionID, authTransactionKindMFA, authTransactionPending, time.Now()).First(&transaction).Error; err != nil {
+		if err := tx.Clauses(
+			clause.Locking{
+				Strength: "UPDATE",
+			},
+		).Where(
+			"id = ? AND kind = ? AND status = ? AND expires_at > ?",
+			transactionID,
+			authTransactionKindMFA,
+			authTransactionPending,
+			time.Now(),
+		).First(
+			&transaction,
+		).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return ErrPasskeyTransaction
 			}
@@ -725,11 +746,11 @@ func (s *PasskeyService) FinishStepUp(ctx context.Context, transactionID, sessio
 	if transaction.SessionID == nil || *transaction.SessionID != sessionID {
 		return nil, ErrPasskeyTransaction
 	}
-	if err := s.ensureActiveSessionInternal(ctx, transaction.UserID, sessionID); err != nil {
-		return nil, err
+	if ensureActiveSessionErr := s.ensureActiveSessionInternal(ctx, transaction.UserID, sessionID); ensureActiveSessionErr != nil {
+		return nil, ensureActiveSessionErr
 	}
-	if _, err := s.finishKnownUserAssertionInternal(ctx, transaction, passkeyCeremonyPurposeStepUp, payload); err != nil {
-		return nil, err
+	if _, finishKnownUserAssertionErr := s.finishKnownUserAssertionInternal(ctx, transaction, passkeyCeremonyPurposeStepUp, payload); finishKnownUserAssertionErr != nil {
+		return nil, finishKnownUserAssertionErr
 	}
 	return s.issueStepUpGrantInternal(ctx, transaction.ID)
 }
@@ -832,8 +853,8 @@ func (s *PasskeyService) RenamePasskey(ctx context.Context, userID, passkeyID, n
 		return nil, fmt.Errorf("failed to load passkey: %w", result.Error)
 	}
 	now := time.Now()
-	if err := s.db.WithContext(ctx).Model(&row).Updates(map[string]any{"name": name, "updated_at": now}).Error; err != nil {
-		return nil, fmt.Errorf("failed to rename passkey: %w", err)
+	if renamePasskeyErr := s.db.WithContext(ctx).Model(&row).Updates(map[string]any{"name": name, "updated_at": now}).Error; renamePasskeyErr != nil {
+		return nil, fmt.Errorf("failed to rename passkey: %w", renamePasskeyErr)
 	}
 	row.Name = name
 	row.UpdatedAt = &now
@@ -888,8 +909,8 @@ func (s *PasskeyService) GetMFAStatus(ctx context.Context, userID string) (*MFAS
 		return nil, err
 	}
 	var recoveryCodes int64
-	if err := s.db.WithContext(ctx).Model(&PasskeyRecoveryCode{}).Where("user_id = ? AND used_at IS NULL", userID).Count(&recoveryCodes).Error; err != nil {
-		return nil, fmt.Errorf("failed to count recovery codes: %w", err)
+	if countRecoveryCodesErr := s.db.WithContext(ctx).Model(&PasskeyRecoveryCode{}).Where("user_id = ? AND used_at IS NULL", userID).Count(&recoveryCodes).Error; countRecoveryCodesErr != nil {
+		return nil, fmt.Errorf("failed to count recovery codes: %w", countRecoveryCodesErr)
 	}
 	return &MFAStatus{Enabled: user.PasskeyMFAEnabled, PasskeyCount: passkeyCount, RecoveryCodesRemaining: int(recoveryCodes)}, nil
 }
@@ -907,12 +928,12 @@ func (s *PasskeyService) EnableMFA(ctx context.Context, userID, sessionID, stepU
 	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var user common.User
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", userID).First(&user).Error; err != nil {
-			return fmt.Errorf("failed to lock user for MFA enable: %w", err)
+		if lockMFAUserErr := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", userID).First(&user).Error; lockMFAUserErr != nil {
+			return fmt.Errorf("failed to lock user for MFA enable: %w", lockMFAUserErr)
 		}
 		var count int64
-		if err := tx.Model(&Passkey{}).Where("user_id = ? AND rp_id = ?", userID, s.rpID).Count(&count).Error; err != nil {
-			return fmt.Errorf("failed to count passkeys for MFA enable: %w", err)
+		if countPasskeysErr := tx.Model(&Passkey{}).Where("user_id = ? AND rp_id = ?", userID, s.rpID).Count(&count).Error; countPasskeysErr != nil {
+			return fmt.Errorf("failed to count passkeys for MFA enable: %w", countPasskeysErr)
 		}
 		if count == 0 {
 			return ErrPasskeyNoCredential
@@ -920,14 +941,14 @@ func (s *PasskeyService) EnableMFA(ctx context.Context, userID, sessionID, stepU
 		if user.PasskeyMFAEnabled {
 			return ErrPasskeyMFAAlreadyEnabled
 		}
-		if err := tx.Model(&common.User{}).Where("id = ?", userID).Update("passkey_mfa_enabled", true).Error; err != nil {
-			return fmt.Errorf("failed to enable passkey MFA: %w", err)
+		if enableMFAErr := tx.Model(&common.User{}).Where("id = ?", userID).Update("passkey_mfa_enabled", true).Error; enableMFAErr != nil {
+			return fmt.Errorf("failed to enable passkey MFA: %w", enableMFAErr)
 		}
-		if err := tx.Where("user_id = ?", userID).Delete(&PasskeyRecoveryCode{}).Error; err != nil {
-			return fmt.Errorf("failed to replace recovery codes: %w", err)
+		if clearRecoveryCodesErr := tx.Where("user_id = ?", userID).Delete(&PasskeyRecoveryCode{}).Error; clearRecoveryCodesErr != nil {
+			return fmt.Errorf("failed to replace recovery codes: %w", clearRecoveryCodesErr)
 		}
-		if err := tx.Create(&rows).Error; err != nil {
-			return fmt.Errorf("failed to create recovery codes: %w", err)
+		if createRecoveryCodesErr := tx.Create(&rows).Error; createRecoveryCodesErr != nil {
+			return fmt.Errorf("failed to create recovery codes: %w", createRecoveryCodesErr)
 		}
 		return nil
 	})
@@ -984,17 +1005,17 @@ func (s *PasskeyService) RegenerateRecoveryCodes(ctx context.Context, userID, se
 	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var user common.User
-		if err := tx.Where("id = ?", userID).First(&user).Error; err != nil {
-			return fmt.Errorf("failed to load user for recovery code regeneration: %w", err)
+		if loadRecoveryUserErr := tx.Where("id = ?", userID).First(&user).Error; loadRecoveryUserErr != nil {
+			return fmt.Errorf("failed to load user for recovery code regeneration: %w", loadRecoveryUserErr)
 		}
 		if !user.PasskeyMFAEnabled {
 			return ErrPasskeyMFANotEnabled
 		}
-		if err := tx.Where("user_id = ?", userID).Delete(&PasskeyRecoveryCode{}).Error; err != nil {
-			return fmt.Errorf("failed to replace recovery codes: %w", err)
+		if clearRecoveryCodesErr := tx.Where("user_id = ?", userID).Delete(&PasskeyRecoveryCode{}).Error; clearRecoveryCodesErr != nil {
+			return fmt.Errorf("failed to replace recovery codes: %w", clearRecoveryCodesErr)
 		}
-		if err := tx.Create(&rows).Error; err != nil {
-			return fmt.Errorf("failed to create recovery codes: %w", err)
+		if createRecoveryCodesErr := tx.Create(&rows).Error; createRecoveryCodesErr != nil {
+			return fmt.Errorf("failed to create recovery codes: %w", createRecoveryCodesErr)
 		}
 		return nil
 	})
@@ -1038,15 +1059,15 @@ func (s *PasskeyService) ResetMFAForUser(ctx context.Context, userID string) err
 	})
 }
 
-func (s *PasskeyService) createCeremonyInternal(ctx context.Context, purpose string, userID, sessionID, transactionID *string, session *webauthn.SessionData) (*PasskeyCeremony, error) {
-	if session == nil {
+func (s *PasskeyService) createCeremonyInternal(ctx context.Context, purpose string, userID, sessionID, transactionID *string, localSession *webauthn.SessionData) (*PasskeyCeremony, error) {
+	if localSession == nil {
 		return nil, ErrPasskeyCeremony
 	}
-	serialized, err := json.Marshal(session)
+	serialized, err := json.Marshal(localSession)
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize WebAuthn session: %w", err)
 	}
-	expiresAt := session.Expires
+	expiresAt := localSession.Expires
 	if expiresAt.IsZero() {
 		expiresAt = time.Now().Add(passkeyCeremonyTTL)
 	}
@@ -1060,8 +1081,8 @@ func (s *PasskeyService) createCeremonyInternal(ctx context.Context, purpose str
 		SessionData:       string(serialized),
 		ExpiresAt:         expiresAt,
 	}
-	if err := s.db.WithContext(ctx).Create(ceremony).Error; err != nil {
-		return nil, fmt.Errorf("failed to store passkey ceremony: %w", err)
+	if createCeremonyErr := s.db.WithContext(ctx).Create(ceremony).Error; createCeremonyErr != nil {
+		return nil, fmt.Errorf("failed to store passkey ceremony: %w", createCeremonyErr)
 	}
 	return ceremony, nil
 }
@@ -1126,8 +1147,8 @@ func (s *PasskeyService) finishKnownUserAssertionInternal(ctx context.Context, t
 	if ceremony.AuthTransactionID == nil || *ceremony.AuthTransactionID != transaction.ID || ceremony.UserID == nil || *ceremony.UserID != transaction.UserID {
 		return nil, ErrPasskeyCeremony
 	}
-	var session webauthn.SessionData
-	if err := json.Unmarshal([]byte(ceremony.SessionData), &session); err != nil {
+	var localSession webauthn.SessionData
+	if unmarshalErr := json.Unmarshal([]byte(ceremony.SessionData), &localSession); unmarshalErr != nil {
 		return nil, ErrPasskeyCeremony
 	}
 	adapter, err := s.loadWebAuthnUserInternal(ctx, transaction.UserID)
@@ -1138,13 +1159,13 @@ func (s *PasskeyService) finishKnownUserAssertionInternal(ctx context.Context, t
 	if err != nil {
 		return nil, ErrPasskeyResponse
 	}
-	utils.NormalizePasskeyAssertionExtensions(session.Extensions, parsed)
-	credential, err := s.webAuthn.ValidateLogin(adapter, session, parsed)
+	utils.NormalizePasskeyAssertionExtensions(localSession.Extensions, parsed)
+	credential, err := s.webAuthn.ValidateLogin(adapter, localSession, parsed)
 	if err != nil || credential == nil {
 		return nil, ErrPasskeyResponse
 	}
-	if err := s.updateCredentialAfterAssertionInternal(ctx, adapter, credential); err != nil {
-		return nil, err
+	if updateCredentialAfterAssertionErr := s.updateCredentialAfterAssertionInternal(ctx, adapter, credential); updateCredentialAfterAssertionErr != nil {
+		return nil, updateCredentialAfterAssertionErr
 	}
 	return &adapter.model, nil
 }
@@ -1222,10 +1243,10 @@ func (s *PasskeyService) ensureActiveSessionInternal(ctx context.Context, userID
 	if strings.TrimSpace(userID) == "" || strings.TrimSpace(sessionID) == "" {
 		return ErrPasskeyStepUpRequired
 	}
-	var session session.UserSession
+	var localSession session.UserSession
 	if err := s.db.WithContext(ctx).
 		Where("id = ? AND user_id = ? AND revoked_at IS NULL AND expires_at > ?", sessionID, userID, time.Now()).
-		First(&session).Error; err != nil {
+		First(&localSession).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrPasskeyStepUpRequired
 		}
@@ -1403,7 +1424,7 @@ func loadAuthenticatorNamesInternal() {
 	if err != nil {
 		return
 	}
-	if err := json.Unmarshal(data, &authenticatorNames); err != nil {
+	if unmarshalErr := json.Unmarshal(data, &authenticatorNames); unmarshalErr != nil {
 		authenticatorNames = map[string]string{}
 	}
 }

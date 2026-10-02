@@ -464,7 +464,7 @@ func (c *Config) MaskSensitive() map[string]any {
 		if isSensitive {
 			// Mask sensitive values
 			strVal := fmt.Sprintf("%v", field.Interface())
-			result[envTag] = kit.Ternary(len(strVal) > 0, "****", "(empty)")
+			result[envTag] = kit.Ternary(strVal != "", "****", "(empty)")
 		} else {
 			result[envTag] = field.Interface()
 		}

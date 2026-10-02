@@ -54,7 +54,19 @@ func collectActivityWindowInternal(window int, fetchPage func(start, limit int) 
 // ListRemoteActivities combines manager-owned summaries with agent-owned work
 // before slicing the page. The remote records must already match the filters
 // and be the agent's newest window; remoteTotal is the agent's filtered count.
-func (s *ActivityService) ListRemoteActivities(ctx context.Context, environmentID string, remote []activitytypes.Activity, remoteTotal int64, params pagination.QueryParams) ([]activitytypes.Activity, pagination.Response, error) {
+func (
+	s *ActivityService,
+) ListRemoteActivities(
+	ctx context.Context,
+	environmentID string,
+	remote []activitytypes.Activity,
+	remoteTotal int64,
+	params pagination.QueryParams,
+) (
+	[]activitytypes.Activity,
+	pagination.Response,
+	error,
+) {
 	params = normalizeRemoteActivityParamsInternal(params)
 	window := kit.Ternary(params.Limit == -1, -1, params.Start+params.Limit)
 	activities, localTotal, err := collectActivityWindowInternal(window, func(start, limit int) ([]activitytypes.Activity, int64, error) {

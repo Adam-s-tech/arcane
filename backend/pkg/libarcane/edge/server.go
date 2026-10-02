@@ -168,8 +168,8 @@ func (s *TunnelServer) HandleConnect(c *echo.Context) error {
 		_ = tunnelConn.Close()
 		return nil
 	}
-	if err := s.requireRequestCertificateIdentityInternal(req, envID); err != nil {
-		slog.WarnContext(ctx, "Rejected websocket edge tunnel with mismatched client certificate", "environment_id", envID, "error", err)
+	if requireRequestCertificateIdentityErr := s.requireRequestCertificateIdentityInternal(req, envID); requireRequestCertificateIdentityErr != nil {
+		slog.WarnContext(ctx, "Rejected websocket edge tunnel with mismatched client certificate", "environment_id", envID, "error", requireRequestCertificateIdentityErr)
 		_ = tunnelConn.Send(&TunnelMessage{Type: MessageTypeRegisterResponse, Accepted: false, Error: "client certificate does not match environment"})
 		_ = tunnelConn.Close()
 		return nil
@@ -243,8 +243,8 @@ func (s *TunnelServer) HandleMTLSEnroll(c *echo.Context) error {
 		return c.JSON(http.StatusNotFound, map[string]any{"error": "edge mTLS enrollment assets unavailable"})
 	}
 	assets.Reenrolled = previouslyEnrolled
-	if err := recordManagerMTLSEnrollmentInternal(s.cfg, envID, now); err != nil {
-		slog.ErrorContext(ctx, "Failed to record edge mTLS enrollment state", "environment_id", envID, "error", err)
+	if recordManagerMTLSEnrollmentErr := recordManagerMTLSEnrollmentInternal(s.cfg, envID, now); recordManagerMTLSEnrollmentErr != nil {
+		slog.ErrorContext(ctx, "Failed to record edge mTLS enrollment state", "environment_id", envID, "error", recordManagerMTLSEnrollmentErr)
 		return c.JSON(http.StatusInternalServerError, map[string]any{"error": "failed to record edge mTLS enrollment state"})
 	}
 	if assets.Reenrolled {
@@ -282,8 +282,8 @@ func (s *TunnelServer) Connect(stream grpc.BidiStreamingServer[tunnelpb.AgentMes
 	if !ok || envID == "" {
 		return status.Error(codes.Unauthenticated, "authenticated environment is missing from stream context")
 	}
-	if err := s.requireCertificateIdentityFromContextInternal(ctx, envID); err != nil {
-		return status.Error(codes.Unauthenticated, err.Error())
+	if requireCertificateIdentityFromContextErr := s.requireCertificateIdentityFromContextInternal(ctx, envID); requireCertificateIdentityFromContextErr != nil {
+		return status.Error(codes.Unauthenticated, requireCertificateIdentityFromContextErr.Error())
 	}
 
 	managerConn := NewGRPCManagerTunnelConn(stream)
@@ -416,7 +416,7 @@ func (s *TunnelServer) manageConnectedTunnel(ctx, callbackCtx context.Context, t
 	// learns what this manager supports (older agents ignore extra strings).
 	capabilities := kit.Unique(append(slices.Clone(tunnel.Capabilities), tunnelCapabilityProtoParity, tunnelCapabilityChunkedRequest))
 
-	if err := tunnel.Conn.Send(&TunnelMessage{
+	if sendErr := tunnel.Conn.Send(&TunnelMessage{
 		Type:          MessageTypeRegisterResponse,
 		Accepted:      true,
 		EnvironmentID: tunnel.EnvironmentID,
@@ -424,8 +424,8 @@ func (s *TunnelServer) manageConnectedTunnel(ctx, callbackCtx context.Context, t
 		SecurityMode:  tunnel.SecurityMode,
 		Capabilities:  capabilities,
 		DrainPrevious: drainPrevious,
-	}); err != nil {
-		slog.WarnContext(ctx, "Failed to send register response", "environment_id", tunnel.EnvironmentID, "error", err)
+	}); sendErr != nil {
+		slog.WarnContext(ctx, "Failed to send register response", "environment_id", tunnel.EnvironmentID, "error", sendErr)
 		_ = tunnel.CloseWithReason("")
 		removed, active := s.registry.UnregisterCurrent(callbackCtx, tunnel.EnvironmentID, tunnel)
 		if removed && !active {
@@ -637,8 +637,8 @@ func (s *TunnelServer) authStreamInterceptorInternal() grpc.StreamServerIntercep
 		if err != nil {
 			return status.Error(codes.Unauthenticated, "invalid agent token")
 		}
-		if err := s.requireCertificateIdentityFromContextInternal(ss.Context(), envID); err != nil {
-			return status.Error(codes.Unauthenticated, err.Error())
+		if requireCertificateIdentityFromContextErr := s.requireCertificateIdentityFromContextInternal(ss.Context(), envID); requireCertificateIdentityFromContextErr != nil {
+			return status.Error(codes.Unauthenticated, requireCertificateIdentityFromContextErr.Error())
 		}
 
 		ctx := context.WithValue(ss.Context(), resolvedEnvironmentIDKey{}, envID)

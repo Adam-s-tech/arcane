@@ -1,7 +1,6 @@
 package edge
 
 import (
-	"context"
 	"net/http"
 	"testing"
 
@@ -24,16 +23,47 @@ func TestResolveEdgeCommandName(t *testing.T) {
 		{name: "container edit", method: "POST", path: "/api/environments/0/containers/abc/edit", command: "container.edit", shouldHit: true},
 		{name: "container edit config wrong method", method: "POST", path: "/api/environments/0/containers/abc/edit-config", command: "container.edit_config", shouldHit: false},
 		{name: "container edit wrong method", method: "GET", path: "/api/environments/0/containers/abc/edit", command: "container.edit", shouldHit: false},
-		{name: "container edit config stream rejected", method: "GET", path: "/api/environments/0/containers/abc/edit-config", stream: true, command: "container.edit_config", shouldHit: false},
+		{
+			name:      "container edit config stream rejected",
+			method:    "GET",
+			path:      "/api/environments/0/containers/abc/edit-config",
+			stream:    true,
+			command:   "container.edit_config",
+			shouldHit: false,
+		},
 		{name: "container edit stream rejected", method: "POST", path: "/api/environments/0/containers/abc/edit", stream: true, command: "container.edit", shouldHit: false},
 		{name: "container start", method: "POST", path: "/api/environments/0/containers/abc/start", command: "container.start", shouldHit: true},
-		{name: "volume workspace download", method: "GET", path: "/api/environments/0/volumes/data/workspace/file/download?relativePath=notes/readme.txt", command: "volume.workspace.download", shouldHit: true},
+		{
+			name:      "volume workspace download",
+			method:    "GET",
+			path:      "/api/environments/0/volumes/data/workspace/file/download?relativePath=notes/readme.txt",
+			command:   "volume.workspace.download",
+			shouldHit: true,
+		},
 		{name: "volume workspace list", method: "GET", path: "/api/environments/0/volumes/data/workspace", command: "volume.workspace.list", shouldHit: true},
-		{name: "volume workspace read file", method: "GET", path: "/api/environments/0/volumes/data/workspace/file?relativePath=notes/readme.txt", command: "volume.workspace.read_file", shouldHit: true},
+		{
+			name:      "volume workspace read file",
+			method:    "GET",
+			path:      "/api/environments/0/volumes/data/workspace/file?relativePath=notes/readme.txt",
+			command:   "volume.workspace.read_file",
+			shouldHit: true,
+		},
 		{name: "volume workspace update", method: "PUT", path: "/api/environments/0/volumes/data/workspace", command: "volume.workspace.update", shouldHit: true},
 		{name: "project workspace list", method: "GET", path: "/api/environments/0/projects/p1/workspace", command: "project.workspace.list", shouldHit: true},
-		{name: "project workspace read file", method: "GET", path: "/api/environments/0/projects/p1/workspace/file?relativePath=notes/readme.txt", command: "project.workspace.read_file", shouldHit: true},
-		{name: "project workspace download", method: "GET", path: "/api/environments/0/projects/p1/workspace/file/download?relativePath=notes/readme.txt", command: "project.workspace.download", shouldHit: true},
+		{
+			name:      "project workspace read file",
+			method:    "GET",
+			path:      "/api/environments/0/projects/p1/workspace/file?relativePath=notes/readme.txt",
+			command:   "project.workspace.read_file",
+			shouldHit: true,
+		},
+		{
+			name:      "project workspace download",
+			method:    "GET",
+			path:      "/api/environments/0/projects/p1/workspace/file/download?relativePath=notes/readme.txt",
+			command:   "project.workspace.download",
+			shouldHit: true,
+		},
 		{name: "project workspace update", method: "PUT", path: "/api/environments/0/projects/p1/workspace", command: "project.workspace.update", shouldHit: true},
 		{name: "build workspace browse retained", method: "GET", path: "/api/environments/0/builds/browse", command: "build_workspace.browse.list", shouldHit: true},
 		{name: "legacy project files absent", method: "GET", path: "/api/environments/0/projects/p1/files", shouldHit: false},
@@ -95,7 +125,7 @@ func TestCollectCommandResponse(t *testing.T) {
 	pending.ResponseCh <- &TunnelMessage{ID: "cmd-1", Type: MessageTypeCommandComplete, Status: 200, Headers: map[string]string{"Content-Type": "text/plain"}, Body: []byte("world")}
 	require.NoError(t, tunnel.CloseWithReason(""))
 
-	status, headers, body, err := collectCommandResponseInternal(context.Background(), tunnel, pending, "")
+	status, headers, body, err := collectCommandResponseInternal(t.Context(), tunnel, pending, "")
 	require.NoError(t, err)
 	require.Equal(t, 200, status)
 	require.Equal(t, "text/plain", headers["Content-Type"])

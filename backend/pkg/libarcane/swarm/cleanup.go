@@ -180,11 +180,11 @@ func RemoveStackResources(ctx context.Context, dockerClient *dockerclient.Client
 		if stackNetwork.Ingress {
 			continue
 		}
-		if err := removeStaleSwarmResourceInternal(ctx, false, func(ctx context.Context) error {
-			_, err := dockerClient.NetworkRemove(ctx, stackNetwork.ID, dockerclient.NetworkRemoveOptions{})
-			return err
-		}); err != nil {
-			return fmt.Errorf("failed to remove stack network %s: %w", stackNetwork.Name, err)
+		if removeStaleSwarmResourceErr := removeStaleSwarmResourceInternal(ctx, false, func(ctx context.Context) error {
+			_, networkRemoveErr := dockerClient.NetworkRemove(ctx, stackNetwork.ID, dockerclient.NetworkRemoveOptions{})
+			return networkRemoveErr
+		}); removeStaleSwarmResourceErr != nil {
+			return fmt.Errorf("failed to remove stack network %s: %w", stackNetwork.Name, removeStaleSwarmResourceErr)
 		}
 	}
 

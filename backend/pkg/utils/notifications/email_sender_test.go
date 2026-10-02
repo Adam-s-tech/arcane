@@ -2,7 +2,6 @@ package notifications
 
 import (
 	"bufio"
-	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
@@ -61,7 +60,7 @@ func TestSendEmailStartTLSRequiresTLSBeforeAuth(t *testing.T) {
 	}
 
 	err := sendEmailInternal(
-		context.Background(),
+		t.Context(),
 		config,
 		"Arcane STARTTLS Test",
 		"<p>Test</p>",
@@ -90,7 +89,7 @@ func TestSendEmailStartTLSFailsWhenServerDoesNotSupportIt(t *testing.T) {
 		TLSMode:      EmailTLSModeStartTLS,
 	}
 
-	err := SendEmail(context.Background(), config, "Arcane STARTTLS Test", "<p>Test</p>")
+	err := SendEmail(t.Context(), config, "Arcane STARTTLS Test", "<p>Test</p>")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "STARTTLS")
 	assert.NotContains(t, err.Error(), "unencrypted connection")
@@ -117,7 +116,7 @@ func TestSendEmailAuthLoginAgainstExchangeStyleServer(t *testing.T) {
 	}
 
 	err := sendEmailInternal(
-		context.Background(),
+		t.Context(),
 		config,
 		"Arcane AUTH LOGIN Test",
 		"<p>Test</p>",
@@ -145,7 +144,7 @@ func TestSendEmailStalePasswordWithoutUsernameSkipsAuth(t *testing.T) {
 		AuthMode:     EmailAuthModeAuto,
 	}
 
-	err := sendEmailInternal(context.Background(), config, "Arcane No-Auth Test", "<p>Test</p>", smtpBuildOptions{})
+	err := sendEmailInternal(t.Context(), config, "Arcane No-Auth Test", "<p>Test</p>", smtpBuildOptions{})
 	require.NoError(t, err)
 	require.NoError(t, server.Wait())
 
@@ -199,7 +198,7 @@ func (s *smtpTestServer) Wait() error {
 	case err := <-s.done:
 		return kit.Ternary(err != nil && (isUseOfClosedNetworkConnInternal(err) || isConnectionTimeoutInternal(err)), nil, err)
 	case <-time.After(4 * time.Second):
-		return fmt.Errorf("timed out waiting for SMTP test server")
+		return errors.New("timed out waiting for SMTP test server")
 	}
 }
 
@@ -270,7 +269,7 @@ func (s *smtpTestServer) handleConnection(conn net.Conn) error {
 	for {
 		line, err := reader.ReadLine()
 		if err != nil {
-			return kit.Ternary(err == io.EOF, nil, err)
+			return kit.Ternary(errors.Is(err, io.EOF), nil, err)
 		}
 
 		verb, rest, _ := strings.Cut(line, " ")
@@ -285,24 +284,24 @@ func (s *smtpTestServer) handleConnection(conn net.Conn) error {
 			} else {
 				lines = s.ehloLinesInternal()
 			}
-			if err := writeSMTPMultiLineResponseInternal(writer, 250, lines); err != nil {
-				return err
+			if writeSMTPMultiLineResponseErr := writeSMTPMultiLineResponseInternal(writer, 250, lines); writeSMTPMultiLineResponseErr != nil {
+				return writeSMTPMultiLineResponseErr
 			}
 		case "STARTTLS":
 			if !s.supportStartTLS {
-				if err := writeSMTPResponseInternal(writer, 502, false, "STARTTLS not supported"); err != nil {
-					return err
+				if writeSMTPResponseErr := writeSMTPResponseInternal(writer, 502, false, "STARTTLS not supported"); writeSMTPResponseErr != nil {
+					return writeSMTPResponseErr
 				}
 				continue
 			}
 
-			if err := writeSMTPResponseInternal(writer, 220, false, "ready to start TLS"); err != nil {
-				return err
+			if writeSMTPResponseErr2 := writeSMTPResponseInternal(writer, 220, false, "ready to start TLS"); writeSMTPResponseErr2 != nil {
+				return writeSMTPResponseErr2
 			}
 
 			tlsConn := tls.Server(conn, s.tlsConfig)
-			if err := tlsConn.Handshake(); err != nil {
-				return err
+			if handshakeErr := tlsConn.Handshake(); handshakeErr != nil {
+				return handshakeErr
 			}
 
 			conn = tlsConn
@@ -311,57 +310,70 @@ func (s *smtpTestServer) handleConnection(conn net.Conn) error {
 			writer = textproto.NewWriter(bufio.NewWriter(conn))
 			tlsActive = true
 			s.markStartTLSNegotiated()
-		case "AUTH":
-			mechanism, _, _ := strings.Cut(strings.TrimSpace(rest), " ")
-			mechanism = strings.ToUpper(mechanism)
-			s.recordAuthMechanismInternal(mechanism)
-			if err := s.handleAuthInternal(reader, writer, mechanism); err != nil {
-				return err
-			}
-		case "NOOP", "RSET":
-			if err := writeSMTPResponseInternal(writer, 250, false, "2.0.0 OK"); err != nil {
-				return err
-			}
-		case "MAIL":
-			if err := writeSMTPResponseInternal(writer, 250, false, "2.1.0 Sender OK"); err != nil {
-				return err
-			}
-		case "RCPT":
-			if err := writeSMTPResponseInternal(writer, 250, false, "2.1.5 Recipient OK"); err != nil {
-				return err
-			}
-		case "DATA":
-			if err := writeSMTPResponseInternal(writer, 354, false, "End data with <CR><LF>.<CR><LF>"); err != nil {
-				return err
-			}
-			for {
-				dataLine, dataErr := reader.ReadLine()
-				if dataErr != nil {
-					return dataErr
-				}
-				if dataLine == "." {
-					break
-				}
-			}
-			if err := writeSMTPResponseInternal(writer, 250, false, "2.0.0 queued"); err != nil {
-				return err
-			}
-		case "QUIT":
-			if err := writeSMTPResponseInternal(writer, 221, false, "2.0.0 bye"); err != nil {
-				return err
-			}
-			return nil
 		default:
-			if err := writeSMTPResponseInternal(writer, 502, false, "command not implemented"); err != nil {
-				return err
+			quit, commandErr := s.handleCommandInternal(reader, writer, verb, rest)
+			if commandErr != nil {
+				return commandErr
+			}
+			if quit {
+				return nil
 			}
 		}
 	}
 }
 
+func (s *smtpTestServer) handleCommandInternal(reader *textproto.Reader, writer *textproto.Writer, verb, rest string) (bool, error) {
+	switch verb {
+	case "AUTH":
+		mechanism, _, _ := strings.Cut(strings.TrimSpace(rest), " ")
+		mechanism = strings.ToUpper(mechanism)
+		s.recordAuthMechanismInternal(mechanism)
+		if handleAuthErr := s.handleAuthInternal(reader, writer, mechanism); handleAuthErr != nil {
+			return false, handleAuthErr
+		}
+	case "NOOP", "RSET":
+		if writeSMTPResponseErr3 := writeSMTPResponseInternal(writer, 250, false, "2.0.0 OK"); writeSMTPResponseErr3 != nil {
+			return false, writeSMTPResponseErr3
+		}
+	case "MAIL":
+		if writeSMTPResponseErr4 := writeSMTPResponseInternal(writer, 250, false, "2.1.0 Sender OK"); writeSMTPResponseErr4 != nil {
+			return false, writeSMTPResponseErr4
+		}
+	case "RCPT":
+		if writeSMTPResponseErr5 := writeSMTPResponseInternal(writer, 250, false, "2.1.5 Recipient OK"); writeSMTPResponseErr5 != nil {
+			return false, writeSMTPResponseErr5
+		}
+	case "DATA":
+		if writeSMTPResponseErr6 := writeSMTPResponseInternal(writer, 354, false, "End data with <CR><LF>.<CR><LF>"); writeSMTPResponseErr6 != nil {
+			return false, writeSMTPResponseErr6
+		}
+		for {
+			dataLine, dataErr := reader.ReadLine()
+			if dataErr != nil {
+				return false, dataErr
+			}
+			if dataLine == "." {
+				break
+			}
+		}
+		if writeSMTPResponseErr7 := writeSMTPResponseInternal(writer, 250, false, "2.0.0 queued"); writeSMTPResponseErr7 != nil {
+			return false, writeSMTPResponseErr7
+		}
+	case "QUIT":
+		if writeSMTPResponseErr8 := writeSMTPResponseInternal(writer, 221, false, "2.0.0 bye"); writeSMTPResponseErr8 != nil {
+			return false, writeSMTPResponseErr8
+		}
+		return true, nil
+	default:
+		if writeSMTPResponseErr9 := writeSMTPResponseInternal(writer, 502, false, "command not implemented"); writeSMTPResponseErr9 != nil {
+			return false, writeSMTPResponseErr9
+		}
+	}
+	return false, nil
+}
+
 func (s *smtpTestServer) handleAuthInternal(reader *textproto.Reader, writer *textproto.Writer, mechanism string) error {
-	switch mechanism {
-	case "LOGIN":
+	if mechanism == "LOGIN" {
 		if err := writeSMTPResponseInternal(writer, 334, false, base64.StdEncoding.EncodeToString([]byte("Username:"))); err != nil {
 			return err
 		}

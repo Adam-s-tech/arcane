@@ -45,7 +45,7 @@ func ValidActivityBatchID(id string) bool {
 // update). Invalid IDs are ignored.
 func WithActivityBatchID(ctx context.Context, batchID string) context.Context {
 	if ctx == nil {
-		ctx = context.Background()
+		ctx = context.Background() //nolint:forbidigo // Fallback preserves the existing nil-context contract when no parent is available.
 	}
 	if !ValidActivityBatchID(batchID) {
 		return ctx
@@ -71,7 +71,7 @@ type activityRuntimeContext struct {
 // WithAppLifecycleContext marks ctx as the application lifecycle context.
 func WithAppLifecycleContext(ctx context.Context) context.Context {
 	if ctx == nil {
-		ctx = context.Background()
+		ctx = context.Background() //nolint:forbidigo // Fallback preserves the existing nil-context contract when no parent is available.
 	}
 	return context.WithValue(ctx, appLifecycleContextKey{}, true)
 }
@@ -99,7 +99,7 @@ func ActivityRuntimeContext(requestCtx, appCtx context.Context) context.Context 
 	if requestCtx != nil {
 		return context.WithoutCancel(requestCtx)
 	}
-	return context.Background()
+	return context.Background() //nolint:forbidigo // Fallback preserves the existing nil-context contract when no parent is available.
 }
 
 func (c activityRuntimeContext) Deadline() (time.Time, bool) {

@@ -236,12 +236,14 @@ func TintInsecure(value string) string {
 
 // Table prints a formatted table with headers and rows.
 // Rendering uses Lip Gloss table styles with zebra-striped rows.
-func Table(headers []string, rows [][]string) {
-	fmt.Println()
+func Table(headers []string, rows [][]string) error {
+	if _, spacingErr := fmt.Println(); spacingErr != nil {
+		return fmt.Errorf("failed to print table: %w", spacingErr)
+	}
 
 	n := len(headers)
 	if n == 0 {
-		return
+		return nil
 	}
 
 	rows = normalizeTableRows(rows, n)
@@ -272,7 +274,10 @@ func Table(headers []string, rows [][]string) {
 		t = t.Rows(rows...)
 	}
 
-	lipgloss.Println(t)
+	if _, tableErr := lipgloss.Println(t); tableErr != nil {
+		return fmt.Errorf("failed to print table: %w", tableErr)
+	}
+	return nil
 }
 
 func fitTableToTerminal(headers []string, rows [][]string) ([]string, [][]string) {

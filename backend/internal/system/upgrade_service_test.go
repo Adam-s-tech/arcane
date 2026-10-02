@@ -130,7 +130,7 @@ func TestSystemUpgradeService_UpgradeInProgressError(t *testing.T) {
 	err := common.Classify(common.ErrUpgradeInProgress, errors.New("an upgrade is already in progress"))
 	require.Equal(t, "an upgrade is already in progress", err.Error())
 
-	require.True(t, errors.Is(err, common.ErrUpgradeInProgress))
+	require.ErrorIs(t, err, common.ErrUpgradeInProgress)
 }
 
 // TestSystemUpgradeService_AtomicOperations tests atomic.Bool operations
@@ -173,7 +173,7 @@ func TestResolveSystemUpgraderRuntimeOptionsInternal_TCPDockerHost(t *testing.T)
 	}
 
 	containerEnv, mounts, networkMode, err := ResolveUpgraderRuntimeOptions(
-		context.Background(),
+		t.Context(),
 		"tcp://docker-socket-proxy:2375",
 		currentContainer,
 		nil,
@@ -188,7 +188,7 @@ func TestResolveSystemUpgraderRuntimeOptionsInternal_TCPDockerHost(t *testing.T)
 
 func TestResolveSystemUpgraderRuntimeOptionsInternal_UnixDockerHost(t *testing.T) {
 	containerEnv, mounts, networkMode, err := ResolveUpgraderRuntimeOptions(
-		context.Background(),
+		t.Context(),
 		"unix:///var/run/docker.sock",
 		nil,
 		func(context.Context, string) (string, error) {
@@ -211,7 +211,7 @@ func TestResolveSystemUpgraderRuntimeOptionsInternal_UnixDockerHost(t *testing.T
 
 func TestResolveSystemUpgraderRuntimeOptionsInternal_DefaultDockerHost(t *testing.T) {
 	containerEnv, mounts, _, err := ResolveUpgraderRuntimeOptions(
-		context.Background(),
+		t.Context(),
 		"",
 		nil,
 		func(context.Context, string) (string, error) {
@@ -233,7 +233,7 @@ func TestResolveSystemUpgraderRuntimeOptionsInternal_DefaultDockerHost(t *testin
 
 func TestResolveSystemUpgraderRuntimeOptionsInternal_UnixDockerHostResolutionError(t *testing.T) {
 	_, _, _, err := ResolveUpgraderRuntimeOptions(
-		context.Background(),
+		t.Context(),
 		"unix:///var/run/docker.sock",
 		nil,
 		func(context.Context, string) (string, error) {

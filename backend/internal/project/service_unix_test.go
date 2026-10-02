@@ -29,7 +29,7 @@ func TestProjectService_ApplyGitSyncProjectFiles_TolerantOfPermissionLockedEnv(t
 	}
 
 	db := setupProjectTestDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	projectsDir := t.TempDir()
 	t.Setenv("PROJECTS_DIRECTORY", projectsDir)
@@ -128,7 +128,7 @@ func TestPrepareProjectBindDirectoriesInternal_PermissionFailure(t *testing.T) {
 				}}},
 			}}
 
-			err := prepareProjectBindDirectoriesInternal(projectPath)(context.Background(), project)
+			err := prepareProjectBindDirectoriesInternal(projectPath)(t.Context(), project)
 			if tc.wantError {
 				require.ErrorIs(t, err, fs.ErrPermission)
 				assert.Contains(t, err.Error(), source)
@@ -141,8 +141,8 @@ func TestPrepareProjectBindDirectoriesInternal_PermissionFailure(t *testing.T) {
 			assert.Equal(t, tc.dirMode, dirInfo.Mode().Perm())
 			require.NoError(t, os.Chmod(locked, 0o700))
 			if !tc.createFile {
-				_, err := os.Lstat(source)
-				require.ErrorIs(t, err, fs.ErrNotExist)
+				_, lstatErr := os.Lstat(source)
+				require.ErrorIs(t, lstatErr, fs.ErrNotExist)
 				return
 			}
 			info, err := os.Stat(source)
@@ -162,7 +162,7 @@ func newEnvDirectoryProjectInternal(t *testing.T, id string) (*ProjectService, *
 	t.Helper()
 
 	db := setupProjectTestDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	projectsDir := t.TempDir()
 	t.Setenv("PROJECTS_DIRECTORY", projectsDir)

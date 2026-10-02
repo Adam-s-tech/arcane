@@ -225,9 +225,9 @@ var s3DeleteCmd = &cobra.Command{
 		}
 
 		if !forceFlag {
-			confirmed, err := cmdutil.Confirm(cmd, fmt.Sprintf("Are you sure you want to delete S3 destination %s?", resolved.Name))
-			if err != nil {
-				return err
+			confirmed, confirmErr := cmdutil.Confirm(cmd, fmt.Sprintf("Are you sure you want to delete S3 destination %s?", resolved.Name))
+			if confirmErr != nil {
+				return confirmErr
 			}
 			if !confirmed {
 				fmt.Println("Cancelled")
@@ -276,9 +276,9 @@ passing the connection flags (--name, --bucket, --region, ...) with no argument.
 			if connectionFlagsSet {
 				return errors.New("pass either a saved destination name or ID, or the connection flags, not both")
 			}
-			resolved, _, err := s3DestinationRef.Resolve(cmd.Context(), c, args[0], !cmdutil.JSONOutputEnabled(cmd) && prompt.IsInteractive())
-			if err != nil {
-				return err
+			resolved, _, resolveErr := s3DestinationRef.Resolve(cmd.Context(), c, args[0], !cmdutil.JSONOutputEnabled(cmd) && prompt.IsInteractive())
+			if resolveErr != nil {
+				return resolveErr
 			}
 			testPath, testBody = types.BackupsS3DestinationTest(resolved.ID), nil
 		} else if s3Bucket == "" {

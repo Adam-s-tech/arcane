@@ -34,11 +34,11 @@ func setupLifecycleTestDB(t *testing.T) *database.DB {
 
 func newLifecycleTestService(t *testing.T, db *database.DB) (*LifecycleService, *settings.SettingsService) {
 	t.Helper()
-	settings, err := settings.NewSettingsService(t.Context(), db)
+	settingsService, err := settings.NewSettingsService(t.Context(), db)
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, settings.Stop(context.Background())) })
+	t.Cleanup(func() { require.NoError(t, settingsService.Stop(context.WithoutCancel(t.Context()))) })
 	events := event.NewEventService(db, nil, nil)
-	return NewLifecycleService(db, settings, events, nil, nil), settings
+	return NewLifecycleService(db, settingsService, events, nil, nil), settingsService
 }
 
 func writeLifecycleProjectDirWithScript(t *testing.T, scriptRel, scriptBody string) string {
@@ -238,20 +238,20 @@ func TestCombineLifecycleOutput(t *testing.T) {
 func TestRunPreDeploy_NilProject(t *testing.T) {
 	db := setupLifecycleTestDB(t)
 	svc, _ := newLifecycleTestService(t, db)
-	require.NoError(t, svc.RunPreDeploy(context.Background(), nil, common.User{}))
+	require.NoError(t, svc.RunPreDeploy(t.Context(), nil, common.User{}))
 }
 
 func TestRunPreDeploy_ProjectNotGitOpsManaged(t *testing.T) {
 	db := setupLifecycleTestDB(t)
-	svc, settings := newLifecycleTestService(t, db)
-	require.NoError(t, settings.SetStringSetting(context.Background(), "lifecycleEnabled", "true"))
+	svc, settingsService := newLifecycleTestService(t, db)
+	require.NoError(t, settingsService.SetStringSetting(t.Context(), "lifecycleEnabled", "true"))
 
 	project := &Project{
 		Name:            "demo",
 		Path:            t.TempDir(),
 		GitOpsManagedBy: nil,
 	}
-	require.NoError(t, svc.RunPreDeploy(context.Background(), project, common.User{}))
+	require.NoError(t, svc.RunPreDeploy(t.Context(), project, common.User{}))
 }
 
 func TestRunPreDeploy_KillSwitchDisabled(t *testing.T) {
@@ -284,13 +284,13 @@ func TestRunPreDeploy_KillSwitchDisabled(t *testing.T) {
 	sync.ID = syncID
 	require.NoError(t, db.Create(sync).Error)
 
-	require.NoError(t, svc.RunPreDeploy(context.Background(), project, common.User{}))
+	require.NoError(t, svc.RunPreDeploy(t.Context(), project, common.User{}))
 }
 
 func TestRunPreDeploy_NoScriptConfigured(t *testing.T) {
 	db := setupLifecycleTestDB(t)
-	svc, settings := newLifecycleTestService(t, db)
-	require.NoError(t, settings.SetStringSetting(context.Background(), "lifecycleEnabled", "true"))
+	svc, settingsService := newLifecycleTestService(t, db)
+	require.NoError(t, settingsService.SetStringSetting(t.Context(), "lifecycleEnabled", "true"))
 
 	syncID := "sync-1"
 	project := &Project{
@@ -314,14 +314,14 @@ func TestRunPreDeploy_NoScriptConfigured(t *testing.T) {
 	sync.ID = syncID
 	require.NoError(t, db.Create(sync).Error)
 
-	require.NoError(t, svc.RunPreDeploy(context.Background(), project, common.User{}))
+	require.NoError(t, svc.RunPreDeploy(t.Context(), project, common.User{}))
 }
 
 func TestRunPreDeploy_MissingRunnerImage(t *testing.T) {
 	db := setupLifecycleTestDB(t)
-	svc, settings := newLifecycleTestService(t, db)
-	require.NoError(t, settings.SetStringSetting(context.Background(), "lifecycleEnabled", "true"))
-	require.NoError(t, settings.SetStringSetting(context.Background(), "lifecycleDefaultRunnerImage", " "))
+	svc, settingsService := newLifecycleTestService(t, db)
+	require.NoError(t, settingsService.SetStringSetting(t.Context(), "lifecycleEnabled", "true"))
+	require.NoError(t, settingsService.SetStringSetting(t.Context(), "lifecycleDefaultRunnerImage", " "))
 
 	syncID := "sync-1"
 	projectDir := writeLifecycleProjectDirWithScript(t, "pre-deploy.sh", "echo hi\n")
@@ -348,28 +348,28 @@ func TestRunPreDeploy_MissingRunnerImage(t *testing.T) {
 	sync.ID = syncID
 	require.NoError(t, db.Create(sync).Error)
 
-	err := svc.RunPreDeploy(context.Background(), project, common.User{})
+	err := svc.RunPreDeploy(t.Context(), project, common.User{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "runner image")
 }
 
 func TestResolveRunnerImage_UsesSettingDefault(t *testing.T) {
 	db := setupLifecycleTestDB(t)
-	svc, settings := newLifecycleTestService(t, db)
-	require.NoError(t, settings.SetStringSetting(context.Background(), "lifecycleDefaultRunnerImage", "alpine:latest"))
+	svc, settingsService := newLifecycleTestService(t, db)
+	require.NoError(t, settingsService.SetStringSetting(t.Context(), "lifecycleDefaultRunnerImage", "alpine:latest"))
 
-	assert.Equal(t, "alpine:latest", svc.resolveRunnerImageInternal(context.Background(), &GitOpsSync{}))
+	assert.Equal(t, "alpine:latest", svc.resolveRunnerImageInternal(t.Context(), &GitOpsSync{}))
 
 	override := "debian:stable-slim"
-	assert.Equal(t, override, svc.resolveRunnerImageInternal(context.Background(), &GitOpsSync{
+	assert.Equal(t, override, svc.resolveRunnerImageInternal(t.Context(), &GitOpsSync{
 		PreDeployRunnerImage: &override,
 	}))
 }
 
 func TestRunPreDeploy_PathTraversalRejected(t *testing.T) {
 	db := setupLifecycleTestDB(t)
-	svc, settings := newLifecycleTestService(t, db)
-	require.NoError(t, settings.SetStringSetting(context.Background(), "lifecycleEnabled", "true"))
+	svc, settingsService := newLifecycleTestService(t, db)
+	require.NoError(t, settingsService.SetStringSetting(t.Context(), "lifecycleEnabled", "true"))
 
 	syncID := "sync-1"
 	project := &Project{
@@ -397,14 +397,14 @@ func TestRunPreDeploy_PathTraversalRejected(t *testing.T) {
 	sync.ID = syncID
 	require.NoError(t, db.Create(sync).Error)
 
-	err := svc.RunPreDeploy(context.Background(), project, common.User{})
+	err := svc.RunPreDeploy(t.Context(), project, common.User{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "script path")
 }
 
 func TestLoadGitOpsSyncForProject_ReturnsNilWhenAbsent(t *testing.T) {
 	db := setupLifecycleTestDB(t)
-	sync, err := loadGitOpsSyncForProjectInternal(context.Background(), db, "nonexistent")
+	sync, err := loadGitOpsSyncForProjectInternal(t.Context(), db, "nonexistent")
 	require.NoError(t, err)
 	assert.Nil(t, sync)
 }
@@ -426,7 +426,7 @@ func TestPersistLastRun_UpdatesGitOpsSyncRow(t *testing.T) {
 	require.NoError(t, db.Create(sync).Error)
 
 	now := time.Now().UTC().Truncate(time.Second)
-	svc.persistLastRunInternal(context.Background(), sync.ID, lifecycleStatusSuccess, "all good", now)
+	svc.persistLastRunInternal(t.Context(), sync.ID, lifecycleStatusSuccess, "all good", now)
 
 	var got GitOpsSync
 	require.NoError(t, db.Where("id = ?", sync.ID).First(&got).Error)

@@ -39,8 +39,8 @@ var configSchemaCmd = &cobra.Command{
 		}
 
 		if outputFile != "" {
-			if err := atomic.WriteFile(outputFile, output, 0o600); err != nil {
-				cmd.PrintErrf("Error writing file: %v\n", err)
+			if writeFileErr := atomic.WriteFile(outputFile, output, 0o600); writeFileErr != nil {
+				cmd.PrintErrf("Error writing file: %v\n", writeFileErr)
 				os.Exit(1)
 			}
 			cmd.PrintErrf("Config schema written to %s\n", outputFile)

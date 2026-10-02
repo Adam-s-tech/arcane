@@ -231,7 +231,7 @@ func TestTunnelMessageToManagerProto_StreamEndRequiresParity(t *testing.T) {
 }
 
 func TestGRPCAgentTunnelConn_ReceiveSkipsUnknownPayload(t *testing.T) {
-	stream := &scriptedAgentStream{msgs: []*tunnelpb.ManagerMessage{
+	stream := &scriptedAgentStream{ctx: t.Context(), msgs: []*tunnelpb.ManagerMessage{
 		{}, // nil payload, decodes as unknown
 		{Payload: &tunnelpb.ManagerMessage_HeartbeatPong{HeartbeatPong: &tunnelpb.HeartbeatPong{Id: "hb-2"}}},
 	}}
@@ -244,6 +244,7 @@ func TestGRPCAgentTunnelConn_ReceiveSkipsUnknownPayload(t *testing.T) {
 }
 
 type scriptedAgentStream struct {
+	ctx  context.Context
 	msgs []*tunnelpb.ManagerMessage
 }
 
@@ -258,6 +259,6 @@ func (s *scriptedAgentStream) Recv() (*tunnelpb.ManagerMessage, error) {
 	return msg, nil
 }
 
-func (s *scriptedAgentStream) Context() context.Context { return context.Background() }
+func (s *scriptedAgentStream) Context() context.Context { return s.ctx }
 
 func (s *scriptedAgentStream) CloseSend() error { return nil }

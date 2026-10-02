@@ -1,7 +1,6 @@
 package swarm
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -73,7 +72,7 @@ func TestApplyDeployConfigConvertsCPUFractionToNanoCPUs(t *testing.T) {
 func TestPlanConfigsUsesComposeProjectEnvironment(t *testing.T) {
 	t.Setenv("ARCANE_SWARM_CONFIG_SOURCE", "process-value")
 
-	project, err := projects.LoadComposeProjectFromContent(context.Background(), projecttypes.ComposeContentOptions{
+	project, err := projects.LoadComposeProjectFromContent(t.Context(), projecttypes.ComposeContentOptions{
 		ProjectName: "stack",
 		ComposeContent: `
 services:
@@ -207,7 +206,7 @@ func TestStackConversionEndToEnd(t *testing.T) {
 	workingDir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(workingDir, "db_pw.txt"), []byte("secret"), 0o600))
 
-	project, err := projects.LoadComposeProjectFromContent(context.Background(), projecttypes.ComposeContentOptions{
+	project, err := projects.LoadComposeProjectFromContent(t.Context(), projecttypes.ComposeContentOptions{
 		ProjectName: "stack",
 		ComposeContent: `
 services:

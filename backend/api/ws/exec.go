@@ -81,10 +81,10 @@ func (h *WebSocketHandler) runContainerExecInternal(ctx context.Context, cancel 
 	// the session is what unblocks it.
 	cleanup := sync.OnceFunc(func() {
 		slog.Debug("Cleaning up exec session", "execID", execID, "containerID", containerID, "contextErr", ctx.Err())
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cleanupCancel()
-		if err := execSession.Close(cleanupCtx); err != nil { //nolint:contextcheck
-			slog.Warn("Failed to clean up exec session", "execID", execID, "error", err)
+		if closeErr := execSession.Close(cleanupCtx); closeErr != nil { //nolint:contextcheck
+			slog.Warn("Failed to clean up exec session", "execID", execID, "error", closeErr)
 		}
 	})
 	defer cleanup()
@@ -159,8 +159,8 @@ func (h *WebSocketHandler) pipeExecOutputInternal(ctx context.Context, conn *web
 			return
 		}
 		if n > 0 {
-			if err := conn.Write(ctx, websocket.MessageBinary, buf[:n]); err != nil {
-				done <- fmt.Errorf("websocket write: %w", err)
+			if writeErr := conn.Write(ctx, websocket.MessageBinary, buf[:n]); writeErr != nil {
+				done <- fmt.Errorf("websocket write: %w", writeErr)
 				return
 			}
 		}
@@ -174,8 +174,8 @@ func (h *WebSocketHandler) pipeExecInputInternal(ctx context.Context, cancel con
 			cancel(fmt.Errorf("websocket read: %w", err))
 			return
 		}
-		if _, err := stdin.Write(data); err != nil {
-			cancel(fmt.Errorf("exec input write: %w", err))
+		if _, writeErr := stdin.Write(data); writeErr != nil {
+			cancel(fmt.Errorf("exec input write: %w", writeErr))
 			return
 		}
 	}

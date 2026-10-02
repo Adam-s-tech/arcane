@@ -31,7 +31,7 @@ func (ps *PermissionSet) Allows(perm, envID string) bool {
 		return false
 	}
 	if env, ok := ps.PerEnv[envID]; ok {
-		if _, ok := env[perm]; ok {
+		if _, localOk := env[perm]; localOk {
 			return true
 		}
 	}

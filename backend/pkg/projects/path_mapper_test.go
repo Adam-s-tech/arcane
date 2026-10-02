@@ -1,7 +1,6 @@
 package projects
 
 import (
-	"context"
 	"path/filepath"
 	"testing"
 
@@ -11,7 +10,7 @@ import (
 )
 
 func TestNewPathMapperForConfiguredDirectory(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Run("empty configuration uses default without Docker", func(t *testing.T) {
 		defaultDir := filepath.Join(t.TempDir(), "projects")
@@ -31,8 +30,8 @@ func TestNewPathMapperForConfiguredDirectory(t *testing.T) {
 		pathMapper := NewPathMapperForConfiguredDirectory(ctx, containerDir+":"+hostDir, containerDir, nil)
 		require.NotNil(t, pathMapper)
 
-		source := filepath.Join(containerDir, "0/stack/compose.yaml")
-		expected := filepath.Join(hostDir, "0/stack/compose.yaml")
+		source := filepath.Join(containerDir, "0", "stack", "compose.yaml")
+		expected := filepath.Join(hostDir, "0", "stack", "compose.yaml")
 		translated, _, err := pathMapper.ContainerToHost(source)
 		require.NoError(t, err)
 		require.Equal(t, filepath.ToSlash(expected), filepath.ToSlash(translated))
@@ -233,7 +232,7 @@ func TestRemapEscapedRelativeSources_MountTableTakesPrecedence(t *testing.T) {
 	}
 
 	require.NoError(t, pm.TranslateVolumeSources(project, true))
-	RemapEscapedRelativeSources(context.Background(), pm, project, containerWorkingDir, rawSources, true)
+	RemapEscapedRelativeSources(t.Context(), pm, project, containerWorkingDir, rawSources, true)
 
 	volumes := project.Services["goclaw"].Volumes
 	assert.Equal(t, "/mnt/media", volumes[0].Source, "nested independent mount must win over the host project directory")

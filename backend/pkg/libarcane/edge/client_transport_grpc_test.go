@@ -24,7 +24,7 @@ import (
 func TestGRPCTunnel_RequestResponse(t *testing.T) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 
 	envID := "env-grpc-1"
 	GetRegistry().Unregister(envID)
@@ -66,9 +66,9 @@ func TestGRPCTunnel_RequestResponse(t *testing.T) {
 
 	agentErrCh := make(chan error, 1)
 	go func() {
-		msg, err := stream.Recv()
-		if err != nil {
-			agentErrCh <- err
+		msg, recvErr := stream.Recv()
+		if recvErr != nil {
+			agentErrCh <- recvErr
 			return
 		}
 
@@ -78,10 +78,10 @@ func TestGRPCTunnel_RequestResponse(t *testing.T) {
 			return
 		}
 
-		if err := stream.Send(&tunnelpb.AgentMessage{Payload: &tunnelpb.AgentMessage_CommandAck{CommandAck: &tunnelpb.CommandAck{
+		if sendErr := stream.Send(&tunnelpb.AgentMessage{Payload: &tunnelpb.AgentMessage_CommandAck{CommandAck: &tunnelpb.CommandAck{
 			CommandId: req.GetCommandId(),
-		}}}); err != nil {
-			agentErrCh <- err
+		}}}); sendErr != nil {
+			agentErrCh <- sendErr
 			return
 		}
 
@@ -112,7 +112,7 @@ func TestGRPCTunnel_RequestResponse(t *testing.T) {
 func TestGRPCTunnel_RequestResponseStreamingChunks(t *testing.T) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 
 	envID := "env-grpc-stream-1"
 	GetRegistry().Unregister(envID)
@@ -152,9 +152,9 @@ func TestGRPCTunnel_RequestResponseStreamingChunks(t *testing.T) {
 
 	agentErrCh := make(chan error, 1)
 	go func() {
-		msg, err := stream.Recv()
-		if err != nil {
-			agentErrCh <- err
+		msg, recvErr := stream.Recv()
+		if recvErr != nil {
+			agentErrCh <- recvErr
 			return
 		}
 
@@ -164,28 +164,28 @@ func TestGRPCTunnel_RequestResponseStreamingChunks(t *testing.T) {
 			return
 		}
 
-		if err := stream.Send(&tunnelpb.AgentMessage{Payload: &tunnelpb.AgentMessage_CommandAck{CommandAck: &tunnelpb.CommandAck{
+		if sendErr := stream.Send(&tunnelpb.AgentMessage{Payload: &tunnelpb.AgentMessage_CommandAck{CommandAck: &tunnelpb.CommandAck{
 			CommandId: req.GetCommandId(),
-		}}}); err != nil {
-			agentErrCh <- err
+		}}}); sendErr != nil {
+			agentErrCh <- sendErr
 			return
 		}
 
-		if err := stream.Send(&tunnelpb.AgentMessage{Payload: &tunnelpb.AgentMessage_CommandOutput{CommandOutput: &tunnelpb.CommandOutput{
+		if sendErr2 := stream.Send(&tunnelpb.AgentMessage{Payload: &tunnelpb.AgentMessage_CommandOutput{CommandOutput: &tunnelpb.CommandOutput{
 			CommandId: req.GetCommandId(),
 			Data:      []byte("hello "),
 			Sequence:  0,
-		}}}); err != nil {
-			agentErrCh <- err
+		}}}); sendErr2 != nil {
+			agentErrCh <- sendErr2
 			return
 		}
 
-		if err := stream.Send(&tunnelpb.AgentMessage{Payload: &tunnelpb.AgentMessage_CommandOutput{CommandOutput: &tunnelpb.CommandOutput{
+		if sendErr3 := stream.Send(&tunnelpb.AgentMessage{Payload: &tunnelpb.AgentMessage_CommandOutput{CommandOutput: &tunnelpb.CommandOutput{
 			CommandId: req.GetCommandId(),
 			Data:      []byte("world"),
 			Sequence:  1,
-		}}}); err != nil {
-			agentErrCh <- err
+		}}}); sendErr3 != nil {
+			agentErrCh <- sendErr3
 			return
 		}
 
@@ -219,7 +219,7 @@ func TestGRPCTunnel_RequestResponseStreamingChunks(t *testing.T) {
 func TestGRPCTunnel_MetadataAuthFallback(t *testing.T) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 
 	envID := "env-grpc-md-1"
 	GetRegistry().Unregister(envID)
@@ -266,7 +266,7 @@ func TestGRPCTunnel_MetadataAuthFallback(t *testing.T) {
 func TestGRPCTunnel_MetadataAPIKeyFallback(t *testing.T) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 
 	envID := "env-grpc-md-api-key-1"
 	GetRegistry().Unregister(envID)
@@ -312,7 +312,7 @@ func TestGRPCTunnel_MetadataAPIKeyFallback(t *testing.T) {
 func TestGRPCTunnel_InvalidTokenRejected(t *testing.T) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 
 	envID := "env-grpc-invalid-token-1"
 	GetRegistry().Unregister(envID)
@@ -342,8 +342,8 @@ func TestGRPCTunnel_InvalidTokenRejected(t *testing.T) {
 	stream, err := client.Connect(testGRPCOutgoingContextInternal(ctx, "invalid-token"))
 	require.NoError(t, err)
 
-	if err := stream.Send(&tunnelpb.AgentMessage{Payload: &tunnelpb.AgentMessage_Register{Register: &tunnelpb.RegisterRequest{AgentToken: "invalid-token"}}}); err != nil {
-		require.ErrorIs(t, err, io.EOF)
+	if sendErr := stream.Send(&tunnelpb.AgentMessage{Payload: &tunnelpb.AgentMessage_Register{Register: &tunnelpb.RegisterRequest{AgentToken: "invalid-token"}}}); sendErr != nil {
+		require.ErrorIs(t, sendErr, io.EOF)
 	}
 
 	_, err = stream.Recv()
@@ -357,7 +357,7 @@ func TestGRPCTunnel_InvalidTokenRejected(t *testing.T) {
 func TestGRPCTunnel_FirstMessageMustBeRegister(t *testing.T) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 
 	envID := "env-grpc-first-msg-1"
 	GetRegistry().Unregister(envID)
@@ -401,7 +401,7 @@ func TestGRPCTunnel_FirstMessageMustBeRegister(t *testing.T) {
 func TestGRPCTunnel_RegisterMessageRequiredOnEOF(t *testing.T) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 
 	envID := "env-grpc-eof-first-msg-1"
 	GetRegistry().Unregister(envID)

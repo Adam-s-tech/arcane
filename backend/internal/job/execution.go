@@ -44,7 +44,15 @@ func (s *JobService) Submit(ctx context.Context, request st.Request) (st.Run, er
 	} else if err := s.validateLocalJobInternal(ctx, request.JobID); err != nil {
 		return st.Run{}, err
 	}
-	if err := s.authorizeRunInternal(ctx, st.Run{Trigger: request.Trigger, RequestedBy: request.RequestedBy, RequestedWithKey: request.RequestedWithKey, EnvironmentID: request.EnvironmentID}); err != nil {
+	if err := s.authorizeRunInternal(
+		ctx,
+		st.Run{
+			Trigger:          request.Trigger,
+			RequestedBy:      request.RequestedBy,
+			RequestedWithKey: request.RequestedWithKey,
+			EnvironmentID:    request.EnvironmentID,
+		},
+	); err != nil {
 		return st.Run{}, err
 	}
 	return s.runs.Submit(ctx, request)
@@ -77,7 +85,7 @@ func (s *JobService) validateLocalJobInternal(ctx context.Context, jobID string)
 	if !ok {
 		return errors.New("job is not registered")
 	}
-	if conditional, ok := job.(st.ConditionalJob); ok && !conditional.ShouldSchedule(ctx) {
+	if conditional, localOk := job.(st.ConditionalJob); localOk && !conditional.ShouldSchedule(ctx) {
 		return errors.New("job is disabled")
 	}
 	return nil
@@ -133,7 +141,7 @@ func (s *JobService) executeRunInternal(ctx context.Context, run st.Run) (st.Out
 	if !ok {
 		return st.Outcome{Status: unavailableStatus, Message: "Job or target no longer exists"}, nil
 	}
-	if conditional, ok := job.(st.ConditionalJob); ok && !conditional.ShouldSchedule(ctx) {
+	if conditional, localOk := job.(st.ConditionalJob); localOk && !conditional.ShouldSchedule(ctx) {
 		return st.Outcome{Status: unavailableStatus, Message: "Job is disabled"}, nil
 	}
 	outcome, err := job.Run(ctx)
@@ -169,7 +177,8 @@ func classifyOutcomeInternal(jobID string, outcome st.Outcome, err error) (st.Ou
 
 func safeJobInternal(jobID string) bool {
 	switch jobID {
-	case "image-polling", "environment-health", "docker-client-refresh", "event-cleanup", "expired-sessions-cleanup", "activity-sweep", "upload-sessions-cleanup", "git-clone-scratch-cleanup", "analytics-heartbeat", "apns-outbox", "vulnerability-scan":
+	case "image-polling", "environment-health", "docker-client-refresh", "event-cleanup", "expired-sessions-cleanup", "activity-sweep", "upload-sessions-cleanup",
+		"git-clone-scratch-cleanup", "analytics-heartbeat", "apns-outbox", "vulnerability-scan":
 		return true
 	}
 	return strings.HasPrefix(jobID, "environment-health:")
@@ -187,7 +196,7 @@ func (s *JobService) reconcileRunInternal(ctx context.Context, run st.Run) (st.O
 	}
 	if s.scheduler != nil {
 		if job, ok := s.scheduler.GetJob(run.JobID); ok {
-			if reconciler, ok := job.(st.Reconciler); ok {
+			if reconciler, localOk := job.(st.Reconciler); localOk {
 				return reconciler.Reconcile(s.runContextInternal(ctx, run), run)
 			}
 		}
@@ -213,7 +222,7 @@ func (s *JobService) reconcileRunInternal(ctx context.Context, run st.Run) (st.O
 		run.Outcome.Targets[index].Status = st.Succeeded
 	}
 	if job, ok := s.scheduler.GetJob(run.JobID); ok {
-		if reconciler, ok := job.(st.Reconciler); ok {
+		if reconciler, localOk2 := job.(st.Reconciler); localOk2 {
 			outcome, err := reconciler.Reconcile(s.runContextInternal(ctx, run), run)
 			if err != nil {
 				slog.WarnContext(ctx, "Job reconciliation requires attention", "runId", run.ID, "error", err)

@@ -13,19 +13,19 @@ import (
 
 func TestSecureCookieFromRequest(t *testing.T) {
 	t.Run("plain http returns false", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "http://example.com/", nil)
+		req := httptest.NewRequest("GET", "http://example.com/", http.NoBody)
 		assert.False(t, SecureCookieFromRequest(req))
 	})
 
 	t.Run("X-Forwarded-Proto https is not trusted directly", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "http://example.com/", nil)
+		req := httptest.NewRequest("GET", "http://example.com/", http.NoBody)
 		req.Header.Set("X-Forwarded-Proto", "https")
 		assert.False(t, SecureCookieFromRequest(req))
 	})
 
 	t.Run("secure cookie context returns true", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "http://example.com/", nil)
-		req = req.WithContext(context.WithValue(context.Background(), SecureCookieContextKey{}, true))
+		req := httptest.NewRequest("GET", "http://example.com/", http.NoBody)
+		req = req.WithContext(context.WithValue(t.Context(), SecureCookieContextKey{}, true))
 		assert.True(t, SecureCookieFromRequest(req))
 	})
 }
@@ -62,7 +62,7 @@ func TestBuildTokenCookieStringFor(t *testing.T) {
 		token := strings.Repeat("a", tokenCookieChunkSize) + strings.Repeat("b", tokenCookieChunkSize) + "tail"
 		headers := BuildTokenCookieStringFor(60, token, true)
 
-		req := httptest.NewRequest("GET", "https://example.com/", nil)
+		req := httptest.NewRequest("GET", "https://example.com/", http.NoBody)
 		for _, c := range readSetCookieHeadersInternal(t, headers...) {
 			if c.MaxAge >= 0 {
 				req.AddCookie(&http.Cookie{Name: c.Name, Value: c.Value})

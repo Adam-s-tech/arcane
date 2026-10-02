@@ -131,9 +131,9 @@ var createCmd = &cobra.Command{
 			req.Username = repoCreateUsername
 		}
 		if cmd.Flags().Changed("ssh-key") {
-			sshKeyData, err := os.ReadFile(repoCreateSSHKey)
-			if err != nil {
-				return fmt.Errorf("failed to read SSH key file: %w", err)
+			sshKeyData, readFileErr := os.ReadFile(repoCreateSSHKey)
+			if readFileErr != nil {
+				return fmt.Errorf("failed to read SSH key file: %w", readFileErr)
 			}
 			req.SSHKey = string(sshKeyData)
 		}
@@ -147,9 +147,9 @@ var createCmd = &cobra.Command{
 			req.CommitAuthorEmail = repoCreateAuthorEmail
 		}
 		if cmd.Flags().Changed("signing-key") {
-			signingKeyData, err := os.ReadFile(repoCreateSigningKey)
-			if err != nil {
-				return fmt.Errorf("failed to read signing key file: %w", err)
+			signingKeyData, readSigningKeyErr := os.ReadFile(repoCreateSigningKey)
+			if readSigningKeyErr != nil {
+				return fmt.Errorf("failed to read signing key file: %w", readSigningKeyErr)
 			}
 			req.SigningKey = string(signingKeyData)
 		}
@@ -261,9 +261,9 @@ var updateCmd = &cobra.Command{
 			req.Username = &repoUpdateUsername
 		}
 		if cmd.Flags().Changed("ssh-key") {
-			sshKeyData, err := os.ReadFile(repoUpdateSSHKey)
-			if err != nil {
-				return fmt.Errorf("failed to read SSH key file: %w", err)
+			sshKeyData, readFileErr := os.ReadFile(repoUpdateSSHKey)
+			if readFileErr != nil {
+				return fmt.Errorf("failed to read SSH key file: %w", readFileErr)
 			}
 			req.SSHKey = new(string(sshKeyData))
 		}
@@ -279,9 +279,9 @@ var updateCmd = &cobra.Command{
 		if cmd.Flags().Changed("signing-key") {
 			signingKey := ""
 			if repoUpdateSigningKey != "" {
-				signingKeyData, err := os.ReadFile(repoUpdateSigningKey)
-				if err != nil {
-					return fmt.Errorf("failed to read signing key file: %w", err)
+				signingKeyData, readSigningKeyErr := os.ReadFile(repoUpdateSigningKey)
+				if readSigningKeyErr != nil {
+					return fmt.Errorf("failed to read signing key file: %w", readSigningKeyErr)
 				}
 				signingKey = string(signingKeyData)
 			}
@@ -334,9 +334,9 @@ var deleteCmd = &cobra.Command{
 		}
 
 		if !forceFlag {
-			confirmed, err := cmdutil.Confirm(cmd, fmt.Sprintf("Are you sure you want to delete repository %s (%s)?", resolved.Name, resolved.ID))
-			if err != nil {
-				return err
+			confirmed, confirmErr := cmdutil.Confirm(cmd, fmt.Sprintf("Are you sure you want to delete repository %s (%s)?", resolved.Name, resolved.ID))
+			if confirmErr != nil {
+				return confirmErr
 			}
 			if !confirmed {
 				fmt.Println("Cancelled")
@@ -349,8 +349,8 @@ var deleteCmd = &cobra.Command{
 			return fmt.Errorf("failed to delete repository: %w", err)
 		}
 		defer func() { _ = resp.Body.Close() }()
-		if err := cmdutil.EnsureSuccessStatus(resp); err != nil {
-			return fmt.Errorf("failed to delete repository: %w", err)
+		if ensureSuccessStatusErr := cmdutil.EnsureSuccessStatus(resp); ensureSuccessStatusErr != nil {
+			return fmt.Errorf("failed to delete repository: %w", ensureSuccessStatusErr)
 		}
 
 		output.Success("Repository deleted successfully")
@@ -421,7 +421,9 @@ var branchesCmd = &cobra.Command{
 			}
 		}
 
-		output.Table(headers, rows)
+		if tableErr := output.Table(headers, rows); tableErr != nil {
+			return tableErr
+		}
 		fmt.Printf("\nTotal: %d branches\n", len(result.Data.Branches))
 		return nil
 	},
@@ -480,7 +482,9 @@ var filesCmd = &cobra.Command{
 			}
 		}
 
-		output.Table(headers, rows)
+		if tableErr := output.Table(headers, rows); tableErr != nil {
+			return tableErr
+		}
 		fmt.Printf("\nTotal: %d entries\n", len(files))
 		return nil
 	},

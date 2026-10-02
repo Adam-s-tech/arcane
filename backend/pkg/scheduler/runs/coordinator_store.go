@@ -30,16 +30,16 @@ func (q *Coordinator) mutateInternal(ctx context.Context, environmentID, jobID s
 		if err != nil && !errors.Is(err, actor.ErrStateNotFound) {
 			return err
 		}
-		if err := q.prepareMutationInternal(&state, environmentID, jobID, change); err != nil {
-			return err
+		if prepareMutationErr := q.prepareMutationInternal(&state, environmentID, jobID, change); prepareMutationErr != nil {
+			return prepareMutationErr
 		}
 		result, err := q.service.Invoke(ctx, coordinatorTypeInternal, id, "replace", state)
 		if err != nil {
 			return err
 		}
 		var swapped bool
-		if err = result.Decode(&swapped); err != nil {
-			return err
+		if decodeErr := result.Decode(&swapped); decodeErr != nil {
+			return decodeErr
 		}
 		if swapped {
 			return nil
@@ -58,20 +58,20 @@ func (q *Coordinator) prepareMutationInternal(state *st.CoordinatorState, enviro
 	if state.Record.JobID == "" {
 		state.Record = st.QueueRecord{JobID: jobID, EnvironmentID: environmentID}
 	}
-	if err := change(&state.Record); err != nil {
-		return err
+	if changeErr := change(&state.Record); changeErr != nil {
+		return changeErr
 	}
 	preserveUnsyncedRunsInternal(state, previousRuns)
 	for i := range state.Record.Runs {
 		q.associateActivityInternal(&state.Record.Runs[i])
-		if err := markChangedActivityInternal(state, &state.Record.Runs[i], previous, versions); err != nil {
-			return err
+		if markChangedActivityErr := markChangedActivityInternal(state, &state.Record.Runs[i], previous, versions); markChangedActivityErr != nil {
+			return markChangedActivityErr
 		}
 	}
 	for id, run := range state.Record.Receipts {
 		q.associateActivityInternal(&run)
-		if err := markChangedActivityInternal(state, &run, previous, versions); err != nil {
-			return err
+		if markChangedActivityErr2 := markChangedActivityInternal(state, &run, previous, versions); markChangedActivityErr2 != nil {
+			return markChangedActivityErr2
 		}
 		state.Record.Receipts[id] = run
 	}
@@ -156,8 +156,8 @@ func (q *Coordinator) Records(ctx context.Context) ([]st.QueueRecord, error) {
 		}
 		for _, entry := range page.States {
 			var state st.CoordinatorState
-			if err := entry.Data.Decode(&state); err != nil {
-				return nil, fmt.Errorf("decode job coordinator %q: %w", entry.ActorID, err)
+			if decodeErr := entry.Data.Decode(&state); decodeErr != nil {
+				return nil, fmt.Errorf("decode job coordinator %q: %w", entry.ActorID, decodeErr)
 			}
 			normalizeRecordTimesInternal(&state.Record)
 			q.runtime.NameActor(entry.ActorID, state.Record.JobID+"@"+state.Record.EnvironmentID)
@@ -266,11 +266,11 @@ func (q *Coordinator) pruneInternal(ctx context.Context) error {
 		if !pruneRunsInternal(&record, now) {
 			continue
 		}
-		if err := q.mutateInternal(ctx, record.EnvironmentID, record.JobID, func(current *st.QueueRecord) error {
+		if mutateErr := q.mutateInternal(ctx, record.EnvironmentID, record.JobID, func(current *st.QueueRecord) error {
 			pruneRunsInternal(current, now)
 			return nil
-		}); err != nil {
-			return fmt.Errorf("prune job %q in environment %q: %w", record.JobID, record.EnvironmentID, err)
+		}); mutateErr != nil {
+			return fmt.Errorf("prune job %q in environment %q: %w", record.JobID, record.EnvironmentID, mutateErr)
 		}
 	}
 	return nil

@@ -31,7 +31,12 @@ func newTestAdmissionGateInternal(t *testing.T) *runs.Admission {
 	return admission
 }
 
-func newTestCoordinatorInternal(t testing.TB, ctx context.Context, location *time.Location, execute func(context.Context, schedulertypes.Run) (schedulertypes.Outcome, error)) (*runs.Coordinator, *francis.Runtime) {
+func newTestCoordinatorInternal(t testing.TB,
+	ctx context.Context,
+	location *time.Location,
+	execute func(context.Context,
+		schedulertypes.Run) (schedulertypes.Outcome, error),
+) (*runs.Coordinator, *francis.Runtime) {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
@@ -45,10 +50,10 @@ func newTestCoordinatorInternal(t testing.TB, ctx context.Context, location *tim
 	coordinator.SetExecutor(execute, nil)
 	require.NoError(t, coordinator.Register(runtime))
 	require.NoError(t, runtime.Start(t.Context(), ctx, nil))
-	t.Cleanup(func() { require.NoError(t, runtime.Stop(context.Background())) })
+	t.Cleanup(func() { require.NoError(t, runtime.Stop(context.WithoutCancel(t.Context()))) })
 	require.NoError(t, coordinator.Start(t.Context(), ctx))
 	coordinator.Activate()
-	t.Cleanup(func() { require.NoError(t, coordinator.Stop(context.Background())) })
+	t.Cleanup(func() { require.NoError(t, coordinator.Stop(context.WithoutCancel(t.Context()))) })
 	return coordinator, runtime
 }
 
@@ -67,7 +72,7 @@ func newJobSchedulerForTestInternal(t testing.TB, ctx context.Context, location 
 	scheduler = created.(*jobSchedulerInternal)
 	schedulerTestRuntimesInternal.Store(scheduler, runtime)
 	t.Cleanup(func() {
-		require.NoError(t, scheduler.Stop(context.Background()))
+		require.NoError(t, scheduler.Stop(context.WithoutCancel(t.Context())))
 		schedulerTestRuntimesInternal.Delete(scheduler)
 	})
 	return scheduler
@@ -88,7 +93,7 @@ func newSettingsServiceForTestInternal(t testing.TB, ctx context.Context, db *da
 	t.Helper()
 	svc, err := settings.NewSettingsService(ctx, db)
 	if err == nil {
-		t.Cleanup(func() { require.NoError(t, svc.Stop(context.Background())) })
+		t.Cleanup(func() { require.NoError(t, svc.Stop(context.WithoutCancel(t.Context()))) })
 	}
 	return svc, err
 }

@@ -51,9 +51,16 @@ func PlanVolumeMigration(ctx context.Context, dockerClient *client.Client, compo
 	return volumes.NewMigration(dockerClient, entries, oldComposeName, newComposeName, toolsImage), nil
 }
 
-func collectProjectRenameVolumeEntriesInternal(ctx context.Context, dockerClient *client.Client, volumes map[string]composetypes.VolumeConfig, explicitVolumeNames map[string]struct{}, oldComposeName, newComposeName string) ([]volumetypes.RenameEntry, error) {
-	entries := make([]volumetypes.RenameEntry, 0, len(volumes))
-	for key, volumeConfig := range volumes {
+func collectProjectRenameVolumeEntriesInternal(ctx context.Context,
+	dockerClient *client.Client,
+	localVolumes map[string]composetypes.VolumeConfig,
+	explicitVolumeNames map[string]struct{},
+	oldComposeName,
+	newComposeName string) ([]volumetypes.RenameEntry,
+	error,
+) {
+	entries := make([]volumetypes.RenameEntry, 0, len(localVolumes))
+	for key, volumeConfig := range localVolumes {
 		entry, ok, err := inspectProjectRenameVolumeEntryInternal(ctx, dockerClient, key, volumeConfig, explicitVolumeNames, oldComposeName, newComposeName)
 		if err != nil {
 			return nil, err
@@ -65,7 +72,16 @@ func collectProjectRenameVolumeEntriesInternal(ctx context.Context, dockerClient
 	return entries, nil
 }
 
-func inspectProjectRenameVolumeEntryInternal(ctx context.Context, dockerClient *client.Client, key string, volumeConfig composetypes.VolumeConfig, explicitVolumeNames map[string]struct{}, oldComposeName, newComposeName string) (volumetypes.RenameEntry, bool, error) {
+func inspectProjectRenameVolumeEntryInternal(ctx context.Context,
+	dockerClient *client.Client,
+	key string,
+	volumeConfig composetypes.VolumeConfig,
+	explicitVolumeNames map[string]struct{},
+	oldComposeName,
+	newComposeName string) (volumetypes.RenameEntry,
+	bool,
+	error,
+) {
 	if _, explicit := explicitVolumeNames[key]; explicit || bool(volumeConfig.External) {
 		return volumetypes.RenameEntry{}, false, nil
 	}
@@ -87,8 +103,8 @@ func inspectProjectRenameVolumeEntryInternal(ctx context.Context, dockerClient *
 		}
 		return volumetypes.RenameEntry{}, false, fmt.Errorf("inspect source volume %s: %w", oldName, err)
 	}
-	if err := volumes.EnsureRenameSourceDetached(ctx, dockerClient, oldName); err != nil {
-		return volumetypes.RenameEntry{}, false, err
+	if ensureRenameSourceDetachedErr := volumes.EnsureRenameSourceDetached(ctx, dockerClient, oldName); ensureRenameSourceDetachedErr != nil {
+		return volumetypes.RenameEntry{}, false, ensureRenameSourceDetachedErr
 	}
 
 	newConfig := buildProjectRenamedVolumeConfigInternal(volumeConfig, key, newName, newComposeName)
@@ -156,8 +172,8 @@ func composeVolumeKeysWithExplicitNameInFileInternal(path string) (map[string]st
 	}
 
 	composeData := map[string]any{}
-	if err := yaml.Unmarshal(content, &composeData); err != nil {
-		return nil, fmt.Errorf("parse compose file: %w", err)
+	if unmarshalErr := yaml.Unmarshal(content, &composeData); unmarshalErr != nil {
+		return nil, fmt.Errorf("parse compose file: %w", unmarshalErr)
 	}
 
 	rawVolumes, ok := composeData["volumes"]
@@ -165,27 +181,27 @@ func composeVolumeKeysWithExplicitNameInFileInternal(path string) (map[string]st
 		return map[string]struct{}{}, nil
 	}
 
-	volumes, ok := rawVolumes.(map[string]any)
+	localVolumes, ok := rawVolumes.(map[string]any)
 	if !ok {
 		return nil, errors.New("parse compose file: volumes must be a mapping")
 	}
 
 	explicit := make(map[string]struct{})
-	for key, rawVolume := range volumes {
+	for key, rawVolume := range localVolumes {
 		key = strings.TrimSpace(key)
 		if key == "" {
 			continue
 		}
-		volumeConfig, ok := rawVolume.(map[string]any)
-		if !ok {
+		volumeConfig, localOk := rawVolume.(map[string]any)
+		if !localOk {
 			continue
 		}
 		rawName, hasName := volumeConfig["name"]
 		if !hasName {
 			continue
 		}
-		name, ok := rawName.(string)
-		if ok && len(composetemplate.ExtractVariables(map[string]any{"name": name}, nil)) == 0 {
+		name, localOk := rawName.(string)
+		if localOk && len(composetemplate.ExtractVariables(map[string]any{"name": name}, nil)) == 0 {
 			explicit[key] = struct{}{}
 		}
 	}
@@ -193,7 +209,12 @@ func composeVolumeKeysWithExplicitNameInFileInternal(path string) (map[string]st
 	return explicit, nil
 }
 
-func ApplyRenameVolumeMigration(ctx context.Context, operations projecttypes.RenameRecoveryOperations, volumeMigration volumetypes.Migration, renameJournal *projecttypes.RenameJournal, applied *bool) error {
+func ApplyRenameVolumeMigration(ctx context.Context,
+	operations projecttypes.RenameRecoveryOperations,
+	volumeMigration volumetypes.Migration,
+	renameJournal *projecttypes.RenameJournal,
+	applied *bool,
+) error {
 	if volumeMigration == nil {
 		return nil
 	}
@@ -204,7 +225,13 @@ func ApplyRenameVolumeMigration(ctx context.Context, operations projecttypes.Ren
 	return operations.WriteJournal(ctx, renameJournal, projecttypes.RenameJournalPhaseTargetsCopied)
 }
 
-func FinalizeRenameAfterCommit(ctx context.Context, operations projecttypes.RenameRecoveryOperations, projectID string, volumeMigration volumetypes.Migration, renameJournal *projecttypes.RenameJournal, journalActive *bool) {
+func FinalizeRenameAfterCommit(ctx context.Context,
+	operations projecttypes.RenameRecoveryOperations,
+	projectID string,
+	volumeMigration volumetypes.Migration,
+	renameJournal *projecttypes.RenameJournal,
+	journalActive *bool,
+) {
 	if renameJournal != nil {
 		if err := operations.WriteJournal(ctx, renameJournal, projecttypes.RenameJournalPhaseProjectStateCommitted); err != nil {
 			slog.WarnContext(ctx, "failed to mark project rename journal committed", "projectID", projectID, "error", err)
@@ -214,14 +241,14 @@ func FinalizeRenameAfterCommit(ctx context.Context, operations projecttypes.Rena
 	if committer, ok := volumeMigration.(volumetypes.Committer); ok {
 		if err := committer.Commit(ctx); err != nil {
 			slog.WarnContext(ctx, "failed to clean up project source volumes after committed rename", "projectID", projectID, "error", err)
-			if _, ok := errors.AsType[*volumetypes.SourceCleanupError](err); ok {
+			if _, localOk := errors.AsType[*volumetypes.SourceCleanupError](err); localOk {
 				if writeErr := operations.WriteJournal(ctx, renameJournal, projecttypes.RenameJournalPhaseSourceCleanupPending); writeErr != nil {
 					slog.WarnContext(ctx, "failed to mark project rename source cleanup pending", "projectID", projectID, "error", writeErr)
 				}
 			}
 			return
-		} else if err := operations.WriteJournal(ctx, renameJournal, projecttypes.RenameJournalPhaseOldVolumesRemoved); err != nil {
-			slog.WarnContext(ctx, "failed to mark old project rename volumes removed", "projectID", projectID, "error", err)
+		} else if writeJournalErr := operations.WriteJournal(ctx, renameJournal, projecttypes.RenameJournalPhaseOldVolumesRemoved); writeJournalErr != nil {
+			slog.WarnContext(ctx, "failed to mark old project rename volumes removed", "projectID", projectID, "error", writeJournalErr)
 		}
 	}
 
@@ -267,15 +294,29 @@ func cleanupRenameJournalSourcesInternal(ctx context.Context, operations project
 		return err
 	}
 
-	if err := volumes.EnsureTargetsReadyForCleanup(ctx, dockerClient, journal.Volumes); err != nil {
-		if missingWithSource, ok := errors.AsType[*volumetypes.TargetMissingWithSourceError](err); ok {
-			slog.WarnContext(ctx, "rolling back project rename because target volume is missing and source volume remains", "projectID", journal.ProjectID, "sourceVolume", missingWithSource.SourceVolume, "targetVolume", missingWithSource.TargetVolume)
+	if ensureTargetsReadyForCleanupErr := volumes.EnsureTargetsReadyForCleanup(ctx, dockerClient, journal.Volumes); ensureTargetsReadyForCleanupErr != nil {
+		if missingWithSource, ok := errors.AsType[*volumetypes.TargetMissingWithSourceError](ensureTargetsReadyForCleanupErr); ok {
+			slog.WarnContext(ctx,
+				"rolling back project rename because target volume is missing and source volume remains",
+				"projectID",
+				journal.ProjectID,
+				"sourceVolume",
+				missingWithSource.SourceVolume,
+				"targetVolume",
+				missingWithSource.TargetVolume)
 			return rollbackRenameJournalInternal(ctx, operations, journal)
 		}
-		if externallyRemoved, ok := errors.AsType[*volumetypes.VolumesExternallyRemovedError](err); ok {
-			slog.WarnContext(ctx, "project rename cleanup found source and target volumes externally removed", "projectID", journal.ProjectID, "volumeCount", len(externallyRemoved.Volumes), "error", externallyRemoved)
+		if externallyRemoved, ok := errors.AsType[*volumetypes.VolumesExternallyRemovedError](ensureTargetsReadyForCleanupErr); ok {
+			slog.WarnContext(ctx,
+				"project rename cleanup found source and target volumes externally removed",
+				"projectID",
+				journal.ProjectID,
+				"volumeCount",
+				len(externallyRemoved.Volumes),
+				"error",
+				externallyRemoved)
 		} else {
-			return err
+			return ensureTargetsReadyForCleanupErr
 		}
 	}
 
@@ -292,7 +333,14 @@ func rollbackRenameJournalInternal(ctx context.Context, operations projecttypes.
 	}
 
 	if directoryErr != nil {
-		slog.WarnContext(ctx, "keeping project rename journal after restoring database state because directory rollback failed", "projectID", journal.ProjectID, "pathsMissing", pathsMissing, "error", directoryErr)
+		slog.WarnContext(ctx,
+			"keeping project rename journal after restoring database state because directory rollback failed",
+			"projectID",
+			journal.ProjectID,
+			"pathsMissing",
+			pathsMissing,
+			"error",
+			directoryErr)
 	}
 
 	if volumeErr != nil {
@@ -302,7 +350,14 @@ func rollbackRenameJournalInternal(ctx context.Context, operations projecttypes.
 			if cleanupErr := operations.WriteRollbackCleanup(ctx, journal); cleanupErr != nil {
 				return errors.Join(directoryErr, volumeErr, cleanupErr)
 			}
-			slog.WarnContext(ctx, "queued project rename target volume cleanup after restoring database state despite volume rollback failure", "projectID", journal.ProjectID, "pathsMissing", pathsMissing, "error", volumeErr)
+			slog.WarnContext(ctx,
+				"queued project rename target volume cleanup after restoring database state despite volume rollback failure",
+				"projectID",
+				journal.ProjectID,
+				"pathsMissing",
+				pathsMissing,
+				"error",
+				volumeErr)
 		}
 	}
 
@@ -356,12 +411,12 @@ func CleanupRenameRollbackTargets(ctx context.Context, cleanup *projecttypes.Ren
 		return err
 	}
 
-	if err := volumes.CleanupRollbackTargetVolumes(ctx, dockerClient, cleanup.Volumes); err != nil {
-		if volumes.OnlyPreservedTargetErrors(err) {
-			slog.WarnContext(ctx, "clearing project rename rollback cleanup after preserving target volume data", "projectID", cleanup.ProjectID, "error", err)
+	if cleanupRollbackTargetVolumesErr := volumes.CleanupRollbackTargetVolumes(ctx, dockerClient, cleanup.Volumes); cleanupRollbackTargetVolumesErr != nil {
+		if volumes.OnlyPreservedTargetErrors(cleanupRollbackTargetVolumesErr) {
+			slog.WarnContext(ctx, "clearing project rename rollback cleanup after preserving target volume data", "projectID", cleanup.ProjectID, "error", cleanupRollbackTargetVolumesErr)
 			return operations.ClearRollbackCleanup(ctx, cleanup.ProjectID)
 		}
-		return err
+		return cleanupRollbackTargetVolumesErr
 	}
 
 	dockerutil.InvalidateVolumeUsageCache(dockerClient)

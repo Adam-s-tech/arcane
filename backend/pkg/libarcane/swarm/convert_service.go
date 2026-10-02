@@ -123,11 +123,11 @@ func buildServiceSpecInternal(
 		}
 	}
 
-	if err := applyDeployConfigInternal(&spec, service.Deploy, service.Scale, service.Restart); err != nil {
-		return swarm.ServiceSpec{}, err
+	if applyDeployConfigErr := applyDeployConfigInternal(&spec, service.Deploy, service.Scale, service.Restart); applyDeployConfigErr != nil {
+		return swarm.ServiceSpec{}, applyDeployConfigErr
 	}
-	if err := applyServicePortsInternal(&spec, service.Ports); err != nil {
-		return swarm.ServiceSpec{}, err
+	if applyServicePortsErr := applyServicePortsInternal(&spec, service.Ports); applyServicePortsErr != nil {
+		return swarm.ServiceSpec{}, applyServicePortsErr
 	}
 
 	return spec, nil
@@ -195,9 +195,9 @@ func convertPrivilegesInternal(
 	privileges := &swarm.Privileges{CredentialSpec: convertedCredentialSpec}
 	hasPrivileges := convertedCredentialSpec != nil
 	for _, securityOption := range securityOptions {
-		applied, err := applySecurityOptionInternal(privileges, securityOption)
-		if err != nil {
-			return nil, nil, err
+		applied, applySecurityOptionErr := applySecurityOptionInternal(privileges, securityOption)
+		if applySecurityOptionErr != nil {
+			return nil, nil, applySecurityOptionErr
 		}
 		if applied {
 			hasPrivileges = true

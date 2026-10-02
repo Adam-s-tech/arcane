@@ -21,16 +21,16 @@ var unitBytesUnmarshalers = json.UnmarshalFromFunc(func(decoder *jsontext.Decode
 	case jsontext.KindNull:
 		return nil
 	case jsontext.KindString:
-		parsed, err := units.RAMInBytes(strings.TrimSpace(token.String()))
-		if err != nil {
-			return err
+		parsed, parseMemoryErr := units.RAMInBytes(strings.TrimSpace(token.String()))
+		if parseMemoryErr != nil {
+			return parseMemoryErr
 		}
 		*value = compose.UnitBytes(parsed)
 		return nil
 	case jsontext.KindNumber:
 		raw := token.String()
-		parsed, err := strconv.ParseInt(raw, 10, 64)
-		if err != nil {
+		parsed, parseIntErr := strconv.ParseInt(raw, 10, 64)
+		if parseIntErr != nil {
 			floatValue, parseErr := strconv.ParseFloat(raw, 64)
 			if parseErr != nil {
 				return parseErr

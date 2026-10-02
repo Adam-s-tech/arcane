@@ -26,7 +26,24 @@ type singleUpdateActorInternal struct{ service *UpdaterService }
 
 func (s *UpdaterService) RegisterActors(runtime *francis.Runtime) error {
 	s.singleUpdates = runtime.Service()
-	return runtime.RegisterActor(singleUpdateTypeInternal, func(_ string, _ *actor.Service) actor.Actor { return &singleUpdateActorInternal{service: s} }, local.WithCapacityGroup("jobs", 4), local.WithCompletedJobRetention(7*24*time.Hour))
+	return runtime.RegisterActor(
+		singleUpdateTypeInternal,
+		func(
+			_ string,
+			_ *actor.Service,
+		) actor.Actor {
+			return &singleUpdateActorInternal{
+				service: s,
+			}
+		},
+		local.WithCapacityGroup(
+			"jobs",
+			4,
+		),
+		local.WithCompletedJobRetention(
+			7*24*time.Hour,
+		),
+	)
 }
 
 // Start repairs persisted single-container delivery intents until shutdown.
@@ -100,8 +117,8 @@ func (s *UpdaterService) dispatchSingleInternal(ctx context.Context, state arcan
 	}
 	// A terminal transport record cannot prove the durable business outcome.
 	// Its replacement reconciles the saved effect before doing any further work.
-	if err := s.singleUpdates.DeleteJob(ctx, singleUpdateTypeInternal, "single-container", id); err != nil {
-		return err
+	if deleteJobErr := s.singleUpdates.DeleteJob(ctx, singleUpdateTypeInternal, "single-container", id); deleteJobErr != nil {
+		return deleteJobErr
 	}
 	_, _, err = s.singleUpdates.Dispatch(ctx, singleUpdateTypeInternal, "single-container", "update", state.Command, actor.WithIdempotencyKey(state.Command.ActivityID))
 	return err
@@ -115,11 +132,11 @@ func (s *UpdaterService) repairSinglesInternal(ctx context.Context) error {
 		}
 		for _, entry := range page.States {
 			var state arcaneupdater.SingleUpdateState
-			if err := entry.Data.Decode(&state); err != nil {
-				return err
+			if decodeErr := entry.Data.Decode(&state); decodeErr != nil {
+				return decodeErr
 			}
-			if err := s.repairSingleInternal(ctx, state); err != nil {
-				return err
+			if repairSingleErr := s.repairSingleInternal(ctx, state); repairSingleErr != nil {
+				return repairSingleErr
 			}
 		}
 		cursor = page.AfterID()
@@ -181,12 +198,12 @@ func (a *singleUpdateActorInternal) Job(ctx context.Context, _ string, data acto
 	}
 	defer release()
 	var command arcaneupdater.SingleUpdateCommand
-	if err := data.Decode(&command); err != nil {
-		return errors.Join(err, actor.ErrJobPermanentFailure)
+	if decodeErr := data.Decode(&command); decodeErr != nil {
+		return errors.Join(decodeErr, actor.ErrJobPermanentFailure)
 	}
 	var state arcaneupdater.SingleUpdateState
-	if err := s.singleUpdates.GetState(ctx, singleUpdateStateTypeInternal, command.ActivityID, &state); err != nil {
-		return err
+	if getStateErr := s.singleUpdates.GetState(ctx, singleUpdateStateTypeInternal, command.ActivityID, &state); getStateErr != nil {
+		return getStateErr
 	}
 	if state.Status == "completed" || state.Status == "needs_attention" {
 		return nil
@@ -194,8 +211,8 @@ func (a *singleUpdateActorInternal) Job(ctx context.Context, _ string, data acto
 	if state.Command != command {
 		return actor.ErrJobPermanentFailure
 	}
-	if err := s.authorizeSingleInternal(ctx, command); err != nil {
-		return s.failSingleInternal(ctx, &state, err.Error())
+	if authorizeSingleErr := s.authorizeSingleInternal(ctx, command); authorizeSingleErr != nil {
+		return s.failSingleInternal(ctx, &state, authorizeSingleErr.Error())
 	}
 	ctx = s.trackActivityInternal(ctx, command.ActivityID)
 	canceled, err := s.awaitSingleActivityInternal(ctx, lifetime, &state)
@@ -291,7 +308,18 @@ func (s *UpdaterService) prepareSingleTargetInternal(ctx context.Context, state 
 		return false, err
 	}
 	if confirmed {
-		result := &arcaneupdater.Result{Updated: 1, Items: []arcaneupdater.ResourceResult{{ResourceID: state.Target.ContainerID, ResourceName: state.Target.ContainerName, ResourceType: "container", Status: arcaneupdater.StatusUpdated, UpdateApplied: true}}}
+		result := &arcaneupdater.Result{
+			Updated: 1,
+			Items: []arcaneupdater.ResourceResult{
+				{
+					ResourceID:    state.Target.ContainerID,
+					ResourceName:  state.Target.ContainerName,
+					ResourceType:  "container",
+					Status:        arcaneupdater.StatusUpdated,
+					UpdateApplied: true,
+				},
+			},
+		}
 		return true, s.completeSingleInternal(ctx, state, result, nil)
 	}
 	if !unchanged {
@@ -343,8 +371,8 @@ func (s *UpdaterService) ActiveUpdateActivityIDs(ctx context.Context) ([]string,
 		}
 		for _, entry := range page.States {
 			var state arcaneupdater.SingleUpdateState
-			if err := entry.Data.Decode(&state); err != nil {
-				return nil, err
+			if decodeErr := entry.Data.Decode(&state); decodeErr != nil {
+				return nil, decodeErr
 			}
 			ids = append(ids, state.Command.ActivityID)
 		}

@@ -350,63 +350,777 @@ func RegisterSwarm(api huma.API, swarmSvc *SwarmService, environmentSvc *environ
 		cfg:                cfg,
 	}
 
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "list-swarm-services", Method: http.MethodGet, Path: "/environments/{id}/swarm/services", Summary: "List swarm services", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmRead, h.ListServices)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "get-swarm-service", Method: http.MethodGet, Path: "/environments/{id}/swarm/services/{serviceId}", Summary: "Get swarm service", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmRead, h.GetService)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "create-swarm-service", Method: http.MethodPost, Path: "/environments/{id}/swarm/services", Summary: "Create swarm service", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmServices, h.CreateService)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "update-swarm-service", Method: http.MethodPut, Path: "/environments/{id}/swarm/services/{serviceId}", Summary: "Update swarm service", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmServices, h.UpdateService)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "delete-swarm-service", Method: http.MethodDelete, Path: "/environments/{id}/swarm/services/{serviceId}", Summary: "Delete swarm service", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmServices, h.DeleteService)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "list-swarm-service-tasks", Method: http.MethodGet, Path: "/environments/{id}/swarm/services/{serviceId}/tasks", Summary: "List tasks for a swarm service", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmRead, h.ListServiceTasks)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "rollback-swarm-service", Method: http.MethodPost, Path: "/environments/{id}/swarm/services/{serviceId}/rollback", Summary: "Rollback a swarm service", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmServices, h.RollbackService)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "scale-swarm-service", Method: http.MethodPost, Path: "/environments/{id}/swarm/services/{serviceId}/scale", Summary: "Scale a swarm service", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmServices, h.ScaleService)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "list-swarm-services",
+			Method:      http.MethodGet,
+			Path:        "/environments/{id}/swarm/services",
+			Summary:     "List swarm services",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmRead,
+		h.ListServices,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "get-swarm-service",
+			Method:      http.MethodGet,
+			Path:        "/environments/{id}/swarm/services/{serviceId}",
+			Summary:     "Get swarm service",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmRead,
+		h.GetService,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "create-swarm-service",
+			Method:      http.MethodPost,
+			Path:        "/environments/{id}/swarm/services",
+			Summary:     "Create swarm service",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmServices,
+		h.CreateService,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "update-swarm-service",
+			Method:      http.MethodPut,
+			Path:        "/environments/{id}/swarm/services/{serviceId}",
+			Summary:     "Update swarm service",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmServices,
+		h.UpdateService,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "delete-swarm-service",
+			Method:      http.MethodDelete,
+			Path:        "/environments/{id}/swarm/services/{serviceId}",
+			Summary:     "Delete swarm service",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmServices,
+		h.DeleteService,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "list-swarm-service-tasks",
+			Method:      http.MethodGet,
+			Path:        "/environments/{id}/swarm/services/{serviceId}/tasks",
+			Summary:     "List tasks for a swarm service",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmRead,
+		h.ListServiceTasks,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "rollback-swarm-service",
+			Method:      http.MethodPost,
+			Path:        "/environments/{id}/swarm/services/{serviceId}/rollback",
+			Summary:     "Rollback a swarm service",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmServices,
+		h.RollbackService,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "scale-swarm-service",
+			Method:      http.MethodPost,
+			Path:        "/environments/{id}/swarm/services/{serviceId}/scale",
+			Summary:     "Scale a swarm service",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmServices,
+		h.ScaleService,
+	)
 
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "list-swarm-nodes", Method: http.MethodGet, Path: "/environments/{id}/swarm/nodes", Summary: "List swarm nodes", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmRead, h.ListNodes)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "get-swarm-node", Method: http.MethodGet, Path: "/environments/{id}/swarm/nodes/{nodeId}", Summary: "Get swarm node", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmRead, h.GetNode)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "get-swarm-node-agent-deployment", Method: http.MethodPost, Path: "/environments/{id}/swarm/nodes/{nodeId}/agent/deployment", Summary: "Get swarm node agent deployment snippets", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmNodes, h.GetNodeAgentDeployment)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "reconcile-swarm-node-agents", Method: http.MethodPost, Path: "/environments/{id}/swarm/nodes/agents/reconcile", Summary: "Reconcile swarm node agent bindings", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmNodes, h.ReconcileNodeAgents)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "put-swarm-node-agent-binding", Method: http.MethodPut, Path: "/environments/{id}/swarm/nodes/{nodeId}/agent/binding", Summary: "Attach a visible environment to a swarm node", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmNodes, h.PutNodeAgentBinding)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "delete-swarm-node-agent-binding", Method: http.MethodDelete, Path: "/environments/{id}/swarm/nodes/{nodeId}/agent/binding", Summary: "Detach a visible environment from a swarm node", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmNodes, h.DeleteNodeAgentBinding)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "delete-swarm-node-agent-deployment", Method: http.MethodDelete, Path: "/environments/{id}/swarm/nodes/{nodeId}/agent/deployment", Summary: "Remove a dedicated swarm node agent registration", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmNodes, h.DeleteNodeAgentDeployment)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "update-swarm-node", Method: http.MethodPatch, Path: "/environments/{id}/swarm/nodes/{nodeId}", Summary: "Update swarm node", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmNodes, h.UpdateNode)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "delete-swarm-node", Method: http.MethodDelete, Path: "/environments/{id}/swarm/nodes/{nodeId}", Summary: "Delete swarm node", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmNodes, h.DeleteNode)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "promote-swarm-node", Method: http.MethodPost, Path: "/environments/{id}/swarm/nodes/{nodeId}/promote", Summary: "Promote swarm node", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmNodes, h.PromoteNode)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "demote-swarm-node", Method: http.MethodPost, Path: "/environments/{id}/swarm/nodes/{nodeId}/demote", Summary: "Demote swarm node", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmNodes, h.DemoteNode)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "list-swarm-node-tasks", Method: http.MethodGet, Path: "/environments/{id}/swarm/nodes/{nodeId}/tasks", Summary: "List tasks for a swarm node", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmRead, h.ListNodeTasks)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "get-swarm-node-identity", Method: http.MethodGet, Path: "/swarm/node-identity", Summary: "Get local swarm node identity", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmRead, h.GetNodeIdentity)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "list-swarm-nodes",
+			Method:      http.MethodGet,
+			Path:        "/environments/{id}/swarm/nodes",
+			Summary:     "List swarm nodes",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmRead,
+		h.ListNodes,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "get-swarm-node",
+			Method:      http.MethodGet,
+			Path:        "/environments/{id}/swarm/nodes/{nodeId}",
+			Summary:     "Get swarm node",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmRead,
+		h.GetNode,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "get-swarm-node-agent-deployment",
+			Method:      http.MethodPost,
+			Path:        "/environments/{id}/swarm/nodes/{nodeId}/agent/deployment",
+			Summary:     "Get swarm node agent deployment snippets",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmNodes,
+		h.GetNodeAgentDeployment,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "reconcile-swarm-node-agents",
+			Method:      http.MethodPost,
+			Path:        "/environments/{id}/swarm/nodes/agents/reconcile",
+			Summary:     "Reconcile swarm node agent bindings",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmNodes,
+		h.ReconcileNodeAgents,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "put-swarm-node-agent-binding",
+			Method:      http.MethodPut,
+			Path:        "/environments/{id}/swarm/nodes/{nodeId}/agent/binding",
+			Summary:     "Attach a visible environment to a swarm node",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmNodes,
+		h.PutNodeAgentBinding,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "delete-swarm-node-agent-binding",
+			Method:      http.MethodDelete,
+			Path:        "/environments/{id}/swarm/nodes/{nodeId}/agent/binding",
+			Summary:     "Detach a visible environment from a swarm node",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmNodes,
+		h.DeleteNodeAgentBinding,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "delete-swarm-node-agent-deployment",
+			Method:      http.MethodDelete,
+			Path:        "/environments/{id}/swarm/nodes/{nodeId}/agent/deployment",
+			Summary:     "Remove a dedicated swarm node agent registration",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmNodes,
+		h.DeleteNodeAgentDeployment,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "update-swarm-node",
+			Method:      http.MethodPatch,
+			Path:        "/environments/{id}/swarm/nodes/{nodeId}",
+			Summary:     "Update swarm node",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmNodes,
+		h.UpdateNode,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "delete-swarm-node",
+			Method:      http.MethodDelete,
+			Path:        "/environments/{id}/swarm/nodes/{nodeId}",
+			Summary:     "Delete swarm node",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmNodes,
+		h.DeleteNode,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "promote-swarm-node",
+			Method:      http.MethodPost,
+			Path:        "/environments/{id}/swarm/nodes/{nodeId}/promote",
+			Summary:     "Promote swarm node",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmNodes,
+		h.PromoteNode,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "demote-swarm-node",
+			Method:      http.MethodPost,
+			Path:        "/environments/{id}/swarm/nodes/{nodeId}/demote",
+			Summary:     "Demote swarm node",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmNodes,
+		h.DemoteNode,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "list-swarm-node-tasks",
+			Method:      http.MethodGet,
+			Path:        "/environments/{id}/swarm/nodes/{nodeId}/tasks",
+			Summary:     "List tasks for a swarm node",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmRead,
+		h.ListNodeTasks,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "get-swarm-node-identity",
+			Method:      http.MethodGet,
+			Path:        "/swarm/node-identity",
+			Summary:     "Get local swarm node identity",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmRead,
+		h.GetNodeIdentity,
+	)
 
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "list-swarm-tasks", Method: http.MethodGet, Path: "/environments/{id}/swarm/tasks", Summary: "List swarm tasks", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmRead, h.ListTasks)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "list-swarm-tasks",
+			Method:      http.MethodGet,
+			Path:        "/environments/{id}/swarm/tasks",
+			Summary:     "List swarm tasks",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmRead,
+		h.ListTasks,
+	)
 
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "list-swarm-stacks", Method: http.MethodGet, Path: "/environments/{id}/swarm/stacks", Summary: "List swarm stacks", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmRead, h.ListStacks)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "deploy-swarm-stack", Method: http.MethodPost, Path: "/environments/{id}/swarm/stacks", Summary: "Deploy swarm stack", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmStacks, h.DeployStack)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "get-swarm-stack", Method: http.MethodGet, Path: "/environments/{id}/swarm/stacks/{name}", Summary: "Get swarm stack", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmRead, h.GetStack)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "get-swarm-stack-source", Method: http.MethodGet, Path: "/environments/{id}/swarm/stacks/{name}/source", Summary: "Get swarm stack source", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmStacks, h.GetStackSource)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "update-swarm-stack-source", Method: http.MethodPut, Path: "/environments/{id}/swarm/stacks/{name}/source", Summary: "Update swarm stack source", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmStacks, h.UpdateStackSource)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "delete-swarm-stack", Method: http.MethodDelete, Path: "/environments/{id}/swarm/stacks/{name}", Summary: "Delete swarm stack", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmStacks, h.DeleteStack)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "list-swarm-stack-services", Method: http.MethodGet, Path: "/environments/{id}/swarm/stacks/{name}/services", Summary: "List swarm stack services", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmRead, h.ListStackServices)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "list-swarm-stack-tasks", Method: http.MethodGet, Path: "/environments/{id}/swarm/stacks/{name}/tasks", Summary: "List swarm stack tasks", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmRead, h.ListStackTasks)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "render-swarm-stack-config", Method: http.MethodPost, Path: "/environments/{id}/swarm/stacks/config/render", Summary: "Render/validate swarm stack config", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmRead, h.RenderStackConfig)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "list-swarm-stacks",
+			Method:      http.MethodGet,
+			Path:        "/environments/{id}/swarm/stacks",
+			Summary:     "List swarm stacks",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmRead,
+		h.ListStacks,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "deploy-swarm-stack",
+			Method:      http.MethodPost,
+			Path:        "/environments/{id}/swarm/stacks",
+			Summary:     "Deploy swarm stack",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmStacks,
+		h.DeployStack,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "get-swarm-stack",
+			Method:      http.MethodGet,
+			Path:        "/environments/{id}/swarm/stacks/{name}",
+			Summary:     "Get swarm stack",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmRead,
+		h.GetStack,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "get-swarm-stack-source",
+			Method:      http.MethodGet,
+			Path:        "/environments/{id}/swarm/stacks/{name}/source",
+			Summary:     "Get swarm stack source",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmStacks,
+		h.GetStackSource,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "update-swarm-stack-source",
+			Method:      http.MethodPut,
+			Path:        "/environments/{id}/swarm/stacks/{name}/source",
+			Summary:     "Update swarm stack source",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmStacks,
+		h.UpdateStackSource,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "delete-swarm-stack",
+			Method:      http.MethodDelete,
+			Path:        "/environments/{id}/swarm/stacks/{name}",
+			Summary:     "Delete swarm stack",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmStacks,
+		h.DeleteStack,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "list-swarm-stack-services",
+			Method:      http.MethodGet,
+			Path:        "/environments/{id}/swarm/stacks/{name}/services",
+			Summary:     "List swarm stack services",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmRead,
+		h.ListStackServices,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "list-swarm-stack-tasks",
+			Method:      http.MethodGet,
+			Path:        "/environments/{id}/swarm/stacks/{name}/tasks",
+			Summary:     "List swarm stack tasks",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmRead,
+		h.ListStackTasks,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "render-swarm-stack-config",
+			Method:      http.MethodPost,
+			Path:        "/environments/{id}/swarm/stacks/config/render",
+			Summary:     "Render/validate swarm stack config",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmRead,
+		h.RenderStackConfig,
+	)
 
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "get-swarm-status", Method: http.MethodGet, Path: "/environments/{id}/swarm/status", Summary: "Get swarm status", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmRead, h.GetSwarmStatus)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "get-swarm-info", Method: http.MethodGet, Path: "/environments/{id}/swarm/info", Summary: "Get swarm info", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmRead, h.GetSwarmInfo)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "init-swarm", Method: http.MethodPost, Path: "/environments/{id}/swarm/init", Summary: "Initialize swarm", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmInit, h.InitSwarm)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "join-swarm", Method: http.MethodPost, Path: "/environments/{id}/swarm/join", Summary: "Join swarm", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmJoin, h.JoinSwarm)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "get-swarm-join-candidates", Method: http.MethodGet, Path: "/environments/{id}/swarm/join-candidates", Summary: "List environments available for Easy Join", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmJoin, h.GetJoinCandidates)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "join-swarm-environments", Method: http.MethodPost, Path: "/environments/{id}/swarm/join-environments", Summary: "Join environments to a swarm", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmJoin, h.JoinEnvironments)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "leave-swarm", Method: http.MethodPost, Path: "/environments/{id}/swarm/leave", Summary: "Leave swarm", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmLeave, h.LeaveSwarm)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "unlock-swarm", Method: http.MethodPost, Path: "/environments/{id}/swarm/unlock", Summary: "Unlock swarm", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmUnlock, h.UnlockSwarm)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "get-swarm-unlock-key", Method: http.MethodGet, Path: "/environments/{id}/swarm/unlock-key", Summary: "Get swarm unlock key", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmUnlock, h.GetUnlockKey)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "get-swarm-join-tokens", Method: http.MethodGet, Path: "/environments/{id}/swarm/join-tokens", Summary: "Get swarm join tokens", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmUnlock, h.GetJoinTokens)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "rotate-swarm-join-tokens", Method: http.MethodPost, Path: "/environments/{id}/swarm/join-tokens/rotate", Summary: "Rotate swarm join tokens", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmUnlock, h.RotateJoinTokens)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "update-swarm-spec", Method: http.MethodPut, Path: "/environments/{id}/swarm/spec", Summary: "Update swarm spec", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmSpec, h.UpdateSwarmSpec)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "get-swarm-status",
+			Method:      http.MethodGet,
+			Path:        "/environments/{id}/swarm/status",
+			Summary:     "Get swarm status",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmRead,
+		h.GetSwarmStatus,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "get-swarm-info",
+			Method:      http.MethodGet,
+			Path:        "/environments/{id}/swarm/info",
+			Summary:     "Get swarm info",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmRead,
+		h.GetSwarmInfo,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "init-swarm",
+			Method:      http.MethodPost,
+			Path:        "/environments/{id}/swarm/init",
+			Summary:     "Initialize swarm",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmInit,
+		h.InitSwarm,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "join-swarm",
+			Method:      http.MethodPost,
+			Path:        "/environments/{id}/swarm/join",
+			Summary:     "Join swarm",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmJoin,
+		h.JoinSwarm,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "get-swarm-join-candidates",
+			Method:      http.MethodGet,
+			Path:        "/environments/{id}/swarm/join-candidates",
+			Summary:     "List environments available for Easy Join",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmJoin,
+		h.GetJoinCandidates,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "join-swarm-environments",
+			Method:      http.MethodPost,
+			Path:        "/environments/{id}/swarm/join-environments",
+			Summary:     "Join environments to a swarm",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmJoin,
+		h.JoinEnvironments,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "leave-swarm",
+			Method:      http.MethodPost,
+			Path:        "/environments/{id}/swarm/leave",
+			Summary:     "Leave swarm",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmLeave,
+		h.LeaveSwarm,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "unlock-swarm",
+			Method:      http.MethodPost,
+			Path:        "/environments/{id}/swarm/unlock",
+			Summary:     "Unlock swarm",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmUnlock,
+		h.UnlockSwarm,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "get-swarm-unlock-key",
+			Method:      http.MethodGet,
+			Path:        "/environments/{id}/swarm/unlock-key",
+			Summary:     "Get swarm unlock key",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmUnlock,
+		h.GetUnlockKey,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "get-swarm-join-tokens",
+			Method:      http.MethodGet,
+			Path:        "/environments/{id}/swarm/join-tokens",
+			Summary:     "Get swarm join tokens",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmUnlock,
+		h.GetJoinTokens,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "rotate-swarm-join-tokens",
+			Method:      http.MethodPost,
+			Path:        "/environments/{id}/swarm/join-tokens/rotate",
+			Summary:     "Rotate swarm join tokens",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmUnlock,
+		h.RotateJoinTokens,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "update-swarm-spec",
+			Method:      http.MethodPut,
+			Path:        "/environments/{id}/swarm/spec",
+			Summary:     "Update swarm spec",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmSpec,
+		h.UpdateSwarmSpec,
+	)
 
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "list-swarm-configs", Method: http.MethodGet, Path: "/environments/{id}/swarm/configs", Summary: "List swarm configs", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmRead, h.ListConfigs)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "get-swarm-config", Method: http.MethodGet, Path: "/environments/{id}/swarm/configs/{configId}", Summary: "Get swarm config", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmRead, h.GetConfig)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "create-swarm-config", Method: http.MethodPost, Path: "/environments/{id}/swarm/configs", Summary: "Create swarm config", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmConfigs, h.CreateConfig)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "delete-swarm-config", Method: http.MethodDelete, Path: "/environments/{id}/swarm/configs/{configId}", Summary: "Delete swarm config", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmConfigs, h.DeleteConfig)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "list-swarm-configs",
+			Method:      http.MethodGet,
+			Path:        "/environments/{id}/swarm/configs",
+			Summary:     "List swarm configs",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmRead,
+		h.ListConfigs,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "get-swarm-config",
+			Method:      http.MethodGet,
+			Path:        "/environments/{id}/swarm/configs/{configId}",
+			Summary:     "Get swarm config",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmRead,
+		h.GetConfig,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "create-swarm-config",
+			Method:      http.MethodPost,
+			Path:        "/environments/{id}/swarm/configs",
+			Summary:     "Create swarm config",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmConfigs,
+		h.CreateConfig,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "delete-swarm-config",
+			Method:      http.MethodDelete,
+			Path:        "/environments/{id}/swarm/configs/{configId}",
+			Summary:     "Delete swarm config",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmConfigs,
+		h.DeleteConfig,
+	)
 
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "list-swarm-secrets", Method: http.MethodGet, Path: "/environments/{id}/swarm/secrets", Summary: "List swarm secrets", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmRead, h.ListSecrets)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "get-swarm-secret", Method: http.MethodGet, Path: "/environments/{id}/swarm/secrets/{secretId}", Summary: "Get swarm secret", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmRead, h.GetSecret)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "create-swarm-secret", Method: http.MethodPost, Path: "/environments/{id}/swarm/secrets", Summary: "Create swarm secret", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmSecrets, h.CreateSecret)
-	middleware.RegisterWithPermission(api, huma.Operation{OperationID: "delete-swarm-secret", Method: http.MethodDelete, Path: "/environments/{id}/swarm/secrets/{secretId}", Summary: "Delete swarm secret", Tags: []string{"Swarm"}, Security: handlerutil.DefaultOperationSecurity()}, authz.PermSwarmSecrets, h.DeleteSecret)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "list-swarm-secrets",
+			Method:      http.MethodGet,
+			Path:        "/environments/{id}/swarm/secrets",
+			Summary:     "List swarm secrets",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmRead,
+		h.ListSecrets,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "get-swarm-secret",
+			Method:      http.MethodGet,
+			Path:        "/environments/{id}/swarm/secrets/{secretId}",
+			Summary:     "Get swarm secret",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmRead,
+		h.GetSecret,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "create-swarm-secret",
+			Method:      http.MethodPost,
+			Path:        "/environments/{id}/swarm/secrets",
+			Summary:     "Create swarm secret",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmSecrets,
+		h.CreateSecret,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "delete-swarm-secret",
+			Method:      http.MethodDelete,
+			Path:        "/environments/{id}/swarm/secrets/{secretId}",
+			Summary:     "Delete swarm secret",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmSecrets,
+		h.DeleteSecret,
+	)
 }
 
 // ListServices lists swarm services for an environment and returns a paginated response.
@@ -736,8 +1450,14 @@ func (h *SwarmHandler) PutNodeAgentBinding(ctx context.Context, input *PutSwarmN
 		if err != nil {
 			return nil, err
 		}
-		if err := h.environmentService.DeleteSwarmNodeAgentDeployment(ctx, input.EnvironmentID, input.NodeID, &user.ID, &user.Username); err != nil {
-			return nil, huma.Error500InternalServerError(err.Error())
+		if deleteSwarmNodeAgentDeploymentErr := h.environmentService.DeleteSwarmNodeAgentDeployment(
+			ctx,
+			input.EnvironmentID,
+			input.NodeID,
+			&user.ID,
+			&user.Username,
+		); deleteSwarmNodeAgentDeploymentErr != nil {
+			return nil, huma.Error500InternalServerError(deleteSwarmNodeAgentDeploymentErr.Error())
 		}
 	}
 
@@ -762,8 +1482,14 @@ func (h *SwarmHandler) DeleteNodeAgentDeployment(ctx context.Context, input *Del
 	if err != nil {
 		return nil, err
 	}
-	if err := h.environmentService.DeleteSwarmNodeAgentDeployment(ctx, input.EnvironmentID, input.NodeID, &user.ID, &user.Username); err != nil {
-		return nil, huma.Error500InternalServerError(err.Error())
+	if deleteSwarmNodeAgentDeploymentErr := h.environmentService.DeleteSwarmNodeAgentDeployment(
+		ctx,
+		input.EnvironmentID,
+		input.NodeID,
+		&user.ID,
+		&user.Username,
+	); deleteSwarmNodeAgentDeploymentErr != nil {
+		return nil, huma.Error500InternalServerError(deleteSwarmNodeAgentDeploymentErr.Error())
 	}
 	return &handlerutil.Out[base.MessageResponse]{Body: base.ApiResponse[base.MessageResponse]{Success: true, Data: base.MessageResponse{Message: "Dedicated swarm node agent registration removed"}}}, nil
 }
@@ -1369,7 +2095,18 @@ func (h *SwarmHandler) RotateJoinTokens(ctx context.Context, input *RotateSwarmJ
 		return nil, mapSwarmServiceErrorInternal(err, "Failed to rotate swarm join tokens")
 	}
 
-	h.auditSwarmMutation(ctx, input.EnvironmentID, "lifecycle.rotate_tokens", "swarm", "cluster", "cluster", map[string]any{"rotateWorker": input.Body.RotateWorkerToken, "rotateManager": input.Body.RotateManagerToken})
+	h.auditSwarmMutation(
+		ctx,
+		input.EnvironmentID,
+		"lifecycle.rotate_tokens",
+		"swarm",
+		"cluster",
+		"cluster",
+		map[string]any{
+			"rotateWorker":  input.Body.RotateWorkerToken,
+			"rotateManager": input.Body.RotateManagerToken,
+		},
+	)
 
 	return &handlerutil.Out[base.MessageResponse]{Body: base.ApiResponse[base.MessageResponse]{Success: true, Data: base.MessageResponse{Message: "Swarm join tokens rotated successfully"}}}, nil
 }

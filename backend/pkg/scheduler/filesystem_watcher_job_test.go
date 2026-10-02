@@ -53,7 +53,7 @@ func TestFilesystemWatcherJob_ConcurrentProjectRestartsAreSerializedInternal(t *
 	job.mu.Unlock()
 	require.NotSame(t, earlyWatcher, startedWatcher)
 
-	stopCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	stopCtx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
 	require.NoError(t, job.Stop(stopCtx))
 }

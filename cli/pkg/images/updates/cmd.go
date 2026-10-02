@@ -27,9 +27,10 @@ var UpdatesCmd = &cobra.Command{
 var checkAll bool
 
 var checkCmd = &cobra.Command{
-	Use:          "check [image-ref...]",
-	Short:        "Check image references for updates",
-	Long:         "Check image references for updates.\n\nWith a single reference the update status is checked directly; with multiple references a batch check is performed. With --all every image is checked.",
+	Use:   "check [image-ref...]",
+	Short: "Check image references for updates",
+	Long: "Check image references for updates.\n\nWith a single reference the update status is checked directly; with " +
+		"multiple references a batch check is performed. With --all every image is checked.",
 	Args:         cobra.ArbitraryArgs,
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -43,9 +44,9 @@ var checkCmd = &cobra.Command{
 				return errors.New("--all cannot be combined with image references")
 			}
 
-			result, err := c.PostJSON[imageupdate.BatchResponse](cmd.Context(), types.ImageUpdatesCheckAll(c.EnvID()), imageupdate.CheckAllImagesRequest{})
-			if err != nil {
-				return fmt.Errorf("failed to check all updates: %w", err)
+			result, checkAllUpdatesErr := c.PostJSON[imageupdate.BatchResponse](cmd.Context(), types.ImageUpdatesCheckAll(c.EnvID()), imageupdate.CheckAllImagesRequest{})
+			if checkAllUpdatesErr != nil {
+				return fmt.Errorf("failed to check all updates: %w", checkAllUpdatesErr)
 			}
 			return printBatchResultsInternal(result.Data)
 		}
@@ -55,9 +56,9 @@ var checkCmd = &cobra.Command{
 		}
 
 		if len(args) > 1 {
-			result, err := c.PostJSON[imageupdate.BatchResponse](cmd.Context(), types.ImageUpdatesCheckBatch(c.EnvID()), imageupdate.BatchImageUpdateRequest{ImageRefs: args})
-			if err != nil {
-				return fmt.Errorf("failed to check updates: %w", err)
+			result, checkBatchUpdatesErr := c.PostJSON[imageupdate.BatchResponse](cmd.Context(), types.ImageUpdatesCheckBatch(c.EnvID()), imageupdate.BatchImageUpdateRequest{ImageRefs: args})
+			if checkBatchUpdatesErr != nil {
+				return fmt.Errorf("failed to check updates: %w", checkBatchUpdatesErr)
 			}
 			return printBatchResultsInternal(result.Data)
 		}
@@ -212,7 +213,9 @@ func printBatchResultsInternal(result imageupdate.BatchResponse) error {
 		rows = append(rows, []string{imageRef, "No", update.CurrentVersion, "", ""})
 	}
 
-	output.Table(headers, rows)
+	if tableErr := output.Table(headers, rows); tableErr != nil {
+		return tableErr
+	}
 	fmt.Printf("\nTotal: %d images checked, %d updates available\n", len(result), updatesAvailable)
 	return nil
 }

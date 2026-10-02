@@ -1,7 +1,6 @@
 package project
 
 import (
-	"context"
 	"testing"
 
 	projecttypes "github.com/getarcaneapp/arcane/types/v2/project"
@@ -13,7 +12,7 @@ import (
 func TestProjectTags_ReconcilePreservesUIAndComposeOwnershipIsReadOnly(t *testing.T) {
 	db := setupProjectTestDB(t)
 	service := &ProjectService{db: db}
-	ctx := context.Background()
+	ctx := t.Context()
 	projectModel := Project{
 		ID:              "project-tags",
 		Name:            "tagged",
@@ -52,7 +51,7 @@ func TestProjectTags_ReconcilePreservesUIAndComposeOwnershipIsReadOnly(t *testin
 
 func TestProjectTags_FilterUsesExactORNames(t *testing.T) {
 	db := setupProjectTestDB(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	projects := []Project{
 		{ID: "one", Name: "one", Path: "/tmp/one", Status: ProjectStatusStopped},
 		{ID: "two", Name: "two", Path: "/tmp/two", Status: ProjectStatusStopped},

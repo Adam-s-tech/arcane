@@ -63,8 +63,8 @@ var loginCmd = &cobra.Command{
 		}
 
 		var deviceAuth auth.OidcDeviceAuthResponse
-		if err := json.Unmarshal(bodyBytes, &deviceAuth); err != nil {
-			return fmt.Errorf("failed to parse response: %w", err)
+		if unmarshalErr := json.Unmarshal(bodyBytes, &deviceAuth); unmarshalErr != nil {
+			return fmt.Errorf("failed to parse response: %w", unmarshalErr)
 		}
 
 		output.Header("Device Login")
@@ -100,15 +100,15 @@ var loginCmd = &cobra.Command{
 				return cmd.Context().Err()
 			}
 
-			tokenResp, err := c.Post(cmd.Context(), types.OIDCDeviceToken(), tokenReqBody)
-			if err != nil {
-				return fmt.Errorf("device token exchange failed: %w", err)
+			tokenResp, postErr := c.Post(cmd.Context(), types.OIDCDeviceToken(), tokenReqBody)
+			if postErr != nil {
+				return fmt.Errorf("device token exchange failed: %w", postErr)
 			}
 
-			tokenBody, err := io.ReadAll(tokenResp.Body)
+			tokenBody, postErr := io.ReadAll(tokenResp.Body)
 			_ = tokenResp.Body.Close()
-			if err != nil {
-				return fmt.Errorf("failed to read token response: %w", err)
+			if postErr != nil {
+				return fmt.Errorf("failed to read token response: %w", postErr)
 			}
 
 			if tokenResp.StatusCode < 200 || tokenResp.StatusCode >= 300 {
@@ -125,15 +125,16 @@ var loginCmd = &cobra.Command{
 				case "access_denied":
 					return errors.New("device authorization denied")
 				case "mfa_required":
-					return errors.New("this account has MFA enabled, which browser-based CLI login cannot complete; create a personal API key in Arcane (Account -> API keys) and run: arcane config set api-key <key>")
+					return errors.New("this account has MFA enabled, which browser-based CLI login cannot complete; create a personal API key in " +
+						"Arcane (Account -> API keys) and run: arcane config set api-key <key>")
 				default:
 					return fmt.Errorf("device token exchange failed (status %d): %s", tokenResp.StatusCode, strings.TrimSpace(string(tokenBody)))
 				}
 			}
 
 			var tokenResult auth.AuthenticationResponse
-			if err := json.Unmarshal(tokenBody, &tokenResult); err != nil {
-				return fmt.Errorf("failed to parse token response: %w", err)
+			if decodeTokenResponseErr := json.Unmarshal(tokenBody, &tokenResult); decodeTokenResponseErr != nil {
+				return fmt.Errorf("failed to parse token response: %w", decodeTokenResponseErr)
 			}
 			if !tokenResult.Success || tokenResult.Token == "" {
 				return errors.New("device token exchange failed: unexpected response from server")
@@ -149,15 +150,15 @@ var loginCmd = &cobra.Command{
 				})
 			}
 
-			cfg, err := config.Load()
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+			cfg, postErr := config.Load()
+			if postErr != nil {
+				return fmt.Errorf("failed to load config: %w", postErr)
 			}
 			cfg.JWTToken = tokenResult.Token
 			cfg.RefreshToken = tokenResult.RefreshToken
 			cfg.APIKey = ""
-			if err := config.Save(cfg); err != nil {
-				return fmt.Errorf("failed to save token: %w", err)
+			if saveErr := config.Save(cfg); saveErr != nil {
+				return fmt.Errorf("failed to save token: %w", saveErr)
 			}
 
 			output.Success("Login successful")
@@ -190,8 +191,8 @@ var logoutCmd = &cobra.Command{
 		}
 		cfg.JWTToken = ""
 		cfg.RefreshToken = ""
-		if err := config.Save(cfg); err != nil {
-			return fmt.Errorf("failed to clear token: %w", err)
+		if saveErr := config.Save(cfg); saveErr != nil {
+			return fmt.Errorf("failed to clear token: %w", saveErr)
 		}
 
 		if cmdutil.JSONOutputEnabled(cmd) || jsonOutput {
@@ -303,8 +304,8 @@ var refreshCmd = &cobra.Command{
 		}
 		if refreshToken == "" {
 			fmt.Print("Refresh token: ")
-			if _, err := fmt.Scanln(&refreshToken); err != nil {
-				return fmt.Errorf("failed to read refresh token: %w", err)
+			if _, scanlnErr := fmt.Scanln(&refreshToken); scanlnErr != nil {
+				return fmt.Errorf("failed to read refresh token: %w", scanlnErr)
 			}
 		}
 
@@ -337,8 +338,8 @@ var refreshCmd = &cobra.Command{
 		if result.Data.RefreshToken != "" {
 			cfg.RefreshToken = result.Data.RefreshToken
 		}
-		if err := config.Save(cfg); err != nil {
-			return fmt.Errorf("failed to save token: %w", err)
+		if saveErr := config.Save(cfg); saveErr != nil {
+			return fmt.Errorf("failed to save token: %w", saveErr)
 		}
 
 		output.Success("Token refreshed successfully")

@@ -42,43 +42,43 @@ func (s *JobService) ListRuns(ctx context.Context, environmentID, jobID string, 
 			merged[run.ID] = run
 		}
 	}
-	runs := make([]st.Run, 0, len(merged))
+	localRuns := make([]st.Run, 0, len(merged))
 	for _, run := range merged {
-		runs = append(runs, projectRunOutcomeInternal(run))
+		localRuns = append(localRuns, projectRunOutcomeInternal(run))
 	}
-	sort.Slice(runs, func(i, j int) bool {
-		if runs[i].CreatedAt.Equal(runs[j].CreatedAt) {
-			return runs[i].ID < runs[j].ID
+	sort.Slice(localRuns, func(i, j int) bool {
+		if localRuns[i].CreatedAt.Equal(localRuns[j].CreatedAt) {
+			return localRuns[i].ID < localRuns[j].ID
 		}
-		return runs[i].CreatedAt.After(runs[j].CreatedAt)
+		return localRuns[i].CreatedAt.After(localRuns[j].CreatedAt)
 	})
 	page = max(page, 1)
 	limit = min(max(limit, 1), 100)
-	start := len(runs)
-	if page-1 <= len(runs)/limit {
-		start = min((page-1)*limit, len(runs))
+	start := len(localRuns)
+	if page-1 <= len(localRuns)/limit {
+		start = min((page-1)*limit, len(localRuns))
 	}
-	return st.RunList{Runs: runs[start:min(start+limit, len(runs))], Total: len(runs), Page: page, Limit: limit}, nil
+	return st.RunList{Runs: localRuns[start:min(start+limit, len(localRuns))], Total: len(localRuns), Page: page, Limit: limit}, nil
 }
 
 func (s *JobService) remoteHistoryInternal(ctx context.Context, environmentID, jobID string) (map[string]st.Run, error) {
-	runs := make(map[string]st.Run)
+	localRuns := make(map[string]st.Run)
 	for page := 1; ; page++ {
 		path := "/api/environments/0/jobs/" + url.PathEscape(jobID) + "/runs?page=" + strconv.Itoa(page) + "&limit=100"
 		var response st.RunList
 		if err := s.environment.ProxyJSONRequest(ctx, environmentID, http.MethodGet, path, nil, &response); err != nil {
 			return nil, err
 		}
-		previous := len(runs)
+		previous := len(localRuns)
 		for _, run := range response.Runs {
 			run.EnvironmentID = environmentID
 			if run.ActivityID != "" {
 				run.ActivityEnvironmentID = environmentID
 			}
-			runs[run.ID] = run
+			localRuns[run.ID] = run
 		}
-		if len(runs) >= response.Total || len(runs) == previous {
-			return runs, nil
+		if len(localRuns) >= response.Total || len(localRuns) == previous {
+			return localRuns, nil
 		}
 	}
 }
@@ -90,8 +90,8 @@ func (s *JobService) GetRun(ctx context.Context, environmentID, jobID, runID str
 		return projectRunOutcomeInternal(run), err
 	}
 	path := "/api/environments/0/jobs/" + url.PathEscape(jobID) + "/runs/" + url.PathEscape(runID)
-	if err := s.environment.ProxyJSONRequest(ctx, environmentID, http.MethodGet, path, nil, &run); err != nil {
-		return st.Run{}, err
+	if proxyJSONRequestErr := s.environment.ProxyJSONRequest(ctx, environmentID, http.MethodGet, path, nil, &run); proxyJSONRequestErr != nil {
+		return st.Run{}, proxyJSONRequestErr
 	}
 	if run.ID != runID || run.JobID != jobID {
 		return st.Run{}, errors.New("agent returned an inconsistent run identity")
@@ -126,8 +126,8 @@ func (s *JobService) mutateAgentRunInternal(ctx context.Context, environmentID, 
 	path := "/api/environments/0/jobs/" + url.PathEscape(jobID) + "/runs/" + url.PathEscape(runID) + "/" + action
 	var run st.Run
 	// This is an explicit operator action. Never replay a lost mutation response.
-	if err := s.environment.ProxyJSONRequest(ctx, environmentID, http.MethodPost, path, nil, &run); err != nil {
-		return st.Run{}, err
+	if proxyJSONRequestErr := s.environment.ProxyJSONRequest(ctx, environmentID, http.MethodPost, path, nil, &run); proxyJSONRequestErr != nil {
+		return st.Run{}, proxyJSONRequestErr
 	}
 	if run.ID != runID || run.JobID != jobID {
 		return st.Run{}, errors.New("agent returned an inconsistent run identity")

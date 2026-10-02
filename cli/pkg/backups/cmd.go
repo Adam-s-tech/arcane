@@ -119,9 +119,9 @@ alone stores it in S3, and --local together with --s3-destination stores it in b
 
 		s3DestinationID := ""
 		if createS3Destination != "" {
-			resolved, _, err := s3DestinationRef.Resolve(cmd.Context(), c, createS3Destination, !cmdutil.JSONOutputEnabled(cmd) && prompt.IsInteractive())
-			if err != nil {
-				return err
+			resolved, _, resolveErr := s3DestinationRef.Resolve(cmd.Context(), c, createS3Destination, !cmdutil.JSONOutputEnabled(cmd) && prompt.IsInteractive())
+			if resolveErr != nil {
+				return resolveErr
 			}
 			s3DestinationID = resolved.ID
 		}
@@ -365,12 +365,11 @@ var policiesCmd = &cobra.Command{
 			return cmdutil.PrintJSON(result)
 		}
 
-		printPolicies(result)
-		return nil
+		return printPolicies(result)
 	},
 }
 
-func printPolicies(result backup.SystemBackupPolicyCollection) {
+func printPolicies(result backup.SystemBackupPolicyCollection) error {
 	output.Header("System Backup Policies")
 	recoveryKey := kit.Ternary(result.RecoveryKeyStored, "Configured", "Not configured")
 	output.KeyValue("Recovery Key", recoveryKey)
@@ -393,7 +392,7 @@ func printPolicies(result backup.SystemBackupPolicyCollection) {
 			lastRun,
 		}
 	}
-	output.Table(headers, rows)
+	return output.Table(headers, rows)
 }
 
 var policiesUpdateCmd = &cobra.Command{
@@ -430,13 +429,13 @@ Alternatively, --file replaces all policies from a raw JSON payload.`,
 					return fmt.Errorf("failed to read file %s: %w", policiesUpdateFile, err)
 				}
 			}
-			if err := json.Unmarshal(data, &req); err != nil {
-				return fmt.Errorf("failed to parse policies file: %w", err)
+			if unmarshalErr := json.Unmarshal(data, &req); unmarshalErr != nil {
+				return fmt.Errorf("failed to parse policies file: %w", unmarshalErr)
 			}
 		} else {
-			current, err := c.DoJSON[backup.SystemBackupPolicyCollection](cmd.Context(), http.MethodGet, types.BackupsPolicies(), nil)
-			if err != nil {
-				return fmt.Errorf("failed to get current backup policies: %w", err)
+			current, getPoliciesErr := c.DoJSON[backup.SystemBackupPolicyCollection](cmd.Context(), http.MethodGet, types.BackupsPolicies(), nil)
+			if getPoliciesErr != nil {
+				return fmt.Errorf("failed to get current backup policies: %w", getPoliciesErr)
 			}
 
 			req.Policies = make([]backup.UpdateSystemBackupPolicy, len(current.Policies))
@@ -492,9 +491,9 @@ Alternatively, --file replaces all policies from a raw JSON payload.`,
 				target.S3Enabled = policiesUpdateS3
 			}
 			if cmd.Flags().Changed("s3-destination") {
-				resolved, _, err := s3DestinationRef.Resolve(cmd.Context(), c, policiesUpdateS3Destination, !cmdutil.JSONOutputEnabled(cmd) && prompt.IsInteractive())
-				if err != nil {
-					return err
+				resolved, _, resolveErr := s3DestinationRef.Resolve(cmd.Context(), c, policiesUpdateS3Destination, !cmdutil.JSONOutputEnabled(cmd) && prompt.IsInteractive())
+				if resolveErr != nil {
+					return resolveErr
 				}
 				target.S3DestinationID = resolved.ID
 				if !cmd.Flags().Changed("s3") {
@@ -513,8 +512,7 @@ Alternatively, --file replaces all policies from a raw JSON payload.`,
 		}
 
 		output.Success("Backup policies updated successfully")
-		printPolicies(result)
-		return nil
+		return printPolicies(result)
 	},
 }
 
@@ -541,8 +539,8 @@ var recoveryKeyGenerateCmd = &cobra.Command{
 
 		if cmdutil.JSONOutputEnabled(cmd) {
 			if generateSave {
-				if err := storeRecoveryKey(cmd, c, result.RecoveryKey); err != nil {
-					return err
+				if storeRecoveryKeyErr := storeRecoveryKey(cmd, c, result.RecoveryKey); storeRecoveryKeyErr != nil {
+					return storeRecoveryKeyErr
 				}
 			}
 			return cmdutil.PrintJSON(result)
@@ -563,8 +561,8 @@ var recoveryKeyGenerateCmd = &cobra.Command{
 			fmt.Println("Run `arcane backups recovery set` to store it on the server later.")
 			return nil
 		}
-		if err := storeRecoveryKey(cmd, c, result.RecoveryKey); err != nil {
-			return err
+		if storeRotatedRecoveryKeyErr := storeRecoveryKey(cmd, c, result.RecoveryKey); storeRotatedRecoveryKeyErr != nil {
+			return storeRotatedRecoveryKeyErr
 		}
 		output.Success("Recovery key stored on the server")
 		return nil

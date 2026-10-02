@@ -71,8 +71,8 @@ func collectCommandResponseInternal(ctx context.Context, tunnel *AgentTunnel, pe
 			}
 			return 0, nil, nil, fmt.Errorf("edge tunnel closed while waiting for response: %w", ErrTunnelConnectionClosed)
 		case err := <-pending.failureCh:
-			if done, status, headers, body, err := state.drainTerminalResponseInternal(pending.ResponseCh, method); done {
-				return status, headers, body, err
+			if done, status, headers, body, drainTerminalResponseErr := state.drainTerminalResponseInternal(pending.ResponseCh, method); done {
+				return status, headers, body, drainTerminalResponseErr
 			}
 			return 0, nil, nil, err
 		case incoming, ok := <-pending.ResponseCh:

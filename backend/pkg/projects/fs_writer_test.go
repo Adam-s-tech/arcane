@@ -43,8 +43,8 @@ func TestWriteFilesPermissions(t *testing.T) {
 		if runtime.GOOS != "windows" {
 			assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
 
-			dirInfo, err := os.Stat(projectDir)
-			require.NoError(t, err)
+			dirInfo, statErr := os.Stat(projectDir)
+			require.NoError(t, statErr)
 			assert.Equal(t, os.FileMode(0o700), dirInfo.Mode().Perm())
 		}
 	})
@@ -212,7 +212,7 @@ func TestWriteProjectFile_StillRejectsNonEnvSymlink(t *testing.T) {
 			if writer == "project" {
 				assert.Contains(t, err.Error(), "destination is a symlink")
 			} else {
-				assert.ErrorIs(t, err, acfs.ErrSymlink)
+				require.ErrorIs(t, err, acfs.ErrSymlink)
 			}
 
 			targetContent, readErr := os.ReadFile(targetPath)
@@ -329,7 +329,7 @@ func TestWriteSyncedDirectory_HonorsExecutableBit(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, os.FileMode(0), composeInfo.Mode().Perm()&0o111, "compose.yml should not be executable")
 
-	scriptInfo, err := os.Stat(filepath.Join(project, "scripts/pre-deploy.sh"))
+	scriptInfo, err := os.Stat(filepath.Join(project, "scripts", "pre-deploy.sh"))
 	require.NoError(t, err)
 	assert.NotEqual(t, os.FileMode(0), scriptInfo.Mode().Perm()&0o111, "scripts/pre-deploy.sh should be executable")
 }
@@ -346,7 +346,7 @@ func TestWriteSyncedDirectory_DowngradesExecutableBit(t *testing.T) {
 		{RelativePath: "scripts/hook.sh", Content: []byte("#!/bin/sh\n"), Executable: true},
 	})
 	require.NoError(t, err)
-	first, err := os.Stat(filepath.Join(project, "scripts/hook.sh"))
+	first, err := os.Stat(filepath.Join(project, "scripts", "hook.sh"))
 	require.NoError(t, err)
 	require.NotEqual(t, os.FileMode(0), first.Mode().Perm()&0o111)
 
@@ -357,7 +357,7 @@ func TestWriteSyncedDirectory_DowngradesExecutableBit(t *testing.T) {
 		{RelativePath: "scripts/hook.sh", Content: []byte("#!/bin/sh\necho updated\n"), Executable: false},
 	})
 	require.NoError(t, err)
-	second, err := os.Stat(filepath.Join(project, "scripts/hook.sh"))
+	second, err := os.Stat(filepath.Join(project, "scripts", "hook.sh"))
 	require.NoError(t, err)
 	assert.True(t, os.SameFile(first, second), "sync updates should preserve the inode")
 	assert.Equal(t, os.FileMode(0), second.Mode().Perm()&0o111, "executable bit should clear on update when repo no longer marks +x")
@@ -376,7 +376,7 @@ func TestWriteSyncedDirectory_UpgradesExecutableBitOnUpdate(t *testing.T) {
 		{RelativePath: "scripts/hook.sh", Content: []byte("#!/bin/sh\n"), Executable: false},
 	})
 	require.NoError(t, err)
-	first, err := os.Stat(filepath.Join(project, "scripts/hook.sh"))
+	first, err := os.Stat(filepath.Join(project, "scripts", "hook.sh"))
 	require.NoError(t, err)
 	require.Equal(t, os.FileMode(0), first.Mode().Perm()&0o111)
 
@@ -386,7 +386,7 @@ func TestWriteSyncedDirectory_UpgradesExecutableBitOnUpdate(t *testing.T) {
 		{RelativePath: "scripts/hook.sh", Content: []byte("#!/bin/sh\n"), Executable: true},
 	})
 	require.NoError(t, err)
-	second, err := os.Stat(filepath.Join(project, "scripts/hook.sh"))
+	second, err := os.Stat(filepath.Join(project, "scripts", "hook.sh"))
 	require.NoError(t, err)
 	assert.True(t, os.SameFile(first, second), "permission updates should preserve the inode")
 	assert.NotEqual(t, os.FileMode(0), second.Mode().Perm()&0o111, "executable bit should set on update when repo marks +x")

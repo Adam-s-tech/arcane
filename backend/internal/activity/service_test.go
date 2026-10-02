@@ -28,7 +28,7 @@ func setupActivityServiceTestDBInternal(t *testing.T) *database.DB {
 }
 
 func TestActivityServiceLifecycleInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupActivityServiceTestDBInternal(t)
 	service := NewActivityService(db, nil)
 
@@ -94,7 +94,7 @@ func TestActivityServiceLifecycleInternal(t *testing.T) {
 }
 
 func TestActivityServiceStreamFanoutInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupActivityServiceTestDBInternal(t)
 	service := NewActivityService(db, nil)
 
@@ -137,7 +137,7 @@ func TestActivityServiceStreamFanoutInternal(t *testing.T) {
 }
 
 func TestActivityServiceRetentionCleanupInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupActivityServiceTestDBInternal(t)
 	service := NewActivityService(db, nil)
 
@@ -171,7 +171,7 @@ func TestActivityServiceRetentionCleanupInternal(t *testing.T) {
 }
 
 func TestActivityServicePruneHistoryZeroRetentionDisablesAgeCleanupInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupActivityServiceTestDBInternal(t)
 	service := NewActivityService(db, nil)
 
@@ -214,7 +214,7 @@ func TestActivityServiceSubscribeMarksMissedEventsWhenBufferFullInternal(t *test
 }
 
 func TestActivityServiceDeleteHistoryPreservesActiveActivitiesInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupActivityServiceTestDBInternal(t)
 	service := NewActivityService(db, nil)
 
@@ -244,7 +244,7 @@ func TestActivityServiceDeleteHistoryPreservesActiveActivitiesInternal(t *testin
 }
 
 func TestActivityServicePruneHistoryByAgeAndCountInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupActivityServiceTestDBInternal(t)
 	service := NewActivityService(db, nil)
 
@@ -331,7 +331,7 @@ func TestActivitySubscriberCoalescesProgressEventsInternal(t *testing.T) {
 }
 
 func TestActivityServiceListOrderStableUnderProgressUpdatesInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupActivityServiceTestDBInternal(t)
 	service := NewActivityService(db, nil)
 
@@ -370,7 +370,7 @@ func TestActivityServiceListOrderStableUnderProgressUpdatesInternal(t *testing.T
 
 func setupQueuedActivityServiceInternal(t *testing.T) (*ActivityService, context.Context) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
@@ -383,17 +383,17 @@ func setupQueuedActivityServiceInternal(t *testing.T) (*ActivityService, context
 	require.NoError(t, err)
 	sqlDB.SetMaxOpenConns(1)
 
-	settings, err := newSettingsServiceForTestInternal(t, ctx, wrapped)
+	localSettings, err := newSettingsServiceForTestInternal(t, ctx, wrapped)
 	require.NoError(t, err)
-	require.NoError(t, settings.SetIntSetting(ctx, maxConcurrentActivitiesSettingKey, 1))
-	return NewActivityService(wrapped, settings), ctx
+	require.NoError(t, localSettings.SetIntSetting(ctx, maxConcurrentActivitiesSettingKey, 1))
+	return NewActivityService(wrapped, localSettings), ctx
 }
 
 func newSettingsServiceForTestInternal(t testing.TB, ctx context.Context, db *database.DB) (*settings.SettingsService, error) {
 	t.Helper()
 	svc, err := settings.NewSettingsService(ctx, db)
 	if err == nil {
-		t.Cleanup(func() { require.NoError(t, svc.Stop(context.Background())) })
+		t.Cleanup(func() { require.NoError(t, svc.Stop(context.WithoutCancel(t.Context()))) })
 	}
 	return svc, err
 }
@@ -500,7 +500,7 @@ func TestActivityServiceCancelWhileQueuedUnblocksAwaitInternal(t *testing.T) {
 
 func TestActivityServiceCompleteActivityRejectsUninitializedServiceInternal(t *testing.T) {
 	service := NewActivityService(nil, nil)
-	_, err := service.CompleteActivity(context.Background(), "any-id", activitytypes.StatusSuccess, "done", nil)
+	_, err := service.CompleteActivity(t.Context(), "any-id", activitytypes.StatusSuccess, "done", nil)
 	require.Error(t, err)
 }
 
@@ -509,8 +509,8 @@ func TestActivityServiceTrackAndRequestCancelInternal(t *testing.T) {
 	service := NewActivityService(db, nil)
 
 	// Mirror the handler flow: work runs under an app-lifecycle runtime context.
-	appCtx := utils.WithAppLifecycleContext(context.Background())
-	runtimeCtx := utils.ActivityRuntimeContext(context.Background(), appCtx)
+	appCtx := utils.WithAppLifecycleContext(t.Context())
+	runtimeCtx := utils.ActivityRuntimeContext(t.Context(), appCtx)
 
 	created, err := service.StartActivity(runtimeCtx, StartActivityRequest{
 		EnvironmentID: "0",
@@ -540,7 +540,7 @@ func TestActivityServiceTrackAndRequestCancelInternal(t *testing.T) {
 }
 
 func TestActivityServiceCancelActivityInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupActivityServiceTestDBInternal(t)
 	service := NewActivityService(db, nil)
 
@@ -567,7 +567,7 @@ func TestActivityServiceCancelActivityInternal(t *testing.T) {
 }
 
 func TestActivityServiceFailStaleImageUpdateChecksInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupActivityServiceTestDBInternal(t)
 	service := NewActivityService(db, nil)
 
@@ -635,7 +635,7 @@ func TestActivityServiceFailStaleImageUpdateChecksInternal(t *testing.T) {
 }
 
 func TestActivityServiceFailAbandonedActivitiesInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupActivityServiceTestDBInternal(t)
 	service := NewActivityService(db, nil)
 
@@ -684,7 +684,7 @@ func TestActivityServiceFailAbandonedActivitiesInternal(t *testing.T) {
 }
 
 func TestActivityServiceResolveStaleAutoUpdateActivitiesInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupActivityServiceTestDBInternal(t)
 	service := NewActivityService(db, nil)
 
@@ -747,7 +747,7 @@ func receiveActivityEventInternal(t *testing.T, events <-chan activitytypes.Stre
 // messages in order and coalesces the activity update to the batch's last
 // message, last progress, and last step.
 func TestActivityServiceAppendMessagesBatchInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupActivityServiceTestDBInternal(t)
 	service := NewActivityService(db, nil)
 
@@ -796,7 +796,7 @@ func TestActivityServiceAppendMessagesBatchInternal(t *testing.T) {
 // publishes after it — is dropped instead of reverting subscribers to a
 // running state no later event would correct.
 func TestActivityServiceDropsStaleSnapshotAfterTerminalPublishInternal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db := setupActivityServiceTestDBInternal(t)
 	service := NewActivityService(db, nil)
 
@@ -824,8 +824,8 @@ func TestActivityServiceDropsStaleSnapshotAfterTerminalPublishInternal(t *testin
 
 	service.publishActivityInternal(stale)
 	select {
-	case event := <-events:
-		t.Fatalf("stale non-terminal snapshot reached subscriber: %+v", event)
+	case localEvent := <-events:
+		t.Fatalf("stale non-terminal snapshot reached subscriber: %+v", localEvent)
 	case <-time.After(100 * time.Millisecond):
 	}
 }

@@ -1,7 +1,6 @@
 package volumes
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -42,7 +41,7 @@ func TestDockerProjectVolumeRenameMigrationInternal_RollbackExplainsPreservedTar
 		},
 	}
 
-	err := migration.Rollback(context.Background())
+	err := migration.Rollback(t.Context())
 
 	require.Error(t, err)
 	var preserved *volumetypes.TargetPreservedDuringRollbackError
@@ -68,7 +67,7 @@ func TestRollbackVolume_ExplainsPreservedTargetWhenSourceMissing(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	err := RollbackVolume(context.Background(), newTestDockerClientInternal(t, server), volumetypes.JournalVolume{
+	err := RollbackVolume(t.Context(), newTestDockerClientInternal(t, server), volumetypes.JournalVolume{
 		OldName: "nginx_data",
 		NewName: "web_data",
 	})

@@ -60,7 +60,14 @@ type ImagePatchService struct {
 	patchSlot chan struct{}
 }
 
-func NewImagePatchService(db *database.DB, dockerService *docker.DockerClientService, settingsService *settings.SettingsService, activityService *activity.ActivityService, registryService *registry.ContainerRegistryService, vulnerabilityService *vulnerability.VulnerabilityService) *ImagePatchService {
+func NewImagePatchService(
+	db *database.DB,
+	dockerService *docker.DockerClientService,
+	settingsService *settings.SettingsService,
+	activityService *activity.ActivityService,
+	registryService *registry.ContainerRegistryService,
+	vulnerabilityService *vulnerability.VulnerabilityService,
+) *ImagePatchService {
 	// Copa logs through the global logrus logger; route it into slog so its
 	// output follows Arcane's log format.
 	logging.InstallLogrusBridge()
@@ -101,8 +108,8 @@ func (s *ImagePatchService) PatchImage(ctx context.Context, envID, imageID strin
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to Docker: %w", err)
 	}
-	if err := requireContainerdImageStoreInternal(runCtx, dockerClient); err != nil {
-		return nil, err
+	if requireContainerdImageStoreErr := requireContainerdImageStoreInternal(runCtx, dockerClient); requireContainerdImageStoreErr != nil {
+		return nil, requireContainerdImageStoreErr
 	}
 
 	imageInspect, err := dockerClient.ImageInspect(runCtx, imageID)
@@ -130,7 +137,7 @@ func (s *ImagePatchService) PatchImage(ctx context.Context, envID, imageID strin
 			return nil, common.ErrPatchScanImageMismatch
 		}
 		var report vulnerability.VulnerabilityReportRecord
-		if err := s.db.WithContext(runCtx).First(&report, "image_id = ?", opts.ScanID).Error; err != nil || len(report.Data) == 0 {
+		if loadScanReportErr := s.db.WithContext(runCtx).First(&report, "image_id = ?", opts.ScanID).Error; loadScanReportErr != nil || report.Data == "" {
 			return nil, common.ErrPatchScanReportUnavailable
 		}
 		reportData = []byte(report.Data)
@@ -179,8 +186,8 @@ func (s *ImagePatchService) PatchImage(ctx context.Context, envID, imageID strin
 		Status:          string(imagepatch.PatchStatusPatching),
 		ActivityID:      mo.EmptyableToOption(strings.TrimSpace(activityID)).ToPointer(),
 	}
-	if err := s.db.WithContext(runCtx).Create(record).Error; err != nil {
-		return nil, fmt.Errorf("failed to create image patch record: %w", err)
+	if createPatchRecordErr := s.db.WithContext(runCtx).Create(record).Error; createPatchRecordErr != nil {
+		return nil, fmt.Errorf("failed to create image patch record: %w", createPatchRecordErr)
 	}
 
 	slog.InfoContext(runCtx, "image patch queued",
@@ -223,7 +230,11 @@ func (s *ImagePatchService) patchInBackgroundInternal(ctx context.Context, recor
 		if err == nil {
 			reportPath = filepath.Join(reportDir, "report.json")
 			err = os.WriteFile(reportPath, reportData, 0o600)
-			defer os.RemoveAll(reportDir)
+			defer func() {
+				if cleanupErr := os.RemoveAll(reportDir); cleanupErr != nil {
+					slog.WarnContext(ctx, "Failed to remove image patch temporary directory", "directory", reportDir, "error", cleanupErr)
+				}
+			}()
 		}
 		if err != nil {
 			s.finishPatchRecordInternal(ctx, record, imagepatch.PatchStatusFailed, err.Error(), nil, 0)
@@ -264,7 +275,11 @@ func (s *ImagePatchService) patchInBackgroundInternal(ctx context.Context, recor
 			vexOutputPath = filepath.Join(vexDir, "vex.json")
 			copaOpts.Format = "openvex"
 			copaOpts.Output = vexOutputPath
-			defer os.RemoveAll(vexDir)
+			defer func() {
+				if cleanupErr := os.RemoveAll(vexDir); cleanupErr != nil {
+					slog.WarnContext(ctx, "Failed to remove image patch temporary directory", "directory", vexDir, "error", cleanupErr)
+				}
+			}()
 		}
 	}
 
@@ -303,7 +318,7 @@ func (s *ImagePatchService) patchInBackgroundInternal(ctx context.Context, recor
 			var doc struct {
 				Statements []jsontext.Value `json:"statements"`
 			}
-			if err := json.Unmarshal(data, &doc); err == nil {
+			if unmarshalErr := json.Unmarshal(data, &doc); unmarshalErr == nil {
 				count := len(doc.Statements)
 				packagesUpdated = &count
 			}
@@ -327,13 +342,13 @@ func (s *ImagePatchService) verifyPatchedImageInternal(ctx context.Context, reco
 	// took the multi-platform path and arch-suffixed the tag). When it exists,
 	// re-scan it so the security page can show whether the patch worked.
 	if dockerClient, err := s.dockerService.GetClient(ctx); err == nil {
-		if patchedInspect, err := dockerClient.ImageInspect(ctx, record.PatchedRef); err != nil {
-			slog.WarnContext(ctx, "patched image tag not found after patching", "patchedRef", record.PatchedRef, "error", err)
+		if patchedInspect, imageInspectErr := dockerClient.ImageInspect(ctx, record.PatchedRef); imageInspectErr != nil {
+			slog.WarnContext(ctx, "patched image tag not found after patching", "patchedRef", record.PatchedRef, "error", imageInspectErr)
 			s.appendPatchActivityInternal(ctx, activityID, 95, "Patched image was created but the expected tag "+record.PatchedRef+" was not found; check the image list")
 		} else if s.vulnerabilityService != nil && s.settingsService.IsFeatureEnabled(ctx, features.VulnerabilityManagement) {
 			s.appendPatchActivityInternal(ctx, activityID, 95, "Re-scanning patched image to verify the patch")
-			if _, err := s.vulnerabilityService.ScanImage(context.WithoutCancel(ctx), record.EnvironmentID, patchedInspect.ID, common.User{Username: "System"}); err != nil {
-				slog.WarnContext(ctx, "failed to start verification scan of patched image", "patchedRef", record.PatchedRef, "error", err)
+			if _, scanImageErr := s.vulnerabilityService.ScanImage(context.WithoutCancel(ctx), record.EnvironmentID, patchedInspect.ID, common.User{Username: "System"}); scanImageErr != nil {
+				slog.WarnContext(ctx, "failed to start verification scan of patched image", "patchedRef", record.PatchedRef, "error", scanImageErr)
 			}
 		}
 	}
@@ -388,11 +403,11 @@ func resolvePatchedRef(imageRef, patchedTag, suffix string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to parse image reference: %w", err)
 	}
-	name, tag, err := copacommon.ResolvePatchedImageName(named, patchedTag, suffix)
+	localName, tag, err := copacommon.ResolvePatchedImageName(named, patchedTag, suffix)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve patched image name: %w", err)
 	}
-	return name + ":" + tag, nil
+	return localName + ":" + tag, nil
 }
 
 // writeRegistryAuthConfigInternal merges Arcane's registry credentials into the
@@ -418,26 +433,26 @@ func (s *ImagePatchService) writeRegistryAuthConfigInternal(ctx context.Context)
 	var arcane struct {
 		Auths map[string]jsontext.Value `json:"auths"`
 	}
-	if err := json.Unmarshal(arcaneConfig, &arcane); err != nil {
+	if unmarshalErr := json.Unmarshal(arcaneConfig, &arcane); unmarshalErr != nil {
 		return
 	}
 
-	if err := acfs.MkdirAll(ctx, filepath.Dir(configDir), "/"+filepath.Base(configDir), 0o700); err != nil {
-		slog.WarnContext(ctx, "failed to create docker config directory for image patching", "path", configDir, "error", err)
+	if mkdirAllErr := acfs.MkdirAll(ctx, filepath.Dir(configDir), "/"+filepath.Base(configDir), 0o700); mkdirAllErr != nil {
+		slog.WarnContext(ctx, "failed to create docker config directory for image patching", "path", configDir, "error", mkdirAllErr)
 		return
 	}
 
 	merged := map[string]jsontext.Value{}
-	if existing, err := acfs.ReadFile(ctx, configDir, "/config.json"); err == nil {
-		if err := json.Unmarshal(existing, &merged); err != nil {
-			slog.WarnContext(ctx, "existing docker config is not valid JSON; leaving it untouched", "path", configDir, "error", err)
+	if existing, readFileErr := acfs.ReadFile(ctx, configDir, "/config.json"); readFileErr == nil {
+		if decodeExistingConfigErr := json.Unmarshal(existing, &merged); decodeExistingConfigErr != nil {
+			slog.WarnContext(ctx, "existing docker config is not valid JSON; leaving it untouched", "path", configDir, "error", decodeExistingConfigErr)
 			return
 		}
 	}
 
 	auths := map[string]jsontext.Value{}
 	if raw, ok := merged["auths"]; ok {
-		if err := json.Unmarshal(raw, &auths); err != nil {
+		if decodeAuthConfigErr := json.Unmarshal(raw, &auths); decodeAuthConfigErr != nil {
 			auths = map[string]jsontext.Value{}
 		}
 	}
@@ -452,8 +467,8 @@ func (s *ImagePatchService) writeRegistryAuthConfigInternal(ctx context.Context)
 	if err != nil {
 		return
 	}
-	if err := acfs.Write(ctx, configDir, "/config.json", payload, acfs.WriteOptions{Mode: 0o600}); err != nil {
-		slog.WarnContext(ctx, "failed to write docker config for image patching", "path", configDir, "error", err)
+	if writeErr := acfs.Write(ctx, configDir, "/config.json", payload, acfs.WriteOptions{Mode: 0o600}); writeErr != nil {
+		slog.WarnContext(ctx, "failed to write docker config for image patching", "path", configDir, "error", writeErr)
 	}
 }
 
@@ -534,7 +549,7 @@ func (s *ImagePatchService) ListPatchTargets(ctx context.Context, envID string, 
 	excludedNames := make([]string, 0, len(patchedRefs)*2)
 	for ref := range patchedRefs {
 		excludedNames = append(excludedNames, ref)
-		if named, err := reference.ParseNormalizedNamed(ref); err == nil {
+		if named, parseNormalizedNamedErr := reference.ParseNormalizedNamed(ref); parseNormalizedNamedErr == nil {
 			excludedNames = append(excludedNames, reference.FamiliarString(named))
 		}
 	}
@@ -571,12 +586,12 @@ func (s *ImagePatchService) ListPatchTargets(ctx context.Context, envID string, 
 	// Best-effort: mark images without a registry source so the UI can explain
 	// why they cannot be patched.
 	repoDigestsByID := map[string][]string{}
-	if images, err := s.dockerService.ListImages(ctx); err == nil {
+	if images, listImagesErr := s.dockerService.ListImages(ctx); listImagesErr == nil {
 		for i := range images {
 			repoDigestsByID[images[i].ID] = images[i].RepoDigests
 		}
 	} else {
-		slog.WarnContext(ctx, "failed to list images for patch targets", "error", err)
+		slog.WarnContext(ctx, "failed to list images for patch targets", "error", listImagesErr)
 	}
 
 	imageIDs := make([]string, 0, len(scans))
@@ -694,23 +709,23 @@ func (s *ImagePatchService) latestPatchesByImageInternal(ctx context.Context, en
 // images already patched since their latest scan. Used by the scheduled
 // auto-patch job.
 func (s *ImagePatchService) PatchFlaggedImages(ctx context.Context, envID string, user common.User) (patched, skipped int, err error) {
-	if err := s.settingsService.RequireFeature(ctx, features.VulnerabilityManagement); err != nil {
-		return 0, 0, err
+	if requireFeatureErr := s.settingsService.RequireFeature(ctx, features.VulnerabilityManagement); requireFeatureErr != nil {
+		return 0, 0, requireFeatureErr
 	}
 	dockerClient, err := s.dockerService.GetClient(ctx)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to connect to Docker: %w", err)
 	}
-	if err := requireContainerdImageStoreInternal(ctx, dockerClient); err != nil {
-		return 0, 0, err
+	if requireContainerdImageStoreErr := requireContainerdImageStoreInternal(ctx, dockerClient); requireContainerdImageStoreErr != nil {
+		return 0, 0, requireContainerdImageStoreErr
 	}
 	var scans []vulnerability.VulnerabilityScanRecord
-	if err := s.db.WithContext(ctx).
+	if loadFixableScansErr := s.db.WithContext(ctx).
 		Where("status = ? AND fixable_count > 0", vulnerability.ScanStatusCompleted).
 		Where("id IN (?)", s.db.Model(&vulnerability.VulnerabilityReportRecord{}).Select("image_id")).
 		Where("image_name NOT LIKE 'sha256:%' AND image_name NOT LIKE '%<none>%' AND image_name <> id").
-		Find(&scans).Error; err != nil {
-		return 0, 0, fmt.Errorf("failed to list vulnerability scans: %w", err)
+		Find(&scans).Error; loadFixableScansErr != nil {
+		return 0, 0, fmt.Errorf("failed to list vulnerability scans: %w", loadFixableScansErr)
 	}
 
 	patchedRefs, err := s.PatchedRefs(ctx, envID)
@@ -731,20 +746,20 @@ func (s *ImagePatchService) PatchFlaggedImages(ctx context.Context, envID string
 
 		// Skip images already patched (or being patched) since their latest scan.
 		var recent int64
-		if err := s.db.WithContext(ctx).
+		if countRecentPatchesErr := s.db.WithContext(ctx).
 			Model(&ImagePatchRecord{}).
 			Where("environment_id = ? AND original_image_id = ? AND status IN ? AND created_at >= ?",
 				envID, scan.ID, []string{string(imagepatch.PatchStatusCompleted), string(imagepatch.PatchStatusPatching)}, scan.ScanTime).
-			Count(&recent).Error; err == nil && recent > 0 {
+			Count(&recent).Error; countRecentPatchesErr == nil && recent > 0 {
 			skipped++
 			continue
 		}
 
-		if _, err := s.PatchImage(ctx, envID, scan.ID, imagepatch.PatchOptions{ScanID: scan.ID}, user); err != nil {
+		if _, patchImageErr := s.PatchImage(ctx, envID, scan.ID, imagepatch.PatchOptions{ScanID: scan.ID}, user); patchImageErr != nil {
 			slog.WarnContext(ctx, "scheduled image patch failed to start",
 				"imageId", scan.ID,
 				"imageName", scan.ImageName,
-				"error", err,
+				"error", patchImageErr,
 			)
 			skipped++
 			continue

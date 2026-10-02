@@ -1,7 +1,6 @@
 package database
 
 import (
-	"context"
 	stdsql "database/sql"
 	"fmt"
 	"io/fs"
@@ -45,7 +44,7 @@ func TestEnsureSQLiteDirectoryPreservesAbsoluteFilePath(t *testing.T) {
 }
 
 func TestMigrateDatabase_BlocksDowngradeWithoutFlag(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	rawDB, dsn := newSQLiteSQLDBInternal(t, t.TempDir(), "arcane-test.db")
 	require.NoError(t, migrateDatabaseInternal(ctx, rawDB, dbProviderSQLite, MigrationOptions{}))
 	targetVersion := downgradeTargetVersionInternal(t)
@@ -61,7 +60,7 @@ func TestMigrateDatabase_BlocksDowngradeWithoutFlag(t *testing.T) {
 }
 
 func TestMigrateDatabase_DowngradesWhenAllowed(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	rawDB, dsn := newSQLiteSQLDBInternal(t, t.TempDir(), "arcane-test.db")
 	require.NoError(t, migrateDatabaseInternal(ctx, rawDB, dbProviderSQLite, MigrationOptions{}))
 	targetVersion := downgradeTargetVersionInternal(t)
@@ -71,7 +70,7 @@ func TestMigrateDatabase_DowngradesWhenAllowed(t *testing.T) {
 }
 
 func TestMigration065_ProjectBuildImageRefs_UpAndDown(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	rawDB, _ := newSQLiteSQLDBInternal(t, t.TempDir(), "arcane-project-build-refs.db")
 
 	require.NoError(t, migrateDatabaseToVersionInternal(ctx, rawDB, dbProviderSQLite, MigrationOptions{}, 64))
@@ -81,7 +80,14 @@ func TestMigration065_ProjectBuildImageRefs_UpAndDown(t *testing.T) {
 
 	require.NoError(t, migrateDatabaseToVersionInternal(ctx, rawDB, dbProviderSQLite, MigrationOptions{}, 65))
 	var notNull int
-	require.NoError(t, rawDB.QueryRow(`SELECT COUNT(*), COALESCE(MAX("notnull"), 0) FROM pragma_table_info('projects') WHERE name = 'build_image_refs_json'`).Scan(&columnCount, &notNull))
+	require.NoError(
+		t,
+		rawDB.QueryRow("SELECT COUNT(*), COALESCE(MAX(\"notnull\"), 0) FROM pragma_table_info('projects') WHERE name = 'build_"+
+			"image_refs_json'").Scan(
+			&columnCount,
+			&notNull,
+		),
+	)
 	assert.Equal(t, 1, columnCount)
 	assert.Zero(t, notNull)
 
@@ -91,7 +97,7 @@ func TestMigration065_ProjectBuildImageRefs_UpAndDown(t *testing.T) {
 }
 
 func TestMigration066_GlobalVariables_UpAndDown(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	rawDB, _ := newSQLiteSQLDBInternal(t, t.TempDir(), "arcane-global-variables.db")
 
 	require.NoError(t, migrateDatabaseToVersionInternal(ctx, rawDB, dbProviderSQLite, MigrationOptions{}, 65))
@@ -105,7 +111,8 @@ func TestMigration066_GlobalVariables_UpAndDown(t *testing.T) {
 
 	_, err := rawDB.Exec(`INSERT INTO environments (id, api_url, status, enabled) VALUES ('env-1', 'http://localhost', 'online', TRUE)`)
 	require.NoError(t, err)
-	_, err = rawDB.Exec(`INSERT INTO global_variables (id, created_at, key, value, is_secret, all_environments) VALUES ('var-1', CURRENT_TIMESTAMP, 'API_URL', 'https://example.test', FALSE, FALSE)`)
+	_, err = rawDB.Exec("INSERT INTO global_variables (id, created_at, key, value, is_secret, all_environments) VALUES ('var-" +
+		"1', CURRENT_TIMESTAMP, 'API_URL', 'https://example.test', FALSE, FALSE)")
 	require.NoError(t, err)
 	_, err = rawDB.Exec(`INSERT INTO global_variable_environments (global_variable_id, environment_id) VALUES ('var-1', 'env-1')`)
 	require.NoError(t, err)
@@ -121,7 +128,7 @@ func TestMigration066_GlobalVariables_UpAndDown(t *testing.T) {
 }
 
 func TestMigration088_VulnerabilityRisk_BackfillsCVSSAndDowngrades(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	rawDB, _ := newSQLiteSQLDBInternal(t, t.TempDir(), "arcane-vulnerability-risk.db")
 
 	require.NoError(t, migrateDatabaseToVersionInternal(ctx, rawDB, dbProviderSQLite, MigrationOptions{}, 87))
@@ -150,16 +157,24 @@ func TestMigration088_VulnerabilityRisk_BackfillsCVSSAndDowngrades(t *testing.T)
 	assert.False(t, scores["CVE-NONE"].Valid)
 
 	var tableCount int
-	require.NoError(t, rawDB.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('vulnerability_threat_intel', 'vulnerability_risk_snapshots')`).Scan(&tableCount))
+	require.NoError(
+		t,
+		rawDB.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('vulnerability_threat_intel', '"+
+			"vulnerability_risk_snapshots')").Scan(&tableCount),
+	)
 	assert.Equal(t, 2, tableCount)
 
 	require.NoError(t, migrateDatabaseToVersionInternal(ctx, rawDB, dbProviderSQLite, MigrationOptions{AllowDowngrade: true}, 87))
-	require.NoError(t, rawDB.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('vulnerability_threat_intel', 'vulnerability_risk_snapshots')`).Scan(&tableCount))
+	require.NoError(
+		t,
+		rawDB.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('vulnerability_threat_intel', '"+
+			"vulnerability_risk_snapshots')").Scan(&tableCount),
+	)
 	assert.Zero(t, tableCount)
 }
 
 func TestMigration067_ActivityBatchID_UpAndDown(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	rawDB, _ := newSQLiteSQLDBInternal(t, t.TempDir(), "arcane-activity-batch-id.db")
 
 	require.NoError(t, migrateDatabaseToVersionInternal(ctx, rawDB, dbProviderSQLite, MigrationOptions{}, 66))
@@ -185,7 +200,7 @@ func TestMigration067_ActivityBatchID_UpAndDown(t *testing.T) {
 }
 
 func TestMigration068_UserPreferences_UpAndDown(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	rawDB, _ := newSQLiteSQLDBInternal(t, t.TempDir(), "arcane-user-preferences.db")
 
 	require.NoError(t, migrateDatabaseToVersionInternal(ctx, rawDB, dbProviderSQLite, MigrationOptions{}, 67))
@@ -207,7 +222,15 @@ func TestMigration068_UserPreferences_UpAndDown(t *testing.T) {
 	var theme string
 	var oled bool
 	var iconCatalog stdsql.NullString
-	require.NoError(t, rawDB.QueryRow(`SELECT json_extract(preferences, '$.applicationTheme'), json_extract(preferences, '$.oledMode'), json_extract(preferences, '$.iconCatalog') FROM users WHERE id = 'u-1'`).Scan(&theme, &oled, &iconCatalog))
+	require.NoError(
+		t,
+		rawDB.QueryRow("SELECT json_extract(preferences, '$.applicationTheme'), json_extract(preferences, '$.oledMode'), jso"+
+			"n_extract(preferences, '$.iconCatalog') FROM users WHERE id = 'u-1'").Scan(
+			&theme,
+			&oled,
+			&iconCatalog,
+		),
+	)
 	assert.Equal(t, "nord", theme)
 	assert.True(t, oled)
 	assert.False(t, iconCatalog.Valid)
@@ -218,12 +241,16 @@ func TestMigration068_UserPreferences_UpAndDown(t *testing.T) {
 }
 
 func TestMigration070_PasskeysAndMFA_UpAndDown(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	rawDB, _ := newSQLiteSQLDBInternal(t, t.TempDir(), "arcane-passkeys-mfa.db")
 
 	require.NoError(t, migrateDatabaseToVersionInternal(ctx, rawDB, dbProviderSQLite, MigrationOptions{}, 69))
 	var tableCount int
-	require.NoError(t, rawDB.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('passkeys', 'auth_transactions', 'passkey_ceremonies', 'passkey_recovery_codes')`).Scan(&tableCount))
+	require.NoError(
+		t,
+		rawDB.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('passkeys', 'auth_transactions'"+
+			", 'passkey_ceremonies', 'passkey_recovery_codes')").Scan(&tableCount),
+	)
 	assert.Zero(t, tableCount)
 
 	var columnCount int
@@ -231,7 +258,11 @@ func TestMigration070_PasskeysAndMFA_UpAndDown(t *testing.T) {
 	assert.Zero(t, columnCount)
 
 	require.NoError(t, migrateDatabaseToVersionInternal(ctx, rawDB, dbProviderSQLite, MigrationOptions{}, 70))
-	require.NoError(t, rawDB.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('passkeys', 'auth_transactions', 'passkey_ceremonies', 'passkey_recovery_codes')`).Scan(&tableCount))
+	require.NoError(
+		t,
+		rawDB.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('passkeys', 'auth_transactions'"+
+			", 'passkey_ceremonies', 'passkey_recovery_codes')").Scan(&tableCount),
+	)
 	assert.Equal(t, 4, tableCount)
 	require.NoError(t, rawDB.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('users') WHERE name = 'passkey_mfa_enabled'`).Scan(&columnCount))
 	assert.Equal(t, 1, columnCount)
@@ -239,7 +270,11 @@ func TestMigration070_PasskeysAndMFA_UpAndDown(t *testing.T) {
 	assert.Equal(t, 2, columnCount)
 
 	require.NoError(t, migrateDatabaseToVersionInternal(ctx, rawDB, dbProviderSQLite, MigrationOptions{AllowDowngrade: true}, 69))
-	require.NoError(t, rawDB.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('passkeys', 'auth_transactions', 'passkey_ceremonies', 'passkey_recovery_codes')`).Scan(&tableCount))
+	require.NoError(
+		t,
+		rawDB.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('passkeys', 'auth_transactions'"+
+			", 'passkey_ceremonies', 'passkey_recovery_codes')").Scan(&tableCount),
+	)
 	assert.Zero(t, tableCount)
 	require.NoError(t, rawDB.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('users') WHERE name = 'passkey_mfa_enabled'`).Scan(&columnCount))
 	assert.Zero(t, columnCount)
@@ -251,7 +286,7 @@ func TestMigration070_PasskeysAndMFA_UpAndDown(t *testing.T) {
 // pre-existing volume backup rows survive the backup-support migration as
 // format=archive, and that downgrading is refused while Rustic rows exist.
 func TestMigration073_BackupSupport_PreservesExistingBackups(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	rawDB, _ := newSQLiteSQLDBInternal(t, t.TempDir(), "arcane-backup-support.db")
 
 	require.NoError(t, migrateDatabaseToVersionInternal(ctx, rawDB, dbProviderSQLite, MigrationOptions{}, 72))
@@ -268,7 +303,11 @@ func TestMigration073_BackupSupport_PreservesExistingBackups(t *testing.T) {
 	assert.EqualValues(t, 42, size)
 
 	// Downgrade is refused while a Rustic-format row exists.
-	_, err = rawDB.ExecContext(ctx, `INSERT INTO volume_backups (id, volume_name, size, created_at, format, local_snapshot_id) VALUES ('rustic-1', 'app-data', 7, CURRENT_TIMESTAMP, 'rustic', 'snap-1')`)
+	_, err = rawDB.ExecContext(
+		ctx,
+		"INSERT INTO volume_backups (id, volume_name, size, created_at, format, local_snapshot_id) VALUES ('r"+
+			"ustic-1', 'app-data', 7, CURRENT_TIMESTAMP, 'rustic', 'snap-1')",
+	)
 	require.NoError(t, err)
 	err = migrateDatabaseToVersionInternal(ctx, rawDB, dbProviderSQLite, MigrationOptions{AllowDowngrade: true}, 72)
 	require.Error(t, err)
@@ -283,7 +322,7 @@ func TestMigration073_BackupSupport_PreservesExistingBackups(t *testing.T) {
 }
 
 func TestMigration072_ProjectTags_UpDownAndCascade(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	rawDB, _ := newSQLiteSQLDBInternal(t, t.TempDir(), "arcane-project-tags.db")
 	rawDB.SetMaxOpenConns(1)
 
@@ -301,7 +340,8 @@ func TestMigration072_ProjectTags_UpDownAndCascade(t *testing.T) {
 
 	_, err := rawDB.Exec(`PRAGMA foreign_keys=ON`)
 	require.NoError(t, err)
-	_, err = rawDB.Exec(`INSERT INTO projects (id, name, path, status, service_count, running_count, created_at) VALUES ('project-1', 'demo', '/tmp/demo', 'stopped', 0, 0, CURRENT_TIMESTAMP)`)
+	_, err = rawDB.Exec("INSERT INTO projects (id, name, path, status, service_count, running_count, created_at) VALUES ('pro" +
+		"ject-1', 'demo', '/tmp/demo', 'stopped', 0, 0, CURRENT_TIMESTAMP)")
 	require.NoError(t, err)
 	_, err = rawDB.Exec(`INSERT INTO project_tags (project_id, name, source) VALUES ('project-1', 'database', 'ui'), ('project-1', 'database', 'compose')`)
 	require.NoError(t, err)
@@ -321,7 +361,7 @@ func TestMigration072_ProjectTags_UpDownAndCascade(t *testing.T) {
 }
 
 func TestMigration071_RenamesVolumeWorkspaceLegacyKeys(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	rawDB, _ := newSQLiteSQLDBInternal(t, t.TempDir(), "arcane-volume-workspace-keys.db")
 
 	require.NoError(t, migrateDatabaseToVersionInternal(ctx, rawDB, dbProviderSQLite, MigrationOptions{}, 70))
@@ -333,7 +373,8 @@ func TestMigration071_RenamesVolumeWorkspaceLegacyKeys(t *testing.T) {
 	require.NoError(t, err)
 	_, err = rawDB.Exec(`INSERT INTO api_keys (id, name, key_hash, key_prefix) VALUES ('key-workspace', 'Workspace key', 'hash', 'arc_')`)
 	require.NoError(t, err)
-	_, err = rawDB.Exec(`INSERT INTO api_key_permissions (id, api_key_id, permission) VALUES ('grant-browse', 'key-workspace', 'volumes:browse'), ('grant-read', 'key-workspace', 'volumes:read')`)
+	_, err = rawDB.Exec("INSERT INTO api_key_permissions (id, api_key_id, permission) VALUES ('grant-browse', 'key-workspace'" +
+		", 'volumes:browse'), ('grant-read', 'key-workspace', 'volumes:read')")
 	require.NoError(t, err)
 
 	require.NoError(t, migrateDatabaseToVersionInternal(ctx, rawDB, dbProviderSQLite, MigrationOptions{}, 71))
@@ -358,7 +399,7 @@ func TestMigration071_RenamesVolumeWorkspaceLegacyKeys(t *testing.T) {
 }
 
 func TestMigrateDatabase_BlocksFutureGooseVersionWithoutFlag(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	rawDB, dsn := newSQLiteSQLDBInternal(t, t.TempDir(), "arcane-future.db")
 	highestVersion, err := getHighestEmbeddedMigrationVersionInternal("sqlite")
 	require.NoError(t, err)
@@ -373,7 +414,7 @@ func TestMigrateDatabase_BlocksFutureGooseVersionWithoutFlag(t *testing.T) {
 }
 
 func TestMigrateDatabase_BlocksDowngradeWhenEmbeddedMigrationMissing(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	rawDB, dsn := newSQLiteSQLDBInternal(t, t.TempDir(), "arcane-missing-down.db")
 	highestVersion, err := getHighestEmbeddedMigrationVersionInternal("sqlite")
 	require.NoError(t, err)
@@ -390,7 +431,7 @@ func TestMigrateDatabase_BlocksDowngradeWhenEmbeddedMigrationMissing(t *testing.
 }
 
 func TestMigrateDatabase_BlocksDirtyLegacyCurrentVersion(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	rawDB, dsn := newSQLiteSQLDBInternal(t, t.TempDir(), "arcane-legacy-current-dirty.db")
 	highestVersion, err := getHighestEmbeddedMigrationVersionInternal("sqlite")
 	require.NoError(t, err)
@@ -403,11 +444,11 @@ func TestMigrateDatabase_BlocksDirtyLegacyCurrentVersion(t *testing.T) {
 
 	require.NoError(t, migrateDatabaseInternal(ctx, rawDB, dbProviderSQLite, MigrationOptions{AllowDowngrade: true}))
 	assert.Equal(t, highestVersion, readGooseSQLiteVersionInternal(t, dsn))
-	assertLegacyMigrationDirtyInternal(t, dsn, false)
+	assertLegacyMigrationCleanInternal(t, dsn)
 }
 
 func TestMigrateDatabase_BlocksDirtyLegacyOlderVersion(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	rawDB, dsn := newSQLiteSQLDBInternal(t, t.TempDir(), "arcane-legacy-older-dirty.db")
 	targetVersion := downgradeTargetVersionInternal(t)
 	require.NoError(t, migrateDatabaseInternal(ctx, rawDB, dbProviderSQLite, MigrationOptions{}))
@@ -424,7 +465,7 @@ func TestMigrateDatabase_BlocksDirtyLegacyOlderVersion(t *testing.T) {
 	highestVersion, err := getHighestEmbeddedMigrationVersionInternal("sqlite")
 	require.NoError(t, err)
 	assert.Equal(t, highestVersion, readGooseSQLiteVersionInternal(t, dsn))
-	assertLegacyMigrationDirtyInternal(t, dsn, false)
+	assertLegacyMigrationCleanInternal(t, dsn)
 }
 
 func downgradeTargetVersionInternal(t *testing.T) int64 {
@@ -452,7 +493,7 @@ func newSQLiteSQLDBInternal(t *testing.T, dirPath, fileName string) (*stdsql.DB,
 }
 
 func TestInitialize_AllowsMigrationOptions(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	dsn := "file:" + filepath.Join(t.TempDir(), "arcane-init.db")
 
 	db, err := Initialize(ctx, dsn, MigrationOptions{})
@@ -466,7 +507,7 @@ func TestInitialize_AllowsMigrationOptions(t *testing.T) {
 }
 
 func TestInitialize_RecordsGooseVersionOnFreshSQLite(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	dsn := "file:" + filepath.Join(t.TempDir(), "arcane-goose-fresh.db")
 
 	db, err := Initialize(ctx, dsn, MigrationOptions{})
@@ -482,7 +523,7 @@ func TestInitialize_RecordsGooseVersionOnFreshSQLite(t *testing.T) {
 }
 
 func TestInitialize_AdoptsCleanLegacyMigrationState(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	dsn := "file:" + filepath.Join(t.TempDir(), "arcane-legacy-clean.db")
 	highest, err := getHighestEmbeddedMigrationVersionInternal("sqlite")
 	require.NoError(t, err)
@@ -496,11 +537,11 @@ func TestInitialize_AdoptsCleanLegacyMigrationState(t *testing.T) {
 	})
 
 	assert.Equal(t, highest, readGooseSQLiteVersionInternal(t, dsn))
-	assertLegacyMigrationDirtyInternal(t, dsn, false)
+	assertLegacyMigrationCleanInternal(t, dsn)
 }
 
 func TestInitialize_RollsBackFailedLegacyMigrationAdoption(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	rawDB, dsn := newSQLiteSQLDBInternal(t, t.TempDir(), "arcane-legacy-rollback.db")
 	highest, err := getHighestEmbeddedMigrationVersionInternal("sqlite")
 	require.NoError(t, err)
@@ -528,7 +569,7 @@ CREATE TABLE goose_db_version (
 }
 
 func TestInitialize_BlocksDirtyLegacyMigrationState(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	dsn := "file:" + filepath.Join(t.TempDir(), "arcane-legacy-dirty.db")
 	highest, err := getHighestEmbeddedMigrationVersionInternal("sqlite")
 	require.NoError(t, err)
@@ -542,7 +583,7 @@ func TestInitialize_BlocksDirtyLegacyMigrationState(t *testing.T) {
 }
 
 func TestInitialize_ClearsDirtyLegacyMigrationStateWhenAllowed(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	dsn := "file:" + filepath.Join(t.TempDir(), "arcane-legacy-dirty-allowed.db")
 	highest, err := getHighestEmbeddedMigrationVersionInternal("sqlite")
 	require.NoError(t, err)
@@ -556,11 +597,11 @@ func TestInitialize_ClearsDirtyLegacyMigrationStateWhenAllowed(t *testing.T) {
 	})
 
 	assert.Equal(t, highest, readGooseSQLiteVersionInternal(t, dsn))
-	assertLegacyMigrationDirtyInternal(t, dsn, false)
+	assertLegacyMigrationCleanInternal(t, dsn)
 }
 
 func TestInitialize_CreatesQueryPerformanceIndexes(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	dsn := "file:" + filepath.Join(t.TempDir(), "arcane-indexes.db")
 
 	db, err := Initialize(ctx, dsn, MigrationOptions{})
@@ -678,7 +719,7 @@ func readGooseSQLiteVersionInternal(t *testing.T, dsn string) int64 {
 	return version
 }
 
-func assertLegacyMigrationDirtyInternal(t *testing.T, dsn string, expected bool) {
+func assertLegacyMigrationCleanInternal(t *testing.T, dsn string) {
 	t.Helper()
 
 	rawDB, err := stdsql.Open("sqlite", dsn)
@@ -690,7 +731,7 @@ func assertLegacyMigrationDirtyInternal(t *testing.T, dsn string, expected bool)
 	var dirty bool
 	err = rawDB.QueryRow(`SELECT dirty FROM schema_migrations ORDER BY version DESC LIMIT 1`).Scan(&dirty)
 	require.NoError(t, err)
-	assert.Equal(t, expected, dirty)
+	assert.False(t, dirty)
 }
 
 // TestSQLiteMigrations_ColumnAddsAreReversible guards against the historical footgun
@@ -711,15 +752,22 @@ func TestSQLiteMigrations_ColumnAddsAreReversible(t *testing.T) {
 			continue
 		}
 
-		content, err := fs.ReadFile(migrationsFS, entry.Name())
-		require.NoError(t, err)
+		content, readFileErr := fs.ReadFile(migrationsFS, entry.Name())
+		require.NoError(t, readFileErr)
 
 		up, down := gooseUpDownSectionsInternal(string(content))
 		if !strings.Contains(strings.ToUpper(up), "ADD COLUMN") {
 			continue
 		}
 
-		assert.True(t, sectionHasSQLInternal(down), "migration %s adds a column but its '-- +goose Down' has no SQL; add the reversing ALTER TABLE ... DROP COLUMN (modernc SQLite supports it). A no-op Down breaks down/up round-trips with a duplicate-column error.", entry.Name())
+		assert.True(
+			t,
+			sectionHasSQLInternal(down),
+			"migration %s adds a column but its '-- +goose Down' has no SQL; add the reversing ALTER TABLE ... DR"+
+				"OP COLUMN (modernc SQLite supports it). A no-op Down breaks down/up round-trips with a duplicate-col"+
+				"umn error.",
+			entry.Name(),
+		)
 	}
 }
 
@@ -733,7 +781,7 @@ func TestSQLiteMigrations_ColumnAddsAreReversible(t *testing.T) {
 // foreign key still references it, which SQLite rejects. That is unrelated to the no-op
 // Down fixes here and is tracked separately.
 func TestSQLiteMigrations_DownUpRoundTrip(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	rawDB, dsn := newSQLiteSQLDBInternal(t, t.TempDir(), "arcane-roundtrip.db")
 
 	require.NoError(t, migrateDatabaseInternal(ctx, rawDB, dbProviderSQLite, MigrationOptions{}))
@@ -787,11 +835,22 @@ func TestIdentityNormalizationMigration(t *testing.T) {
 		{name: "existing duplicate emails preserved", first: "one", second: "two", emailFirst: "a@example.com", emailSecond: "a@example.com"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			db, _ := newSQLiteSQLDBInternal(t, t.TempDir(), "identities.db")
 			require.NoError(t, migrateDatabaseToVersionInternal(ctx, db, dbProviderSQLite, MigrationOptions{}, 80))
 			const displayName = "\t\n\v\f\r \u0085\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000Jose\u0301\u3000"
-			_, err := db.Exec("INSERT INTO users (id, username, email, display_name, password_hash) VALUES (?, ?, ?, ?, 'unchanged'), (?, ?, ?, ?, 'unchanged')", "first", tc.first, tc.emailFirst, displayName, "second", tc.second, tc.emailSecond, nil)
+			_, err := db.Exec(
+				"INSERT INTO users (id, username, email, display_name, password_hash) VALUES (?, ?, ?, ?, 'unchanged'"+
+					"), (?, ?, ?, ?, 'unchanged')",
+				"first",
+				tc.first,
+				tc.emailFirst,
+				displayName,
+				"second",
+				tc.second,
+				tc.emailSecond,
+				nil,
+			)
 			require.NoError(t, err)
 			require.NoError(t, migrateDatabaseInternal(ctx, db, dbProviderSQLite, MigrationOptions{}))
 			require.NoError(t, migrateDatabaseInternal(ctx, db, dbProviderSQLite, MigrationOptions{}))
@@ -804,7 +863,19 @@ func TestIdentityNormalizationMigration(t *testing.T) {
 			} {
 				var id, username, email, password string
 				var displayName stdsql.NullString
-				require.NoError(t, db.QueryRow("SELECT id, username, email, display_name, password_hash FROM users WHERE id = ?", expected.id).Scan(&id, &username, &email, &displayName, &password))
+				require.NoError(
+					t,
+					db.QueryRow(
+						"SELECT id, username, email, display_name, password_hash FROM users WHERE id = ?",
+						expected.id,
+					).Scan(
+						&id,
+						&username,
+						&email,
+						&displayName,
+						&password,
+					),
+				)
 				require.Equal(t, expected.id, id)
 				require.Equal(t, expected.username, username)
 				require.Equal(t, expected.email, email)
@@ -821,10 +892,20 @@ func TestIdentityNormalizationMigration(t *testing.T) {
 }
 
 func TestIdentityNormalizationGooseUpgrade(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	db, dsn := newSQLiteSQLDBInternal(t, t.TempDir(), "upgrade.db")
 	require.NoError(t, migrateDatabaseToVersionInternal(ctx, db, dbProviderSQLite, MigrationOptions{}, 80))
-	_, err := db.Exec("INSERT INTO users (id, username, display_name, password_hash) VALUES (?, ?, ?, ?), (?, ?, ?, ?)", "first", " Jose\u0301 ", " Jose\u0301 ", "unchanged", "second", "José", nil, "unchanged")
+	_, err := db.Exec(
+		"INSERT INTO users (id, username, display_name, password_hash) VALUES (?, ?, ?, ?), (?, ?, ?, ?)",
+		"first",
+		" Jose\u0301 ",
+		" Jose\u0301 ",
+		"unchanged",
+		"second",
+		"José",
+		nil,
+		"unchanged",
+	)
 	require.NoError(t, err)
 	initialized, err := Initialize(ctx, dsn, MigrationOptions{})
 	require.NoError(t, err)
@@ -852,7 +933,7 @@ func TestIdentityNormalizationPostgresUpgrade(t *testing.T) {
 	if dsn == "" {
 		t.Skip("ARCANE_TEST_POSTGRES_DSN is not set")
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 	admin, err := stdsql.Open("pgx", dsn)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, admin.Close()) })
@@ -860,8 +941,8 @@ func TestIdentityNormalizationPostgresUpgrade(t *testing.T) {
 	_, err = admin.ExecContext(ctx, "CREATE SCHEMA "+schema)
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		_, err := admin.ExecContext(ctx, "DROP SCHEMA "+schema+" CASCADE")
-		require.NoError(t, err)
+		_, execContextErr := admin.ExecContext(ctx, "DROP SCHEMA "+schema+" CASCADE")
+		require.NoError(t, execContextErr)
 	})
 	parsed, err := url.Parse(dsn)
 	require.NoError(t, err)
@@ -874,7 +955,21 @@ func TestIdentityNormalizationPostgresUpgrade(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
 	require.NoError(t, migrateDatabaseToVersionInternal(ctx, db, dbProviderPostgres, MigrationOptions{}, 80))
 	const whitespace = "\t\n\v\f\r \u0085\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000"
-	_, err = db.ExecContext(ctx, "INSERT INTO users (id, username, email, display_name, password_hash) VALUES ($1, $2, $3, $4, $5), ($6, $7, $8, $9, $10)", "first", " Jose\u0301 ", " a@example.com ", whitespace+"Jose\u0301"+whitespace, "unchanged", "second", "José", nil, nil, "unchanged")
+	_, err = db.ExecContext(
+		ctx,
+		"INSERT INTO users (id, username, email, display_name, password_hash) VALUES ($1, $2, $3, $4, $5), ($"+
+			"6, $7, $8, $9, $10)",
+		"first",
+		" Jose\u0301 ",
+		" a@example.com ",
+		whitespace+"Jose\u0301"+whitespace,
+		"unchanged",
+		"second",
+		"José",
+		nil,
+		nil,
+		"unchanged",
+	)
 	require.NoError(t, err)
 	require.NoError(t, migrateDatabaseInternal(ctx, db, dbProviderPostgres, MigrationOptions{}))
 	require.NoError(t, migrateDatabaseInternal(ctx, db, dbProviderPostgres, MigrationOptions{}))
@@ -887,7 +982,20 @@ func TestIdentityNormalizationPostgresUpgrade(t *testing.T) {
 	} {
 		var id, username, password string
 		var email, displayName stdsql.NullString
-		require.NoError(t, db.QueryRowContext(ctx, "SELECT id, username, email, display_name, password_hash FROM users WHERE id = $1", expected.id).Scan(&id, &username, &email, &displayName, &password))
+		require.NoError(
+			t,
+			db.QueryRowContext(
+				ctx,
+				"SELECT id, username, email, display_name, password_hash FROM users WHERE id = $1",
+				expected.id,
+			).Scan(
+				&id,
+				&username,
+				&email,
+				&displayName,
+				&password,
+			),
+		)
 		require.Equal(t, expected.id, id)
 		require.Equal(t, expected.username, username)
 		require.Equal(t, expected.email, email)

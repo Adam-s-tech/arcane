@@ -3,6 +3,8 @@ package search
 // CustomizeItem represents a customization configuration item
 // This struct uses reflection tags to define customization categories and metadata
 // Categories must be grouped together and use `catmeta` tag for category-level metadata
+//
+//nolint:lll // Reflection metadata must remain in single struct-tag literals.
 type CustomizeItem struct {
 	// Defaults category
 	DefaultProjectTemplate   CustomizeVariable `key:"defaultProjectTemplate" meta:"label=Default Project Template;type=select;keywords=template,default,project,scaffold,boilerplate,starter;category=defaults;description=Set the default template for new projects"`

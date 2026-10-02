@@ -117,7 +117,7 @@ func validComposeCacheEntryInternal(mtimes map[string]time.Time) bool {
 		if err != nil {
 			return false
 		}
-		if err := file.Close(); err != nil {
+		if closeErr := file.Close(); closeErr != nil {
 			return false
 		}
 	}
@@ -125,7 +125,17 @@ func validComposeCacheEntryInternal(mtimes map[string]time.Time) bool {
 }
 
 // LoadCachedComposeProject resolves an executable model with isolated cached state.
-func LoadCachedComposeProject(ctx context.Context, cache projecttypes.ComposeCache[*composetypes.Project], projectID, projectPath, composePath, projectName, projectsDirectory string, autoInject bool, pathMapper *PathMapper) (*composetypes.Project, error) {
+func LoadCachedComposeProject(ctx context.Context,
+	cache projecttypes.ComposeCache[*composetypes.Project],
+	projectID,
+	projectPath,
+	composePath,
+	projectName,
+	projectsDirectory string,
+	autoInject bool,
+	pathMapper *PathMapper) (*composetypes.Project,
+	error,
+) {
 	fingerprint := fmt.Sprintf("%q|%q|%q|%t|%#v", composePath, projectName, projectsDirectory, autoInject, pathMapper)
 	if cache != nil {
 		if cached, ok := cache.Get(projectID, fingerprint); ok {
@@ -150,8 +160,8 @@ func LoadCachedComposeProject(ctx context.Context, cache projecttypes.ComposeCac
 	}
 	composeFiles := append(append([]string{}, model.ComposeFiles...), meta.ComposeFiles...)
 	dependencies.EnvFiles = append(dependencies.EnvFiles, meta.EnvFiles...)
-	if err := cache.Set(projectID, fingerprint, projectPath, projectsDirectory, composePath, composeFiles, dependencies.EnvFiles, model); err != nil {
-		return nil, err
+	if setErr := cache.Set(projectID, fingerprint, projectPath, projectsDirectory, composePath, composeFiles, dependencies.EnvFiles, model); setErr != nil {
+		return nil, setErr
 	}
 	return model, nil
 }

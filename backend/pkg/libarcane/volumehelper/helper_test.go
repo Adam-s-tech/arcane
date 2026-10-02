@@ -1,7 +1,6 @@
 package volumehelper
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -43,7 +42,7 @@ func TestResolveHelperImage_UsesLocalToolsImage(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	image, err := ResolveHelperImage(context.Background(), newTestDockerClientInternal(t, server), ToolsImage(""))
+	image, err := ResolveHelperImage(t.Context(), newTestDockerClientInternal(t, server), ToolsImage(""))
 
 	require.NoError(t, err)
 	require.Equal(t, ToolsImage(""), image)
@@ -75,7 +74,7 @@ func TestResolveHelperImage_PullsToolsImageWhenMissing(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	image, err := ResolveHelperImage(context.Background(), newTestDockerClientInternal(t, server), ToolsImage(""))
+	image, err := ResolveHelperImage(t.Context(), newTestDockerClientInternal(t, server), ToolsImage(""))
 
 	require.NoError(t, err)
 	require.Equal(t, ToolsImage(""), image)
@@ -112,7 +111,7 @@ func TestResolveHelperImage_FallsBackToArcaneRuntimeWhenToolsPullFails(t *testin
 	}))
 	t.Cleanup(server.Close)
 
-	image, err := ResolveHelperImage(context.Background(), newTestDockerClientInternal(t, server), ToolsImage(""))
+	image, err := ResolveHelperImage(t.Context(), newTestDockerClientInternal(t, server), ToolsImage(""))
 
 	require.NoError(t, err)
 	require.Equal(t, "arcane:local", image)
@@ -136,7 +135,7 @@ func TestResolveHelperImage_ReturnsPullErrorWhenNoFallbackExists(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	image, err := ResolveHelperImage(context.Background(), newTestDockerClientInternal(t, server), ToolsImage(""))
+	image, err := ResolveHelperImage(t.Context(), newTestDockerClientInternal(t, server), ToolsImage(""))
 
 	require.Error(t, err)
 	require.Empty(t, image)

@@ -73,8 +73,8 @@ func New(databaseURL, encryptionKey, instanceID, port string, options ...local.H
 		names:   &runtime.actorNames,
 	})))
 	if encryptionKey != "" && instanceID != "" {
-		if err := runtime.ConfigureIdentity(encryptionKey, instanceID); err != nil {
-			return nil, err
+		if configureIdentityErr := runtime.ConfigureIdentity(encryptionKey, instanceID); configureIdentityErr != nil {
+			return nil, configureIdentityErr
 		}
 	}
 	runtime.options = append(runtime.options, options...)
@@ -148,24 +148,24 @@ func (r *Runtime) Start(ctx, appCtx context.Context, onFailure func(error)) erro
 	bindRetries := 0
 
 	for {
-		host, errCh, err := r.runHostInternal(runCtx)
-		if err != nil {
+		host, errCh, runHostErr := r.runHostInternal(runCtx)
+		if runHostErr != nil {
 			cancel()
-			r.finishInternal(err)
-			return err
+			r.finishInternal(runHostErr)
+			return runHostErr
 		}
 		select {
 		case <-host.Ready():
-			err = waitForPeerInternal(startupCtx, r.address, errCh)
-			if err != nil {
-				if errors.Is(err, syscall.EADDRINUSE) && bindRetries < 3 {
+			runHostErr = waitForPeerInternal(startupCtx, r.address, errCh)
+			if runHostErr != nil {
+				if errors.Is(runHostErr, syscall.EADDRINUSE) && bindRetries < 3 {
 					<-errCh
 					bindRetries++
 					continue
 				}
 				cancel()
 				r.finishInternal(<-errCh)
-				return err
+				return runHostErr
 			}
 			select {
 			case runErr := <-errCh:
@@ -176,17 +176,17 @@ func (r *Runtime) Start(ctx, appCtx context.Context, onFailure func(error)) erro
 			}
 			r.publishReadyInternal(runCtx, host, errCh, onFailure)
 			return nil
-		case err = <-errCh:
-			if errors.Is(err, syscall.EADDRINUSE) && bindRetries < 3 {
+		case runHostErr = <-errCh:
+			if errors.Is(runHostErr, syscall.EADDRINUSE) && bindRetries < 3 {
 				bindRetries++
 				continue
 			}
-			if !errors.Is(err, components.ErrClusterFull) && !errors.Is(err, components.ErrHostAlreadyRegistered) {
+			if !errors.Is(runHostErr, components.ErrClusterFull) && !errors.Is(runHostErr, components.ErrHostAlreadyRegistered) {
 				cancel()
-				r.finishInternal(err)
-				return err
+				r.finishInternal(runHostErr)
+				return runHostErr
 			}
-			slog.WarnContext(ctx, "Waiting for the previous actor host registration to expire", "error", err)
+			slog.WarnContext(ctx, "Waiting for the previous actor host registration to expire", "error", runHostErr)
 		case <-startupCtx.Done():
 			cancel()
 			r.finishInternal(<-errCh)
@@ -202,9 +202,9 @@ func (r *Runtime) Start(ctx, appCtx context.Context, onFailure func(error)) erro
 		case <-startupCtx.Done():
 			timer.Stop()
 			cancel()
-			err = fmt.Errorf("another Arcane process owns this database or its registration has not expired: %w", startupCtx.Err())
-			r.finishInternal(err)
-			return err
+			runHostErr = fmt.Errorf("another Arcane process owns this database or its registration has not expired: %w", startupCtx.Err())
+			r.finishInternal(runHostErr)
+			return runHostErr
 		}
 	}
 }
@@ -215,19 +215,19 @@ func (r *Runtime) runHostInternal(ctx context.Context) (*local.Host, chan error,
 		return nil, nil, err
 	}
 	for _, registration := range r.registrations {
-		if err := host.RegisterActor(registration.actorType, registration.factory, registration.options...); err != nil {
+		if registerActorErr := host.RegisterActor(registration.actorType, registration.factory, registration.options...); registerActorErr != nil {
 			// Running a canceled host closes its provider-owned connections.
 			cleanupCtx, cancel := context.WithCancel(ctx)
 			cancel()
 			if cleanupErr := host.Run(cleanupCtx); cleanupErr != nil {
-				return nil, nil, errors.Join(err, fmt.Errorf("clean up unregistered actor host: %w", cleanupErr))
+				return nil, nil, errors.Join(registerActorErr, fmt.Errorf("clean up unregistered actor host: %w", cleanupErr))
 			}
-			return nil, nil, err
+			return nil, nil, registerActorErr
 		}
 	}
-	errors := make(chan error, 1)
-	go func() { errors <- host.Run(ctx) }()
-	return host, errors, nil
+	localErrors := make(chan error, 1)
+	go func() { localErrors <- host.Run(ctx) }()
+	return host, localErrors, nil
 }
 
 func (r *Runtime) publishReadyInternal(ctx context.Context, host *local.Host, runErrors <-chan error, onFailure func(error)) {
@@ -280,8 +280,8 @@ func waitForPeerInternal(ctx context.Context, address string, runErrors chan err
 		connection, err := quic.DialAddr(probeCtx, address, tlsConfig, &quic.Config{})
 		cancel()
 		if connection != nil {
-			if err := connection.CloseWithError(0, "readiness probe complete"); err != nil {
-				return fmt.Errorf("close actor readiness probe: %w", err)
+			if closeWithErrorErr := connection.CloseWithError(0, "readiness probe complete"); closeWithErrorErr != nil {
+				return fmt.Errorf("close actor readiness probe: %w", closeWithErrorErr)
 			}
 			return nil
 		}

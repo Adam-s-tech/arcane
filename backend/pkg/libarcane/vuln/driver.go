@@ -193,8 +193,8 @@ func CreateLogTempFile(prefix string) (*os.File, error) {
 		return nil, fmt.Errorf("failed to create trivy temp file (primary: %s) and user cache dir unavailable: %w", primaryErr.Error(), err)
 	}
 	fallbackDir := filepath.Join(cacheDir, "arcane", "trivy-tmp")
-	if err := os.MkdirAll(fallbackDir, 0o700); err != nil {
-		return nil, fmt.Errorf("failed to create trivy fallback temp dir %s (primary: %s): %w", fallbackDir, primaryErr.Error(), err)
+	if mkdirAllErr := os.MkdirAll(fallbackDir, 0o700); mkdirAllErr != nil {
+		return nil, fmt.Errorf("failed to create trivy fallback temp dir %s (primary: %s): %w", fallbackDir, primaryErr.Error(), mkdirAllErr)
 	}
 	fallbackFile, err := os.CreateTemp(fallbackDir, prefix)
 	if err != nil {
@@ -209,18 +209,18 @@ func CleanupLogTempFiles(ctx context.Context, files ...*os.File) {
 			continue
 		}
 
-		path := file.Name()
+		localPath := file.Name()
 		if err := file.Close(); err != nil {
-			slog.WarnContext(ctx, "failed to close trivy temp file", "path", path, "error", err)
+			slog.WarnContext(ctx, "failed to close trivy temp file", "path", localPath, "error", err)
 		}
 
-		if path == "" {
+		if localPath == "" {
 			continue
 		}
 
 		// System temp scratch: no acfs root exists for it.
-		if err := os.Remove(path); err != nil {
-			slog.WarnContext(ctx, "failed to remove trivy temp file", "path", path, "error", err)
+		if err := os.Remove(localPath); err != nil {
+			slog.WarnContext(ctx, "failed to remove trivy temp file", "path", localPath, "error", err)
 		}
 	}
 }
@@ -316,8 +316,8 @@ func ReadStartupLogs(ctx context.Context, dockerClient *client.Client, container
 
 	var stdoutBuf bytes.Buffer
 	var stderrBuf bytes.Buffer
-	if _, err := stdcopy.StdCopy(&stdoutBuf, &stderrBuf, logs); err != nil && !dockerutils.IsExpectedStreamEndError(err) {
-		slog.DebugContext(ctx, "failed to decode trivy startup logs", "containerId", containerID, "error", err)
+	if _, stdCopyErr := stdcopy.StdCopy(&stdoutBuf, &stderrBuf, logs); stdCopyErr != nil && !dockerutils.IsExpectedStreamEndError(stdCopyErr) {
+		slog.DebugContext(ctx, "failed to decode trivy startup logs", "containerId", containerID, "error", stdCopyErr)
 	}
 
 	stdoutLog := TruncateLogOutput(stdoutBuf.String(), errorExcerptSizeInternal)
@@ -539,12 +539,12 @@ func CleanupOutputFileInContainer(ctx context.Context, dockerClient *client.Clie
 		return
 	}
 
-	if _, err := dockerClient.ExecStart(execCtx, execResp.ID, client.ExecStartOptions{}); err != nil {
+	if _, execStartErr := dockerClient.ExecStart(execCtx, execResp.ID, client.ExecStartOptions{}); execStartErr != nil {
 		slog.DebugContext(ctx,
 			"failed to start cleanup exec for trivy output file",
 			"containerId", containerID,
 			"outputPath", outputPath,
-			"error", err,
+			"error", execStartErr,
 		)
 		return
 	}
@@ -622,9 +622,9 @@ func DecodeReportFromBytes(rawOutput []byte) (*vulnerability.TrivyReport, error)
 
 	lastErr := strictErr
 	for _, candidate := range jsonCandidates {
-		report, err := decodeSingleReportInternal(candidate)
+		localReport, err := decodeSingleReportInternal(candidate)
 		if err == nil {
-			return report, nil
+			return localReport, nil
 		}
 		lastErr = err
 	}

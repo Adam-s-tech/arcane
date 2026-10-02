@@ -69,8 +69,8 @@ func (q *Coordinator) retryActivitySyncInternal(ctx context.Context) {
 		}
 		for _, entry := range page.States {
 			var state scheduler.CoordinatorState
-			if err := entry.Data.Decode(&state); err != nil {
-				slog.ErrorContext(ctx, "Decode pending job activities", "error", err)
+			if decodeErr := entry.Data.Decode(&state); decodeErr != nil {
+				slog.ErrorContext(ctx, "Decode pending job activities", "error", decodeErr)
 				continue
 			}
 			for runID := range state.PendingActivitySync {

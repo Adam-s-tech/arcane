@@ -1,7 +1,6 @@
 package projects
 
 import (
-	"context"
 	"reflect"
 	"testing"
 
@@ -33,7 +32,7 @@ func TestWrapDockerCLIWithInspectCompatibility(t *testing.T) {
 }
 
 func TestPlainComposeClientCachedPerDockerHost(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	first, shared, err := plainComposeClientInternal(ctx, "tcp://first.example.com:2375")
 	require.NoError(t, err)

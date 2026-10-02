@@ -14,6 +14,7 @@ import (
 	arcaneupdater "github.com/getarcaneapp/arcane/types/v2/updater"
 	"github.com/moby/moby/api/types/container"
 	image "github.com/moby/moby/api/types/image"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
@@ -26,23 +27,84 @@ import (
 func TestFrozenTargetsPreserveAllSelectedContainers(t *testing.T) {
 	db := setupProjectTestDBInternal(t)
 	digest := "sha256:desired"
-	require.NoError(t, db.Create(&imageupdate.ImageUpdateRecord{ID: "shared-image", Repository: "registry.example.com/app", Tag: "latest", HasUpdate: true, LatestDigest: &digest}).Error)
+	require.NoError(
+		t,
+		db.Create(&imageupdate.ImageUpdateRecord{
+			ID:           "shared-image",
+			Repository:   "registry.example.com/app",
+			Tag:          "latest",
+			HasUpdate:    true,
+			LatestDigest: &digest,
+		}).Error,
+	)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if strings.HasSuffix(r.URL.Path, "/containers/json") {
-			require.NoError(t, json.MarshalWrite(w, []container.Summary{{ID: "a", Names: []string{"/a"}, Image: "registry.example.com/app:latest"}, {ID: "b", Names: []string{"/b"}, Image: "registry.example.com/app:latest"}}))
+			if !assert.NoError(
+				t,
+				json.MarshalWrite(
+					w,
+					[]container.Summary{
+						{
+							ID:    "a",
+							Names: []string{"/a"},
+							Image: "registry.example.com/app:latest",
+						},
+						{
+							ID:    "b",
+							Names: []string{"/b"},
+							Image: "registry.example.com/app:latest",
+						},
+					},
+				),
+			) {
+				return
+			}
 			return
 		}
 		for _, id := range []string{"a", "b"} {
 			if strings.HasSuffix(r.URL.Path, "/containers/"+id+"/json") {
-				require.NoError(t, json.MarshalWrite(w, container.InspectResponse{ID: id, Name: "/" + id, Image: "sha256:old", Config: &container.Config{Image: "registry.example.com/app:latest"}, State: &container.State{StartedAt: "baseline"}}))
+				if !assert.NoError(
+					t,
+					json.MarshalWrite(
+						w,
+						container.InspectResponse{
+							ID:     id,
+							Name:   "/" + id,
+							Image:  "sha256:old",
+							Config: &container.Config{Image: "registry.example.com/app:latest"},
+							State:  &container.State{StartedAt: "baseline"},
+						},
+					),
+				) {
+					return
+				}
 				return
 			}
 		}
 		http.NotFound(w, r)
 	}))
 	defer server.Close()
-	svc, err := NewUpdaterService(db, nil, (&docker.DockerClientService{}).WithClient(newTestDockerClientInternal(t, server)), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	svc, err := NewUpdaterService(
+		db,
+		nil,
+		(&docker.DockerClientService{}).WithClient(newTestDockerClientInternal(
+			t,
+			server,
+		)),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+	)
 	require.NoError(t, err)
 	var evidence []byte
 	ctx := jobcontext.WithExecution(t.Context(), schedulertypes.Run{ID: "run"}, func(target schedulertypes.TargetOutcome) error {
@@ -75,19 +137,66 @@ func TestFrozenTargetConfirmsReplacementAndRejectsUnknownEffect(t *testing.T) {
 				w.Header().Set("Content-Type", "application/json")
 				switch {
 				case strings.HasSuffix(r.URL.Path, "/containers/json"):
-					require.NoError(t, json.MarshalWrite(w, []container.Summary{{ID: test.id, Names: []string{"/app"}}}))
+					if !assert.NoError(t, json.MarshalWrite(w, []container.Summary{{ID: test.id, Names: []string{"/app"}}})) {
+						return
+					}
 				case strings.Contains(r.URL.Path, "/images/"):
-					require.NoError(t, json.MarshalWrite(w, image.InspectResponse{ID: "sha256:desired"}))
+					if !assert.NoError(t, json.MarshalWrite(w, image.InspectResponse{ID: "sha256:desired"})) {
+						return
+					}
 				case strings.Contains(r.URL.Path, "/containers/"):
-					require.NoError(t, json.MarshalWrite(w, container.InspectResponse{ID: test.id, Name: "/app", Image: test.image, Config: &container.Config{}, State: &container.State{StartedAt: "baseline"}}))
+					if !assert.NoError(
+						t,
+						json.MarshalWrite(
+							w,
+							container.InspectResponse{
+								ID:     test.id,
+								Name:   "/app",
+								Image:  test.image,
+								Config: &container.Config{},
+								State:  &container.State{StartedAt: "baseline"},
+							},
+						),
+					) {
+						return
+					}
 				default:
 					http.NotFound(w, r)
 				}
 			}))
 			defer server.Close()
-			svc, err := NewUpdaterService(nil, nil, (&docker.DockerClientService{}).WithClient(newTestDockerClientInternal(t, server)), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+			svc, err := NewUpdaterService(
+				nil,
+				nil,
+				(&docker.DockerClientService{}).WithClient(newTestDockerClientInternal(
+					t,
+					server,
+				)),
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+			)
 			require.NoError(t, err)
-			confirmed, unchanged, err := svc.confirmFrozenTargetInternal(t.Context(), arcaneupdater.FrozenUpdateTarget{ContainerID: "old", ContainerName: "app", BaselineImageID: "sha256:baseline", BaselineStartedAt: "baseline", DesiredImageRef: "registry.example.com/app:latest", DesiredDigest: "sha256:desired"})
+			confirmed, unchanged, err := svc.confirmFrozenTargetInternal(
+				t.Context(),
+				arcaneupdater.FrozenUpdateTarget{
+					ContainerID:       "old",
+					ContainerName:     "app",
+					BaselineImageID:   "sha256:baseline",
+					BaselineStartedAt: "baseline",
+					DesiredImageRef:   "registry.example.com/app:latest",
+					DesiredDigest:     "sha256:desired",
+				},
+			)
 			require.NoError(t, err)
 			require.Equal(t, test.confirmed, confirmed)
 			require.Equal(t, test.unchanged, unchanged)
@@ -102,10 +211,22 @@ func TestSingleUpdateRepairsAcceptedIntentBeforeDispatch(t *testing.T) {
 	require.NoError(t, svc.RegisterActors(runtime))
 	francistest.Start(t, runtime)
 	command := arcaneupdater.SingleUpdateCommand{ContainerID: "missing", ActivityID: "accepted"}
-	require.NoError(t, runtime.Service().SetState(t.Context(), singleUpdateStateTypeInternal, command.ActivityID, arcaneupdater.SingleUpdateState{Command: command, Status: "queued"}, nil))
+	require.NoError(
+		t,
+		runtime.Service().SetState(
+			t.Context(),
+			singleUpdateStateTypeInternal,
+			command.ActivityID,
+			arcaneupdater.SingleUpdateState{
+				Command: command,
+				Status:  "queued",
+			},
+			nil,
+		),
+	)
 	require.NoError(t, svc.Start(t.Context()))
 	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Second)
 		defer cancel()
 		require.NoError(t, svc.Stop(ctx))
 	})
@@ -126,23 +247,61 @@ func TestSingleUpdatePersistsSuccessfulActivity(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/containers/json"):
-			require.NoError(t, json.MarshalWrite(w, []container.Summary{{ID: "app", Names: []string{"/app"}, Image: immutableRef, State: "running"}}))
+			if !assert.NoError(t, json.MarshalWrite(w, []container.Summary{{ID: "app", Names: []string{"/app"}, Image: immutableRef, State: "running"}})) {
+				return
+			}
 		case strings.HasSuffix(r.URL.Path, "/containers/app/json"):
-			require.NoError(t, json.MarshalWrite(w, container.InspectResponse{ID: "app", Name: "/app", Image: "sha256:baseline", Config: &container.Config{Image: immutableRef}, State: &container.State{StartedAt: "baseline", Running: true}}))
+			if !assert.NoError(
+				t,
+				json.MarshalWrite(
+					w,
+					container.InspectResponse{
+						ID:     "app",
+						Name:   "/app",
+						Image:  "sha256:baseline",
+						Config: &container.Config{Image: immutableRef},
+						State: &container.State{
+							StartedAt: "baseline",
+							Running:   true,
+						},
+					},
+				),
+			) {
+				return
+			}
 		default:
 			http.NotFound(w, r)
 		}
 	}))
 	defer server.Close()
 	activityService := activity.NewActivityService(db, nil)
-	svc, err := NewUpdaterService(db, nil, (&docker.DockerClientService{}).WithClient(newTestDockerClientInternal(t, server)), nil, nil, nil, nil, nil, nil, nil, activityService, nil, nil, nil, nil)
+	svc, err := NewUpdaterService(
+		db,
+		nil,
+		(&docker.DockerClientService{}).WithClient(newTestDockerClientInternal(
+			t,
+			server,
+		)),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		activityService,
+		nil,
+		nil,
+		nil,
+		nil,
+	)
 	require.NoError(t, err)
 	runtime := francistest.New(t)
 	require.NoError(t, svc.RegisterActors(runtime))
 	francistest.Start(t, runtime)
 	require.NoError(t, svc.Start(t.Context()))
 	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Second)
 		defer cancel()
 		require.NoError(t, svc.Stop(ctx))
 	})
@@ -153,8 +312,8 @@ func TestSingleUpdatePersistsSuccessfulActivity(t *testing.T) {
 		if runtime.Service().GetState(t.Context(), singleUpdateStateTypeInternal, accepted.ID, &state) != nil || state.Status != "completed" {
 			return false
 		}
-		detail, err := activityService.GetActivityDetail(t.Context(), "0", accepted.ID, 1)
-		return err == nil && detail.Activity.Status == activitytypes.StatusSuccess
+		detail, getActivityDetailErr := activityService.GetActivityDetail(t.Context(), "0", accepted.ID, 1)
+		return getActivityDetailErr == nil && detail.Activity.Status == activitytypes.StatusSuccess
 	}, 3*time.Second, 10*time.Millisecond)
 	detail, err := activityService.GetActivityDetail(t.Context(), "0", accepted.ID, 1)
 	require.NoError(t, err)

@@ -276,7 +276,34 @@ func (s *SystemService) runSystemPruneInternal(ctx context.Context, req system.P
 		slog.ErrorContext(ctx, "Prune operations failed", "error", err)
 	}
 
-	slog.InfoContext(ctx, "Selective prune operation completed", "success", result.Success, "containers_pruned", len(result.ContainersPruned), "images_deleted", len(result.ImagesDeleted), "volumes_deleted", len(result.VolumesDeleted), "networks_deleted", len(result.NetworksDeleted), "space_reclaimed", result.SpaceReclaimed, "error_count", len(result.Errors))
+	slog.InfoContext(
+		ctx,
+		"Selective prune operation completed",
+		"success",
+		result.Success,
+		"containers_pruned",
+		len(
+			result.ContainersPruned,
+		),
+		"images_deleted",
+		len(
+			result.ImagesDeleted,
+		),
+		"volumes_deleted",
+		len(
+			result.VolumesDeleted,
+		),
+		"networks_deleted",
+		len(
+			result.NetworksDeleted,
+		),
+		"space_reclaimed",
+		result.SpaceReclaimed,
+		"error_count",
+		len(
+			result.Errors,
+		),
+	)
 	s.completeSystemPruneActivityInternal(ctx, activityID, result)
 }
 
@@ -284,7 +311,7 @@ func (s *SystemService) startSystemPruneActivityInternal(ctx context.Context, en
 	if s.activityService == nil {
 		return ""
 	}
-	activity, err := s.activityService.StartActivity(ctx, activity.StartActivityRequest{
+	localActivity, err := s.activityService.StartActivity(ctx, activity.StartActivityRequest{
 		EnvironmentID: environmentID,
 		Type:          activitytypes.TypeSystemPrune,
 		ResourceType:  new("system"),
@@ -303,7 +330,7 @@ func (s *SystemService) startSystemPruneActivityInternal(ctx context.Context, en
 		slog.DebugContext(ctx, "failed to start system prune activity", "error", err)
 		return ""
 	}
-	return activity.ID
+	return localActivity.ID
 }
 
 func (s *SystemService) appendSystemPruneActivityMessageInternal(ctx context.Context, activityID, message string, progress int) {
@@ -343,7 +370,20 @@ func (s *SystemService) completeSystemPruneActivityInternal(ctx context.Context,
 	}
 }
 
-func (s *SystemService) performBatchContainerAction(ctx context.Context, containers []mobycontainer.Summary, actionName string, shouldProcess func(mobycontainer.Summary) bool, action func(context.Context, string) error) *containertypes.ActionResult {
+func (
+	s *SystemService,
+) performBatchContainerAction(
+	ctx context.Context,
+	containers []mobycontainer.Summary,
+	actionName string,
+	shouldProcess func(
+		mobycontainer.Summary,
+	) bool,
+	action func(
+		context.Context,
+		string,
+	) error,
+) *containertypes.ActionResult {
 	result := &containertypes.ActionResult{Success: true}
 	var mu sync.Mutex
 
@@ -465,7 +505,7 @@ func (s *SystemService) startSystemContainerActivityInternal(ctx context.Context
 	if s.activityService == nil {
 		return ""
 	}
-	activity, err := s.activityService.StartActivity(ctx, activity.StartActivityRequest{
+	localActivity, err := s.activityService.StartActivity(ctx, activity.StartActivityRequest{
 		EnvironmentID: environmentID,
 		Type:          activityType,
 		ResourceType:  new("system"),
@@ -478,7 +518,7 @@ func (s *SystemService) startSystemContainerActivityInternal(ctx context.Context
 		slog.DebugContext(ctx, "failed to start system container activity", "type", activityType, "error", err)
 		return ""
 	}
-	return activity.ID
+	return localActivity.ID
 }
 
 func (s *SystemService) completeSystemContainerActivityInternal(ctx context.Context, activityID, successMessage string, result *containertypes.ActionResult) {
@@ -566,8 +606,8 @@ func (s *SystemService) pruneImagesInternal(ctx context.Context, options system.
 		}
 	}
 
-	if err := s.imageUpdateService.DeleteRecordsForImages(ctx, idsToDelete); err != nil {
-		slog.WarnContext(ctx, "Failed to delete image update records", "count", len(idsToDelete), "error", err.Error())
+	if deleteRecordsForImagesErr := s.imageUpdateService.DeleteRecordsForImages(ctx, idsToDelete); deleteRecordsForImagesErr != nil {
+		slog.WarnContext(ctx, "Failed to delete image update records", "count", len(idsToDelete), "error", deleteRecordsForImagesErr.Error())
 	}
 
 	result.ImagesDeleted = idsToDelete

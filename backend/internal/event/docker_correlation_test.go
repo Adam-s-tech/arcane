@@ -108,7 +108,21 @@ func TestCreateEventCorrelationEligibility(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			db := setupEventServiceTestDB(t)
 			svc := NewEventService(db, nil, nil)
-			_, err := svc.CreateEvent(t.Context(), CreateEventRequest{Type: tc.eventType, Title: "action", ResourceType: new(strings.SplitN(string(tc.eventType), ".", 2)[0]), ResourceID: new("id"), EnvironmentID: tc.environment, Metadata: database.JSON{"source": tc.source}})
+			_, err := svc.CreateEvent(
+				t.Context(),
+				CreateEventRequest{
+					Type:  tc.eventType,
+					Title: "action",
+					ResourceType: new(strings.SplitN(
+						string(tc.eventType),
+						".",
+						2,
+					)[0]),
+					ResourceID:    new("id"),
+					EnvironmentID: tc.environment,
+					Metadata:      database.JSON{"source": tc.source},
+				},
+			)
 			require.NoError(t, err)
 			require.Equal(t, tc.want, svc.ShouldSuppressDaemonEvent(strings.SplitN(string(tc.eventType), ".", 2)[0], "id", "", ""))
 		})

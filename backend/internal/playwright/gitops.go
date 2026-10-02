@@ -43,16 +43,16 @@ func (ps *PlaywrightService) CreateTestGitOpsProject(ctx context.Context) error 
 	}
 	// CreateSync already ran the initial sync; retry only if it failed.
 	if !created || sync.LastSyncStatus == nil || *sync.LastSyncStatus != "success" || sync.LastSyncError != nil {
-		result, err := ps.syncService.PerformSync(ctx, "0", sync.ID, *actor)
-		if err != nil {
-			return fmt.Errorf("failed to sync GitOps test project: %w", err)
+		result, performSyncErr := ps.syncService.PerformSync(ctx, "0", sync.ID, *actor)
+		if performSyncErr != nil {
+			return fmt.Errorf("failed to sync GitOps test project: %w", performSyncErr)
 		}
 		if !result.Success {
 			return fmt.Errorf("GitOps test sync failed: %s", result.Message)
 		}
-		sync, err = ps.syncService.GetSyncByID(ctx, "0", sync.ID)
-		if err != nil {
-			return err
+		sync, performSyncErr = ps.syncService.GetSyncByID(ctx, "0", sync.ID)
+		if performSyncErr != nil {
+			return performSyncErr
 		}
 	}
 	if sync.ProjectID == nil || sync.LastSyncCommit == nil || *sync.LastSyncCommit == "" || sync.LastSyncStatus == nil || *sync.LastSyncStatus != "success" || sync.LastSyncError != nil {
@@ -62,7 +62,11 @@ func (ps *PlaywrightService) CreateTestGitOpsProject(ctx context.Context) error 
 	if err != nil {
 		return fmt.Errorf("failed to verify GitOps test project: %w", err)
 	}
-	if details.Name != testProjectNameInternal || details.GitOpsManagedBy == nil || *details.GitOpsManagedBy != sync.ID || details.LastSyncCommit == nil || *details.LastSyncCommit != *sync.LastSyncCommit {
+	if details.Name != testProjectNameInternal ||
+		details.GitOpsManagedBy == nil ||
+		*details.GitOpsManagedBy != sync.ID ||
+		details.LastSyncCommit == nil ||
+		*details.LastSyncCommit != *sync.LastSyncCommit {
 		return errors.New("GitOps test project does not match its managed sync")
 	}
 	return nil
@@ -79,26 +83,26 @@ func (ps *PlaywrightService) ensureTestRepositoryInternal(ctx context.Context, a
 		if repository.Name != testRepositoryNameInternal {
 			continue
 		}
-		updated, err := ps.repositoryService.UpdateRepository(ctx, repository.ID, gitopstypes.UpdateRepositoryRequest{
+		updated, updateRepositoryErr := ps.repositoryService.UpdateRepository(ctx, repository.ID, gitopstypes.UpdateRepositoryRequest{
 			Name: new(testRepositoryNameInternal), URL: new(testRepositoryURLInternal), AuthType: new("none"), Enabled: new(true),
 		}, actor)
-		if err != nil {
-			return "", err
+		if updateRepositoryErr != nil {
+			return "", updateRepositoryErr
 		}
 		repositoryID = updated.ID
 		break
 	}
 	if repositoryID == "" {
-		created, err := ps.repositoryService.CreateRepository(ctx, gitopstypes.CreateRepositoryRequest{
+		created, createRepositoryErr := ps.repositoryService.CreateRepository(ctx, gitopstypes.CreateRepositoryRequest{
 			Name: testRepositoryNameInternal, URL: testRepositoryURLInternal, AuthType: "none", Enabled: new(true),
 		}, actor)
-		if err != nil {
-			return "", err
+		if createRepositoryErr != nil {
+			return "", createRepositoryErr
 		}
 		repositoryID = created.ID
 	}
-	if err := ps.repositoryService.TestConnection(ctx, repositoryID, testBranchInternal, actor); err != nil {
-		return "", fmt.Errorf("failed to connect to GitOps test repository: %w", err)
+	if testConnectionErr := ps.repositoryService.TestConnection(ctx, repositoryID, testBranchInternal, actor); testConnectionErr != nil {
+		return "", fmt.Errorf("failed to connect to GitOps test repository: %w", testConnectionErr)
 	}
 	return repositoryID, nil
 }
@@ -113,12 +117,12 @@ func (ps *PlaywrightService) ensureTestSyncInternal(ctx context.Context, reposit
 		if sync.Name != testSyncNameInternal {
 			continue
 		}
-		updated, err := ps.syncService.UpdateSync(ctx, "0", sync.ID, gitopstypes.UpdateSyncRequest{
+		updated, updateSyncErr := ps.syncService.UpdateSync(ctx, "0", sync.ID, gitopstypes.UpdateSyncRequest{
 			Name: new(testSyncNameInternal), RepositoryID: new(repositoryID), Branch: new(testBranchInternal), ComposePath: new(testComposePathInternal),
 			TargetType: new("project"), ProjectName: new(testProjectNameInternal), AutoSync: new(false), SyncDirectory: new(false), PullImageAfterSync: new(false), RedeployAfterSync: new(false),
 		}, actor)
-		if err != nil {
-			return nil, false, err
+		if updateSyncErr != nil {
+			return nil, false, updateSyncErr
 		}
 		return updated, false, nil
 	}

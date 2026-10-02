@@ -44,8 +44,8 @@ func (c *composeCoordinatorInternal) Deploy(ctx context.Context, request project
 		}
 	}()
 	if request.PreDeploy != nil {
-		if err := request.PreDeploy(ctx); err != nil {
-			return nil, fmt.Errorf("pre-deploy lifecycle hook failed: %w", err)
+		if preDeployErr := request.PreDeploy(ctx); preDeployErr != nil {
+			return nil, fmt.Errorf("pre-deploy lifecycle hook failed: %w", preDeployErr)
 		}
 	}
 	model, err := request.Load(ctx)
@@ -66,17 +66,20 @@ func (c *composeCoordinatorInternal) Deploy(ctx context.Context, request project
 		pullPolicy = NormalizeDeployPullPolicy(request.DefaultPullPolicy)
 	}
 	pullPolicy = cmp.Or(pullPolicy, "missing")
-	if err := c.PrepareImagesForDeploy(ctx, request.ProjectID, model, request.Progress, operations, pullPolicy); err != nil {
-		return nil, fmt.Errorf("failed to prepare project images for deploy: %w", err)
+	if prepareImagesForDeployErr := c.PrepareImagesForDeploy(ctx, request.ProjectID, model, request.Progress, operations, pullPolicy); prepareImagesForDeployErr != nil {
+		return nil, fmt.Errorf("failed to prepare project images for deploy: %w", prepareImagesForDeployErr)
 	}
 	removeOrphans := ResolveRemoveOrphans(request.GitOpsManaged, request.Options)
 	slog.InfoContext(ctx, "starting compose up with health check support", "projectID", request.ProjectID, "projectName", model.Name, "services", len(model.Services), "removeOrphans", removeOrphans)
-	if err := c.commands.Up(ctx, model, nil, removeOrphans, forceRecreate, recreateVolumes, request.AuthConfigs, request.WaitTimeout); err != nil {
-		slog.ErrorContext(ctx, "compose up failed", "projectName", model.Name, "projectID", request.ProjectID, "error", err)
-		if strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "context deadline exceeded") {
-			return nil, fmt.Errorf("deployment timed out waiting for services - long-running 'service_healthy'/'service_completed_successfully' dependencies may need a higher Deploy Wait Timeout setting, and 'service_healthy' requires a healthcheck: %w", err)
+	if upErr := c.commands.Up(ctx, model, nil, removeOrphans, forceRecreate, recreateVolumes, request.AuthConfigs, request.WaitTimeout); upErr != nil {
+		slog.ErrorContext(ctx, "compose up failed", "projectName", model.Name, "projectID", request.ProjectID, "error", upErr)
+		if strings.Contains(upErr.Error(), "timeout") || strings.Contains(upErr.Error(), "context deadline exceeded") {
+			return nil,
+				fmt.Errorf("deployment timed out waiting for services - long-running 'service_healthy'/'service_completed_successfully' dependencies "+
+					"may need a higher Deploy Wait Timeout setting, and 'service_healthy' requires a healthcheck: %w",
+					upErr)
 		}
-		return nil, fmt.Errorf("failed to deploy project: %w", err)
+		return nil, fmt.Errorf("failed to deploy project: %w", upErr)
 	}
 	slog.InfoContext(ctx, "compose up completed successfully", "projectID", request.ProjectID, "projectName", model.Name)
 	return model, nil
@@ -97,29 +100,29 @@ func (c *composeCoordinatorInternal) UpdateServices(ctx context.Context, request
 		}
 		return err
 	}
-	if err := c.PullServices(ctx, selected, request.Services, request.Images, request.Progress); err != nil {
+	if pullServicesErr := c.PullServices(ctx, selected, request.Services, request.Images, request.Progress); pullServicesErr != nil {
 		if request.RestoreBeforeMutation != nil {
 			request.RestoreBeforeMutation(ctx)
 		}
-		return fmt.Errorf("pull updated service images: %w", err)
+		return fmt.Errorf("pull updated service images: %w", pullServicesErr)
 	}
-	if err := c.commands.Stop(ctx, selected, scope); err != nil {
-		slog.WarnContext(ctx, "compose stop failed, continuing", "error", err)
+	if stopErr := c.commands.Stop(ctx, selected, scope); stopErr != nil {
+		slog.WarnContext(ctx, "compose stop failed, continuing", "error", stopErr)
 	}
-	if err := c.commands.Up(ctx, selected, scope, false, true, false, request.AuthConfigs, request.WaitTimeout); err != nil {
+	if upErr := c.commands.Up(ctx, selected, scope, false, true, false, request.AuthConfigs, request.WaitTimeout); upErr != nil {
 		if request.Recover != nil {
 			request.Recover(ctx)
 		}
-		return fmt.Errorf("failed to up services: %w", err)
+		return fmt.Errorf("failed to up services: %w", upErr)
 	}
 	// Stopped dependents are recreated after the up so they resolve the new
 	// provider containers, and are left stopped.
 	if len(request.StoppedDependents) > 0 {
-		if err := c.commands.Create(ctx, selected, request.StoppedDependents, request.AuthConfigs); err != nil {
+		if createErr := c.commands.Create(ctx, selected, request.StoppedDependents, request.AuthConfigs); createErr != nil {
 			if request.Recover != nil {
 				request.Recover(ctx)
 			}
-			return fmt.Errorf("failed to recreate stopped dependents: %w", err)
+			return fmt.Errorf("failed to recreate stopped dependents: %w", createErr)
 		}
 	}
 	return nil
@@ -259,20 +262,20 @@ func (c *composeCoordinatorInternal) PrepareImagesForDeploy(
 	}
 
 	for name, svc := range project.Services {
-		svc, imageName, updated := PrepareDeployServiceConfig(projectID, project.Name, name, svc)
+		localSvc, imageName, updated := PrepareDeployServiceConfig(projectID, project.Name, name, svc)
 		if updated {
-			project.Services[name] = svc
+			project.Services[name] = localSvc
 		}
 
 		if imageName == "" {
 			continue
 		}
 
-		decision := DecideDeployImageAction(svc, pullPolicyOverride)
+		decision := DecideDeployImageAction(localSvc, pullPolicyOverride)
 		if updated {
 			decision = DeployImageDecision{Build: true}
 		}
-		if err := c.ensureDeployServiceImageReadyInternal(ctx, projectID, project, name, svc, imageName, decision, progressWriter, operations); err != nil {
+		if err := c.ensureDeployServiceImageReadyInternal(ctx, projectID, project, name, localSvc, imageName, decision, progressWriter, operations); err != nil {
 			return err
 		}
 
@@ -287,14 +290,14 @@ func (c *composeCoordinatorInternal) PrepareImagesForDeploy(
 		case decision.PullIfStale:
 			dependentDecision = DeployImageDecision{PullIfStale: true, StaleAfter: decision.StaleAfter}
 		}
-		dependentImages := api.GetDependentImages(svc, project.Name)
-		for _, vol := range svc.Volumes {
+		dependentImages := api.GetDependentImages(localSvc, project.Name)
+		for _, vol := range localSvc.Volumes {
 			if vol.Type == composetypes.VolumeTypeImage && strings.TrimSpace(vol.Source) != "" {
 				dependentImages = append(dependentImages, strings.TrimSpace(vol.Source))
 			}
 		}
 		for _, img := range dependentImages {
-			if err := c.ensureDeployServiceImageReadyInternal(ctx, projectID, project, name, svc, img, dependentDecision, progressWriter, operations); err != nil {
+			if err := c.ensureDeployServiceImageReadyInternal(ctx, projectID, project, name, localSvc, img, dependentDecision, progressWriter, operations); err != nil {
 				return err
 			}
 		}
@@ -376,14 +379,20 @@ func (c *composeCoordinatorInternal) buildServiceImageForDeployInternal(
 		project.Services[serviceName] = updatedSvc
 	}
 
-	if err := operations.Build(ctx, buildReq, progressWriter, serviceName); err != nil {
-		return err
+	if buildErr := operations.Build(ctx, buildReq, progressWriter, serviceName); buildErr != nil {
+		return buildErr
 	}
 
 	return nil
 }
 
-func (c *composeCoordinatorInternal) BuildServices(ctx context.Context, projectID string, project *composetypes.Project, options projecttypes.BuildOptions, progressWriter io.Writer, operations projecttypes.ComposeImageOperations) error {
+func (c *composeCoordinatorInternal) BuildServices(ctx context.Context,
+	projectID string,
+	project *composetypes.Project,
+	options projecttypes.BuildOptions,
+	progressWriter io.Writer,
+	operations projecttypes.ComposeImageOperations,
+) error {
 	if operations.Build == nil {
 		return nil
 	}
@@ -411,8 +420,8 @@ func (c *composeCoordinatorInternal) BuildServices(ctx context.Context, projectI
 		}
 
 		buildCount++
-		if err := operations.Build(ctx, buildReq, progressWriter, name); err != nil {
-			return err
+		if buildErr := operations.Build(ctx, buildReq, progressWriter, name); buildErr != nil {
+			return buildErr
 		}
 	}
 

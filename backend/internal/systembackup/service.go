@@ -83,7 +83,17 @@ type SystemBackupService struct {
 	jobs            *entityjobs.Registry
 }
 
-func NewSystemBackupService(db *database.DB, dockerService *docker.DockerClientService, volumeService *volume.VolumeService, engine *backup.Engine, s3Destinations *s3domain.S3DestinationService, activityService *activity.ActivityService, settingsService *settings.SettingsService, cfg *config.Config, recoveryKeys *backup.RecoveryKeyStore) *SystemBackupService {
+func NewSystemBackupService(
+	db *database.DB,
+	dockerService *docker.DockerClientService,
+	volumeService *volume.VolumeService,
+	engine *backup.Engine,
+	s3Destinations *s3domain.S3DestinationService,
+	activityService *activity.ActivityService,
+	settingsService *settings.SettingsService,
+	cfg *config.Config,
+	recoveryKeys *backup.RecoveryKeyStore,
+) *SystemBackupService {
 	service := &SystemBackupService{
 		db: db, dockerService: dockerService, volumeService: volumeService, engine: engine,
 		s3Destinations: s3Destinations, activityService: activityService, settingsService: settingsService, config: cfg,
@@ -199,8 +209,8 @@ func (s *SystemBackupService) writeManifestInternal(ctx context.Context, backupI
 	if err != nil {
 		return fmt.Errorf("failed to encode recovery manifest: %w", err)
 	}
-	if err := os.WriteFile(layout.manifestPathInternal(), data, 0o600); err != nil {
-		return fmt.Errorf("failed to write recovery manifest: %w", err)
+	if writeFileErr := os.WriteFile(layout.manifestPathInternal(), data, 0o600); writeFileErr != nil {
+		return fmt.Errorf("failed to write recovery manifest: %w", writeFileErr)
 	}
 	return nil
 }
@@ -247,7 +257,17 @@ func (s *SystemBackupService) recoveryKeyInternal(ctx context.Context, supplied 
 
 // resolveBackupPlanInternal resolves which destinations a run targets, from
 // either the policy or the request's destination enum.
-func (s *SystemBackupService) resolveBackupPlanInternal(ctx context.Context, request backuptypes.CreateSystemBackupRequest) (localEnabled, s3Enabled bool, destinationID string, destination backuptypes.SystemBackupDestination, err error) {
+func (
+	s *SystemBackupService,
+) resolveBackupPlanInternal(
+	ctx context.Context,
+	request backuptypes.CreateSystemBackupRequest,
+) (
+	localEnabled, s3Enabled bool,
+	destinationID string,
+	destination backuptypes.SystemBackupDestination,
+	err error,
+) {
 	destinationID = strings.TrimSpace(request.S3DestinationID)
 	if request.PolicyID != "" {
 		policy, policyErr := s.loadPolicyInternal(ctx, request.PolicyID)
@@ -297,7 +317,19 @@ func (s *SystemBackupService) CreateBackup(ctx context.Context, user common.User
 	return s.createBackupInternal(ctx, trigger, request)
 }
 
-func (s *SystemBackupService) createStagedSystemRecoverySnapshotInternal(ctx context.Context, dockerClient *client.Client, recoveryKey, backupID, destinationID string, localEnabled, s3Enabled bool) (backup.Snapshot, backup.Repository, bool, error) {
+func (
+	s *SystemBackupService,
+) createStagedSystemRecoverySnapshotInternal(
+	ctx context.Context,
+	dockerClient *client.Client,
+	recoveryKey, backupID, destinationID string,
+	localEnabled, s3Enabled bool,
+) (
+	backup.Snapshot,
+	backup.Repository,
+	bool,
+	error,
+) {
 	localRepository, err := s.localRepositoryInternal(ctx, dockerClient, false)
 	var snapshot backup.Snapshot
 	if err == nil {
@@ -358,8 +390,8 @@ func (s *SystemBackupService) prepareBackupInternal(ctx context.Context, trigger
 	}
 	run := &SystemBackupRun{CreatedAt: time.Now().UTC(), Status: SystemBackupStatusRunning, Trigger: trigger, Destination: destination, S3DestinationID: destinationID, PolicyID: request.PolicyID}
 	run.ID = "system-" + uuid.New().String()
-	if err := s.db.WithContext(ctx).Create(run).Error; err != nil {
-		return nil, err
+	if createBackupRunErr := s.db.WithContext(ctx).Create(run).Error; createBackupRunErr != nil {
+		return nil, createBackupRunErr
 	}
 	checkpoint, err := json.Marshal(systemBackupRecoveryInternal{BackupID: run.ID, LocalEnabled: localEnabled, S3Enabled: s3Enabled})
 	if err == nil {
@@ -381,8 +413,8 @@ func (s *SystemBackupService) executeBackupInternal(ctx context.Context, prepare
 	if err != nil {
 		return run, err
 	}
-	if err := jobcontext.Progress(ctx, schedulertypes.TargetOutcome{ResourceType: "backup_destination", ID: run.ID + ":stage", Status: schedulertypes.Running}); err != nil {
-		return run, err
+	if progressErr := jobcontext.Progress(ctx, schedulertypes.TargetOutcome{ResourceType: "backup_destination", ID: run.ID + ":stage", Status: schedulertypes.Running}); progressErr != nil {
+		return run, progressErr
 	}
 	stagedSnapshot, stagingRepository, directRemote, err := s.createStagedSystemRecoverySnapshotInternal(
 		ctx, dockerClient, recoveryKey, run.ID, destinationID, localEnabled, s3Enabled,
@@ -390,13 +422,21 @@ func (s *SystemBackupService) executeBackupInternal(ctx context.Context, prepare
 	if err != nil {
 		return run, err
 	}
-	if err := jobcontext.Progress(ctx, schedulertypes.TargetOutcome{ResourceType: "backup_destination", ID: run.ID + ":stage", Status: schedulertypes.Succeeded, Message: stagedSnapshot.ID}); err != nil {
-		return run, err
+	if startDestinationProgressErr := jobcontext.Progress(
+		ctx,
+		schedulertypes.TargetOutcome{
+			ResourceType: "backup_destination",
+			ID:           run.ID + ":stage",
+			Status:       schedulertypes.Succeeded,
+			Message:      stagedSnapshot.ID,
+		},
+	); startDestinationProgressErr != nil {
+		return run, startDestinationProgressErr
 	}
 	if directRemote {
 		run.RemoteSnapshotID, run.Size = stagedSnapshot.ID, stagedSnapshot.Size
-		if err := s.db.WithContext(ctx).Save(run).Error; err != nil {
-			return run, err
+		if saveDisabledBackupErr := s.db.WithContext(ctx).Save(run).Error; saveDisabledBackupErr != nil {
+			return run, saveDisabledBackupErr
 		}
 		return run, nil
 	}
@@ -416,16 +456,24 @@ func (s *SystemBackupService) executeBackupInternal(ctx context.Context, prepare
 	}()
 	if localEnabled {
 		run.LocalSnapshotID, run.Size = stagedSnapshot.ID, stagedSnapshot.Size
-		if err := s.db.WithContext(ctx).Save(run).Error; err != nil {
-			return run, err
+		if saveLocalBackupErr := s.db.WithContext(ctx).Save(run).Error; saveLocalBackupErr != nil {
+			return run, saveLocalBackupErr
 		}
-		if err := jobcontext.Progress(ctx, schedulertypes.TargetOutcome{ResourceType: "backup_destination", ID: run.ID + ":local", Status: schedulertypes.Succeeded, Message: stagedSnapshot.ID}); err != nil {
-			return run, err
+		if localDestinationProgressErr := jobcontext.Progress(
+			ctx,
+			schedulertypes.TargetOutcome{
+				ResourceType: "backup_destination",
+				ID:           run.ID + ":local",
+				Status:       schedulertypes.Succeeded,
+				Message:      stagedSnapshot.ID,
+			},
+		); localDestinationProgressErr != nil {
+			return run, localDestinationProgressErr
 		}
 	}
 	if s3Enabled {
-		if err := s.replicateBackupInternal(ctx, dockerClient, prepared, localRepository, stagedSnapshot); err != nil {
-			return run, err
+		if replicateBackupErr := s.replicateBackupInternal(ctx, dockerClient, prepared, localRepository, stagedSnapshot); replicateBackupErr != nil {
+			return run, replicateBackupErr
 		}
 	}
 	return run, nil
@@ -449,7 +497,15 @@ func (s *SystemBackupService) completeBackupInternal(ctx context.Context, run *S
 	return err
 }
 
-func (s *SystemBackupService) replicateBackupInternal(ctx context.Context, dockerClient *client.Client, prepared *preparedSystemBackupInternal, localRepository backup.Repository, stagedSnapshot backup.Snapshot) error {
+func (
+	s *SystemBackupService,
+) replicateBackupInternal(
+	ctx context.Context,
+	dockerClient *client.Client,
+	prepared *preparedSystemBackupInternal,
+	localRepository backup.Repository,
+	stagedSnapshot backup.Snapshot,
+) error {
 	run := prepared.run
 	remoteRepository, repoErr := s.remoteRepositoryInternal(ctx, run.S3DestinationID)
 	if repoErr != nil {
@@ -458,7 +514,18 @@ func (s *SystemBackupService) replicateBackupInternal(ctx context.Context, docke
 	if err := jobcontext.Progress(ctx, schedulertypes.TargetOutcome{ResourceType: "backup_destination", ID: run.ID + ":remote", Status: schedulertypes.Running}); err != nil {
 		return err
 	}
-	remoteSnapshot, replicateErr := s.engine.Replicate(ctx, dockerClient, localRepository, stagedSnapshot.ID, remoteRepository, prepared.recoveryKey, "arcane-system-recovery", backup.RunSnapshotTag(run.ID))
+	remoteSnapshot, replicateErr := s.engine.Replicate(
+		ctx,
+		dockerClient,
+		localRepository,
+		stagedSnapshot.ID,
+		remoteRepository,
+		prepared.recoveryKey,
+		"arcane-system-recovery",
+		backup.RunSnapshotTag(
+			run.ID,
+		),
+	)
 	if replicateErr != nil {
 		return fmt.Errorf("failed to create S3 system recovery snapshot: %w", replicateErr)
 	}
@@ -469,20 +536,28 @@ func (s *SystemBackupService) replicateBackupInternal(ctx context.Context, docke
 	if err := s.db.WithContext(ctx).Save(run).Error; err != nil {
 		return err
 	}
-	if err := jobcontext.Progress(ctx, schedulertypes.TargetOutcome{ResourceType: "backup_destination", ID: run.ID + ":remote", Status: schedulertypes.Succeeded, Message: remoteSnapshot.ID}); err != nil {
+	if err := jobcontext.Progress(
+		ctx,
+		schedulertypes.TargetOutcome{
+			ResourceType: "backup_destination",
+			ID:           run.ID + ":remote",
+			Status:       schedulertypes.Succeeded,
+			Message:      remoteSnapshot.ID,
+		},
+	); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (s *SystemBackupService) ListBackups(ctx context.Context, params pagination.QueryParams) ([]backuptypes.SystemBackupRun, pagination.Response, error) {
-	var runs []SystemBackupRun
+	var localRuns []SystemBackupRun
 	query := s.db.WithContext(ctx).Model(&SystemBackupRun{})
 	if term := strings.TrimSpace(params.Search); term != "" {
 		pattern := "%" + term + "%"
 		query = query.Where("status LIKE ? OR trigger LIKE ? OR destination LIKE ? OR error LIKE ?", pattern, pattern, pattern, pattern)
 	}
-	response, err := pagination.PaginateAndSortDB(params, query, &runs)
+	response, err := pagination.PaginateAndSortDB(params, query, &localRuns)
 	if err != nil {
 		return nil, pagination.Response{}, fmt.Errorf("failed to list system backups: %w", err)
 	}
@@ -493,11 +568,11 @@ func (s *SystemBackupService) ListBackups(ctx context.Context, params pagination
 		}
 	}
 	remoteAvailable := backup.RemoteSnapshotChecker(ctx, s.s3Destinations, "arcane-system-recovery")
-	result := make([]backuptypes.SystemBackupRun, len(runs))
-	for i := range runs {
-		runs[i].S3DestinationName = names[runs[i].S3DestinationID].Name
-		result[i] = runs[i].ToDTO()
-		result[i].RemoteAvailable = remoteAvailable(runs[i].S3DestinationID, runs[i].RemoteSnapshotID)
+	result := make([]backuptypes.SystemBackupRun, len(localRuns))
+	for i := range localRuns {
+		localRuns[i].S3DestinationName = names[localRuns[i].S3DestinationID].Name
+		result[i] = localRuns[i].ToDTO()
+		result[i].RemoteAvailable = remoteAvailable(localRuns[i].S3DestinationID, localRuns[i].RemoteSnapshotID)
 	}
 	return result, response, nil
 }
@@ -588,7 +663,16 @@ func (session systemBackupSnapshotSessionInternal) inspectReadableSnapshotIntern
 	return systemBackupSnapshotInternal{systemBackupSnapshotLocationInternal: location, layout: layout}, nil
 }
 
-func (session systemBackupSnapshotSessionInternal) firstReadableSnapshotInternal(ctx context.Context, locations []systemBackupSnapshotLocationInternal, setupErr error) (systemBackupSnapshotInternal, error) {
+func (
+	session systemBackupSnapshotSessionInternal,
+) firstReadableSnapshotInternal(
+	ctx context.Context,
+	locations []systemBackupSnapshotLocationInternal,
+	setupErr error,
+) (
+	systemBackupSnapshotInternal,
+	error,
+) {
 	inspectErr := setupErr
 	for _, location := range locations {
 		snapshot, err := session.inspectReadableSnapshotInternal(ctx, location)
@@ -629,7 +713,17 @@ func (session systemBackupSnapshotSessionInternal) inspectProjectManifestInterna
 	return snapshot, nil
 }
 
-func (session systemBackupSnapshotSessionInternal) availableProjectSnapshotsInternal(ctx context.Context, locations []systemBackupSnapshotLocationInternal, setupErr error, firstOnly bool) ([]systemBackupSnapshotInternal, error) {
+func (
+	session systemBackupSnapshotSessionInternal,
+) availableProjectSnapshotsInternal(
+	ctx context.Context,
+	locations []systemBackupSnapshotLocationInternal,
+	setupErr error,
+	firstOnly bool,
+) (
+	[]systemBackupSnapshotInternal,
+	error,
+) {
 	snapshots := make([]systemBackupSnapshotInternal, 0, len(locations))
 	inspectErr := setupErr
 	for _, location := range locations {
@@ -734,7 +828,16 @@ func (s *SystemBackupService) BrowseBackupFiles(ctx context.Context, id, recover
 
 // openSafetySnapshotInternal resolves the safety run's snapshot in the same
 // repository the restore reads from and indexes the project paths it holds.
-func (session systemBackupSnapshotSessionInternal) openSafetySnapshotInternal(ctx context.Context, source systemBackupSnapshotInternal, safetyRun *SystemBackupRun) (systemBackupSafetySnapshotInternal, error) {
+func (
+	session systemBackupSnapshotSessionInternal,
+) openSafetySnapshotInternal(
+	ctx context.Context,
+	source systemBackupSnapshotInternal,
+	safetyRun *SystemBackupRun,
+) (
+	systemBackupSafetySnapshotInternal,
+	error,
+) {
 	location := source.systemBackupSnapshotLocationInternal
 	location.name = "safety"
 	if source.destination == backuptypes.SystemBackupDestinationS3 {
@@ -763,7 +866,14 @@ func removeProjectFileInternal(ctx context.Context, projectsDirectory, selectedP
 	return acfs.RemoveAll(ctx, projectsDirectory, selectedPath)
 }
 
-func (session systemBackupSnapshotSessionInternal) restoreEntryInternal(ctx context.Context, snapshots []systemBackupSnapshotInternal, selected backuptypes.BackupFileEntry, destination projectsRestoreDestinationInternal) error {
+func (
+	session systemBackupSnapshotSessionInternal,
+) restoreEntryInternal(
+	ctx context.Context,
+	snapshots []systemBackupSnapshotInternal,
+	selected backuptypes.BackupFileEntry,
+	destination projectsRestoreDestinationInternal,
+) error {
 	var restoreErr error
 	for _, snapshot := range snapshots {
 		if !snapshotContainsProjectEntryInternal(snapshot, selected) {
@@ -820,7 +930,14 @@ func safetySnapshotContainsPathInternal(safety systemBackupSafetySnapshotInterna
 	return false
 }
 
-func (session systemBackupSnapshotSessionInternal) rollbackInternal(ctx context.Context, safety systemBackupSafetySnapshotInternal, selected []backuptypes.BackupFileEntry, destination projectsRestoreDestinationInternal) error {
+func (
+	session systemBackupSnapshotSessionInternal,
+) rollbackInternal(
+	ctx context.Context,
+	safety systemBackupSafetySnapshotInternal,
+	selected []backuptypes.BackupFileEntry,
+	destination projectsRestoreDestinationInternal,
+) error {
 	var rollbackErr error
 	for _, selectedEntry := range slices.Backward(selected) {
 		if !safetySnapshotContainsPathInternal(safety, selectedEntry.Path) {
@@ -845,7 +962,15 @@ func (session systemBackupSnapshotSessionInternal) rollbackInternal(ctx context.
 	return rollbackErr
 }
 
-func (session systemBackupSnapshotSessionInternal) restoreSelectedInternal(ctx context.Context, snapshots []systemBackupSnapshotInternal, safety systemBackupSafetySnapshotInternal, selected []backuptypes.BackupFileEntry, destination projectsRestoreDestinationInternal) error {
+func (
+	session systemBackupSnapshotSessionInternal,
+) restoreSelectedInternal(
+	ctx context.Context,
+	snapshots []systemBackupSnapshotInternal,
+	safety systemBackupSafetySnapshotInternal,
+	selected []backuptypes.BackupFileEntry,
+	destination projectsRestoreDestinationInternal,
+) error {
 	restored := make([]backuptypes.BackupFileEntry, 0, len(selected))
 	for _, selectedEntry := range selected {
 		if err := session.restoreEntryInternal(ctx, snapshots, selectedEntry, destination); err != nil {
@@ -951,10 +1076,10 @@ func (s *SystemBackupService) DeleteBackup(ctx context.Context, id, recoveryKey 
 }
 
 // deleteRunsInternal forgets snapshots grouped by repository under the caller's run lease.
-func (s *SystemBackupService) deleteRunsInternal(ctx context.Context, runs []*SystemBackupRun, recoveryKey string, includeRemote bool) error {
+func (s *SystemBackupService) deleteRunsInternal(ctx context.Context, localRuns2 []*SystemBackupRun, recoveryKey string, includeRemote bool) error {
 	var localRuns []*SystemBackupRun
 	remoteGroups := make(map[string][]*SystemBackupRun)
-	for _, run := range runs {
+	for _, run := range localRuns2 {
 		if run.LocalSnapshotID != "" {
 			localRuns = append(localRuns, run)
 		}
@@ -979,10 +1104,10 @@ func (s *SystemBackupService) deleteRunsInternal(ctx context.Context, runs []*Sy
 	for destinationID, group := range remoteGroups {
 		deleteErr = errors.Join(deleteErr, s.forgetRemoteSnapshotsInternal(ctx, dockerClient, key, destinationID, group))
 	}
-	for _, run := range runs {
+	for _, run := range localRuns2 {
 		if run.LocalSnapshotID == "" && run.RemoteSnapshotID == "" {
-			if err := s.db.WithContext(ctx).Delete(run).Error; err != nil {
-				deleteErr = errors.Join(deleteErr, fmt.Errorf("failed to delete system backup record: %w", err))
+			if deleteBackupRunErr := s.db.WithContext(ctx).Delete(run).Error; deleteBackupRunErr != nil {
+				deleteErr = errors.Join(deleteErr, fmt.Errorf("failed to delete system backup record: %w", deleteBackupRunErr))
 			}
 			continue
 		}
@@ -993,12 +1118,12 @@ func (s *SystemBackupService) deleteRunsInternal(ctx context.Context, runs []*Sy
 	return deleteErr
 }
 
-func (s *SystemBackupService) forgetLocalSnapshotsInternal(ctx context.Context, dockerClient *client.Client, key string, runs []*SystemBackupRun) error {
-	if len(runs) == 0 {
+func (s *SystemBackupService) forgetLocalSnapshotsInternal(ctx context.Context, dockerClient *client.Client, key string, localRuns []*SystemBackupRun) error {
+	if len(localRuns) == 0 {
 		return nil
 	}
-	snapshotIDs := make([]string, len(runs))
-	for index, run := range runs {
+	snapshotIDs := make([]string, len(localRuns))
+	for index, run := range localRuns {
 		snapshotIDs[index] = run.LocalSnapshotID
 	}
 	repository, repoErr := s.localRepositoryInternal(ctx, dockerClient, false)
@@ -1008,15 +1133,15 @@ func (s *SystemBackupService) forgetLocalSnapshotsInternal(ctx context.Context, 
 	if repoErr != nil {
 		return fmt.Errorf("failed to delete local snapshots: %w", repoErr)
 	}
-	for _, run := range runs {
+	for _, run := range localRuns {
 		run.LocalSnapshotID = ""
 	}
 	return nil
 }
 
-func (s *SystemBackupService) forgetRemoteSnapshotsInternal(ctx context.Context, dockerClient *client.Client, key, destinationID string, runs []*SystemBackupRun) error {
-	snapshotIDs := make([]string, len(runs))
-	for index, run := range runs {
+func (s *SystemBackupService) forgetRemoteSnapshotsInternal(ctx context.Context, dockerClient *client.Client, key, destinationID string, localRuns []*SystemBackupRun) error {
+	snapshotIDs := make([]string, len(localRuns))
+	for index, run := range localRuns {
 		snapshotIDs[index] = run.RemoteSnapshotID
 	}
 	repository, repoErr := s.remoteRepositoryInternal(ctx, destinationID)
@@ -1026,7 +1151,7 @@ func (s *SystemBackupService) forgetRemoteSnapshotsInternal(ctx context.Context,
 	if repoErr != nil {
 		return fmt.Errorf("failed to delete S3 snapshots: %w", repoErr)
 	}
-	for _, run := range runs {
+	for _, run := range localRuns {
 		run.RemoteSnapshotID, run.S3DestinationID = "", ""
 	}
 	return nil
@@ -1050,10 +1175,10 @@ func (s *SystemBackupService) DiscoverRemoteBackups(ctx context.Context, request
 		return 0, fmt.Errorf("failed to open system recovery repository: %w", err)
 	}
 	var knownIDs []string
-	if err := s.db.WithContext(ctx).Model(&SystemBackupRun{}).
+	if loadSnapshotIDsErr := s.db.WithContext(ctx).Model(&SystemBackupRun{}).
 		Where("s3_destination_id = ? AND remote_snapshot_id <> ''", request.S3DestinationID).
-		Pluck("remote_snapshot_id", &knownIDs).Error; err != nil {
-		return 0, err
+		Pluck("remote_snapshot_id", &knownIDs).Error; loadSnapshotIDsErr != nil {
+		return 0, loadSnapshotIDsErr
 	}
 	known := make(map[string]struct{}, len(knownIDs))
 	for _, id := range knownIDs {
@@ -1077,8 +1202,8 @@ func (s *SystemBackupService) DiscoverRemoteBackups(ctx context.Context, request
 			RemoteSnapshotID: snapshot.ID, S3DestinationID: request.S3DestinationID,
 		}
 		run.ID = fmt.Sprintf("remote-%s-%s", request.S3DestinationID, snapshot.ID)
-		if err := s.db.WithContext(ctx).Create(run).Error; err != nil {
-			return created, fmt.Errorf("failed to save discovered system backup: %w", err)
+		if createDiscoveredBackupErr := s.db.WithContext(ctx).Create(run).Error; createDiscoveredBackupErr != nil {
+			return created, fmt.Errorf("failed to save discovered system backup: %w", createDiscoveredBackupErr)
 		}
 		created++
 	}
@@ -1129,8 +1254,8 @@ func (s *SystemBackupService) UploadBackup(ctx context.Context, id string, reque
 	}
 	run.RemoteSnapshotID, run.S3DestinationID = snapshot.ID, request.S3DestinationID
 	run.Destination = backuptypes.SystemBackupDestinationLocalS3
-	if err := s.db.WithContext(ctx).Save(run).Error; err != nil {
-		return nil, fmt.Errorf("failed to save uploaded system backup: %w", err)
+	if saveUploadedBackupErr := s.db.WithContext(ctx).Save(run).Error; saveUploadedBackupErr != nil {
+		return nil, fmt.Errorf("failed to save uploaded system backup: %w", saveUploadedBackupErr)
 	}
 	return run, nil
 }
@@ -1218,8 +1343,8 @@ func (s *SystemBackupService) RestoreBackup(ctx context.Context, id, recoveryKey
 		return fmt.Errorf("encode recovery request: %w", err)
 	}
 	requestFile := path.Join("/app/data", systemRecoveryRequestName)
-	if err := os.WriteFile(requestFile, requestData, 0o600); err != nil {
-		return fmt.Errorf("write recovery request: %w", err)
+	if writeFileErr := os.WriteFile(requestFile, requestData, 0o600); writeFileErr != nil {
+		return fmt.Errorf("write recovery request: %w", writeFileErr)
 	}
 	cleanupRequest := true
 	defer func() {
@@ -1231,7 +1356,10 @@ func (s *SystemBackupService) RestoreBackup(ctx context.Context, id, recoveryKey
 		func(ctx context.Context, containerPath string) (string, error) {
 			return projects.GetHostPathForContainerPath(ctx, dockerClient, containerPath)
 		},
-		func() bool { _, err := cgroup.CurrentContainerID(); return err == nil },
+		func() bool {
+			_, currentContainerIDErr := cgroup.CurrentContainerID()
+			return currentContainerIDErr == nil
+		},
 		func(ctx context.Context, inspect *containertypes.InspectResponse, dockerHost string) string {
 			return dockerutil.SelectDockerHostReachableNetworkMode(ctx, dockerClient, inspect, dockerHost)
 		},
@@ -1269,9 +1397,9 @@ func (s *SystemBackupService) RestoreBackup(ctx context.Context, id, recoveryKey
 	if err != nil {
 		return fmt.Errorf("create recovery helper container: %w", err)
 	}
-	if _, err := dockerClient.ContainerStart(ctx, created.ID, client.ContainerStartOptions{}); err != nil {
+	if _, containerStartErr := dockerClient.ContainerStart(ctx, created.ID, client.ContainerStartOptions{}); containerStartErr != nil {
 		_, _ = dockerClient.ContainerRemove(ctx, created.ID, client.ContainerRemoveOptions{Force: true})
-		return fmt.Errorf("start recovery helper container: %w", err)
+		return fmt.Errorf("start recovery helper container: %w", containerStartErr)
 	}
 	cleanupRequest = false
 	return nil
@@ -1337,28 +1465,28 @@ func (s *SystemBackupService) SetRecoveryKey(ctx context.Context, recoveryKey st
 	}
 	if configured {
 		if current, keyErr := s.recoveryKeyInternal(ctx, ""); keyErr == nil && current != recoveryKey {
-			var runs int64
-			if err := s.db.WithContext(ctx).Model(&SystemBackupRun{}).Count(&runs).Error; err != nil {
-				return nil, err
+			var localRuns int64
+			if countLocalBackupsErr := s.db.WithContext(ctx).Model(&SystemBackupRun{}).Count(&localRuns).Error; countLocalBackupsErr != nil {
+				return nil, countLocalBackupsErr
 			}
-			if runs > 0 {
+			if localRuns > 0 {
 				return nil, errors.New("delete the existing system backups before replacing the recovery key; they can only be opened with the current key")
 			}
 			var volumeBackups int64
-			if err := s.db.WithContext(ctx).Model(&volume.VolumeBackup{}).Where("format = ?", volume.VolumeBackupFormatRustic).Count(&volumeBackups).Error; err != nil {
-				return nil, err
+			if countVolumeBackupsErr := s.db.WithContext(ctx).Model(&volume.VolumeBackup{}).Where("format = ?", volume.VolumeBackupFormatRustic).Count(&volumeBackups).Error; countVolumeBackupsErr != nil {
+				return nil, countVolumeBackupsErr
 			}
 			if volumeBackups > 0 {
 				return nil, errors.New("delete the existing volume backups before replacing the recovery key; they can only be opened with the current key")
 			}
 		}
 	}
-	if err := s.recoveryKeys.Set(ctx, recoveryKey); err != nil {
-		return nil, err
+	if setErr := s.recoveryKeys.Set(ctx, recoveryKey); setErr != nil {
+		return nil, setErr
 	}
 	if s.volumeService != nil {
-		if err := s.volumeService.MigrateRepositoryPasswords(ctx); err != nil {
-			slog.WarnContext(ctx, "failed to re-key volume backup repositories to the recovery key", "error", err.Error())
+		if migrateRepositoryPasswordsErr := s.volumeService.MigrateRepositoryPasswords(ctx); migrateRepositoryPasswordsErr != nil {
+			slog.WarnContext(ctx, "failed to re-key volume backup repositories to the recovery key", "error", migrateRepositoryPasswordsErr.Error())
 		}
 	}
 	return &backuptypes.SystemBackupRecoveryKeyStatus{Configured: true}, nil
@@ -1433,8 +1561,8 @@ func (s *SystemBackupService) UpdatePolicies(ctx context.Context, updates []back
 		Unregister: s.jobs.Unregister,
 		Reschedule: s.rescheduleSystemBackupPolicyInternal,
 	}
-	if err := reconcile.Run(ctx, updates); err != nil {
-		return nil, err
+	if runErr := reconcile.Run(ctx, updates); runErr != nil {
+		return nil, runErr
 	}
 	return s.GetPolicies(ctx)
 }
@@ -1540,9 +1668,9 @@ func (s *SystemBackupService) rescheduleSystemBackupPolicyInternal(ctx context.C
 				return outcome, err
 			}
 			if current != nil && current.RetentionCount > 0 {
-				if err := s.applyRetentionInternal(ctx, current.ID, current.RetentionCount, current.S3Enabled); err != nil {
+				if applyRetentionErr := s.applyRetentionInternal(ctx, current.ID, current.RetentionCount, current.S3Enabled); applyRetentionErr != nil {
 					outcome.Status = schedulertypes.Partial
-					return outcome, err
+					return outcome, applyRetentionErr
 				}
 			}
 			return outcome, nil
@@ -1585,11 +1713,11 @@ func (s *SystemBackupService) applyRetentionInternal(ctx context.Context, policy
 		return ErrSystemBackupAlreadyRunning
 	}
 	defer lease.Release(ctx)
-	var runs []*SystemBackupRun
-	if err := s.db.WithContext(ctx).Where("id IN ?", expired).Find(&runs).Error; err != nil {
-		return err
+	var localRuns []*SystemBackupRun
+	if loadExpiredBackupsErr := s.db.WithContext(ctx).Where("id IN ?", expired).Find(&localRuns).Error; loadExpiredBackupsErr != nil {
+		return loadExpiredBackupsErr
 	}
-	return s.deleteRunsInternal(ctx, runs, "", includeRemote)
+	return s.deleteRunsInternal(ctx, localRuns, "", includeRemote)
 }
 
 func (s *SystemBackupService) disableMissingS3Internal(ctx context.Context, policy *SystemBackupPolicy) (bool, error) {
@@ -1740,7 +1868,10 @@ func (s *SystemBackupService) backupSourceLayoutInternal(ctx context.Context, do
 
 var (
 	errProjectsOutsideDataInternal = errors.New("the backup-time projects directory is outside Arcane's system backup data")
-	errProjectsNotInBackupInternal = errors.New("this system backup does not include the projects directory because it was created before Arcane backed up separately mounted projects; create a new system backup to restore project files")
+	errProjectsNotInBackupInternal = errors.New(
+		"this system backup does not include the projects directory because it was created before Arcane " +
+			"backed up separately mounted projects; create a new system backup to restore project files",
+	)
 	manifestCandidateRootsInternal = []string{snapshotDataPath, "/", "/app/data"}
 )
 
@@ -1994,7 +2125,16 @@ func (s *SystemBackupService) projectsRestoreDestinationInternal(ctx context.Con
 // and projects into the current container layout. Projects get their own
 // stage unless the snapshot already holds them at their current place under
 // the data root.
-func restoreStagesInternal(mounts []containertypes.MountPoint, dataDirectory, projectsDirectory string, repository recoverytypes.RestoreRepository, snapshotID string, layout snapshotLayoutInternal) ([]recoverytypes.RestoreStage, error) {
+func restoreStagesInternal(
+	mounts []containertypes.MountPoint,
+	dataDirectory, projectsDirectory string,
+	repository recoverytypes.RestoreRepository,
+	snapshotID string,
+	layout snapshotLayoutInternal,
+) (
+	[]recoverytypes.RestoreStage,
+	error,
+) {
 	separate := layout.projectsIncludedInternal() && !layout.projectsCoveredByDataInternal(dataDirectory, projectsDirectory)
 	if separate && layout.projectsPath == layout.dataPath {
 		return nil, fmt.Errorf("the backup keeps projects in Arcane's data directory; set the projects directory to %s before a full restore, or restore individual project files instead", dataDirectory)

@@ -2,7 +2,6 @@ package admin
 
 import (
 	"bytes"
-	"context"
 	"testing"
 	"time"
 
@@ -54,7 +53,7 @@ func TestConfirmMFAResetInternal(t *testing.T) {
 
 func TestResetMFACommandServiceStatePreservesPasskey(t *testing.T) {
 	db := newResetMFATestDBInternal(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	user := &common.User{
 		ID:                "mfa-reset-user",
 		Username:          "alice",

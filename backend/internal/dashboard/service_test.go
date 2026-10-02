@@ -48,7 +48,7 @@ func setupDashboardServiceTestDB(t *testing.T) (*database.DB, *settings.Settings
 	require.NoError(t, db.AutoMigrate(&apikey.ApiKey{}, &environment.Environment{}, &imageupdate.ImageUpdateRecord{}, &project.Project{}, &settings.SettingVariable{}))
 
 	databaseDB := &database.DB{DB: db}
-	settingsSvc, err := newSettingsServiceForTestInternal(context.Background(), t, databaseDB)
+	settingsSvc, err := newSettingsServiceForTestInternal(t.Context(), t, databaseDB)
 	require.NoError(t, err)
 
 	return databaseDB, settingsSvc
@@ -56,12 +56,12 @@ func setupDashboardServiceTestDB(t *testing.T) (*database.DB, *settings.Settings
 
 func createDashboardTestAPIKey(t *testing.T, db *database.DB, key apikey.ApiKey) {
 	t.Helper()
-	require.NoError(t, db.WithContext(context.Background()).Create(&key).Error)
+	require.NoError(t, db.WithContext(t.Context()).Create(&key).Error)
 }
 
 func createDashboardTestImageUpdateRecord(t *testing.T, db *database.DB, record imageupdate.ImageUpdateRecord) {
 	t.Helper()
-	require.NoError(t, db.WithContext(context.Background()).Create(&record).Error)
+	require.NoError(t, db.WithContext(t.Context()).Create(&record).Error)
 }
 
 func newDashboardTestDockerService(
@@ -184,12 +184,12 @@ func TestDashboardService_GetSnapshot_ReturnsDashboardSnapshot(t *testing.T) {
 	dockerSvc := newDashboardTestDockerService(t, settingsSvc, containers, images, volumes)
 	projectsDir := t.TempDir()
 	t.Setenv("PROJECTS_DIRECTORY", projectsDir)
-	require.NoError(t, settingsSvc.SetStringSetting(context.Background(), "projectsDirectory", projectsDir))
-	require.NoError(t, settingsSvc.SetStringSetting(context.Background(), "autoUpdateExcludedContainers", "stopped-app"))
+	require.NoError(t, settingsSvc.SetStringSetting(t.Context(), "projectsDirectory", projectsDir))
+	require.NoError(t, settingsSvc.SetStringSetting(t.Context(), "autoUpdateExcludedContainers", "stopped-app"))
 	projectPath := createComposeProjectDirInternal(t, projectsDir, "project-with-update")
 	require.NoError(t, os.WriteFile(filepath.Join(projectPath, "compose.yaml"), []byte("services:\n  app:\n    image: repo/worker:latest\n"), 0o644))
 	dirName := "project-with-update"
-	require.NoError(t, db.WithContext(context.Background()).Create(&project.Project{
+	require.NoError(t, db.WithContext(t.Context()).Create(&project.Project{
 		ID:      "project-with-update",
 		Name:    "project-with-update",
 		DirName: &dirName,
@@ -200,7 +200,7 @@ func TestDashboardService_GetSnapshot_ReturnsDashboardSnapshot(t *testing.T) {
 	projectSvc := project.NewProjectService(db, settingsSvc, nil, imageSvc, nil, nil, nil, nil, config.Load(), nil, nil)
 	svc := NewDashboardService(db, dockerSvc, nil, projectSvc, imageSvc, settingsSvc, nil, nil, nil, volume.NewVolumeService(db, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil))
 
-	snapshot, err := svc.GetSnapshot(context.Background(), DashboardActionItemsOptions{}, true)
+	snapshot, err := svc.GetSnapshot(t.Context(), DashboardActionItemsOptions{}, true)
 	require.NoError(t, err)
 	require.NotNil(t, snapshot)
 
@@ -255,7 +255,7 @@ func TestDashboardService_GetSnapshot_DebugAllGoodOnlyClearsActionItems(t *testi
 	dockerSvc := newDashboardTestDockerService(t, settingsSvc, containers, images, nil)
 	svc := NewDashboardService(db, dockerSvc, nil, nil, nil, settingsSvc, nil, nil, nil, nil)
 
-	snapshot, err := svc.GetSnapshot(context.Background(), DashboardActionItemsOptions{DebugAllGood: true}, true)
+	snapshot, err := svc.GetSnapshot(t.Context(), DashboardActionItemsOptions{DebugAllGood: true}, true)
 	require.NoError(t, err)
 	require.NotNil(t, snapshot)
 
@@ -296,7 +296,7 @@ func TestDashboardService_GetSnapshot_EnrichesPinnedReferencesInternal(t *testin
 	dockerSvc := newDashboardTestDockerService(t, settingsSvc, containers, images, nil)
 	svc := NewDashboardService(db, dockerSvc, nil, nil, nil, settingsSvc, nil, nil, nil, nil)
 
-	snapshot, err := svc.GetSnapshot(context.Background(), DashboardActionItemsOptions{}, true)
+	snapshot, err := svc.GetSnapshot(t.Context(), DashboardActionItemsOptions{}, true)
 	require.NoError(t, err)
 	require.NotNil(t, snapshot)
 
@@ -321,29 +321,13 @@ func createComposeProjectDirInternal(t *testing.T, root, name string) string {
 	return projectPath
 }
 
-// createTestRemoteEnvironmentInternal inserts an enabled, online remote environment.
-func createTestRemoteEnvironmentInternal(t *testing.T, db *database.DB, environmentID, name, apiURL, token string) {
-	t.Helper()
-	now := time.Now()
-	require.NoError(t, db.Create(&environment.Environment{
-		ID:          environmentID,
-		CreatedAt:   now,
-		UpdatedAt:   &now,
-		Name:        name,
-		ApiUrl:      apiURL,
-		Status:      string(environment.EnvironmentStatusOnline),
-		Enabled:     true,
-		AccessToken: &token,
-	}).Error)
-}
-
 // newSettingsServiceForTestInternal builds a SettingsService backed by its own actor runtime,
 // stopped when the test ends.
 func newSettingsServiceForTestInternal(ctx context.Context, t testing.TB, db *database.DB) (*settings.SettingsService, error) {
 	t.Helper()
 	svc, err := settings.NewSettingsService(ctx, db)
 	if err == nil {
-		t.Cleanup(func() { require.NoError(t, svc.Stop(context.Background())) })
+		t.Cleanup(func() { require.NoError(t, svc.Stop(context.WithoutCancel(t.Context()))) })
 	}
 	return svc, err
 }
@@ -352,8 +336,26 @@ func TestDashboardService_GetSnapshot_TrimmedOmitsTablesAndSharesBuilds(t *testi
 	db, settingsSvc := setupDashboardServiceTestDB(t)
 
 	containers := []dockercontainer.Summary{
-		{ID: "container-running", Names: []string{"/running-app"}, Image: "repo/app:stable", ImageID: "sha256:image-a", Created: 1700000000, State: "running", Status: "Up 2 hours", Labels: map[string]string{}},
-		{ID: "container-stopped", Names: []string{"/stopped-app"}, Image: "repo/worker:latest", ImageID: "sha256:image-b", Created: 1800000000, State: "exited", Status: "Exited (0) 1 hour ago", Labels: map[string]string{}},
+		{
+			ID:      "container-running",
+			Names:   []string{"/running-app"},
+			Image:   "repo/app:stable",
+			ImageID: "sha256:image-a",
+			Created: 1700000000,
+			State:   "running",
+			Status:  "Up 2 hours",
+			Labels:  map[string]string{},
+		},
+		{
+			ID:      "container-stopped",
+			Names:   []string{"/stopped-app"},
+			Image:   "repo/worker:latest",
+			ImageID: "sha256:image-b",
+			Created: 1800000000,
+			State:   "exited",
+			Status:  "Exited (0) 1 hour ago",
+			Labels:  map[string]string{},
+		},
 	}
 	images := []dockerimage.Summary{
 		{ID: "sha256:image-a", RepoTags: []string{"repo/app:stable"}, Created: 1710000000, Size: 100},
@@ -363,7 +365,7 @@ func TestDashboardService_GetSnapshot_TrimmedOmitsTablesAndSharesBuilds(t *testi
 	dockerSvc := newDashboardTestDockerService(t, settingsSvc, containers, images, nil)
 	svc := NewDashboardService(db, dockerSvc, nil, nil, nil, settingsSvc, nil, nil, nil, nil)
 
-	trimmed, err := svc.GetSnapshot(context.Background(), DashboardActionItemsOptions{}, false)
+	trimmed, err := svc.GetSnapshot(t.Context(), DashboardActionItemsOptions{}, false)
 	require.NoError(t, err)
 	require.NotNil(t, trimmed)
 
@@ -378,12 +380,12 @@ func TestDashboardService_GetSnapshot_TrimmedOmitsTablesAndSharesBuilds(t *testi
 	require.Equal(t, 2, trimmed.ImageUsageCounts.Total)
 
 	// Within the TTL every subscriber shares the same build.
-	again, err := svc.GetSnapshot(context.Background(), DashboardActionItemsOptions{}, false)
+	again, err := svc.GetSnapshot(t.Context(), DashboardActionItemsOptions{}, false)
 	require.NoError(t, err)
 	require.Same(t, trimmed, again)
 
 	// The full variant is cached separately and still carries the tables.
-	full, err := svc.GetSnapshot(context.Background(), DashboardActionItemsOptions{}, true)
+	full, err := svc.GetSnapshot(t.Context(), DashboardActionItemsOptions{}, true)
 	require.NoError(t, err)
 	require.NotNil(t, full)
 	require.Len(t, full.Containers.Data, 2)
@@ -394,18 +396,27 @@ func TestDashboardService_GetSnapshot_CachesFullSnapshotsPerIconCatalog(t *testi
 	db, settingsSvc := setupDashboardServiceTestDB(t)
 
 	containers := []dockercontainer.Summary{
-		{ID: "container-running", Names: []string{"/running-app"}, Image: "repo/app:stable", ImageID: "sha256:image-a", Created: 1700000000, State: "running", Status: "Up 2 hours", Labels: map[string]string{"arcane.icon": "myapp"}},
+		{
+			ID:      "container-running",
+			Names:   []string{"/running-app"},
+			Image:   "repo/app:stable",
+			ImageID: "sha256:image-a",
+			Created: 1700000000,
+			State:   "running",
+			Status:  "Up 2 hours",
+			Labels:  map[string]string{"arcane.icon": "myapp"},
+		},
 	}
 	images := []dockerimage.Summary{
 		{ID: "sha256:image-a", RepoTags: []string{"repo/app:stable"}, Created: 1710000000, Size: 100},
 	}
 
 	dockerSvc := newDashboardTestDockerService(t, settingsSvc, containers, images, nil)
-	require.NoError(t, settingsSvc.SetStringSetting(context.Background(), "autoUpdateExcludedContainers", "running-app"))
+	require.NoError(t, settingsSvc.SetStringSetting(t.Context(), "autoUpdateExcludedContainers", "running-app"))
 	containerSvc := container.NewContainerService(nil, dockerSvc, nil, settingsSvc, nil)
 	svc := NewDashboardService(db, dockerSvc, containerSvc, nil, nil, settingsSvc, nil, nil, nil, nil)
 
-	defaultSnapshot, err := svc.GetSnapshot(context.Background(), DashboardActionItemsOptions{}, true)
+	defaultSnapshot, err := svc.GetSnapshot(t.Context(), DashboardActionItemsOptions{}, true)
 	require.NoError(t, err)
 	require.Len(t, defaultSnapshot.Containers.Data, 1)
 	require.Contains(t, defaultSnapshot.Containers.Data[0].IconLightURL, "selfhst")
@@ -414,7 +425,7 @@ func TestDashboardService_GetSnapshot_CachesFullSnapshotsPerIconCatalog(t *testi
 	// A user preferring another catalog must not be served the default-catalog
 	// snapshot from the cache.
 	dashboardIconsUser := &common.User{Preferences: usertypes.Preferences{IconCatalog: new("dashboard-icons")}}
-	userCtx := context.WithValue(context.Background(), common.CurrentUserContextKey{}, dashboardIconsUser)
+	userCtx := context.WithValue(t.Context(), common.CurrentUserContextKey{}, dashboardIconsUser)
 	userSnapshot, err := svc.GetSnapshot(userCtx, DashboardActionItemsOptions{}, true)
 	require.NoError(t, err)
 	require.NotSame(t, defaultSnapshot, userSnapshot)
@@ -422,7 +433,7 @@ func TestDashboardService_GetSnapshot_CachesFullSnapshotsPerIconCatalog(t *testi
 	require.Contains(t, userSnapshot.Containers.Data[0].IconLightURL, "dashboard-icons")
 
 	// Both catalog variants stay cached side by side within the TTL.
-	defaultAgain, err := svc.GetSnapshot(context.Background(), DashboardActionItemsOptions{}, true)
+	defaultAgain, err := svc.GetSnapshot(t.Context(), DashboardActionItemsOptions{}, true)
 	require.NoError(t, err)
 	require.Same(t, defaultSnapshot, defaultAgain)
 	userAgain, err := svc.GetSnapshot(userCtx, DashboardActionItemsOptions{}, true)
@@ -437,7 +448,17 @@ func TestPendingContainerCountUsesScopedTagRecords(t *testing.T) {
 		// A digest record recorded under another local tag of the shared image.
 		{ID: "shared", Repository: "docker.io/library/app", Tag: "stable", HasUpdate: true, UpdateType: "digest"},
 		{ID: "container::first", PolicyKey: imageref.UpdatePolicyKey("app:1.2.3", tagLabels), ContainerID: "first", ImageID: "shared", HasUpdate: true, UpdateType: "tag"},
-		{ID: "container::other-project", PolicyKey: imageref.UpdatePolicyKey("app:1.2.3", tagLabels), ContainerID: "other-project", ImageID: "shared", HasUpdate: true, UpdateType: "tag"},
+		{
+			ID: "container::other-project",
+			PolicyKey: imageref.UpdatePolicyKey(
+				"app:1.2.3",
+				tagLabels,
+			),
+			ContainerID: "other-project",
+			ImageID:     "shared",
+			HasUpdate:   true,
+			UpdateType:  "tag",
+		},
 	}
 	require.NoError(t, db.Create(&records).Error)
 	service := &DashboardService{db: db, imageService: image.NewImageService(db, nil, nil, nil, nil, nil)}

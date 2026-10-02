@@ -188,9 +188,9 @@ var containersGetCmd = &cobra.Command{
 		}
 
 		if !complete {
-			result, err := c.GetJSON[container.Details](cmd.Context(), types.Container(c.EnvID(), resolved.ID))
-			if err != nil {
-				return fmt.Errorf("failed to get container: %w", err)
+			result, getContainerErr := c.GetJSON[container.Details](cmd.Context(), types.Container(c.EnvID(), resolved.ID))
+			if getContainerErr != nil {
+				return fmt.Errorf("failed to get container: %w", getContainerErr)
 			}
 			resolved = &result.Data
 		}
@@ -358,9 +358,9 @@ var containersDeleteCmd = &cobra.Command{
 		displayName := containerDisplayName(resolved)
 
 		if !forceFlag {
-			confirmed, err := cmdutil.Confirm(cmd, fmt.Sprintf("Are you sure you want to delete container %s?", displayName))
-			if err != nil {
-				return err
+			confirmed, confirmErr := cmdutil.Confirm(cmd, fmt.Sprintf("Are you sure you want to delete container %s?", displayName))
+			if confirmErr != nil {
+				return confirmErr
 			}
 			if !confirmed {
 				fmt.Println("Cancelled")
@@ -429,12 +429,12 @@ var containersCreateCmd = &cobra.Command{
 
 		// File mode: read base config from file
 		if containerCreateFile != "" {
-			data, err := os.ReadFile(containerCreateFile)
-			if err != nil {
-				return fmt.Errorf("failed to read file %s: %w", containerCreateFile, err)
+			data, readFileErr := os.ReadFile(containerCreateFile)
+			if readFileErr != nil {
+				return fmt.Errorf("failed to read file %s: %w", containerCreateFile, readFileErr)
 			}
-			if err := json.Unmarshal(data, &req); err != nil {
-				return fmt.Errorf("failed to parse config file: %w", err)
+			if unmarshalErr := json.Unmarshal(data, &req); unmarshalErr != nil {
+				return fmt.Errorf("failed to parse config file: %w", unmarshalErr)
 			}
 		}
 
