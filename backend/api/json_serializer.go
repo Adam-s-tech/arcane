@@ -4,12 +4,8 @@ import (
 	jsonv1 "encoding/json"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
-	"errors"
-	"fmt"
-	"net/http"
 
 	"github.com/labstack/echo/v5"
-	"go.getarcane.app/kit/normalization"
 )
 
 type jsonV2Serializer struct{}
@@ -26,33 +22,9 @@ func (jsonV2Serializer) Serialize(c *echo.Context, value any, indent string) err
 }
 
 func (jsonV2Serializer) Deserialize(c *echo.Context, value any) error {
-	err := json.UnmarshalRead(c.Request().Body, value, jsonV2APIOptions)
-	if err == nil {
-		if normalizeErr := normalization.Normalize(value); normalizeErr != nil {
-			return echo.NewHTTPError(http.StatusUnprocessableEntity, normalizeErr.Error()).Wrap(normalizeErr)
-		}
-		return nil
+	if err := json.UnmarshalRead(c.Request().Body, value, jsonV2APIOptions); err != nil {
+		return echo.ErrBadRequest.Wrap(err)
 	}
 
-	if semanticErr, ok := errors.AsType[*json.SemanticError](err); ok {
-		return echo.NewHTTPError(
-			http.StatusBadRequest,
-			fmt.Sprintf(
-				"Unmarshal type error: expected=%v, got=%v, field=%v, offset=%v",
-				semanticErr.GoType,
-				semanticErr.JSONKind,
-				semanticErr.JSONPointer,
-				semanticErr.ByteOffset,
-			),
-		).Wrap(err)
-	}
-
-	if syntacticErr, ok := errors.AsType[*jsontext.SyntacticError](err); ok {
-		return echo.NewHTTPError(
-			http.StatusBadRequest,
-			fmt.Sprintf("Syntax error: offset=%v, error=%v", syntacticErr.ByteOffset, syntacticErr.Error()),
-		).Wrap(err)
-	}
-
-	return err
+	return nil
 }

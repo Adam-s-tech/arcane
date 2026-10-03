@@ -266,24 +266,3 @@ func TestNormalizationRejectsInvalidTagsAtRegistration(t *testing.T) {
 		})
 	})
 }
-
-func TestEchoSerializerNormalization(t *testing.T) {
-	router := echo.New()
-	request := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"name":" e\u0301 ","password":" secret "}`))
-	ctx := router.NewContext(request, httptest.NewRecorder())
-	var result normalizationTestBody
-	require.NoError(t, (jsonV2Serializer{}).Deserialize(ctx, &result))
-	require.Equal(t, "é", result.Name)
-	require.Equal(t, " secret ", result.Password)
-}
-
-func TestEchoSerializerRejectsNormalizedEmptyName(t *testing.T) {
-	router := echo.New()
-	request := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"name":" "}`))
-	ctx := router.NewContext(request, httptest.NewRecorder())
-	var result normalizationTestBody
-	err := (jsonV2Serializer{}).Deserialize(ctx, &result)
-	var httpError *echo.HTTPError
-	require.ErrorAs(t, err, &httpError)
-	require.Equal(t, http.StatusUnprocessableEntity, httpError.Code)
-}

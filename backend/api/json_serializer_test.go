@@ -2,9 +2,9 @@ package api
 
 import (
 	"bytes"
-	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -87,14 +87,28 @@ func TestJSONV2SerializerUsesStrictV2Decoding(t *testing.T) {
 
 			var body requestBody
 			err := (jsonV2Serializer{}).Deserialize(context, &body)
-			var httpErr *echo.HTTPError
-			if !errors.As(err, &httpErr) {
-				require.ErrorAs(t, err, &httpErr,
-					"deserialize error = %T %v, want *echo.HTTPError", err, err)
-			}
-
-			require.Equal(t, http.StatusBadRequest, httpErr.StatusCode(),
-				"HTTP status = %d, want %d", httpErr.StatusCode(), http.StatusBadRequest)
+			require.Equal(t, http.StatusBadRequest, echo.StatusCode(err),
+				"HTTP status = %d, want %d", echo.StatusCode(err), http.StatusBadRequest)
 		})
 	}
+}
+
+func TestEchoSerializerPreservesUnnormalizedStrings(t *testing.T) {
+	router := echo.New()
+	request := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"name":" e\u0301 ","password":" secret "}`))
+	ctx := router.NewContext(request, httptest.NewRecorder())
+	var result normalizationTestBody
+	require.NoError(t, (jsonV2Serializer{}).Deserialize(ctx, &result))
+	require.Equal(t, " e\u0301 ", result.Name)
+	require.Equal(t, " secret ", result.Password)
+}
+
+func TestEchoSerializerAllowsWhitespaceOnlyName(t *testing.T) {
+	router := echo.New()
+	request := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"name":" "}`))
+	ctx := router.NewContext(request, httptest.NewRecorder())
+	var result normalizationTestBody
+	err := (jsonV2Serializer{}).Deserialize(ctx, &result)
+	require.NoError(t, err)
+	require.Equal(t, " ", result.Name)
 }
