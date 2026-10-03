@@ -201,7 +201,7 @@ var containersEditCmd = &cobra.Command{
 }
 
 var containersAutoUpdateCmd = &cobra.Command{
-	Use:          "autoupdate <container-id|name>",
+	Use:          "auto-update <container-id|name>",
 	Short:        "Enable or disable auto-update for a container",
 	Args:         cobra.ExactArgs(1),
 	SilenceUsage: true,

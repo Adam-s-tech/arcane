@@ -260,7 +260,7 @@ var deleteCmd = &cobra.Command{
 				return confirmErr
 			}
 			if !confirmed {
-				fmt.Println("Cancelled")
+				_, _ = fmt.Fprintln(output.Stdout(), "Cancelled")
 				return nil
 			}
 		}
@@ -444,7 +444,7 @@ var importCmd = &cobra.Command{
 		if len(result.Data.Errors) > 0 {
 			output.Warning("Errors:")
 			for _, e := range result.Data.Errors {
-				fmt.Printf("  - %s\n", e)
+				_, _ = fmt.Fprintf(output.Stdout(), "  - %s\n", e)
 			}
 		}
 		return nil

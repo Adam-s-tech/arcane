@@ -22,11 +22,16 @@ var (
 	requestID  string
 )
 
-// JobsCmd is the parent command for job schedule operations.
+// JobsCmd is the parent command for background jobs and their schedules.
 var JobsCmd = &cobra.Command{
 	Use:     "jobs",
 	Aliases: []string{"job"},
 	Short:   "Manage background jobs",
+}
+
+var schedulesCmd = &cobra.Command{
+	Use:   "schedules",
+	Short: "Manage job schedule intervals",
 }
 
 var getCmd = &cobra.Command{
@@ -144,7 +149,7 @@ var listCmd = &cobra.Command{
 		if tableErr := output.Table(headers, rows); tableErr != nil {
 			return tableErr
 		}
-		fmt.Printf("\nTotal: %d jobs\n", len(result.Jobs))
+		_, _ = fmt.Fprintf(output.Stdout(), "\nTotal: %d jobs\n", len(result.Jobs))
 		return nil
 	},
 }
@@ -188,8 +193,9 @@ var runCmd = &cobra.Command{
 }
 
 func init() {
-	JobsCmd.AddCommand(getCmd)
-	JobsCmd.AddCommand(updateCmd)
+	JobsCmd.AddCommand(schedulesCmd)
+	schedulesCmd.AddCommand(getCmd)
+	schedulesCmd.AddCommand(updateCmd)
 	JobsCmd.AddCommand(listCmd)
 	JobsCmd.AddCommand(runCmd)
 

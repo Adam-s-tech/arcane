@@ -2,13 +2,11 @@ package cmdutil
 
 import (
 	"errors"
-	"fmt"
-	"io"
-	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/getarcaneapp/arcane/cli/v2/internal/client"
+	"github.com/getarcaneapp/arcane/cli/v2/internal/output"
 	runtimectx "github.com/getarcaneapp/arcane/cli/v2/internal/runtime"
 )
 
@@ -66,17 +64,5 @@ func Confirm(cmd *cobra.Command, prompt string) (bool, error) {
 		return true, nil
 	}
 
-	fmt.Printf("%s (y/N): ", strings.TrimSpace(prompt))
-	var response string
-	if _, err := fmt.Scanln(&response); err != nil && !errors.Is(err, io.EOF) {
-		// Keep EOF as a default "no" response, but surface other input failures.
-		return false, fmt.Errorf("failed to read confirmation input: %w", err)
-	}
-
-	switch strings.ToLower(strings.TrimSpace(response)) {
-	case "y", "yes":
-		return true, nil
-	default:
-		return false, nil
-	}
+	return output.Confirm(cmd.Context(), cmd.InOrStdin(), cmd.ErrOrStderr(), prompt)
 }

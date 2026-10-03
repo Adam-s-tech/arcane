@@ -174,11 +174,11 @@ var contentCmd = &cobra.Command{
 		output.KeyValue("Description", result.Data.Template.Description)
 		output.KeyValue("Services", strconv.Itoa(len(result.Data.Services)))
 		output.KeyValue("Env Variables", strconv.Itoa(len(result.Data.EnvVariables)))
-		fmt.Println("\n--- Compose Content ---")
-		fmt.Println(result.Data.Content)
+		_, _ = fmt.Fprintln(output.Stdout(), "\n--- Compose Content ---")
+		_, _ = fmt.Fprintln(output.Stdout(), result.Data.Content)
 		if result.Data.EnvContent != "" {
-			fmt.Println("\n--- Environment Content ---")
-			fmt.Println(result.Data.EnvContent)
+			_, _ = fmt.Fprintln(output.Stdout(), "\n--- Environment Content ---")
+			_, _ = fmt.Fprintln(output.Stdout(), result.Data.EnvContent)
 		}
 		return nil
 	},
@@ -222,7 +222,7 @@ var registriesCmd = &cobra.Command{
 		if tableErr := output.Table(headers, rows); tableErr != nil {
 			return tableErr
 		}
-		fmt.Printf("\nTotal: %d registries\n", len(result.Data))
+		_, _ = fmt.Fprintf(output.Stdout(), "\nTotal: %d registries\n", len(result.Data))
 		return nil
 	},
 }
@@ -234,7 +234,7 @@ func runTemplateDeleteInternal(cmd *cobra.Command, label, path string) error {
 			return err
 		}
 		if !confirmed {
-			fmt.Println("Cancelled")
+			_, _ = fmt.Fprintln(output.Stdout(), "Cancelled")
 			return nil
 		}
 	}
@@ -726,7 +726,7 @@ var downloadCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Print(result.Data.Content)
+		_, _ = fmt.Fprint(output.Stdout(), result.Data.Content)
 		return nil
 	},
 }

@@ -3,7 +3,6 @@ package projects
 import (
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -277,7 +276,7 @@ var workspaceCatCmd = &cobra.Command{
 		if result.Data.Content == "" && result.Data.ReadOnlyReason != "" {
 			return fmt.Errorf("file %s has no inline content (%s); use `arcane projects workspace download` instead", args[1], result.Data.ReadOnlyReason)
 		}
-		fmt.Print(result.Data.Content)
+		_, _ = fmt.Fprint(output.Stdout(), result.Data.Content)
 		return nil
 	},
 }
@@ -317,7 +316,7 @@ var workspaceDownloadCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to create file %s: %w", outputFile, err)
 		}
-		written, copyErr := io.Copy(file, resp.Body)
+		written, copyErr := output.Copy(cmd.Context(), file, resp.Body, resp.ContentLength, "Downloading workspace file", !cmdutil.JSONOutputEnabled(cmd))
 		closeErr := file.Close()
 		if copyErr != nil {
 			return fmt.Errorf("failed to write workspace file: %w", copyErr)

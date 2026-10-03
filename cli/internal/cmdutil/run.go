@@ -35,6 +35,9 @@ type ListSpec[T any] struct {
 
 // RunList executes one standard list command as described by spec.
 func RunList[T any](cmd *cobra.Command, c *client.Client, spec ListSpec[T]) error {
+	loading := output.StartTracker(cmd.Context(), cmd.ErrOrStderr(), !spec.JSON, "Loading "+spec.Resource)
+	loading.NextStep()
+	defer loading.Stop()
 	path, err := ApplyPaginationParams(cmd, spec.Endpoint, spec.Params)
 	if err != nil {
 		return fmt.Errorf("failed to build pagination query: %w", err)
@@ -63,6 +66,8 @@ func RunList[T any](cmd *cobra.Command, c *client.Client, spec ListSpec[T]) erro
 		return fmt.Errorf("failed to parse response: %w", unmarshalErr)
 	}
 
+	loading.Finish("", nil)
+	loading.Stop()
 	rows := make([][]string, len(result.Data))
 	for i, item := range result.Data {
 		rows[i] = spec.Row(item)
@@ -98,11 +103,16 @@ func RunPostAction[T any](cmd *cobra.Command, c *client.Client, spec PostActionS
 		c.SetTimeout(spec.Timeout)
 	}
 
+	loading := output.StartTracker(cmd.Context(), cmd.ErrOrStderr(), !spec.JSON, cmd.Short)
+	loading.NextStep()
+	defer loading.Stop()
 	result, err := c.PostJSON[T](cmd.Context(), spec.Path, spec.Body)
 	if err != nil {
 		return fmt.Errorf("%s: %w", spec.FailureMessage, err)
 	}
 
+	loading.Finish("", nil)
+	loading.Stop()
 	if spec.JSON {
 		return PrintJSON(result.Data)
 	}

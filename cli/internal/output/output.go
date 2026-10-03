@@ -14,12 +14,11 @@ package output
 
 import (
 	"fmt"
-	"os"
+	"image/color"
 	"regexp"
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	"charm.land/lipgloss/v2/compat"
 	"charm.land/lipgloss/v2/table"
 	"github.com/charmbracelet/x/term"
 	"github.com/mattn/go-runewidth"
@@ -27,55 +26,37 @@ import (
 )
 
 var (
-	arcanePurple = compat.AdaptiveColor{
-		Light: lipgloss.Color("#6d28d9"),
-		Dark:  lipgloss.Color("#a78bfa"),
-	}
-	textPrimary = compat.AdaptiveColor{
-		Light: lipgloss.Color("#1f2937"),
-		Dark:  lipgloss.Color("#e5e7eb"),
-	}
-	textMuted = compat.AdaptiveColor{
-		Light: lipgloss.Color("#64748b"),
-		Dark:  lipgloss.Color("#cbd5e1"),
-	}
-	statusOnline = compat.AdaptiveColor{
-		Light: lipgloss.Color("#15803d"),
-		Dark:  lipgloss.Color("#4ade80"),
-	}
-	statusOffline = compat.AdaptiveColor{
-		Light: lipgloss.Color("#b91c1c"),
-		Dark:  lipgloss.Color("#f87171"),
-	}
-	statusWarn = compat.AdaptiveColor{
-		Light: lipgloss.Color("#b45309"),
-		Dark:  lipgloss.Color("#fbbf24"),
-	}
+	arcanePurple, textPrimary, textMuted, statusOnline, statusOffline, statusWarn                  color.Color
+	successStyle, warnStyle, infoStyle, headerStyle, keyStyle, valueStyle                          lipgloss.Style
+	statusOnlineStyle, statusOfflineStyle, statusWarnStyle, statusMutedStyle, enabledStyle         lipgloss.Style
+	tableHeader, tableCell, tableOddRow, tableEvenRow, tableBorder, tablePlainCell, tablePlainHead lipgloss.Style
 )
 
-var (
+func init() { setThemeInternal(true) }
+
+func setThemeInternal(dark bool) {
+	c := lipgloss.LightDark(dark)
+	arcanePurple = c(lipgloss.Color("#6d28d9"), lipgloss.Color("#a78bfa"))
+	textPrimary = c(lipgloss.Color("#1f2937"), lipgloss.Color("#e5e7eb"))
+	textMuted = c(lipgloss.Color("#64748b"), lipgloss.Color("#cbd5e1"))
+	statusOnline = c(lipgloss.Color("#15803d"), lipgloss.Color("#4ade80"))
+	statusOffline = c(lipgloss.Color("#b91c1c"), lipgloss.Color("#f87171"))
+	statusWarn = c(lipgloss.Color("#b45309"), lipgloss.Color("#fbbf24"))
 	successStyle = lipgloss.NewStyle().Foreground(statusOnline)
-	warnStyle    = lipgloss.NewStyle().Foreground(statusWarn)
-	infoStyle    = lipgloss.NewStyle().Foreground(arcanePurple)
-	headerStyle  = lipgloss.NewStyle().Bold(true).Foreground(arcanePurple)
-	keyStyle     = lipgloss.NewStyle().Bold(true).Foreground(textPrimary)
-	valueStyle   = lipgloss.NewStyle().Foreground(arcanePurple)
-
-	statusOnlineStyle  = lipgloss.NewStyle().Foreground(statusOnline)
-	statusOfflineStyle = lipgloss.NewStyle().Foreground(statusOffline)
-	statusWarnStyle    = lipgloss.NewStyle().Foreground(statusWarn)
-	statusMutedStyle   = lipgloss.NewStyle().Foreground(textMuted)
-	enabledStyle       = lipgloss.NewStyle().Foreground(arcanePurple)
-
-	tablePurple    = lipgloss.Color("99")
-	tableHeader    = lipgloss.NewStyle().Foreground(tablePurple).Bold(true).Align(lipgloss.Center).Padding(0, 1)
-	tableCell      = lipgloss.NewStyle().Padding(0, 1)
-	tableOddRow    = tableCell.Foreground(textPrimary)
-	tableEvenRow   = tableCell.Foreground(textPrimary)
-	tableBorder    = lipgloss.NewStyle().Foreground(tablePurple)
-	tablePlainCell = lipgloss.NewStyle().Padding(0, 1)
-	tablePlainHead = lipgloss.NewStyle().Bold(true).Padding(0, 1)
-)
+	warnStyle = lipgloss.NewStyle().Foreground(statusWarn)
+	infoStyle = lipgloss.NewStyle().Foreground(arcanePurple)
+	headerStyle = infoStyle.Bold(true)
+	keyStyle = lipgloss.NewStyle().Foreground(textMuted)
+	valueStyle = lipgloss.NewStyle().Foreground(textPrimary)
+	statusOnlineStyle, statusOfflineStyle, statusWarnStyle = successStyle, lipgloss.NewStyle().Foreground(statusOffline), warnStyle
+	statusMutedStyle = keyStyle
+	enabledStyle = infoStyle
+	tableCell = lipgloss.NewStyle().Padding(0, 1)
+	tableHeader = tableCell.Foreground(arcanePurple).Bold(true).Align(lipgloss.Left)
+	tableOddRow, tableEvenRow = tableCell.Foreground(textPrimary), tableCell.Foreground(textPrimary)
+	tableBorder = lipgloss.NewStyle().Foreground(arcanePurple)
+	tablePlainCell, tablePlainHead = tableCell, tableCell
+}
 
 var ansiRegexp = regexp.MustCompile("\x1b\\[[0-9;]*[a-zA-Z]")
 
@@ -86,20 +67,12 @@ var tableWhitespaceReplacer = strings.NewReplacer("\r\n", " ", "\n", " ", "\r", 
 
 var colorEnabled = true
 
-func shouldColor() bool {
-	return colorEnabled && term.IsTerminal(os.Stdout.Fd())
+func shouldColorInternal() bool {
+	return colorEnabledInternal() && IsTerminal(Stdout())
 }
 
-func render(style lipgloss.Style, value string) string {
-	if !shouldColor() {
-		return value
-	}
-	return style.Render(value)
-}
-
-// SetColorEnabled controls whether CLI output should render ANSI colors.
-func SetColorEnabled(enabled bool) {
-	colorEnabled = enabled
+func renderInternal(style lipgloss.Style, value string) string {
+	return renderForInternal(Stdout(), style, value)
 }
 
 // Success prints a success message in green.
@@ -109,7 +82,8 @@ func SetColorEnabled(enabled bool) {
 //nolint:goprintffuncname // printf-style output helper; *f rename across call sites tracked separately
 func Success(format string, a ...any) {
 	msg := fmt.Sprintf(format, a...)
-	fmt.Printf("\n%s\n", render(successStyle, msg))
+	defer SuspendProgress()()
+	_, _ = fmt.Fprintf(Stdout(), "\n  %s\n", renderInternal(successStyle, "✓ "+msg))
 }
 
 // Warning prints a warning message in yellow.
@@ -119,44 +93,49 @@ func Success(format string, a ...any) {
 //nolint:goprintffuncname // printf-style output helper; *f rename across call sites tracked separately
 func Warning(format string, a ...any) {
 	msg := fmt.Sprintf(format, a...)
-	fmt.Printf("\n%s\n", render(warnStyle, msg))
+	defer SuspendProgress()()
+	_, _ = fmt.Fprintf(Stderr(), "\n  %s\n", renderForInternal(Stderr(), warnStyle, msg))
 }
 
-// Info prints an info message in cyan.
+// Info prints an info message in purple.
 // The message is prefixed with a newline for visual separation.
 // Format specifiers and arguments work like fmt.Printf.
 //
 //nolint:goprintffuncname // printf-style output helper; *f rename across call sites tracked separately
 func Info(format string, a ...any) {
 	msg := fmt.Sprintf(format, a...)
-	fmt.Printf("\n%s\n", render(infoStyle, msg))
+	defer SuspendProgress()()
+	_, _ = fmt.Fprintf(Stdout(), "\n  %s\n", renderInternal(infoStyle, msg))
 }
 
-// Header prints a header message in bold white.
+// Header prints a purple section heading.
 // Use this to introduce sections of output. The message is prefixed
 // with a newline for visual separation.
 //
 //nolint:goprintffuncname // printf-style output helper; *f rename across call sites tracked separately
 func Header(format string, a ...any) {
 	msg := fmt.Sprintf(format, a...)
-	fmt.Printf("\n%s\n", render(headerStyle, msg))
+	defer SuspendProgress()()
+	_, _ = fmt.Fprintf(Stdout(), "\n  %s\n", renderInternal(headerStyle, msg))
 }
 
-// KeyValue prints a key-value pair with the key in bold and value in blue.
+// KeyValue prints a key-value pair with the muted aligned labels and neutral values.
 // This is useful for displaying structured information like image details
 // or configuration values.
 func KeyValue(key string, value any) {
 	keyText := key
 	valueText := fmt.Sprint(value)
-	fmt.Printf("%s: %v\n", render(keyStyle, keyText), render(valueStyle, valueText))
+	defer SuspendProgress()()
+	_, _ = fmt.Fprintf(Stdout(), "  %s %s\n", renderInternal(keyStyle, fmt.Sprintf("%-18s", keyText)), renderInternal(valueStyle, valueText))
 }
 
 // Showing prints a pagination summary in the form "Showing: shown/total label".
 func Showing(shown int, total int64, label string) {
-	fmt.Printf("\nShowing: %d/%d %s\n", shown, total, label)
+	defer SuspendProgress()()
+	_, _ = fmt.Fprintf(Stdout(), "\n  Showing: %d/%d %s\n", shown, total, label)
 }
 
-func hasAnsi(s string) bool {
+func hasAnsiInternal(s string) bool {
 	if s == "" {
 		return false
 	}
@@ -166,17 +145,18 @@ func hasAnsi(s string) bool {
 // TintStatus applies semantic status coloring to a value.
 func TintStatus(value string) string {
 	trimmed := strings.TrimSpace(value)
-	if trimmed == "" || hasAnsi(trimmed) || !shouldColor() {
+	if trimmed == "" || hasAnsiInternal(trimmed) || !shouldColorInternal() {
 		return value
 	}
 	lower := strings.ToLower(trimmed)
 
 	switch {
-	case lower == "online" || lower == "running" || lower == "healthy" || lower == "active" || strings.HasPrefix(lower, "up"):
+	case lower == "ok" || lower == "succeeded" || lower == "success" || lower == "online" || lower == "running" || lower == "healthy" || lower == "active" || strings.HasPrefix(lower, "up"):
 		return statusOnlineStyle.Render(trimmed)
-	case lower == "offline" || lower == "stopped" || lower == "exited" || lower == "dead" || lower == "unhealthy" || lower == "failed" || strings.HasPrefix(lower, "down"):
+	case lower == "fail" || lower == "error" || lower == "offline" || lower == "stopped" || lower == "exited" ||
+		lower == "dead" || lower == "unhealthy" || lower == "failed" || strings.HasPrefix(lower, "down"):
 		return statusOfflineStyle.Render(trimmed)
-	case lower == "paused" || lower == "restarting" || lower == "starting" || lower == "created" || lower == "degraded":
+	case lower == "warn" || lower == "warning" || lower == "paused" || lower == "restarting" || lower == "starting" || lower == "created" || lower == "degraded":
 		return statusWarnStyle.Render(trimmed)
 	default:
 		return statusMutedStyle.Render(trimmed)
@@ -186,7 +166,7 @@ func TintStatus(value string) string {
 // TintEnabled applies tints for enabled/disabled values.
 func TintEnabled(value string) string {
 	trimmed := strings.TrimSpace(value)
-	if trimmed == "" || hasAnsi(trimmed) || !shouldColor() {
+	if trimmed == "" || hasAnsiInternal(trimmed) || !shouldColorInternal() {
 		return value
 	}
 	lower := strings.ToLower(trimmed)
@@ -203,7 +183,7 @@ func TintEnabled(value string) string {
 // TintYesNo applies tints for yes/no style values.
 func TintYesNo(value string) string {
 	trimmed := strings.TrimSpace(value)
-	if trimmed == "" || hasAnsi(trimmed) || !shouldColor() {
+	if trimmed == "" || hasAnsiInternal(trimmed) || !shouldColorInternal() {
 		return value
 	}
 	lower := strings.ToLower(trimmed)
@@ -220,7 +200,7 @@ func TintYesNo(value string) string {
 // TintInsecure applies warning tints for insecure values.
 func TintInsecure(value string) string {
 	trimmed := strings.TrimSpace(value)
-	if trimmed == "" || hasAnsi(trimmed) || !shouldColor() {
+	if trimmed == "" || hasAnsiInternal(trimmed) || !shouldColorInternal() {
 		return value
 	}
 	lower := strings.ToLower(trimmed)
@@ -237,7 +217,8 @@ func TintInsecure(value string) string {
 // Table prints a formatted table with headers and rows.
 // Rendering uses Lip Gloss table styles with zebra-striped rows.
 func Table(headers []string, rows [][]string) error {
-	if _, spacingErr := fmt.Println(); spacingErr != nil {
+	defer SuspendProgress()()
+	if _, spacingErr := fmt.Fprintln(Stdout()); spacingErr != nil {
 		return fmt.Errorf("failed to print table: %w", spacingErr)
 	}
 
@@ -246,13 +227,13 @@ func Table(headers []string, rows [][]string) error {
 		return nil
 	}
 
-	rows = normalizeTableRows(rows, n)
-	rows = tintTableRows(headers, rows)
-	headers, rows = fitTableToTerminal(headers, rows)
+	rows = normalizeTableRowsInternal(rows, n)
+	rows = tintTableRowsInternal(headers, rows)
+	headers, rows = fitTableToTerminalInternal(headers, rows)
 
 	t := table.New().Border(lipgloss.NormalBorder()).Headers(headers...)
 
-	if shouldColor() {
+	if shouldColorInternal() {
 		t = t.BorderStyle(tableBorder).
 			StyleFunc(func(row, col int) lipgloss.Style {
 				switch {
@@ -274,13 +255,13 @@ func Table(headers []string, rows [][]string) error {
 		t = t.Rows(rows...)
 	}
 
-	if _, tableErr := lipgloss.Println(t); tableErr != nil {
+	if _, tableErr := fmt.Fprintln(Stdout(), t.String()); tableErr != nil {
 		return fmt.Errorf("failed to print table: %w", tableErr)
 	}
 	return nil
 }
 
-func fitTableToTerminal(headers []string, rows [][]string) ([]string, [][]string) {
+func fitTableToTerminalInternal(headers []string, rows [][]string) ([]string, [][]string) {
 	if len(headers) == 0 {
 		return headers, rows
 	}
@@ -288,51 +269,52 @@ func fitTableToTerminal(headers []string, rows [][]string) ([]string, [][]string
 	columnCount := len(headers)
 	displayHeaders := make([]string, columnCount)
 	for i, header := range headers {
-		displayHeaders[i] = sanitizeTableCell(header)
+		displayHeaders[i] = sanitizeTableCellInternal(header)
 	}
 
-	displayRows := normalizeTableRows(rows, columnCount)
+	displayRows := normalizeTableRowsInternal(rows, columnCount)
 	for i, row := range displayRows {
 		cleaned := make([]string, columnCount)
 		for col := range columnCount {
-			cleaned[col] = sanitizeTableCell(row[col])
+			cleaned[col] = sanitizeTableCellInternal(row[col])
 		}
 		displayRows[i] = cleaned
 	}
 
-	if !term.IsTerminal(os.Stdout.Fd()) {
+	fd, ok := Stdout().(interface{ Fd() uintptr })
+	if !ok || !term.IsTerminal(fd.Fd()) {
 		return displayHeaders, displayRows
 	}
 
-	terminalWidth, _, err := term.GetSize(os.Stdout.Fd())
+	terminalWidth, _, err := term.GetSize(fd.Fd())
 	if err != nil || terminalWidth <= 0 {
 		return displayHeaders, displayRows
 	}
 
 	columnWidths := make([]int, columnCount)
 	for i, header := range displayHeaders {
-		columnWidths[i] = max(1, visibleWidth(header))
+		columnWidths[i] = max(1, visibleWidthInternal(header))
 	}
 
 	for _, row := range displayRows {
 		for col := range columnCount {
-			columnWidths[col] = max(columnWidths[col], visibleWidth(row[col]))
+			columnWidths[col] = max(columnWidths[col], visibleWidthInternal(row[col]))
 		}
 	}
 
-	availableContentWidth := terminalWidth - tableNonContentWidth(columnCount)
+	availableContentWidth := terminalWidth - tableNonContentWidthInternal(columnCount)
 	if availableContentWidth <= 0 {
 		return displayHeaders, displayRows
 	}
 
-	fitWidths := fitColumnWidths(columnWidths, availableContentWidth)
+	fitWidths := fitColumnWidthsInternal(columnWidths, availableContentWidth)
 	for i, header := range displayHeaders {
-		displayHeaders[i] = truncateVisible(header, fitWidths[i])
+		displayHeaders[i] = truncateVisibleInternal(header, fitWidths[i])
 	}
 
 	for i, row := range displayRows {
 		for col := range columnCount {
-			row[col] = truncateVisible(row[col], fitWidths[col])
+			row[col] = truncateVisibleInternal(row[col], fitWidths[col])
 		}
 		displayRows[i] = row
 	}
@@ -340,20 +322,20 @@ func fitTableToTerminal(headers []string, rows [][]string) ([]string, [][]string
 	return displayHeaders, displayRows
 }
 
-func sanitizeTableCell(value string) string {
+func sanitizeTableCellInternal(value string) string {
 	cleaned := tableWhitespaceReplacer.Replace(value)
 	return strings.TrimSpace(cleaned)
 }
 
-func visibleWidth(value string) int {
+func visibleWidthInternal(value string) int {
 	return runewidth.StringWidth(ansiRegexp.ReplaceAllString(value, ""))
 }
 
-func truncateVisible(value string, maxWidth int) string {
+func truncateVisibleInternal(value string, maxWidth int) string {
 	if maxWidth <= 0 {
 		return ""
 	}
-	if visibleWidth(value) <= maxWidth {
+	if visibleWidthInternal(value) <= maxWidth {
 		return value
 	}
 
@@ -374,7 +356,7 @@ func truncateVisible(value string, maxWidth int) string {
 	return codes[0] + truncated + ansiReset
 }
 
-func tableNonContentWidth(columnCount int) int {
+func tableNonContentWidthInternal(columnCount int) int {
 	const horizontalCellPadding = 2
 
 	// For normal border style:
@@ -383,7 +365,7 @@ func tableNonContentWidth(columnCount int) int {
 	return (columnCount + 1) + (horizontalCellPadding * columnCount)
 }
 
-func fitColumnWidths(widths []int, available int) []int {
+func fitColumnWidthsInternal(widths []int, available int) []int {
 	fitted := make([]int, len(widths))
 	copy(fitted, widths)
 
@@ -395,9 +377,9 @@ func fitColumnWidths(widths []int, available int) []int {
 		available = len(fitted)
 	}
 
-	current := sumInts(fitted)
+	current := sumIntsInternal(fitted)
 	for current > available {
-		idx := widestShrinkableColumn(fitted)
+		idx := widestShrinkableColumnInternal(fitted)
 		if idx < 0 {
 			break
 		}
@@ -408,7 +390,7 @@ func fitColumnWidths(widths []int, available int) []int {
 	return fitted
 }
 
-func widestShrinkableColumn(widths []int) int {
+func widestShrinkableColumnInternal(widths []int) int {
 	idx := -1
 	maxWidth := 1
 	for i, width := range widths {
@@ -420,7 +402,7 @@ func widestShrinkableColumn(widths []int) int {
 	return idx
 }
 
-func sumInts(values []int) int {
+func sumIntsInternal(values []int) int {
 	total := 0
 	for _, value := range values {
 		total += value
@@ -428,7 +410,7 @@ func sumInts(values []int) int {
 	return total
 }
 
-func normalizeTableRows(rows [][]string, width int) [][]string {
+func normalizeTableRowsInternal(rows [][]string, width int) [][]string {
 	if width == 0 || len(rows) == 0 {
 		return rows
 	}
@@ -443,11 +425,11 @@ func normalizeTableRows(rows [][]string, width int) [][]string {
 	return normalized
 }
 
-func tintTableRows(headers []string, rows [][]string) [][]string {
+func tintTableRowsInternal(headers []string, rows [][]string) [][]string {
 	if len(rows) == 0 {
 		return rows
 	}
-	if !shouldColor() {
+	if !shouldColorInternal() {
 		return rows
 	}
 

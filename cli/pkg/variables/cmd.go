@@ -126,7 +126,7 @@ var listCmd = &cobra.Command{
 		if tableErr := output.Table(headers, rows); tableErr != nil {
 			return tableErr
 		}
-		fmt.Printf("\nTotal: %d variables\n", len(result.Data))
+		_, _ = fmt.Fprintf(output.Stdout(), "\nTotal: %d variables\n", len(result.Data))
 		return nil
 	},
 }
@@ -212,7 +212,7 @@ var deleteCmd = &cobra.Command{
 				return err
 			}
 			if !confirmed {
-				fmt.Println("Cancelled")
+				_, _ = fmt.Fprintln(output.Stdout(), "Cancelled")
 				return nil
 			}
 		}

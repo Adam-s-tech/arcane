@@ -177,15 +177,15 @@ var convertCmd = &cobra.Command{
 
 		output.Header("Conversion Result")
 		if result.ServiceName != "" {
-			fmt.Printf("Service: %s\n\n", result.ServiceName)
+			_, _ = fmt.Fprintf(output.Stdout(), "Service: %s\n\n", result.ServiceName)
 		}
 		if result.DockerCompose != "" {
-			fmt.Println("Docker Compose:")
-			fmt.Println(result.DockerCompose)
+			_, _ = fmt.Fprintln(output.Stdout(), "Docker Compose:")
+			_, _ = fmt.Fprintln(output.Stdout(), result.DockerCompose)
 		}
 		if result.EnvVars != "" {
-			fmt.Println("Environment Variables:")
-			fmt.Println(result.EnvVars)
+			_, _ = fmt.Fprintln(output.Stdout(), "Environment Variables:")
+			_, _ = fmt.Fprintln(output.Stdout(), result.EnvVars)
 		}
 		return nil
 	},
@@ -217,7 +217,7 @@ var upgradeCmd = &cobra.Command{
 				return err
 			}
 			if !confirmed {
-				fmt.Println("Cancelled")
+				_, _ = fmt.Fprintln(output.Stdout(), "Cancelled")
 				return nil
 			}
 		}
@@ -320,7 +320,7 @@ func printUpdateAllJobInternal(job environmentUpdateJob) error {
 		resErr := cmp.Or(res.Error, "-")
 		rows[i] = []string{name, res.Status, res.FromVersion, res.ToVersion, resErr}
 	}
-	if _, spacingErr := fmt.Println(); spacingErr != nil {
+	if _, spacingErr := fmt.Fprintln(output.Stdout()); spacingErr != nil {
 		return fmt.Errorf("failed to print update status: %w", spacingErr)
 	}
 	return output.Table(headers, rows)
@@ -357,7 +357,7 @@ func runUpgradeAllInternal(cmd *cobra.Command) error {
 			return confirmErr
 		}
 		if !confirmed {
-			fmt.Println("Cancelled")
+			_, _ = fmt.Fprintln(output.Stdout(), "Cancelled")
 			return nil
 		}
 	}

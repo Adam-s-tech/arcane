@@ -44,6 +44,7 @@ import (
 
 	"github.com/getarcaneapp/arcane/cli/v2/internal/config"
 	"github.com/getarcaneapp/arcane/cli/v2/internal/logger"
+	"github.com/getarcaneapp/arcane/cli/v2/internal/output"
 	"github.com/getarcaneapp/arcane/cli/v2/internal/runstate"
 	"github.com/getarcaneapp/arcane/cli/v2/internal/types"
 )
@@ -242,6 +243,8 @@ type APIResponse[T any] struct {
 // as JSON (if provided), and includes authentication headers. The caller is
 // responsible for closing the response body.
 func (c *Client) Request(ctx context.Context, method, path string, body any, headers ...http.Header) (*http.Response, error) {
+	loading := output.StartLoading(ctx)
+	defer loading.Stop()
 	fullURL, err := c.resolveURL(path)
 	if err != nil {
 		return nil, err
@@ -293,6 +296,8 @@ func (c *Client) Request(ctx context.Context, method, path string, body any, hea
 // suitable for multipart form uploads and other non-JSON content types.
 // Custom headers can be provided to set Content-Type and other headers.
 func (c *Client) RequestRaw(ctx context.Context, method, path string, body io.Reader, headers map[string]string) (*http.Response, error) {
+	loading := output.StartLoading(ctx)
+	defer loading.Stop()
 	fullURL, err := c.resolveURL(path)
 	if err != nil {
 		return nil, err
@@ -575,6 +580,8 @@ func (c *Client) DeleteWithBody(ctx context.Context, path string, body any) (*ht
 // successful HTTP status. Unlike GetJSON/PostJSON it does not require the
 // standard API envelope or its Success flag.
 func (c *Client) DoJSON[T any](ctx context.Context, method, path string, body any, headers ...http.Header) (T, error) {
+	loading := output.StartLoading(ctx)
+	defer loading.Stop()
 	var out T
 	resp, err := c.Request(ctx, method, path, body, headers...)
 	if err != nil {
@@ -596,6 +603,8 @@ func (c *Client) DoJSON[T any](ctx context.Context, method, path string, body an
 // GetJSON performs a GET and decodes the standard API envelope, enforcing
 // HTTP and API success.
 func (c *Client) GetJSON[T any](ctx context.Context, path string) (*APIResponse[T], error) {
+	loading := output.StartLoading(ctx)
+	defer loading.Stop()
 	resp, err := c.Get(ctx, path)
 	if err != nil {
 		return nil, err
@@ -607,6 +616,8 @@ func (c *Client) GetJSON[T any](ctx context.Context, path string) (*APIResponse[
 // PostJSON performs a POST with a JSON body and decodes the standard API
 // envelope, enforcing HTTP and API success.
 func (c *Client) PostJSON[T any](ctx context.Context, path string, body any) (*APIResponse[T], error) {
+	loading := output.StartLoading(ctx)
+	defer loading.Stop()
 	resp, err := c.Post(ctx, path, body)
 	if err != nil {
 		return nil, err
@@ -617,6 +628,8 @@ func (c *Client) PostJSON[T any](ctx context.Context, path string, body any) (*A
 
 // DoRaw performs a request and returns the response payload when status is 2xx.
 func (c *Client) DoRaw(ctx context.Context, method, path string, body any) ([]byte, error) {
+	loading := output.StartLoading(ctx)
+	defer loading.Stop()
 	resp, err := c.Request(ctx, method, path, body)
 	if err != nil {
 		return nil, err
@@ -638,6 +651,8 @@ func (c *Client) DoRaw(ctx context.Context, method, path string, body any) ([]by
 // PutJSON performs a PUT with a JSON body and decodes the standard API
 // envelope, enforcing HTTP and API success.
 func (c *Client) PutJSON[T any](ctx context.Context, path string, body any) (*APIResponse[T], error) {
+	loading := output.StartLoading(ctx)
+	defer loading.Stop()
 	resp, err := c.Put(ctx, path, body)
 	if err != nil {
 		return nil, err
@@ -649,6 +664,8 @@ func (c *Client) PutJSON[T any](ctx context.Context, path string, body any) (*AP
 // DeleteJSON performs a DELETE and decodes the standard API envelope,
 // enforcing HTTP and API success.
 func (c *Client) DeleteJSON[T any](ctx context.Context, path string) (*APIResponse[T], error) {
+	loading := output.StartLoading(ctx)
+	defer loading.Stop()
 	resp, err := c.Delete(ctx, path)
 	if err != nil {
 		return nil, err

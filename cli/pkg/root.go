@@ -22,7 +22,6 @@
 //
 //   - admin: Administration & platform management
 //   - auth: Authentication operations
-//   - backups: Manage Arcane system backups
 //   - config: Manage CLI configuration
 //   - containers: Manage containers
 //   - images: Manage Docker images and updates
@@ -36,7 +35,9 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"io"
 	"os"
+	"os/signal"
 	"runtime"
 	"strings"
 	"time"
@@ -53,7 +54,6 @@ import (
 	"github.com/getarcaneapp/arcane/cli/v2/pkg/activities"
 	"github.com/getarcaneapp/arcane/cli/v2/pkg/admin"
 	"github.com/getarcaneapp/arcane/cli/v2/pkg/auth"
-	"github.com/getarcaneapp/arcane/cli/v2/pkg/backups"
 	"github.com/getarcaneapp/arcane/cli/v2/pkg/completion"
 	configClient "github.com/getarcaneapp/arcane/cli/v2/pkg/config"
 	"github.com/getarcaneapp/arcane/cli/v2/pkg/containers"
@@ -126,13 +126,13 @@ var rootCmd = &cobra.Command{
 			logLevel = cfg.LogLevel
 		}
 
-		if noColorOutput {
-			output.SetColorEnabled(false)
-		} else {
-			output.SetColorEnabled(true)
+		jsonMode := outputMode == string(runtimectx.OutputModeJSON)
+		if flag := cmd.Flags().Lookup("json"); flag != nil {
+			localJSON, _ := cmd.Flags().GetBool("json")
+			jsonMode = jsonMode || localJSON
 		}
-
-		logger.Setup(logLevel, logJSONOutput)
+		output.Configure(cmd.OutOrStdout(), cmd.ErrOrStderr(), jsonMode, noColorOutput, cmd.Short)
+		logger.Setup(cmd.ErrOrStderr(), logLevel, logJSONOutput)
 
 		app, err := runtimectx.New(runtimectx.Options{
 			EnvOverride:    envOverride,
@@ -156,10 +156,10 @@ var rootCmd = &cobra.Command{
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if showVersion {
-			fmt.Printf("Arcane CLI version: %s\n", config.Version)
-			fmt.Printf("Git revision: %s\n", config.Revision)
-			fmt.Printf("Go version: %s\n", runtime.Version())
-			fmt.Printf("OS/Arch: %s/%s\n", runtime.GOOS, runtime.GOARCH)
+			_, _ = fmt.Fprintf(output.Stdout(), "Arcane CLI version: %s\n", config.Version)
+			_, _ = fmt.Fprintf(output.Stdout(), "Git revision: %s\n", config.Revision)
+			_, _ = fmt.Fprintf(output.Stdout(), "Go version: %s\n", runtime.Version())
+			_, _ = fmt.Fprintf(output.Stdout(), "OS/Arch: %s/%s\n", runtime.GOOS, runtime.GOARCH)
 			return nil
 		}
 		return cmd.Help()
@@ -168,15 +168,19 @@ var rootCmd = &cobra.Command{
 }
 
 func Execute() {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt) //nolint:forbidigo // CLI process context.
 	if err := fang.Execute(
-		context.Background(), //nolint:forbidigo // CLI entry point establishes the process context.
+		ctx,
 		rootCmd,
 		fang.WithColorSchemeFunc(arcaneFangColorSchemeInternal),
+		fang.WithErrorHandler(func(w io.Writer, _ fang.Styles, err error) { output.WriteError(w, err) }),
 		fang.WithVersion(config.Version),
 		fang.WithCommit(config.Revision),
 	); err != nil {
+		cancel()
 		os.Exit(1)
 	}
+	cancel()
 }
 
 // RootCommand returns the configured root command.
@@ -258,6 +262,7 @@ func init() {
 	rootCmd.AddCommand(version.VersionCmd)
 	rootCmd.AddCommand(auth.AuthCmd)
 	rootCmd.AddCommand(containers.ContainersCmd)
+	images.ImagesCmd.AddCommand(vulnerabilities.VulnerabilitiesCmd)
 	rootCmd.AddCommand(images.ImagesCmd)
 	rootCmd.AddCommand(volumes.VolumesCmd)
 	rootCmd.AddCommand(networks.NetworksCmd)
@@ -273,9 +278,7 @@ func init() {
 	rootCmd.AddCommand(selfupdate.Cmd)
 	rootCmd.AddCommand(admin.AdminCmd)
 	rootCmd.AddCommand(gitops.GitopsCmd)
-	rootCmd.AddCommand(backups.BackupsCmd)
 	rootCmd.AddCommand(variables.VariablesCmd)
-	rootCmd.AddCommand(vulnerabilities.VulnerabilitiesCmd)
 	rootCmd.AddCommand(activities.ActivitiesCmd)
 	rootCmd.AddCommand(webhooks.WebhooksCmd)
 

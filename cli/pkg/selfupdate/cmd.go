@@ -129,7 +129,9 @@ func setCLIUpdateChannelAndRunInternal(cmd *cobra.Command, channel string) error
 	if err := saveCLIUpdateChannelInternal(channel); err != nil {
 		return err
 	}
-	output.Success("Set CLI update channel to %s", channel)
+	if !jsonOutput {
+		output.Success("Set CLI update channel to %s", channel)
+	}
 	return runCLIUpdateInternal(cmd.Context(), channel)
 }
 
@@ -138,11 +140,16 @@ func runCLIUpdateCommandInternal(cmd *cobra.Command, args []string) error {
 }
 
 func runCLIUpdateInternal(ctx context.Context, overrideChannel string) error {
+	loading := output.StartTracker(ctx, output.Stderr(), !jsonOutput, "Resolving update")
+	loading.NextStep()
+	defer loading.Stop()
 	plan, err := buildCLIUpdatePlanInternal(ctx, overrideChannel)
 	if err != nil {
 		return err
 	}
 
+	loading.Finish("", err)
+	loading.Stop()
 	if jsonOutput {
 		return cmdutil.PrintJSON(plan)
 	}
@@ -439,16 +446,21 @@ func installCLIUpdateInternal(ctx context.Context, plan *cliUpdatePlan) error {
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
+	loading := output.StartTracker(ctx, output.Stderr(), !jsonOutput, "Downloading artifact", "Verifying artifact", "Installing executable")
+	loading.NextStep()
+	defer loading.Stop()
 	downloadPath := filepath.Join(tmpDir, plan.ArtifactName)
 	if downloadFileErr := downloadFileInternal(ctx, plan.ArtifactURL, downloadPath); downloadFileErr != nil {
 		return downloadFileErr
 	}
+	loading.NextStep()
 	if gotSHA, sha256FileErr := sha256FileInternal(downloadPath); sha256FileErr != nil {
 		return sha256FileErr
 	} else if !strings.EqualFold(gotSHA, plan.ArtifactSHA) {
 		return fmt.Errorf("downloaded artifact SHA mismatch: got %s, expected %s", gotSHA, plan.ArtifactSHA)
 	}
 
+	loading.NextStep()
 	binaryPath := downloadPath
 	if strings.HasSuffix(plan.ArtifactName, ".tar.gz") {
 		extractedPath := filepath.Join(tmpDir, "arcane-cli")
@@ -612,7 +624,7 @@ func downloadFileInternal(ctx context.Context, url, outputPath string) error {
 		return fmt.Errorf("failed to create download file: %w", err)
 	}
 	limitedBody := &io.LimitedReader{R: resp.Body, N: maxCLIDownloadSize + 1}
-	written, err := io.Copy(out, limitedBody)
+	written, err := output.Copy(ctx, out, limitedBody, resp.ContentLength, "Downloading artifact", !jsonOutput)
 	if err != nil {
 		_ = out.Close()
 		return fmt.Errorf("failed to write download file: %w", err)
@@ -632,7 +644,7 @@ func verboseCLIUpdateInternal(format string, args ...any) {
 	if !cliUpdateVerbose {
 		return
 	}
-	fmt.Fprintf(os.Stderr, "self-update: "+format+"\n", args...)
+	_, _ = fmt.Fprintf(output.CoordinatedWriter(output.Stderr()), "self-update: "+format+"\n", args...)
 }
 
 func sha256FileInternal(filePath string) (string, error) {

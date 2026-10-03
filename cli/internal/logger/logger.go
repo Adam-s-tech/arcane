@@ -8,8 +8,8 @@
 //
 // Call Setup early in the application lifecycle:
 //
-//	logger.Setup("debug", false) // debug level, text format
-//	logger.Setup("info", true)   // info level, JSON format
+//	log.Setup(cmd.ErrOrStderr(), "debug", false) // debug level, text format
+//	log.Setup(cmd.ErrOrStderr(), "info", true)   // info level, JSON format
 //
 // # Usage
 //
@@ -20,16 +20,18 @@
 package logger
 
 import (
-	"os"
+	"io"
 
 	charmlog "charm.land/log/v2"
+
+	"github.com/getarcaneapp/arcane/cli/v2/internal/output"
 )
 
 // Setup configures the global logger with the specified level and format.
 // Valid log levels are: debug, info, warn, error, fatal.
 // If an invalid level is provided, it defaults to info.
 // When jsonFormat is true, logs are output as JSON for machine parsing.
-func Setup(level string, jsonFormat bool) {
+func Setup(w io.Writer, level string, jsonFormat bool) {
 	lvl, err := charmlog.ParseLevel(level)
 	if err != nil {
 		lvl = charmlog.InfoLevel
@@ -37,7 +39,7 @@ func Setup(level string, jsonFormat bool) {
 
 	log := charmlog.Default()
 	log.SetLevel(lvl)
-	log.SetOutput(os.Stdout)
+	log.SetOutput(output.CoordinatedWriter(w))
 	log.SetReportTimestamp(true)
 
 	if jsonFormat {

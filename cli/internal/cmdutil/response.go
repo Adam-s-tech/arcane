@@ -9,6 +9,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/getarcaneapp/arcane/cli/v2/internal/output"
 )
 
 const maxErrorBodyBytes = 4096
@@ -76,12 +78,12 @@ func ReadJSONBody(resp *http.Response) ([]byte, error) {
 func PrintRawJSON(body []byte) error {
 	value := jsontext.Value(bytes.Clone(body))
 	if value.Indent(jsontext.WithIndent("  ")) == nil {
-		fmt.Println(value.String())
-		return nil
+		_, err := fmt.Fprintln(output.Stdout(), value.String())
+		return err
 	}
 	// Not valid JSON: echo the server's bytes verbatim rather than swallow them.
-	fmt.Println(string(body))
-	return nil
+	_, err := fmt.Fprintln(output.Stdout(), string(body))
+	return err
 }
 
 // PrintJSON prints indented JSON to stdout.
@@ -90,6 +92,6 @@ func PrintJSON(v any) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal JSON: %w", err)
 	}
-	fmt.Println(string(b))
-	return nil
+	_, err = fmt.Fprintln(output.Stdout(), string(b))
+	return err
 }

@@ -158,7 +158,7 @@ var deleteCmd = &cobra.Command{
 				return confirmErr
 			}
 			if !confirmed {
-				fmt.Println("Cancelled")
+				_, _ = fmt.Fprintln(output.Stdout(), "Cancelled")
 				return nil
 			}
 		}
@@ -206,7 +206,7 @@ var pruneCmd = &cobra.Command{
 				return err
 			}
 			if !confirmed {
-				fmt.Println("Cancelled")
+				_, _ = fmt.Fprintln(output.Stdout(), "Cancelled")
 				return nil
 			}
 		}

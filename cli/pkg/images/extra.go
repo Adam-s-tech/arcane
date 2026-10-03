@@ -235,7 +235,7 @@ var imagesExportCmd = &cobra.Command{
 			return fmt.Errorf("failed to create output file: %w", err)
 		}
 
-		written, err := io.Copy(file, resp.Body)
+		written, err := output.Copy(cmd.Context(), file, resp.Body, resp.ContentLength, "Exporting image", !cmdutil.JSONOutputEnabled(cmd))
 		if closeErr := file.Close(); closeErr != nil && err == nil {
 			err = closeErr
 		}
@@ -349,7 +349,7 @@ var imagesAttestationsCmd = &cobra.Command{
 		for _, att := range result.Data.Attestations {
 			rows = append(rows, []string{att.PredicateType, att.Platform, truncateCell(att.Digest, 19), output.Bytes(att.Size)})
 		}
-		fmt.Println()
+		_, _ = fmt.Fprintln(output.Stdout())
 		if tableErr := output.Table(headers, rows); tableErr != nil {
 			return tableErr
 		}
@@ -485,7 +485,7 @@ func streamBuildOutput(body io.Reader) error {
 				}
 			}
 		}
-		fmt.Println(line)
+		_, _ = fmt.Fprintln(output.Stdout(), line)
 	}
 	if err := scanner.Err(); err != nil {
 		return fmt.Errorf("failed to read build stream: %w", err)
@@ -608,7 +608,7 @@ var imagesBuildsGetCmd = &cobra.Command{
 
 		if record.Output != nil && *record.Output != "" {
 			output.Header("Output")
-			fmt.Println(*record.Output)
+			_, _ = fmt.Fprintln(output.Stdout(), *record.Output)
 			if record.OutputTruncated {
 				output.Warning("Output was truncated")
 			}

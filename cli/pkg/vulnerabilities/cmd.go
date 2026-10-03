@@ -1,7 +1,7 @@
 // Package vulnerabilities provides CLI commands for image vulnerability
 // scanning on Arcane servers.
 //
-// This package implements the "arcane vulnerabilities" command group, which
+// This package implements the "arcane images vulnerabilities" command group, which
 // includes subcommands for checking scanner status, viewing environment-wide
 // summaries, listing vulnerabilities, scanning images, and managing ignore
 // records.
@@ -347,7 +347,7 @@ var unignoreCmd = &cobra.Command{
 				return err
 			}
 			if !confirmed {
-				fmt.Println("Cancelled")
+				_, _ = fmt.Fprintln(output.Stdout(), "Cancelled")
 				return nil
 			}
 		}

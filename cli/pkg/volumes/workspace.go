@@ -148,7 +148,7 @@ var workspaceCatCmd = &cobra.Command{
 			return fmt.Errorf("file %s has no printable content (%s); use `arcane volumes workspace download` instead", args[1], result.Data.ReadOnlyReason)
 		}
 
-		fmt.Print(result.Data.Content)
+		_, _ = fmt.Fprint(output.Stdout(), result.Data.Content)
 		return nil
 	},
 }
@@ -194,7 +194,7 @@ var workspaceDownloadCmd = &cobra.Command{
 			outputFile = downloadFilename(resp, path.Base(args[1]))
 		}
 
-		if writeResponseToFileErr := writeResponseToFile(resp.Body, outputFile); writeResponseToFileErr != nil {
+		if writeResponseToFileErr := writeResponseToFileInternal(cmd.Context(), resp.Body, resp.ContentLength, outputFile, !cmdutil.JSONOutputEnabled(cmd)); writeResponseToFileErr != nil {
 			return writeResponseToFileErr
 		}
 
@@ -236,7 +236,7 @@ var workspacePutCmd = &cobra.Command{
 				return confirmErr
 			}
 			if !confirmed {
-				fmt.Println("Cancelled")
+				_, _ = fmt.Fprintln(output.Stdout(), "Cancelled")
 				return nil
 			}
 		}

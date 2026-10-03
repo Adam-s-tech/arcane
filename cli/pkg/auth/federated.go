@@ -105,8 +105,8 @@ GitHub Actions example:
 				"persisted":       persist,
 			})
 		case exportOutput:
-			fmt.Printf("export ARCANE_TOKEN=%s\n", shellQuoteInternal(tokenResp.AccessToken))
-			fmt.Printf("export ARCANE_TOKEN_EXPIRES_AT=%s\n", shellQuoteInternal(expiresAt.Format(time.RFC3339)))
+			_, _ = fmt.Fprintf(output.Stdout(), "export ARCANE_TOKEN=%s\n", shellQuoteInternal(tokenResp.AccessToken))
+			_, _ = fmt.Fprintf(output.Stdout(), "export ARCANE_TOKEN_EXPIRES_AT=%s\n", shellQuoteInternal(expiresAt.Format(time.RFC3339)))
 		default:
 			output.Success("Federated token exchange successful")
 			output.KeyValue("Token source", tokenSource)

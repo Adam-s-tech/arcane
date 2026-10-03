@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"io"
 
 	"github.com/spf13/cobra"
 )
@@ -19,7 +20,7 @@ var secretCmd = &cobra.Command{
 	Short: "Generate cryptographic secrets",
 	Long:  `Generate a secure cryptographic secret for ENCRYPTION_KEY.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return generateSecrets()
+		return generateSecretsInternal(cmd.OutOrStdout())
 	},
 }
 
@@ -29,7 +30,7 @@ func init() {
 	secretCmd.Flags().IntVarP(&secretLength, "length", "l", 32, "secret length in bytes (default: 32 for AES-256)")
 }
 
-func generateSecrets() error {
+func generateSecretsInternal(w io.Writer) error {
 	encryptionKey := make([]byte, secretLength)
 	if _, err := rand.Read(encryptionKey); err != nil {
 		return fmt.Errorf("failed to generate encryption key: %w", err)
@@ -37,15 +38,15 @@ func generateSecrets() error {
 
 	switch secretFormat {
 	case "base64":
-		printBase64Format(encryptionKey)
+		printBase64FormatInternal(w, encryptionKey)
 	case "hex":
-		printHexFormat(encryptionKey)
+		printHexFormatInternal(w, encryptionKey)
 	case "env":
-		printEnvFormat(encryptionKey)
+		printEnvFormatInternal(w, encryptionKey)
 	case "docker":
-		printDockerFormat(encryptionKey)
+		printDockerFormatInternal(w, encryptionKey)
 	case "all":
-		printAllFormats(encryptionKey)
+		printAllFormatsInternal(w, encryptionKey)
 	default:
 		return fmt.Errorf("unknown format: %s (supported: base64, hex, env, docker, all)", secretFormat)
 	}
@@ -53,49 +54,49 @@ func generateSecrets() error {
 	return nil
 }
 
-func printBase64Format(encKey []byte) {
-	fmt.Println("BASE64")
-	fmt.Println("------")
-	fmt.Printf("ENCRYPTION_KEY=%s\n", base64.StdEncoding.EncodeToString(encKey))
+func printBase64FormatInternal(w io.Writer, encKey []byte) {
+	_, _ = fmt.Fprintln(w, "BASE64")
+	_, _ = fmt.Fprintln(w, "------")
+	_, _ = fmt.Fprintf(w, "ENCRYPTION_KEY=%s\n", base64.StdEncoding.EncodeToString(encKey))
 }
 
-func printHexFormat(encKey []byte) {
-	fmt.Println("HEX")
-	fmt.Println("---")
-	fmt.Printf("ENCRYPTION_KEY=%s\n", hex.EncodeToString(encKey))
+func printHexFormatInternal(w io.Writer, encKey []byte) {
+	_, _ = fmt.Fprintln(w, "HEX")
+	_, _ = fmt.Fprintln(w, "---")
+	_, _ = fmt.Fprintf(w, "ENCRYPTION_KEY=%s\n", hex.EncodeToString(encKey))
 }
 
-func printEnvFormat(encKey []byte) {
-	fmt.Println("ENV (.env) FORMAT")
-	fmt.Println("-------------------")
-	fmt.Printf("ENCRYPTION_KEY=%s\n", base64.StdEncoding.EncodeToString(encKey))
+func printEnvFormatInternal(w io.Writer, encKey []byte) {
+	_, _ = fmt.Fprintln(w, "ENV (.env) FORMAT")
+	_, _ = fmt.Fprintln(w, "-------------------")
+	_, _ = fmt.Fprintf(w, "ENCRYPTION_KEY=%s\n", base64.StdEncoding.EncodeToString(encKey))
 }
 
-func printDockerFormat(encKey []byte) {
-	fmt.Println("DOCKER COMPOSE ENVIRONMENT")
-	fmt.Println("--------------------------")
-	fmt.Println("environment:")
-	fmt.Printf("  - ENCRYPTION_KEY=%s\n", base64.StdEncoding.EncodeToString(encKey))
+func printDockerFormatInternal(w io.Writer, encKey []byte) {
+	_, _ = fmt.Fprintln(w, "DOCKER COMPOSE ENVIRONMENT")
+	_, _ = fmt.Fprintln(w, "--------------------------")
+	_, _ = fmt.Fprintln(w, "environment:")
+	_, _ = fmt.Fprintf(w, "  - ENCRYPTION_KEY=%s\n", base64.StdEncoding.EncodeToString(encKey))
 }
 
-func printAllFormats(encKey []byte) {
-	fmt.Println("Arcane cryptographic secrets")
-	fmt.Println("===========================")
-	fmt.Println()
+func printAllFormatsInternal(w io.Writer, encKey []byte) {
+	_, _ = fmt.Fprintln(w, "Arcane cryptographic secrets")
+	_, _ = fmt.Fprintln(w, "===========================")
+	_, _ = fmt.Fprintln(w)
 
-	fmt.Println("ENV (.env) - recommended")
-	fmt.Println("------------------------")
-	fmt.Printf("ENCRYPTION_KEY=%s\n", base64.StdEncoding.EncodeToString(encKey))
-	fmt.Println()
+	_, _ = fmt.Fprintln(w, "ENV (.env) - recommended")
+	_, _ = fmt.Fprintln(w, "------------------------")
+	_, _ = fmt.Fprintf(w, "ENCRYPTION_KEY=%s\n", base64.StdEncoding.EncodeToString(encKey))
+	_, _ = fmt.Fprintln(w)
 
-	fmt.Println("Docker Compose (environment block)")
-	fmt.Println("-------------------------------")
-	fmt.Println("environment:")
-	fmt.Printf("  - ENCRYPTION_KEY=%s\n", base64.StdEncoding.EncodeToString(encKey))
-	fmt.Println()
+	_, _ = fmt.Fprintln(w, "Docker Compose (environment block)")
+	_, _ = fmt.Fprintln(w, "-------------------------------")
+	_, _ = fmt.Fprintln(w, "environment:")
+	_, _ = fmt.Fprintf(w, "  - ENCRYPTION_KEY=%s\n", base64.StdEncoding.EncodeToString(encKey))
+	_, _ = fmt.Fprintln(w)
 
-	fmt.Println("HEX")
-	fmt.Println("---")
-	fmt.Printf("ENCRYPTION_KEY=%s\n", hex.EncodeToString(encKey))
-	fmt.Println()
+	_, _ = fmt.Fprintln(w, "HEX")
+	_, _ = fmt.Fprintln(w, "---")
+	_, _ = fmt.Fprintf(w, "ENCRYPTION_KEY=%s\n", hex.EncodeToString(encKey))
+	_, _ = fmt.Fprintln(w)
 }

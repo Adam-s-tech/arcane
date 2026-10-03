@@ -117,7 +117,7 @@ func runSettingsList(cmd *cobra.Command, cfg settingsListConfig) error {
 	if tableErr := output.Table(headers, rows); tableErr != nil {
 		return tableErr
 	}
-	fmt.Printf("\nTotal: %d %s\n", len(result), cfg.totalLabel)
+	_, _ = fmt.Fprintf(output.Stdout(), "\nTotal: %d %s\n", len(result), cfg.totalLabel)
 	return nil
 }
 

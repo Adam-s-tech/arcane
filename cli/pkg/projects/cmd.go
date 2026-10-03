@@ -182,7 +182,7 @@ var destroyCmd = &cobra.Command{
 				return confirmErr
 			}
 			if !confirmed {
-				fmt.Println("Cancelled")
+				_, _ = fmt.Fprintln(output.Stdout(), "Cancelled")
 				return nil
 			}
 		}
@@ -401,7 +401,7 @@ func printOperationStreamInternal(body io.Reader) error {
 			return nil
 		}
 		if frame.Log != "" {
-			fmt.Println(frame.Log)
+			_, _ = fmt.Fprintln(output.Stdout(), frame.Log)
 		}
 	}
 

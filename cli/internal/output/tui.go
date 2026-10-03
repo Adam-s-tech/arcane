@@ -1,240 +1,270 @@
 package output
 
 import (
+	"context"
 	"fmt"
+	"io"
+	"strings"
 	"sync"
+	"time"
 
 	"charm.land/bubbles/v2/progress"
-	"charm.land/bubbles/v2/spinner"
-	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/term"
 	"go.getarcane.app/sys/bytes"
 )
 
-type spinnerDoneMsg struct{}
+var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
-type spinnerModel struct {
-	spinner spinner.Model
-	label   string
+var (
+	trackersMu     sync.Mutex
+	activeTrackers = make(map[*tracker]struct{})
+	terminalMu     sync.Mutex
+)
+
+const (
+	stepPending = iota
+	stepRunning
+	stepSucceeded
+	stepFailed
+)
+
+type trackerStep struct {
+	key, label     string
+	status         int
+	current, total int64
+	bytes          bool
 }
 
-func newSpinnerModel(label string) spinnerModel {
-	s := spinner.New()
-	s.Spinner = spinner.Dot
-	return spinnerModel{spinner: s, label: label}
+type tracker struct {
+	mu                            sync.Mutex
+	out                           io.Writer
+	live                          bool
+	steps                         []trackerStep
+	current, drawn, frame, paused int
+	stopped                       bool
+	stop, done                    chan struct{}
+	once                          sync.Once
+	resumeOuter                   func()
 }
 
-func (m spinnerModel) Init() tea.Cmd {
-	return m.spinner.Tick
+// StartTracker renders a checklist only for interactive text output.
+func StartTracker(ctx context.Context, out io.Writer, enabled bool, labels ...string) *tracker {
+	if out == nil {
+		out = io.Discard
+	}
+	t := &tracker{out: out, live: enabled && IsTerminal(out) && IsTerminal(Stdout()), current: -1}
+	for _, label := range labels {
+		t.steps = append(t.steps, trackerStep{label: label, status: stepPending})
+	}
+	if !t.live || ctx.Err() != nil {
+		t.live = false
+		return t
+	}
+	t.stop, t.done = make(chan struct{}), make(chan struct{})
+	t.resumeOuter = SuspendProgress()
+	trackersMu.Lock()
+	activeTrackers[t] = struct{}{}
+	trackersMu.Unlock()
+	go t.runInternal(ctx)
+	return t
 }
 
-func (m spinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case spinnerDoneMsg:
-		return m, tea.Quit
-	case tea.KeyPressMsg:
-		switch msg.String() {
-		case "q", "esc", "ctrl+c":
-			return m, tea.Quit
+func (t *tracker) runInternal(ctx context.Context) {
+	defer close(t.done)
+	defer func() {
+		t.mu.Lock()
+		defer t.mu.Unlock()
+		t.stopped = true
+		t.clearInternal()
+	}()
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.stop:
+			return
+		case <-ticker.C:
+			t.mu.Lock()
+			t.frame++
+			if t.paused == 0 {
+				t.drawInternal()
+			}
+			t.mu.Unlock()
 		}
 	}
-
-	var cmd tea.Cmd
-	m.spinner, cmd = m.spinner.Update(msg)
-	return m, cmd
 }
 
-func (m spinnerModel) View() tea.View {
-	return tea.NewView(fmt.Sprintf("%s %s", m.spinner.View(), m.label))
+// NextStep completes the active step and starts the next pending step.
+func (t *tracker) NextStep() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.current >= 0 && t.current < len(t.steps) {
+		t.steps[t.current].status = stepSucceeded
+	}
+	t.current++
+	if t.current < len(t.steps) {
+		t.steps[t.current].status = stepRunning
+	}
 }
 
-// Spinner renders a Bubble Tea spinner inline.
-type Spinner struct {
-	program *tea.Program
-	done    chan struct{}
+// SetProgress updates a distinct step, retaining interleaved layer totals.
+func (t *tracker) SetProgress(key, label string, current, total int64, byteCount bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	index := -1
+	if key == "" && t.current >= 0 && t.current < len(t.steps) {
+		index = t.current
+	} else {
+		for i := range t.steps {
+			if t.steps[i].key == key {
+				index = i
+				break
+			}
+		}
+	}
+	if index < 0 {
+		t.steps = append(t.steps, trackerStep{key: key})
+		index = len(t.steps) - 1
+	}
+	step := &t.steps[index]
+	step.label, step.current, step.total, step.bytes = label, max(current, 0), max(total, 0), byteCount
+	step.status = stepRunning
 }
 
-// StartSpinner starts a spinner with the given label.
-func StartSpinner(label string) *Spinner {
-	model := newSpinnerModel(label)
-	program := tea.NewProgram(model)
-	done := make(chan struct{})
-
-	spin := &Spinner{program: program, done: done}
-	go func() {
-		_, _ = program.Run()
-		close(done)
-	}()
-
-	return spin
+// Finish marks one tracked step complete or failed.
+func (t *tracker) Finish(key string, err error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for i := range t.steps {
+		if (key == "" && i == t.current) || (key != "" && t.steps[i].key == key) {
+			t.steps[i].status = stepSucceeded
+			if err != nil {
+				t.steps[i].status = stepFailed
+			}
+		}
+	}
 }
 
-// Stop stops the spinner and moves to the next line.
-func (s *Spinner) Stop() {
-	if s == nil || s.program == nil {
+// Stop clears loading and waits for the renderer. It is safe to repeat.
+func (t *tracker) Stop() {
+	if t == nil || !t.live {
 		return
 	}
-	s.program.Send(spinnerDoneMsg{})
-	<-s.done
-	fmt.Println()
+	t.once.Do(func() {
+		close(t.stop)
+		<-t.done
+		trackersMu.Lock()
+		delete(activeTrackers, t)
+		trackersMu.Unlock()
+		t.resumeOuter()
+	})
 }
 
-type progressUpdateMsg struct {
-	current int64
-	total   int64
+// SuspendProgress pauses every active tracker until the returned function runs.
+func SuspendProgress() func() {
+	trackersMu.Lock()
+	trackers := make([]*tracker, 0, len(activeTrackers))
+	for t := range activeTrackers {
+		trackers = append(trackers, t)
+	}
+	trackersMu.Unlock()
+	for _, t := range trackers {
+		t.mu.Lock()
+		t.paused++
+		t.clearInternal()
+		t.mu.Unlock()
+	}
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			for _, t := range trackers {
+				t.mu.Lock()
+				t.paused = max(t.paused-1, 0)
+				t.mu.Unlock()
+			}
+		})
+	}
 }
 
-type progressLabelMsg string
-
-type progressDoneMsg struct{}
-
-type progressModel struct {
-	progress progress.Model
-	label    string
-	current  int64
-	total    int64
+func (t *tracker) clearInternal() {
+	if t.drawn == 0 {
+		return
+	}
+	terminalMu.Lock()
+	defer terminalMu.Unlock()
+	_, _ = io.WriteString(t.out, strings.Repeat("\x1b[A\r\x1b[2K", t.drawn))
+	t.drawn = 0
 }
 
-func newProgressModel(label string, total int64) progressModel {
-	p := progress.New(progress.WithDefaultBlend(), progress.WithWidth(40))
-	return progressModel{progress: p, label: label, total: total}
-}
-
-func (m progressModel) Init() tea.Cmd {
-	return m.progress.Init()
-}
-
-func (m progressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case progressUpdateMsg:
-		m.current = msg.current
-		if msg.total > 0 {
-			m.total = msg.total
-		}
-	case progressLabelMsg:
-		m.label = string(msg)
-	case progressDoneMsg:
-		return m, tea.Quit
-	case tea.KeyPressMsg:
-		switch msg.String() {
-		case "q", "esc", "ctrl+c":
-			return m, tea.Quit
-		}
-	case tea.WindowSizeMsg:
-		if msg.Width > 10 {
-			m.progress.SetWidth(msg.Width - 10)
+func (t *tracker) drawInternal() {
+	width := 80
+	height := 24
+	if fd, ok := t.out.(interface{ Fd() uintptr }); ok {
+		if w, h, err := term.GetSize(fd.Fd()); err == nil {
+			width, height = max(w, 1), max(h, 2)
 		}
 	}
-
-	var cmd tea.Cmd
-	m.progress, cmd = m.progress.Update(msg)
-	return m, cmd
+	var frame strings.Builder
+	if t.drawn > 0 {
+		_, _ = fmt.Fprintf(&frame, "\x1b[%dA", t.drawn)
+	}
+	start := max(len(t.steps)-max(height-2, 1), 0)
+	for _, step := range t.steps[start:] {
+		frame.WriteString("\r\x1b[2K")
+		frame.WriteString(ansi.Truncate(t.renderStepInternal(step, width), width, "…"))
+		frame.WriteByte('\n')
+	}
+	// Erase rows left over after a terminal resize.
+	count := len(t.steps) - start
+	for i := count; i < t.drawn; i++ {
+		frame.WriteString("\r\x1b[2K\n")
+	}
+	if t.drawn > count {
+		_, _ = fmt.Fprintf(&frame, "\x1b[%dA", t.drawn-count)
+	}
+	t.drawn = count
+	terminalMu.Lock()
+	defer terminalMu.Unlock()
+	_, _ = io.WriteString(t.out, frame.String())
 }
 
-func (m progressModel) View() tea.View {
-	percent := 0.0
-	if m.total > 0 {
-		percent = float64(m.current) / float64(m.total)
-		if percent < 0 {
-			percent = 0
-		} else if percent > 1 {
-			percent = 1
+func (t *tracker) renderStepInternal(step trackerStep, width int) string {
+	icon, style := "○", statusMutedStyle
+	switch step.status {
+	case stepRunning:
+		icon, style = spinnerFrames[t.frame%len(spinnerFrames)], infoStyle
+		if step.total > 0 {
+			current := min(step.current, step.total)
+			count := fmt.Sprintf("%d/%d", current, step.total)
+			if step.bytes {
+				count = Bytes(current) + "/" + Bytes(step.total)
+			}
+			barWidth := min(24, max(width-visibleWidthInternal(step.label)-len(count)-7, 1))
+			bar := progress.New(progress.WithWidth(barWidth), progress.WithColors(arcanePurple))
+			if !colorEnabledInternal() {
+				bar.FullColor = nil
+				bar.EmptyColor = nil
+				bar.PercentageStyle = tablePlainCell.UnsetPadding()
+			}
+			line := fmt.Sprintf("  %s %s %s", renderForInternal(t.out, infoStyle, step.label), bar.ViewAs(float64(current)/float64(step.total)), count)
+			if !colorEnabledInternal() {
+				return ansi.Strip(line)
+			}
+			return line
 		}
+	case stepSucceeded:
+		icon, style = "✓", successStyle
+	case stepFailed:
+		icon, style = "✗", warnStyle.Foreground(statusOffline)
 	}
-
-	bar := m.progress.ViewAs(percent)
-	if m.total > 0 {
-		return tea.NewView(fmt.Sprintf("%s\n%s %s/%s", m.label, bar, bytes.Capacity(uint64(max(m.current, 0))), bytes.Capacity(uint64(max(m.total, 0)))))
-	}
-	return tea.NewView(fmt.Sprintf("%s\n%s", m.label, bar))
+	return "  " + renderForInternal(t.out, style, icon) + " " + renderForInternal(t.out, valueStyle, step.label)
 }
 
-// Bytes renders a signed byte count in human-readable form. Negative values,
-// which bytes.Capacity would otherwise wrap into the exabyte range, render as 0.
-func Bytes(value int64) string {
-	return bytes.Capacity(uint64(max(value, 0))).String()
-}
+// Bytes renders a signed byte count in human-readable form.
+func Bytes(value int64) string { return bytes.Capacity(uint64(max(value, 0))).String() }
 
 // UnsignedBytes renders an unsigned byte count in human-readable form.
-func UnsignedBytes(value uint64) string {
-	return bytes.Capacity(value).String()
-}
-
-// Progress renders a Bubble Tea progress bar inline.
-type Progress struct {
-	program *tea.Program
-	done    chan struct{}
-
-	mu      sync.Mutex
-	current int64
-	total   int64
-}
-
-// StartProgress starts a progress bar with the given label and total.
-func StartProgress(label string, total int64) *Progress {
-	model := newProgressModel(label, total)
-	program := tea.NewProgram(model)
-	done := make(chan struct{})
-
-	progressUI := &Progress{program: program, done: done, total: total}
-	go func() {
-		_, _ = program.Run()
-		close(done)
-	}()
-
-	return progressUI
-}
-
-// SetLabel updates the progress label.
-func (p *Progress) SetLabel(label string) {
-	if p == nil || p.program == nil {
-		return
-	}
-	p.program.Send(progressLabelMsg(label))
-}
-
-// SetTotal updates the total value.
-func (p *Progress) SetTotal(total int64) {
-	if p == nil || p.program == nil {
-		return
-	}
-	p.mu.Lock()
-	p.total = total
-	current := p.current
-	p.mu.Unlock()
-	p.program.Send(progressUpdateMsg{current: current, total: total})
-}
-
-// SetCurrent sets the current progress value.
-func (p *Progress) SetCurrent(current int64) {
-	if p == nil || p.program == nil {
-		return
-	}
-	p.mu.Lock()
-	p.current = current
-	total := p.total
-	p.mu.Unlock()
-	p.program.Send(progressUpdateMsg{current: current, total: total})
-}
-
-// Add increments progress by the given value.
-func (p *Progress) Add(delta int64) {
-	if p == nil || p.program == nil {
-		return
-	}
-	p.mu.Lock()
-	p.current += delta
-	current := p.current
-	total := p.total
-	p.mu.Unlock()
-	p.program.Send(progressUpdateMsg{current: current, total: total})
-}
-
-// Stop stops the progress bar and moves to the next line.
-func (p *Progress) Stop() {
-	if p == nil || p.program == nil {
-		return
-	}
-	p.program.Send(progressDoneMsg{})
-	<-p.done
-	fmt.Println()
-}
+func UnsignedBytes(value uint64) string { return bytes.Capacity(value).String() }

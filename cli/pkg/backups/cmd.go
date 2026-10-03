@@ -190,7 +190,7 @@ var deleteCmd = &cobra.Command{
 				return err
 			}
 			if !confirmed {
-				fmt.Println("Cancelled")
+				_, _ = fmt.Fprintln(output.Stdout(), "Cancelled")
 				return nil
 			}
 		}
@@ -228,7 +228,7 @@ var restoreCmd = &cobra.Command{
 				return err
 			}
 			if !confirmed {
-				fmt.Println("Cancelled")
+				_, _ = fmt.Fprintln(output.Stdout(), "Cancelled")
 				return nil
 			}
 		}
@@ -238,13 +238,16 @@ var restoreCmd = &cobra.Command{
 			if !prompt.IsInteractive() {
 				return errors.New("recovery key is required; pass --recovery-key")
 			}
-			fmt.Print("Recovery key: ")
+			resume := output.SuspendProgress()
+			defer resume()
+			_, _ = fmt.Fprint(cmd.ErrOrStderr(), "Recovery key: ")
 			byteKey, err := term.ReadPassword(os.Stdin.Fd())
+			resume()
 			if err != nil {
 				return fmt.Errorf("failed to read recovery key: %w", err)
 			}
 			key = string(byteKey)
-			fmt.Println()
+			_, _ = fmt.Fprintln(output.Stdout())
 			if key == "" {
 				return errors.New("recovery key is required")
 			}
@@ -457,7 +460,7 @@ Alternatively, --file replaces all policies from a raw JSON payload.`,
 
 			switch {
 			case policiesUpdateID != "" && targetIndex == -1:
-				return fmt.Errorf("policy %q not found; run `arcane backups policies`", policiesUpdateID)
+				return fmt.Errorf("policy %q not found; run `arcane admin backups policies`", policiesUpdateID)
 			case policiesUpdateID == "" && len(req.Policies) > 1:
 				return fmt.Errorf("%d backup policies exist; select one with --policy-id", len(req.Policies))
 			case policiesUpdateID == "" && len(req.Policies) == 1:
@@ -547,7 +550,7 @@ var recoveryKeyGenerateCmd = &cobra.Command{
 		}
 
 		output.Header("Generated Recovery Key")
-		fmt.Println(result.RecoveryKey)
+		_, _ = fmt.Fprintln(output.Stdout(), result.RecoveryKey)
 		output.Warning("Store this recovery key somewhere safe. Backups encrypted with it cannot be restored without it.")
 
 		save := generateSave
@@ -558,7 +561,7 @@ var recoveryKeyGenerateCmd = &cobra.Command{
 			}
 		}
 		if !save {
-			fmt.Println("Run `arcane backups recovery set` to store it on the server later.")
+			_, _ = fmt.Fprintln(output.Stdout(), "Run `arcane admin backups recovery set` to store it on the server later.")
 			return nil
 		}
 		if storeRotatedRecoveryKeyErr := storeRecoveryKey(cmd, c, result.RecoveryKey); storeRotatedRecoveryKeyErr != nil {
@@ -580,13 +583,16 @@ var recoveryKeySetCmd = &cobra.Command{
 			if !prompt.IsInteractive() {
 				return errors.New("recovery key is required; pass --recovery-key")
 			}
-			fmt.Print("Recovery key: ")
+			resume := output.SuspendProgress()
+			defer resume()
+			_, _ = fmt.Fprint(cmd.ErrOrStderr(), "Recovery key: ")
 			byteKey, err := term.ReadPassword(os.Stdin.Fd())
+			resume()
 			if err != nil {
 				return fmt.Errorf("failed to read recovery key: %w", err)
 			}
 			key = string(byteKey)
-			fmt.Println()
+			_, _ = fmt.Fprintln(output.Stdout())
 		}
 		if key == "" {
 			return errors.New("recovery key is required; use --recovery-key")

@@ -2,6 +2,7 @@ package volumes
 
 import (
 	"cmp"
+	"context"
 	"encoding/json/v2"
 	"errors"
 	"fmt"
@@ -75,7 +76,7 @@ var renameCmd = &cobra.Command{
 				return confirmErr
 			}
 			if !confirmed {
-				fmt.Println("Cancelled")
+				_, _ = fmt.Fprintln(output.Stdout(), "Cancelled")
 				return nil
 			}
 		}
@@ -245,7 +246,7 @@ func printBackupPolicies(volumeName string, collection volume.BackupPolicyCollec
 	output.Header("Backup Policies: %s", volumeName)
 	output.KeyValue("S3 Available", collection.S3Available)
 	if len(collection.Policies) == 0 {
-		_, writeErr := fmt.Println("No backup policies configured")
+		_, writeErr := fmt.Fprintln(output.Stdout(), "No backup policies configured")
 		return writeErr
 	}
 
@@ -434,7 +435,7 @@ and restored instead (no backup ID).`,
 				return confirmErr
 			}
 			if !confirmed {
-				fmt.Println("Cancelled")
+				_, _ = fmt.Fprintln(output.Stdout(), "Cancelled")
 				return nil
 			}
 		}
@@ -460,7 +461,7 @@ func runRestorePaths(cmd *cobra.Command, c *client.Client, volumeName, backupID 
 			return err
 		}
 		if !confirmed {
-			fmt.Println("Cancelled")
+			_, _ = fmt.Fprintln(output.Stdout(), "Cancelled")
 			return nil
 		}
 	}
@@ -489,7 +490,7 @@ func runUploadRestore(cmd *cobra.Command, c *client.Client, volumeName string) e
 			return err
 		}
 		if !confirmed {
-			fmt.Println("Cancelled")
+			_, _ = fmt.Fprintln(output.Stdout(), "Cancelled")
 			return nil
 		}
 	}
@@ -509,7 +510,7 @@ func runUploadRestore(cmd *cobra.Command, c *client.Client, volumeName string) e
 	}
 
 	if jsonOutput {
-		fmt.Println(string(respBody))
+		_, _ = fmt.Fprintln(output.Stdout(), string(respBody))
 		return nil
 	}
 
@@ -530,7 +531,7 @@ var backupsDeleteCmd = &cobra.Command{
 				return err
 			}
 			if !confirmed {
-				fmt.Println("Cancelled")
+				_, _ = fmt.Fprintln(output.Stdout(), "Cancelled")
 				return nil
 			}
 		}
@@ -609,7 +610,7 @@ var backupsDownloadCmd = &cobra.Command{
 			outputFile = downloadFilename(resp, args[0]+".tar.gz")
 		}
 
-		if writeResponseToFileErr := writeResponseToFile(resp.Body, outputFile); writeResponseToFileErr != nil {
+		if writeResponseToFileErr := writeResponseToFileInternal(cmd.Context(), resp.Body, resp.ContentLength, outputFile, !cmdutil.JSONOutputEnabled(cmd)); writeResponseToFileErr != nil {
 			return writeResponseToFileErr
 		}
 
@@ -629,12 +630,12 @@ func downloadFilename(resp *http.Response, fallback string) string {
 	return fallback
 }
 
-func writeResponseToFile(body io.Reader, path string) error {
+func writeResponseToFileInternal(ctx context.Context, body io.Reader, total int64, path string, showProgress bool) error {
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		return fmt.Errorf("failed to create file %s: %w", path, err)
 	}
-	if _, copyErr := io.Copy(file, body); copyErr != nil {
+	if _, copyErr := output.Copy(ctx, file, body, total, "Downloading backup", showProgress); copyErr != nil {
 		_ = file.Close()
 		return fmt.Errorf("failed to write file %s: %w", path, copyErr)
 	}
@@ -665,7 +666,7 @@ var backupsFilesCmd = &cobra.Command{
 		}
 
 		for _, file := range result.Data {
-			fmt.Println(file)
+			_, _ = fmt.Fprintln(output.Stdout(), file)
 		}
 		return nil
 	},

@@ -145,7 +145,7 @@ var historyCmd = &cobra.Command{
 		if tableErr := output.Table(headers, rows); tableErr != nil {
 			return tableErr
 		}
-		fmt.Printf("\nTotal: %d history entries\n", len(result.Data))
+		_, _ = fmt.Fprintf(output.Stdout(), "\nTotal: %d history entries\n", len(result.Data))
 		return nil
 	},
 }

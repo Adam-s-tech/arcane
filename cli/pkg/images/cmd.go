@@ -147,7 +147,7 @@ var imagesGetCmd = &cobra.Command{
 		log.Debugf("Response body: %s", string(body))
 
 		if jsonOutput {
-			fmt.Println(string(body))
+			_, _ = fmt.Fprintln(output.Stdout(), string(body))
 			return nil
 		}
 
@@ -186,7 +186,7 @@ var imagesGetCmd = &cobra.Command{
 		if len(result.Data.Config.Env) > 0 {
 			output.Header("Environment Variables")
 			for _, env := range result.Data.Config.Env {
-				fmt.Println(env)
+				_, _ = fmt.Fprintln(output.Stdout(), env)
 			}
 		}
 
@@ -198,7 +198,7 @@ var imagesGetCmd = &cobra.Command{
 			}
 			sort.Strings(ports)
 			for _, p := range ports {
-				fmt.Println(p)
+				_, _ = fmt.Fprintln(output.Stdout(), p)
 			}
 		}
 
@@ -258,7 +258,7 @@ var imagesRemoveCmd = &cobra.Command{
 		log.Debugf("Response body: %s", string(body))
 
 		if cmdutil.JSONOutputEnabled(cmd) {
-			fmt.Println(string(body))
+			_, _ = fmt.Fprintln(output.Stdout(), string(body))
 			return nil
 		}
 
@@ -325,8 +325,8 @@ var imagesPullCmd = &cobra.Command{
 		output.Info("Pulling image: %s", imageName)
 
 		decoder := jsontext.NewDecoder(resp.Body)
-		var progressUI *output.Progress
-		var currentID string
+		loading := output.StartTracker(cmd.Context(), cmd.ErrOrStderr(), true)
+		defer loading.Stop()
 
 		for {
 			var event struct {
@@ -354,50 +354,30 @@ var imagesPullCmd = &cobra.Command{
 			}
 
 			if event.Error != "" {
-				if progressUI != nil {
-					progressUI.Stop()
-				}
-
-				return fmt.Errorf("pull error: %s", event.Error)
-
+				pullErr := fmt.Errorf("pull error: %s", event.Error)
+				loading.Finish(event.ID, pullErr)
+				return pullErr
 			}
-
-			if event.Status == "Downloading" && event.ProgressDetail.Total > 0 {
-				if progressUI == nil {
-					progressUI = output.StartProgress("", event.ProgressDetail.Total)
+			if event.ID != "" {
+				label := event.Status + " " + event.ID
+				loading.SetProgress(event.ID, label, event.ProgressDetail.Current, event.ProgressDetail.Total, true)
+				if event.Status == "Download complete" || event.Status == "Pull complete" || event.Status == "Already exists" {
+					loading.Finish(event.ID, nil)
 				}
-				if currentID != event.ID {
-					currentID = event.ID
-					progressUI.SetLabel("Downloading " + event.ID)
-					progressUI.SetTotal(event.ProgressDetail.Total)
-				}
-				progressUI.SetCurrent(event.ProgressDetail.Current)
-			} else {
-				if progressUI != nil {
-					// Stop the progress bar when the current layer completes.
-					if event.ID == currentID && event.Status == "Download complete" {
-						progressUI.SetCurrent(event.ProgressDetail.Total)
-						progressUI.SetLabel("Download complete")
-						progressUI.Stop()
-						progressUI = nil
-						currentID = ""
-					}
-				}
-
-				// Only print status if it's not a progress update for the current bar
-				if event.Status != "Downloading" {
+			}
+			if !output.IsTerminal(cmd.ErrOrStderr()) || !output.IsTerminal(cmd.OutOrStdout()) || event.ID == "" {
+				if event.Status != "Downloading" && event.Status != "Extracting" {
+					deferResume := output.SuspendProgress()
 					if event.ID != "" {
-						fmt.Printf("%s: %s\n", event.ID, event.Status)
+						_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s: %s\n", event.ID, event.Status)
 					} else {
-						fmt.Printf("%s\n", event.Status)
+						_, _ = fmt.Fprintln(cmd.OutOrStdout(), event.Status)
 					}
+					deferResume()
 				}
 			}
 		}
-
-		if progressUI != nil {
-			progressUI.Stop()
-		}
+		loading.Stop()
 
 		output.Success("Image pulled successfully")
 
@@ -427,18 +407,10 @@ var imagesPruneCmd = &cobra.Command{
 		}
 
 		jsonOutput := cmdutil.JSONOutputEnabled(cmd)
-		var spinner *output.Spinner
-
-		if !jsonOutput {
-			spinner = output.StartSpinner("Pruning images...")
-		}
-
+		loading := output.StartTracker(cmd.Context(), cmd.ErrOrStderr(), !jsonOutput, "Pruning images")
+		loading.NextStep()
+		defer loading.Stop()
 		resp, err := c.Post(cmd.Context(), path, requestBody)
-
-		if spinner != nil {
-			spinner.Stop()
-		}
-
 		if err != nil {
 			return fmt.Errorf("failed to prune images: %w", err)
 		}
@@ -456,7 +428,7 @@ var imagesPruneCmd = &cobra.Command{
 		log.Debugf("Response body: %s", string(body))
 
 		if cmdutil.JSONOutputEnabled(cmd) {
-			fmt.Println(string(body))
+			_, _ = fmt.Fprintln(output.Stdout(), string(body))
 			return nil
 		}
 
@@ -507,7 +479,7 @@ var imagesCountsCmd = &cobra.Command{
 		log.Debugf("Response body: %s", string(body))
 
 		if cmdutil.JSONOutputEnabled(cmd) {
-			fmt.Println(string(body))
+			_, _ = fmt.Fprintln(output.Stdout(), string(body))
 			return nil
 		}
 
@@ -563,7 +535,7 @@ var imagesUploadCmd = &cobra.Command{
 		log.Debugf("Response body: %s", string(respBody))
 
 		if jsonOutput {
-			fmt.Println(string(respBody))
+			_, _ = fmt.Fprintln(output.Stdout(), string(respBody))
 			return nil
 		}
 

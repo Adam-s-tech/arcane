@@ -11,6 +11,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"net"
 	"net/url"
@@ -43,7 +44,7 @@ var mtlsCmd = &cobra.Command{
 	Short: "Generate Arcane edge mTLS assets",
 	Long:  `Generate an Arcane-managed edge mTLS CA and agent client certificate bundle using ML-DSA-87.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return generateMTLSOutputInternal()
+		return generateMTLSOutputInternal(cmd.OutOrStdout())
 	},
 }
 
@@ -52,7 +53,7 @@ var tlsCmd = &cobra.Command{
 	Short: "Generate Arcane HTTPS TLS assets",
 	Long:  `Generate a self-signed Arcane HTTPS server certificate bundle using ECDSA P-384.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return generateTLSOutputInternal()
+		return generateTLSOutputInternal(cmd.OutOrStdout())
 	},
 }
 
@@ -71,7 +72,7 @@ func init() {
 	tlsCmd.Flags().StringVar(&tlsKeyName, "key-name", "server.key", "private key file name to write under out-dir")
 }
 
-func generateMTLSOutputInternal() error {
+func generateMTLSOutputInternal(w io.Writer) error {
 	outDir, err := filepath.Abs(strings.TrimSpace(mtlsOutDir))
 	if err != nil {
 		return fmt.Errorf("failed to resolve output directory: %w", err)
@@ -82,21 +83,21 @@ func generateMTLSOutputInternal() error {
 		return err
 	}
 
-	fmt.Println("Generated Arcane edge mTLS assets (ML-DSA-87)")
-	fmt.Printf("CA cert: %s\n", paths.CACertPath)
-	fmt.Printf("CA key: %s\n", paths.CAKeyPath)
-	fmt.Printf("Agent cert: %s\n", paths.ClientCertPath)
-	fmt.Printf("Agent key: %s\n", paths.ClientKeyPath)
-	fmt.Println()
-	fmt.Println("Manager env")
-	fmt.Printf("EDGE_MTLS_MODE=required\nEDGE_MTLS_CA_FILE=%s\n", paths.CACertPath)
-	fmt.Println()
-	fmt.Println("Agent env")
-	fmt.Printf("EDGE_MTLS_MODE=required\nEDGE_MTLS_CA_FILE=%s\nEDGE_MTLS_CERT_FILE=%s\nEDGE_MTLS_KEY_FILE=%s\n", paths.CACertPath, paths.ClientCertPath, paths.ClientKeyPath)
+	_, _ = fmt.Fprintln(w, "Generated Arcane edge mTLS assets (ML-DSA-87)")
+	_, _ = fmt.Fprintf(w, "CA cert: %s\n", paths.CACertPath)
+	_, _ = fmt.Fprintf(w, "CA key: %s\n", paths.CAKeyPath)
+	_, _ = fmt.Fprintf(w, "Agent cert: %s\n", paths.ClientCertPath)
+	_, _ = fmt.Fprintf(w, "Agent key: %s\n", paths.ClientKeyPath)
+	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, "Manager env")
+	_, _ = fmt.Fprintf(w, "EDGE_MTLS_MODE=required\nEDGE_MTLS_CA_FILE=%s\n", paths.CACertPath)
+	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, "Agent env")
+	_, _ = fmt.Fprintf(w, "EDGE_MTLS_MODE=required\nEDGE_MTLS_CA_FILE=%s\nEDGE_MTLS_CERT_FILE=%s\nEDGE_MTLS_KEY_FILE=%s\n", paths.CACertPath, paths.ClientCertPath, paths.ClientKeyPath)
 	return nil
 }
 
-func generateTLSOutputInternal() error {
+func generateTLSOutputInternal(w io.Writer) error {
 	outDir, err := filepath.Abs(strings.TrimSpace(tlsOutDir))
 	if err != nil {
 		return fmt.Errorf("failed to resolve output directory: %w", err)
@@ -107,12 +108,12 @@ func generateTLSOutputInternal() error {
 		return err
 	}
 
-	fmt.Println("Generated Arcane TLS assets (ECDSA P-384)")
-	fmt.Printf("Server cert: %s\n", paths.CertPath)
-	fmt.Printf("Server key: %s\n", paths.KeyPath)
-	fmt.Println()
-	fmt.Println("Manager env")
-	fmt.Printf("TLS_ENABLED=true\nTLS_CERT_FILE=%s\nTLS_KEY_FILE=%s\n", paths.CertPath, paths.KeyPath)
+	_, _ = fmt.Fprintln(w, "Generated Arcane TLS assets (ECDSA P-384)")
+	_, _ = fmt.Fprintf(w, "Server cert: %s\n", paths.CertPath)
+	_, _ = fmt.Fprintf(w, "Server key: %s\n", paths.KeyPath)
+	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, "Manager env")
+	_, _ = fmt.Fprintf(w, "TLS_ENABLED=true\nTLS_CERT_FILE=%s\nTLS_KEY_FILE=%s\n", paths.CertPath, paths.KeyPath)
 	return nil
 }
 

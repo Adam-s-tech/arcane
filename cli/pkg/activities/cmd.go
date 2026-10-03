@@ -138,7 +138,7 @@ var getCmd = &cobra.Command{
 		if len(result.Data.Messages) > 0 {
 			output.Header("Messages")
 			for _, msg := range result.Data.Messages {
-				fmt.Printf("%s [%s] %s\n", msg.CreatedAt.Format(time.RFC3339), msg.Level, msg.Message)
+				_, _ = fmt.Fprintf(output.Stdout(), "%s [%s] %s\n", msg.CreatedAt.Format(time.RFC3339), msg.Level, msg.Message)
 			}
 		}
 		return nil
@@ -157,7 +157,7 @@ var cancelCmd = &cobra.Command{
 				return err
 			}
 			if !confirmed {
-				fmt.Println("Cancelled")
+				_, _ = fmt.Fprintln(output.Stdout(), "Cancelled")
 				return nil
 			}
 		}
@@ -192,7 +192,7 @@ var clearCmd = &cobra.Command{
 				return err
 			}
 			if !confirmed {
-				fmt.Println("Cancelled")
+				_, _ = fmt.Fprintln(output.Stdout(), "Cancelled")
 				return nil
 			}
 		}

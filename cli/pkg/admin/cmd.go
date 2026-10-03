@@ -10,6 +10,7 @@ import (
 	"github.com/getarcaneapp/arcane/cli/v2/pkg/admin/oidcmappings"
 	"github.com/getarcaneapp/arcane/cli/v2/pkg/admin/roles"
 	"github.com/getarcaneapp/arcane/cli/v2/pkg/admin/users"
+	"github.com/getarcaneapp/arcane/cli/v2/pkg/backups"
 )
 
 // AdminCmd is the parent command for administrative operations.
@@ -20,6 +21,7 @@ var AdminCmd = &cobra.Command{
 }
 
 func init() {
+	AdminCmd.AddCommand(backups.BackupsCmd)
 	AdminCmd.AddCommand(users.UsersCmd)
 	AdminCmd.AddCommand(roles.RolesCmd)
 	AdminCmd.AddCommand(oidcmappings.OidcMappingsCmd)

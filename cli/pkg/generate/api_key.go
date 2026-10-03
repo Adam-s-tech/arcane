@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"io"
 
 	"github.com/spf13/cobra"
 )
@@ -19,7 +20,7 @@ var apiKeyCmd = &cobra.Command{
 	Short:   "Generate a static admin API key",
 	Long:    `Generate a static Arcane API key suitable for ADMIN_STATIC_API_KEY. This is just a local generation, nothing is stored to the database with these commands.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return generateAPIKeyOutputInternal()
+		return generateAPIKeyOutputInternal(cmd.OutOrStdout())
 	},
 }
 
@@ -36,12 +37,12 @@ func GenerateAPIKey() (string, error) {
 	return apiKeyPrefix + hex.EncodeToString(keyBytes), nil
 }
 
-func generateAPIKeyOutputInternal() error {
+func generateAPIKeyOutputInternal(w io.Writer) error {
 	apiKey, err := GenerateAPIKey()
 	if err != nil {
 		return err
 	}
 
-	fmt.Println(apiKey)
+	_, _ = fmt.Fprintln(w, apiKey)
 	return nil
 }

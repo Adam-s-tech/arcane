@@ -77,8 +77,8 @@ func parsePermissionGrantsInternal(tokens []string) ([]apikey.PermissionGrant, e
 
 // ApiKeysCmd is the parent command for API key operations
 var ApiKeysCmd = &cobra.Command{
-	Use:     "keys",
-	Aliases: []string{"api-keys", "apikey", "key"},
+	Use:     "api-keys",
+	Aliases: []string{"apikey", "key"},
 	Short:   "Manage API keys",
 }
 
@@ -189,7 +189,7 @@ var deleteCmd = &cobra.Command{
 				return err
 			}
 			if !confirmed {
-				fmt.Println("Cancelled")
+				_, _ = fmt.Fprintln(output.Stdout(), "Cancelled")
 				return nil
 			}
 		}

@@ -67,7 +67,7 @@ var settingsGetCmd = &cobra.Command{
 		if tableErr := output.Table(headers, rows); tableErr != nil {
 			return tableErr
 		}
-		fmt.Printf("\nTotal: %d notification settings\n", len(result))
+		_, _ = fmt.Fprintf(output.Stdout(), "\nTotal: %d notification settings\n", len(result))
 		return nil
 	},
 }
@@ -84,7 +84,7 @@ var settingsDeleteCmd = &cobra.Command{
 				return err
 			}
 			if !confirmed {
-				fmt.Println("Cancelled")
+				_, _ = fmt.Fprintln(output.Stdout(), "Cancelled")
 				return nil
 			}
 		}

@@ -116,7 +116,7 @@ var checkAllCmd = &cobra.Command{
 			}
 		}
 
-		fmt.Printf("\nTotal: %d images checked, %d updates available\n", len(result.Data), updatesAvailable)
+		_, _ = fmt.Fprintf(output.Stdout(), "\nTotal: %d images checked, %d updates available\n", len(result.Data), updatesAvailable)
 		return nil
 	},
 }
@@ -216,7 +216,7 @@ func printBatchResultsInternal(result imageupdate.BatchResponse) error {
 	if tableErr := output.Table(headers, rows); tableErr != nil {
 		return tableErr
 	}
-	fmt.Printf("\nTotal: %d images checked, %d updates available\n", len(result), updatesAvailable)
+	_, _ = fmt.Fprintf(output.Stdout(), "\nTotal: %d images checked, %d updates available\n", len(result), updatesAvailable)
 	return nil
 }
 

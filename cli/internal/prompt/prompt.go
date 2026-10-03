@@ -8,6 +8,8 @@ import (
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/term"
+
+	"github.com/getarcaneapp/arcane/cli/v2/internal/output"
 )
 
 // IsInteractive reports whether stdin is a terminal.
@@ -24,6 +26,7 @@ func Select(label string, options []string) (int, error) {
 		return -1, errors.New("interactive terminal required")
 	}
 
+	defer output.SuspendProgress()()
 	items := make([]list.Item, len(options))
 	for i, option := range options {
 		items[i] = selectItem{index: i, title: option}

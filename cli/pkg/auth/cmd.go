@@ -239,23 +239,29 @@ var passwordCmd = &cobra.Command{
 		newPassword, _ := cmd.Flags().GetString("new")
 
 		if currentPassword == "" {
-			fmt.Print("Current password: ")
+			resume := output.SuspendProgress()
+			defer resume()
+			_, _ = fmt.Fprint(cmd.ErrOrStderr(), "Current password: ")
 			bytePassword, err := term.ReadPassword(os.Stdin.Fd())
 			if err != nil {
 				return fmt.Errorf("failed to read current password: %w", err)
 			}
 			currentPassword = string(bytePassword)
-			fmt.Println()
+			_, _ = fmt.Fprintln(cmd.ErrOrStderr())
+			resume()
 		}
 
 		if newPassword == "" {
-			fmt.Print("New password: ")
+			resume := output.SuspendProgress()
+			defer resume()
+			_, _ = fmt.Fprint(cmd.ErrOrStderr(), "New password: ")
 			bytePassword, err := term.ReadPassword(os.Stdin.Fd())
 			if err != nil {
 				return fmt.Errorf("failed to read new password: %w", err)
 			}
 			newPassword = string(bytePassword)
-			fmt.Println()
+			_, _ = fmt.Fprintln(cmd.ErrOrStderr())
+			resume()
 		}
 
 		c, err := cmdutil.ClientFromCommand(cmd)
@@ -303,8 +309,10 @@ var refreshCmd = &cobra.Command{
 			refreshToken = cfg.RefreshToken
 		}
 		if refreshToken == "" {
-			fmt.Print("Refresh token: ")
-			if _, scanlnErr := fmt.Scanln(&refreshToken); scanlnErr != nil {
+			resume := output.SuspendProgress()
+			defer resume()
+			_, _ = fmt.Fprint(cmd.ErrOrStderr(), "Refresh token: ")
+			if _, scanlnErr := fmt.Fscanln(cmd.InOrStdin(), &refreshToken); scanlnErr != nil {
 				return fmt.Errorf("failed to read refresh token: %w", scanlnErr)
 			}
 		}

@@ -20,7 +20,7 @@ var s3DestinationRef = cmdutil.ResourceRef[backup.S3Destination, backup.S3Destin
 	Singular: "S3 destination",
 	Plural:   "S3 destinations",
 	IDHint:   "the destination ID",
-	ListCmd:  "arcane backups s3 list",
+	ListCmd:  "arcane admin backups s3 list",
 	GetPath:  func(_, identifier string) string { return types.BackupsS3Destination(identifier) },
 	SearchCandidates: func(ctx context.Context, c *client.Client, identifier string) ([]backup.S3Destination, error) {
 		destinations, err := c.DoJSON[[]backup.S3Destination](ctx, http.MethodGet, types.BackupsS3Options(), nil)

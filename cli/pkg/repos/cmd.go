@@ -339,7 +339,7 @@ var deleteCmd = &cobra.Command{
 				return confirmErr
 			}
 			if !confirmed {
-				fmt.Println("Cancelled")
+				_, _ = fmt.Fprintln(output.Stdout(), "Cancelled")
 				return nil
 			}
 		}
@@ -424,7 +424,7 @@ var branchesCmd = &cobra.Command{
 		if tableErr := output.Table(headers, rows); tableErr != nil {
 			return tableErr
 		}
-		fmt.Printf("\nTotal: %d branches\n", len(result.Data.Branches))
+		_, _ = fmt.Fprintf(output.Stdout(), "\nTotal: %d branches\n", len(result.Data.Branches))
 		return nil
 	},
 }
@@ -485,7 +485,7 @@ var filesCmd = &cobra.Command{
 		if tableErr := output.Table(headers, rows); tableErr != nil {
 			return tableErr
 		}
-		fmt.Printf("\nTotal: %d entries\n", len(files))
+		_, _ = fmt.Fprintf(output.Stdout(), "\nTotal: %d entries\n", len(files))
 		return nil
 	},
 }

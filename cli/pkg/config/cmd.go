@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/getarcaneapp/arcane/cli/v2/internal/config"
+	"github.com/getarcaneapp/arcane/cli/v2/internal/output"
 	"github.com/getarcaneapp/arcane/cli/v2/internal/types"
 )
 
@@ -45,18 +46,18 @@ var configShowCmd = &cobra.Command{
 		}
 
 		path, _ := config.ConfigPath()
-		fmt.Printf("Config file: %s\n\n", path)
-		fmt.Printf("Server URL:          %s\n", cmp.Or(cfg.ServerURL, "(not set)"))
-		fmt.Printf("API Key:             %s\n", maskAPIKey(cfg.APIKey))
-		fmt.Printf("JWT Token:           %s\n", maskAPIKey(cfg.JWTToken))
-		fmt.Printf("Refresh Token:       %s\n", maskAPIKey(cfg.RefreshToken))
-		fmt.Printf("Default Environment: %s\n", cmp.Or(cfg.DefaultEnvironment, "0 (local)"))
-		fmt.Printf("Federated Audience:  %s\n", cmp.Or(cfg.FederatedAudience, "(not set)"))
-		fmt.Printf("Log Level:           %s\n", cmp.Or(cfg.LogLevel, "info (default)"))
-		fmt.Printf("CLI Update Channel:  %s\n", cmp.Or(cfg.CLIUpdateChannel, "(auto)"))
-		fmt.Printf("Pagination Default:  %s\n", cmp.Or(intToString(cfg.Pagination.Default.Limit), "(not set)"))
-
-		fmt.Println("\nPagination Resources:")
+		output.Header("CLI configuration")
+		output.KeyValue("Config file", path)
+		output.KeyValue("Server URL", cmp.Or(cfg.ServerURL, "(not set)"))
+		output.KeyValue("API key", maskAPIKey(cfg.APIKey))
+		output.KeyValue("JWT token", maskAPIKey(cfg.JWTToken))
+		output.KeyValue("Refresh token", maskAPIKey(cfg.RefreshToken))
+		output.KeyValue("Environment", cmp.Or(cfg.DefaultEnvironment, "0 (local)"))
+		output.KeyValue("Federated audience", cmp.Or(cfg.FederatedAudience, "(not set)"))
+		output.KeyValue("Log level", cmp.Or(cfg.LogLevel, "info (default)"))
+		output.KeyValue("Update channel", cmp.Or(cfg.CLIUpdateChannel, "(auto)"))
+		output.KeyValue("Pagination limit", cmp.Or(intToString(cfg.Pagination.Default.Limit), "(not set)"))
+		output.Header("Pagination resources")
 		printed := 0
 		for _, resource := range types.KnownPaginatedResources {
 			limit := cfg.LimitFor(resource)
@@ -67,7 +68,7 @@ var configShowCmd = &cobra.Command{
 			} else if limit > 0 {
 				label = fmt.Sprintf("%d (from global)", limit)
 			}
-			fmt.Printf("  %-14s %s\n", resource+":", label)
+			output.KeyValue(resource, label)
 			printed++
 		}
 		if cfg.Pagination.Resources != nil {
@@ -80,18 +81,18 @@ var configShowCmd = &cobra.Command{
 			}
 			sort.Strings(extras)
 			for _, k := range extras {
-				fmt.Printf("  %-14s %d\n", k+":", cfg.Pagination.Resources[k].Limit)
+				_, _ = fmt.Fprintf(output.Stdout(), "  %-14s %d\n", k+":", cfg.Pagination.Resources[k].Limit)
 				printed++
 			}
 		}
 		if printed == 0 {
-			fmt.Println("  (none)")
+			_, _ = fmt.Fprintln(output.Stdout(), "  (none)")
 		}
 
 		if cfg.IsConfigured() {
-			fmt.Println("\n✓ Configuration is complete")
+			_, _ = fmt.Fprintln(output.Stdout(), "\n✓ Configuration is complete")
 		} else {
-			fmt.Println("\n✗ Configuration is incomplete. Run: arcane config set --help")
+			_, _ = fmt.Fprintln(output.Stdout(), "\n✗ Configuration is incomplete. Run: arcane config set --help")
 		}
 
 		return nil
@@ -147,7 +148,7 @@ Legacy flag syntax (flags shown below) is still supported:
 		}
 
 		path, _ := config.ConfigPath()
-		fmt.Printf("\nConfiguration saved to %s\n", path)
+		_, _ = fmt.Fprintf(output.Stdout(), "\nConfiguration saved to %s\n", path)
 
 		return nil
 	},
@@ -161,7 +162,7 @@ var configPathCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Println(path)
+		_, _ = fmt.Fprintln(output.Stdout(), path)
 		return nil
 	},
 }
@@ -179,7 +180,7 @@ var configTestCmd = &cobra.Command{
 			return validateErr
 		}
 
-		fmt.Printf("Testing connection to %s...\n", cfg.ServerURL)
+		_, _ = fmt.Fprintf(output.Stdout(), "Testing connection to %s...\n", cfg.ServerURL)
 
 		// Test connection directly without importing client to avoid circular import
 		httpClient := &http.Client{Timeout: 10 * time.Second}
@@ -205,7 +206,7 @@ var configTestCmd = &cobra.Command{
 			return fmt.Errorf("connection test failed with status %d: %s", resp.StatusCode, string(body))
 		}
 
-		fmt.Println("✓ Connection successful!")
+		_, _ = fmt.Fprintln(output.Stdout(), "✓ Connection successful!")
 		return nil
 	},
 }
@@ -229,12 +230,12 @@ If the config file already exists, this command is a no-op and does not overwrit
 			return fmt.Errorf("failed to initialize config: %w", err)
 		}
 		if !created {
-			fmt.Printf("Config file already exists at %s (no changes made)\n", path)
+			_, _ = fmt.Fprintf(output.Stdout(), "Config file already exists at %s (no changes made)\n", path)
 			return nil
 		}
 
-		fmt.Printf("Created default config at %s\n", path)
-		fmt.Println("Update values with `arcane config set <key> <value>` or run `arcane auth login`.")
+		_, _ = fmt.Fprintf(output.Stdout(), "Created default config at %s\n", path)
+		_, _ = fmt.Fprintln(output.Stdout(), "Update values with `arcane config set <key> <value>` or run `arcane auth login`.")
 		return nil
 	},
 }
@@ -258,12 +259,12 @@ This removes the original config file from its previous path.`,
 			return fmt.Errorf("failed to backup config: %w", err)
 		}
 		if !moved {
-			fmt.Printf("No config file found at %s (no changes made)\n", path)
+			_, _ = fmt.Fprintf(output.Stdout(), "No config file found at %s (no changes made)\n", path)
 			return nil
 		}
 
-		fmt.Printf("Backed up config to %s\n", backupPath)
-		fmt.Printf("Removed original config at %s\n", path)
+		_, _ = fmt.Fprintf(output.Stdout(), "Backed up config to %s\n", backupPath)
+		_, _ = fmt.Fprintf(output.Stdout(), "Removed original config at %s\n", path)
 		return nil
 	},
 }
@@ -321,7 +322,7 @@ func applyConfigSetFlags(cmd *cobra.Command, cfg *types.Config) (bool, error) {
 
 	if setServerURL != "" {
 		cfg.ServerURL = setServerURL
-		fmt.Printf("Set server_url = %s\n", setServerURL)
+		_, _ = fmt.Fprintf(output.Stdout(), "Set server_url = %s\n", setServerURL)
 		updated = true
 	}
 
@@ -330,7 +331,7 @@ func applyConfigSetFlags(cmd *cobra.Command, cfg *types.Config) (bool, error) {
 		// If switching to API key auth, clear any existing JWT token.
 		cfg.JWTToken = ""
 		cfg.RefreshToken = ""
-		fmt.Printf("Set api_key = %s\n", maskAPIKey(setAPIKey))
+		_, _ = fmt.Fprintf(output.Stdout(), "Set api_key = %s\n", maskAPIKey(setAPIKey))
 		updated = true
 	}
 
@@ -339,25 +340,25 @@ func applyConfigSetFlags(cmd *cobra.Command, cfg *types.Config) (bool, error) {
 		// If switching to JWT auth, clear any existing API key.
 		cfg.APIKey = ""
 		cfg.RefreshToken = ""
-		fmt.Printf("Set jwt_token = %s\n", maskAPIKey(setJWTToken))
+		_, _ = fmt.Fprintf(output.Stdout(), "Set jwt_token = %s\n", maskAPIKey(setJWTToken))
 		updated = true
 	}
 
 	if setEnvironment != "" {
 		cfg.DefaultEnvironment = setEnvironment
-		fmt.Printf("Set default_environment = %s\n", setEnvironment)
+		_, _ = fmt.Fprintf(output.Stdout(), "Set default_environment = %s\n", setEnvironment)
 		updated = true
 	}
 
 	if setFederatedAudience != "" {
 		cfg.FederatedAudience = setFederatedAudience
-		fmt.Printf("Set federated_audience = %s\n", setFederatedAudience)
+		_, _ = fmt.Fprintf(output.Stdout(), "Set federated_audience = %s\n", setFederatedAudience)
 		updated = true
 	}
 
 	if setLogLevel != "" {
 		cfg.LogLevel = setLogLevel
-		fmt.Printf("Set log_level = %s\n", setLogLevel)
+		_, _ = fmt.Fprintf(output.Stdout(), "Set log_level = %s\n", setLogLevel)
 		updated = true
 	}
 
@@ -367,9 +368,9 @@ func applyConfigSetFlags(cmd *cobra.Command, cfg *types.Config) (bool, error) {
 		}
 		cfg.SetDefaultLimit(setDefaultLimit)
 		if setDefaultLimit == 0 {
-			fmt.Println("Cleared pagination.default.limit")
+			_, _ = fmt.Fprintln(output.Stdout(), "Cleared pagination.default.limit")
 		} else {
-			fmt.Printf("Set pagination.default.limit = %d\n", setDefaultLimit)
+			_, _ = fmt.Fprintf(output.Stdout(), "Set pagination.default.limit = %d\n", setDefaultLimit)
 		}
 		updated = true
 	}
@@ -384,9 +385,9 @@ func applyConfigSetFlags(cmd *cobra.Command, cfg *types.Config) (bool, error) {
 		}
 		cfg.SetResourceLimit(resource, limit)
 		if limit == 0 {
-			fmt.Printf("Cleared pagination.resources.%s.limit\n", resource)
+			_, _ = fmt.Fprintf(output.Stdout(), "Cleared pagination.resources.%s.limit\n", resource)
 		} else {
-			fmt.Printf("Set pagination.resources.%s.limit = %d\n", resource, limit)
+			_, _ = fmt.Fprintf(output.Stdout(), "Set pagination.resources.%s.limit = %d\n", resource, limit)
 		}
 		updated = true
 	}
@@ -418,33 +419,33 @@ func applyConfigSetArg(cfg *types.Config, key, value string) (bool, error) {
 	switch normalized {
 	case "server-url", "server", "serverurl", "server_url":
 		cfg.ServerURL = value
-		fmt.Printf("Set server_url = %s\n", value)
+		_, _ = fmt.Fprintf(output.Stdout(), "Set server_url = %s\n", value)
 		return true, nil
 	case "api-key", "apikey", "api_key":
 		cfg.APIKey = value
 		// If switching to API key auth, clear any existing JWT token.
 		cfg.JWTToken = ""
 		cfg.RefreshToken = ""
-		fmt.Printf("Set api_key = %s\n", maskAPIKey(value))
+		_, _ = fmt.Fprintf(output.Stdout(), "Set api_key = %s\n", maskAPIKey(value))
 		return true, nil
 	case "jwt-token", "jwt", "jwt_token":
 		cfg.JWTToken = value
 		// If switching to JWT auth, clear any existing API key.
 		cfg.APIKey = ""
 		cfg.RefreshToken = ""
-		fmt.Printf("Set jwt_token = %s\n", maskAPIKey(value))
+		_, _ = fmt.Fprintf(output.Stdout(), "Set jwt_token = %s\n", maskAPIKey(value))
 		return true, nil
 	case "environment", "default-environment", "default_environment":
 		cfg.DefaultEnvironment = value
-		fmt.Printf("Set default_environment = %s\n", value)
+		_, _ = fmt.Fprintf(output.Stdout(), "Set default_environment = %s\n", value)
 		return true, nil
 	case "federated-audience", "federated_audience", "audience":
 		cfg.FederatedAudience = value
-		fmt.Printf("Set federated_audience = %s\n", value)
+		_, _ = fmt.Fprintf(output.Stdout(), "Set federated_audience = %s\n", value)
 		return true, nil
 	case "log-level", "loglevel", "log_level":
 		cfg.LogLevel = value
-		fmt.Printf("Set log_level = %s\n", value)
+		_, _ = fmt.Fprintf(output.Stdout(), "Set log_level = %s\n", value)
 		return true, nil
 	case "cli-update-channel", "cli_update_channel", "cli-channel", "channel":
 		channel := strings.ToLower(strings.TrimSpace(value))
@@ -452,7 +453,7 @@ func applyConfigSetArg(cfg *types.Config, key, value string) (bool, error) {
 			return false, fmt.Errorf("invalid cli update channel %q (expected stable or next)", value)
 		}
 		cfg.CLIUpdateChannel = channel
-		fmt.Printf("Set cli_update_channel = %s\n", channel)
+		_, _ = fmt.Fprintf(output.Stdout(), "Set cli_update_channel = %s\n", channel)
 		return true, nil
 	case "default-limit", "default_limit", "pagination.default.limit":
 		limit, err := parseLimitValue(normalized, value)
@@ -461,9 +462,9 @@ func applyConfigSetArg(cfg *types.Config, key, value string) (bool, error) {
 		}
 		cfg.SetDefaultLimit(limit)
 		if limit == 0 {
-			fmt.Println("Cleared pagination.default.limit")
+			_, _ = fmt.Fprintln(output.Stdout(), "Cleared pagination.default.limit")
 		} else {
-			fmt.Printf("Set pagination.default.limit = %d\n", limit)
+			_, _ = fmt.Fprintf(output.Stdout(), "Set pagination.default.limit = %d\n", limit)
 		}
 		return true, nil
 	case "resource-limit", "resource_limit":
@@ -476,9 +477,9 @@ func applyConfigSetArg(cfg *types.Config, key, value string) (bool, error) {
 		}
 		cfg.SetResourceLimit(resource, limit)
 		if limit == 0 {
-			fmt.Printf("Cleared pagination.resources.%s.limit\n", resource)
+			_, _ = fmt.Fprintf(output.Stdout(), "Cleared pagination.resources.%s.limit\n", resource)
 		} else {
-			fmt.Printf("Set pagination.resources.%s.limit = %d\n", resource, limit)
+			_, _ = fmt.Fprintf(output.Stdout(), "Set pagination.resources.%s.limit = %d\n", resource, limit)
 		}
 		return true, nil
 	}
@@ -507,9 +508,9 @@ func applyResourceLimitByKey(cfg *types.Config, key, resourceValue, limitValue s
 	}
 	cfg.SetResourceLimit(resource, limit)
 	if limit == 0 {
-		fmt.Printf("Cleared pagination.resources.%s.limit\n", resource)
+		_, _ = fmt.Fprintf(output.Stdout(), "Cleared pagination.resources.%s.limit\n", resource)
 	} else {
-		fmt.Printf("Set pagination.resources.%s.limit = %d\n", resource, limit)
+		_, _ = fmt.Fprintf(output.Stdout(), "Set pagination.resources.%s.limit = %d\n", resource, limit)
 	}
 	return true, nil
 }

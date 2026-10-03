@@ -20,9 +20,9 @@ var (
 
 // apiKeysCmd is the parent command for the caller's own (personal) API keys.
 // Personal keys inherit the owner's role permissions; scoped keys with
-// granular grants are managed via `arcane admin apikeys`.
+// granular grants are managed via `arcane admin api-keys`.
 var apiKeysCmd = &cobra.Command{
-	Use:     "keys",
+	Use:     "api-keys",
 	Aliases: []string{"apikeys", "key"},
 	Short:   "Manage your own API keys",
 	Long: "Manage the current user's personal API keys. Personal keys inherit the owner's role permissions. Creating and " +
@@ -133,7 +133,7 @@ var apiKeysDeleteCmd = &cobra.Command{
 				return err
 			}
 			if !confirmed {
-				fmt.Println("Cancelled")
+				_, _ = fmt.Fprintln(output.Stdout(), "Cancelled")
 				return nil
 			}
 		}

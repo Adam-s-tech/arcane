@@ -39,6 +39,9 @@ func UploadFileInChunks(ctx context.Context, c *client.Client, kind, filePath st
 		return "", fmt.Errorf("failed to stat file: %w", err)
 	}
 
+	loading := output.StartTracker(ctx, output.Stderr(), showProgress, "Creating upload session", "Uploading chunks")
+	loading.NextStep()
+	defer loading.Stop()
 	created, err := c.PostJSON[uploadtypes.Session](ctx, types.UploadSessions(c.EnvID(), kind), uploadtypes.CreateSessionRequest{
 		Filename: filepath.Base(filePath),
 		Size:     fileInfo.Size(),
@@ -50,11 +53,9 @@ func UploadFileInChunks(ctx context.Context, c *client.Client, kind, filePath st
 
 	log.Debugf("Uploading %s as %d chunks of %d bytes (session %s)", filePath, session.TotalChunks, session.ChunkSize, session.ID)
 
-	var progressUI *output.Progress
-	if showProgress {
-		progressUI = output.StartProgress("Uploading", fileInfo.Size())
-		defer progressUI.Stop()
-	}
+	loading.NextStep()
+	loading.SetProgress("", "Uploading", 0, fileInfo.Size(), true)
+	var uploaded int64
 
 	deleteSession := func() {
 		if resp, deleteErr := c.Delete(context.WithoutCancel(ctx), types.UploadSession(c.EnvID(), kind, session.ID)); deleteErr == nil {
@@ -90,11 +91,11 @@ func UploadFileInChunks(ctx context.Context, c *client.Client, kind, filePath st
 			}
 			log.Debugf("Retrying chunk %d after error: %v", index, chunkErr)
 		}
-		if progressUI != nil {
-			progressUI.Add(expected)
-		}
+		uploaded += expected
+		loading.SetProgress("", "Uploading", uploaded, fileInfo.Size(), true)
 	}
 
+	loading.Finish("", nil)
 	return session.ID, nil
 }
 

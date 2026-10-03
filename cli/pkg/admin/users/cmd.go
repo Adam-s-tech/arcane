@@ -138,13 +138,16 @@ var createCmd = &cobra.Command{
 		}
 
 		if userCreatePassword == "" {
-			fmt.Print("Password: ")
+			resume := output.SuspendProgress()
+			defer resume()
+			_, _ = fmt.Fprint(cmd.ErrOrStderr(), "Password: ")
 			bytePassword, readPasswordErr := term.ReadPassword(os.Stdin.Fd())
+			resume()
 			if readPasswordErr != nil {
 				return fmt.Errorf("failed to read password: %w", readPasswordErr)
 			}
 			userCreatePassword = string(bytePassword)
-			fmt.Println()
+			_, _ = fmt.Fprintln(output.Stdout())
 		}
 
 		req := user.CreateUser{
@@ -272,7 +275,7 @@ var deleteCmd = &cobra.Command{
 				return err
 			}
 			if !confirmed {
-				fmt.Println("Cancelled")
+				_, _ = fmt.Fprintln(output.Stdout(), "Cancelled")
 				return nil
 			}
 		}
