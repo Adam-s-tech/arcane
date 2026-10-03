@@ -7,9 +7,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.yaml.in/yaml/v4"
+
+	"github.com/getarcaneapp/arcane/cli/v2/internal/types"
 )
 
-func setTempConfigPath(t *testing.T) string {
+func setTempConfigPathInternal(t *testing.T) string {
 	t.Helper()
 
 	path := filepath.Join(t.TempDir(), "arcanecli.yml")
@@ -30,7 +33,7 @@ func setTempConfigPath(t *testing.T) string {
 }
 
 func TestLoadReturnsDefaultsWhenFileMissing(t *testing.T) {
-	path := setTempConfigPath(t)
+	path := setTempConfigPathInternal(t)
 	{
 		_, err := os.Stat(path)
 		require.True(t, os.IsNotExist(err),
@@ -63,71 +66,119 @@ func TestLoadReturnsDefaultsWhenFileMissing(t *testing.T) {
 }
 
 func TestSaveAndLoadRoundTripPagination(t *testing.T) {
-	path := setTempConfigPath(t)
+	for _, filename := range []string{"arcanecli.yml", "custom.json", "config"} {
+		t.Run(filename, func(t *testing.T) {
+			path := filepath.Join(filepath.Dir(setTempConfigPathInternal(t)), "nested", filename)
+			require.NoError(t, SetConfigPath(path))
 
-	cfg := DefaultConfig()
-	cfg.APIKey = "k_test"
-	cfg.CLIUpdateChannel = "next"
-	cfg.SetDefaultLimit(42)
-	cfg.SetResourceLimit("images", 17)
-	cfg.SetResourceLimit("Containers", 9)
-	{
+			cfg := DefaultConfig()
+			cfg.APIKey = "k_test"
+			cfg.JWTToken = "jwt_test"
+			cfg.RefreshToken = "refresh_test"
+			cfg.FederatedAudience = "audience_test"
+			cfg.CLIUpdateChannel = "next"
+			cfg.SetDefaultLimit(42)
+			cfg.SetResourceLimit("images", 17)
+			cfg.SetResourceLimit("Containers", 9)
+			cfg.Pagination.Resources["GitOps"] = types.PaginationResourceConfig{Limit: 8}
+			cfg.Pagination.Resources[" "] = types.PaginationResourceConfig{Limit: 5}
+			cfg.Pagination.Resources["volumes"] = types.PaginationResourceConfig{Limit: -1}
+			{
 
-		err := Save(cfg)
-		require.NoError(t, err,
-			"Save() failed: %v", err)
+				err := Save(cfg)
+				require.NoError(t, err,
+					"Save() failed: %v", err)
+			}
+
+			raw, err := os.ReadFile(path)
+
+			require.NoError(t, err,
+				"failed to read saved config: %v", err)
+
+			text := string(raw)
+			require.NotContains(t, text, "volumes:")
+			require.Contains(t, text, "gitops-syncs:")
+			require.NotContains(t, text, "GitOps:")
+
+			require.Contains(t, text, "pagination:",
+				"expected saved YAML to include pagination block:\n%s", text)
+
+			require.Contains(t, text, "cli_update_channel: next",
+				"expected saved YAML to include cli_update_channel key:\n%s", text)
+
+			info, err := os.Stat(path)
+
+			require.NoError(t, err,
+				"failed to stat config file: %v", err)
+			{
+
+				got := info.Mode().Perm()
+				require.Equal(t, os.FileMode(0o600), got,
+					"config file permissions=%#o, want %#o", got, 0o600)
+			}
+
+			dirInfo, dirErr := os.Stat(filepath.Dir(path))
+			require.NoError(t, dirErr)
+			require.Equal(t, os.FileMode(0o700), dirInfo.Mode().Perm())
+			cfg.APIKey = "changed after save"
+			cfg.SetResourceLimit("images", 99)
+			cached, cacheErr := Load()
+			require.NoError(t, cacheErr)
+			require.Equal(t, "k_test", cached.APIKey)
+			require.Equal(t, 17, cached.LimitFor("images"))
+			require.Equal(t, 8, cached.LimitFor("gitops-syncs"))
+			require.NotContains(t, cached.Pagination.Resources, "GitOps")
+			require.NotContains(t, cached.Pagination.Resources, "volumes")
+			invalidateCacheInternal()
+			loaded, err := Load()
+
+			require.NoError(t, err,
+				"Load() failed: %v", err)
+
+			require.Equal(t, 42, loaded.Pagination.Default.Limit,
+				"default limit mismatch: pagination=%d, want 42", loaded.Pagination.Default.Limit)
+			{
+
+				got := loaded.LimitFor("images")
+				require.Equal(t, 17, got,
+					"images limit=%d, want 17", got)
+			}
+			{
+
+				got := loaded.LimitFor("containers")
+				require.Equal(t, 9, got,
+					"containers limit=%d, want 9", got)
+			}
+
+			require.Equal(t, "next", loaded.CLIUpdateChannel,
+				"CLIUpdateChannel=%q, want next", loaded.CLIUpdateChannel)
+			require.Equal(t, "k_test", loaded.APIKey)
+			require.Equal(t, "jwt_test", loaded.JWTToken)
+			require.Equal(t, "refresh_test", loaded.RefreshToken)
+			require.Equal(t, "audience_test", loaded.FederatedAudience)
+			require.Equal(t, 8, loaded.LimitFor("gitops-syncs"))
+			loaded.SetResourceLimit("images", 101)
+			reloaded, reloadErr := Load()
+			require.NoError(t, reloadErr)
+			require.Equal(t, 17, reloaded.LimitFor("images"))
+
+			require.NoError(t, os.Chmod(path, 0o644))
+			require.NoError(t, Save(&types.Config{
+				ServerURL:  "https://short.test",
+				Pagination: types.PaginationConfig{Default: types.PaginationResourceConfig{Limit: -1}},
+			}))
+			omittedRaw, omittedErr := os.ReadFile(path)
+			require.NoError(t, omittedErr)
+			require.Equal(t, "server_url: https://short.test\n", string(omittedRaw))
+			securedInfo, securedErr := os.Stat(path)
+			require.NoError(t, securedErr)
+			require.Equal(t, os.FileMode(0o600), securedInfo.Mode().Perm())
+		})
 	}
-
-	raw, err := os.ReadFile(path)
-
-	require.NoError(t, err,
-		"failed to read saved config: %v", err)
-
-	text := string(raw)
-
-	require.Contains(t, text, "pagination:",
-		"expected saved YAML to include pagination block:\n%s", text)
-
-	require.Contains(t, text, "cli_update_channel: next",
-		"expected saved YAML to include cli_update_channel key:\n%s", text)
-
-	info, err := os.Stat(path)
-
-	require.NoError(t, err,
-		"failed to stat config file: %v", err)
-	{
-
-		got := info.Mode().Perm()
-		require.Equal(t, os.FileMode(0o600), got,
-			"config file permissions=%#o, want %#o", got, 0o600)
-	}
-
-	loaded, err := Load()
-
-	require.NoError(t, err,
-		"Load() failed: %v", err)
-
-	require.Equal(t, 42, loaded.Pagination.Default.Limit,
-		"default limit mismatch: pagination=%d, want 42", loaded.Pagination.Default.Limit)
-	{
-
-		got := loaded.LimitFor("images")
-		require.Equal(t, 17, got,
-			"images limit=%d, want 17", got)
-	}
-	{
-
-		got := loaded.LimitFor("containers")
-		require.Equal(t, 9, got,
-			"containers limit=%d, want 9", got)
-	}
-
-	require.Equal(t, "next", loaded.CLIUpdateChannel,
-		"CLIUpdateChannel=%q, want next", loaded.CLIUpdateChannel)
 }
 
 func TestLoadCanonicalPaginationBlock(t *testing.T) {
-	path := setTempConfigPath(t)
+	path := setTempConfigPathInternal(t)
 	content := `
 server_url: https://api.arcane.test
 api_key: k_123
@@ -173,10 +224,95 @@ pagination:
 		require.Equal(t, 9, got,
 			"registries limit=%d, want 9", got)
 	}
+
+	for _, tc := range []struct {
+		name          string
+		content       string
+		serverURL     string
+		environment   string
+		logLevel      string
+		limit         int
+		resourceLimit int
+		errorText     string
+	}{
+		{name: "partial defaults", content: "api_key: partial\n", serverURL: "http://localhost:3552", environment: "0", logLevel: "info"},
+		{name: "empty document", content: "", serverURL: "http://localhost:3552", environment: "0", logLevel: "info"},
+		{name: "null document", content: "null\n", serverURL: "http://localhost:3552", environment: "0", logLevel: "info"},
+		{name: "dotted keys are unknown", content: "pagination.default.limit: 13\n", serverURL: "http://localhost:3552", environment: "0", logLevel: "info"},
+		{name: "keys are case sensitive", content: `SERVER_URL: https://mixed.test
+Default_Environment: 2
+LOG_LEVEL: debug
+PAGINATION:
+  DEFAULT:
+    LIMIT: 13
+  RESOURCES:
+    NETWORKS:
+      LIMIT: 4
+`, serverURL: "http://localhost:3552", environment: "0", logLevel: "info"},
+		{name: "numeric environment and unknown keys", content: `default_environment: 2
+pagination:
+  default:
+    limit: 13
+    unknown_key: ignored
+  resources:
+    networks:
+      limit: 4
+unknown_key: ignored
+`, serverURL: "http://localhost:3552", environment: "2", logLevel: "info", limit: 13, resourceLimit: 4},
+		{name: "explicit empty and zero", content: `server_url: ""
+default_environment: ""
+log_level: ""
+pagination:
+  default:
+    limit: 0
+  resources:
+    networks:
+      limit: 0
+`},
+		{name: "null defaults", content: `server_url: null
+default_environment: null
+log_level: null
+pagination:
+  default:
+    limit: null
+  resources:
+    networks:
+      limit: null
+`, serverURL: "http://localhost:3552", environment: "0", logLevel: "info"},
+		{name: "malformed yaml", content: "pagination: [\n", errorText: "failed to parse config file"},
+		{name: "invalid limit", content: "pagination:\n  default:\n    limit: invalid\n", errorText: "failed to parse config file"},
+		{name: "quoted limit", content: "pagination:\n  default:\n    limit: \"13\"\n", errorText: "failed to parse config file"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fixturePath := setTempConfigPathInternal(t)
+			require.NoError(t, os.WriteFile(fixturePath, []byte(tc.content), 0o600))
+			loaded, loadErr := Load()
+			if tc.errorText != "" {
+				require.ErrorContains(t, loadErr, tc.errorText)
+				require.Nil(t, loaded)
+				require.NoError(t, os.WriteFile(fixturePath, []byte("server_url: https://recovered.test\n"), 0o600))
+				recovered, recoveryErr := Load()
+				require.NoError(t, recoveryErr)
+				require.Equal(t, "https://recovered.test", recovered.ServerURL)
+				return
+			}
+			require.NoError(t, loadErr)
+			require.Equal(t, tc.serverURL, loaded.ServerURL)
+			require.Equal(t, tc.environment, loaded.DefaultEnvironment)
+			require.Equal(t, tc.logLevel, loaded.LogLevel)
+			require.Equal(t, tc.limit, loaded.Pagination.Default.Limit)
+			require.Equal(t, tc.resourceLimit, loaded.LimitFor("networks"))
+			require.NotNil(t, loaded.Pagination.Resources)
+		})
+	}
 }
 
 func TestInitDefaultFileCreatesTemplate(t *testing.T) {
-	path := setTempConfigPath(t)
+	path := setTempConfigPathInternal(t)
+	path = filepath.Join(filepath.Dir(path), "template.json")
+	require.NoError(t, SetConfigPath(path))
+	_, initialErr := Load()
+	require.NoError(t, initialErr)
 
 	created, err := InitDefaultFile()
 
@@ -192,6 +328,19 @@ func TestInitDefaultFileCreatesTemplate(t *testing.T) {
 		"failed to read config file: %v", err)
 
 	text := string(raw)
+	var values map[string]any
+	require.NoError(t, yaml.Unmarshal(raw, &values))
+	for _, key := range []string{"api_key", "jwt_token", "refresh_token", "federated_audience"} {
+		require.Contains(t, values, key)
+		require.Empty(t, values[key])
+	}
+	info, statErr := os.Stat(path)
+	require.NoError(t, statErr)
+	require.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+	entries, readDirErr := os.ReadDir(filepath.Dir(path))
+	require.NoError(t, readDirErr)
+	require.Len(t, entries, 1)
+	require.Equal(t, filepath.Base(path), entries[0].Name())
 
 	requiredKeys := []string{
 		"server_url:",
@@ -229,7 +378,7 @@ func TestInitDefaultFileCreatesTemplate(t *testing.T) {
 }
 
 func TestInitDefaultFileDoesNotOverwriteExistingFile(t *testing.T) {
-	path := setTempConfigPath(t)
+	path := setTempConfigPathInternal(t)
 	original := "server_url: https://custom.arcane.example\napi_key: custom\n"
 	{
 		err := os.WriteFile(path, []byte(original), 0o600)
@@ -244,6 +393,11 @@ func TestInitDefaultFileDoesNotOverwriteExistingFile(t *testing.T) {
 
 	require.False(t, created,
 		"InitDefaultFile() created = true, want false")
+	// The writer must also refuse an existing file after the initial path check.
+	require.ErrorIs(t, writeConfigInternal(path, DefaultConfig(), true), os.ErrExist)
+	entries, readDirErr := os.ReadDir(filepath.Dir(path))
+	require.NoError(t, readDirErr)
+	require.Len(t, entries, 1)
 
 	raw, err := os.ReadFile(path)
 
@@ -255,7 +409,7 @@ func TestInitDefaultFileDoesNotOverwriteExistingFile(t *testing.T) {
 }
 
 func TestBackupFileMovesConfig(t *testing.T) {
-	path := setTempConfigPath(t)
+	path := setTempConfigPathInternal(t)
 	original := "server_url: https://backup.arcane.example\napi_key: abc123\n"
 	{
 		err := os.WriteFile(path, []byte(original), 0o600)
@@ -290,7 +444,7 @@ func TestBackupFileMovesConfig(t *testing.T) {
 }
 
 func TestBackupFileNoConfig(t *testing.T) {
-	path := setTempConfigPath(t)
+	path := setTempConfigPathInternal(t)
 	{
 		_, err := os.Stat(path)
 		require.True(t, os.IsNotExist(err),
@@ -310,7 +464,7 @@ func TestBackupFileNoConfig(t *testing.T) {
 }
 
 func TestBackupFileRotatesExistingBak(t *testing.T) {
-	path := setTempConfigPath(t)
+	path := setTempConfigPathInternal(t)
 	backupPath := path + ".bak"
 	{
 

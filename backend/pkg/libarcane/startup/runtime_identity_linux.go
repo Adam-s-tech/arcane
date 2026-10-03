@@ -35,8 +35,8 @@ func reexecWithRuntimeIdentityInternal(ctx context.Context, req runtimeIdentityR
 		},
 	}
 
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start runtime identity child: %w", err)
+	if startErr := cmd.Start(); startErr != nil {
+		return fmt.Errorf("start runtime identity child: %w", startErr)
 	}
 
 	sigCh := make(chan os.Signal, 2)
@@ -53,14 +53,14 @@ func reexecWithRuntimeIdentityInternal(ctx context.Context, req runtimeIdentityR
 			if cmd.Process != nil {
 				_ = cmd.Process.Signal(sig)
 			}
-		case err := <-done:
+		case waitErr := <-done:
 			signal.Stop(sigCh)
-			if err == nil {
+			if waitErr == nil {
 				os.Exit(0)
 			}
 
-			if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
-				if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
+			if exitErr, ok := errors.AsType[*exec.ExitError](waitErr); ok {
+				if status, hasStatus := exitErr.Sys().(syscall.WaitStatus); hasStatus {
 					if status.Signaled() {
 						os.Exit(128 + int(status.Signal()))
 					}
@@ -69,7 +69,7 @@ func reexecWithRuntimeIdentityInternal(ctx context.Context, req runtimeIdentityR
 				os.Exit(exitErr.ExitCode())
 			}
 
-			return fmt.Errorf("wait for runtime identity child: %w", err)
+			return fmt.Errorf("wait for runtime identity child: %w", waitErr)
 		}
 	}
 }

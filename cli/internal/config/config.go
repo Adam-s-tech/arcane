@@ -21,15 +21,16 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/go-viper/mapstructure/v2"
 	"github.com/samber/hot"
-	"github.com/spf13/viper"
+	"go.getarcane.app/acfs/atomic"
+	"go.yaml.in/yaml/v4"
 
 	"github.com/getarcaneapp/arcane/cli/v2/internal/types"
 )
@@ -54,7 +55,7 @@ var configCache = hot.NewHotCache[string, *types.Config](hot.LRU, 4).
 	WithCopyOnWrite((*types.Config).Clone).
 	Build()
 
-func normalizeConfig(cfg *types.Config) *types.Config {
+func normalizeConfigInternal(cfg *types.Config) *types.Config {
 	if cfg == nil {
 		return DefaultConfig()
 	}
@@ -70,7 +71,7 @@ func normalizeConfig(cfg *types.Config) *types.Config {
 	return normalized
 }
 
-func invalidateCache() {
+func invalidateCacheInternal() {
 	configCache.Purge()
 }
 
@@ -108,7 +109,7 @@ func ConfigPath() (string, error) {
 func SetConfigPath(path string) error {
 	if strings.TrimSpace(path) == "" {
 		customConfigPath = ""
-		invalidateCache()
+		invalidateCacheInternal()
 		return nil
 	}
 
@@ -128,7 +129,7 @@ func SetConfigPath(path string) error {
 	}
 
 	customConfigPath = absPath
-	invalidateCache()
+	invalidateCacheInternal()
 	return nil
 }
 
@@ -154,27 +155,11 @@ func Load() (*types.Config, error) {
 		}
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
-	_ = data
-
-	v := viper.New()
-	v.SetConfigFile(path)
-	v.SetConfigType("yaml")
-	v.SetDefault("server_url", "http://localhost:3552")
-	v.SetDefault("default_environment", "0")
-	v.SetDefault("federated_audience", "")
-	v.SetDefault("log_level", "info")
-	if readInConfigErr := v.ReadInConfig(); readInConfigErr != nil {
-		return nil, fmt.Errorf("failed to parse config file: %w", readInConfigErr)
+	cfg := DefaultConfig()
+	if parseErr := yaml.Unmarshal(data, cfg); parseErr != nil {
+		return nil, fmt.Errorf("failed to parse config file: %w", parseErr)
 	}
-
-	var cfg types.Config
-	if unmarshalErr := v.Unmarshal(&cfg, func(dc *mapstructure.DecoderConfig) {
-		dc.TagName = "mapstructure"
-		dc.WeaklyTypedInput = true
-	}); unmarshalErr != nil {
-		return nil, fmt.Errorf("failed to unmarshal config: %w", unmarshalErr)
-	}
-	normalized := normalizeConfig(&cfg)
+	normalized := normalizeConfigInternal(cfg)
 
 	configCache.Set(path, normalized)
 
@@ -190,55 +175,18 @@ func Save(c *types.Config) error {
 		return err
 	}
 
-	// Ensure the config directory exists
-	dir := filepath.Dir(path)
-	if mkdirAllErr := os.MkdirAll(dir, 0o700); mkdirAllErr != nil {
-		return fmt.Errorf("failed to create config directory: %w", mkdirAllErr)
-	}
-
-	cfg := normalizeConfig(c)
-	v := viper.New()
-	v.SetConfigType("yaml")
-	v.Set("server_url", cfg.ServerURL)
-	if cfg.APIKey != "" {
-		v.Set("api_key", cfg.APIKey)
-	}
-	if cfg.JWTToken != "" {
-		v.Set("jwt_token", cfg.JWTToken)
-	}
-	if cfg.RefreshToken != "" {
-		v.Set("refresh_token", cfg.RefreshToken)
-	}
-	if cfg.DefaultEnvironment != "" {
-		v.Set("default_environment", cfg.DefaultEnvironment)
-	}
-	if cfg.FederatedAudience != "" {
-		v.Set("federated_audience", cfg.FederatedAudience)
-	}
-	if cfg.LogLevel != "" {
-		v.Set("log_level", cfg.LogLevel)
-	}
-	if cfg.CLIUpdateChannel != "" {
-		v.Set("cli_update_channel", cfg.CLIUpdateChannel)
-	}
-
-	// Canonical pagination structure.
-	if cfg.Pagination.Default.Limit > 0 {
-		v.Set("pagination.default.limit", cfg.Pagination.Default.Limit)
-	}
-	for resource, rc := range cfg.Pagination.Resources {
-		resource = types.NormalizePaginatedResource(resource)
-		if resource == "" || rc.Limit <= 0 {
-			continue
+	cfg := normalizeConfigInternal(c)
+	cfg.Pagination.Default.Limit = max(0, cfg.Pagination.Default.Limit)
+	resources := cfg.Pagination.Resources
+	cfg.Pagination.Resources = make(map[string]types.PaginationResourceConfig, len(resources))
+	for resource, rc := range resources {
+		if rc.Limit > 0 {
+			cfg.SetResourceLimit(resource, rc.Limit)
 		}
-		v.Set(fmt.Sprintf("pagination.resources.%s.limit", resource), rc.Limit)
 	}
 
-	if writeConfigAsErr := v.WriteConfigAs(path); writeConfigAsErr != nil {
-		return fmt.Errorf("failed to write config file: %w", writeConfigAsErr)
-	}
-	if chmodErr := os.Chmod(path, 0o600); chmodErr != nil {
-		return fmt.Errorf("failed to set config permissions: %w", chmodErr)
+	if writeErr := writeConfigInternal(path, cfg, false); writeErr != nil {
+		return writeErr
 	}
 
 	configCache.Set(path, cfg)
@@ -246,8 +194,8 @@ func Save(c *types.Config) error {
 	return nil
 }
 
-// InitDefaultFile creates a default config file with all known keys if one does
-// not already exist. It returns true when a file is created, or false when an
+// InitDefaultFile creates a default config file with credential placeholders.
+// It returns true when a file is created, or false when an
 // existing file is left unchanged.
 func InitDefaultFile() (bool, error) {
 	path, err := ConfigPath()
@@ -268,35 +216,65 @@ func InitDefaultFile() (bool, error) {
 		return false, fmt.Errorf("failed to stat config path: %w", err)
 	}
 
-	dir := filepath.Dir(path)
-	if mkdirAllErr := os.MkdirAll(dir, 0o700); mkdirAllErr != nil {
-		return false, fmt.Errorf("failed to create config directory: %w", mkdirAllErr)
-	}
-
-	v := viper.New()
-	v.SetConfigType("yaml")
-	v.Set("server_url", "http://localhost:3552")
-	v.Set("api_key", "")
-	v.Set("jwt_token", "")
-	v.Set("refresh_token", "")
-	v.Set("default_environment", "0")
-	v.Set("federated_audience", "")
-	v.Set("log_level", "info")
-
-	v.Set("pagination.default.limit", defaultPaginationInitLimit)
+	cfg := DefaultConfig()
+	cfg.SetDefaultLimit(defaultPaginationInitLimit)
 	for _, resource := range types.KnownPaginatedResources {
-		v.Set(fmt.Sprintf("pagination.resources.%s.limit", resource), defaultPaginationInitLimit)
+		cfg.SetResourceLimit(resource, defaultPaginationInitLimit)
+	}
+	var template yaml.Node
+	if encodeErr := template.Encode(cfg); encodeErr != nil {
+		return false, fmt.Errorf("failed to encode config template: %w", encodeErr)
+	}
+	// Show empty authentication fields even though normal saves omit them.
+	for _, key := range []string{"api_key", "jwt_token", "refresh_token", "federated_audience"} {
+		template.Content = append(template.Content,
+			&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key},
+			&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: ""},
+		)
 	}
 
-	if writeConfigAsErr := v.WriteConfigAs(path); writeConfigAsErr != nil {
-		return false, fmt.Errorf("failed to write config file: %w", writeConfigAsErr)
-	}
-	if chmodErr := os.Chmod(path, 0o600); chmodErr != nil {
-		return false, fmt.Errorf("failed to set config permissions: %w", chmodErr)
+	if writeErr := writeConfigInternal(path, &template, true); writeErr != nil {
+		if errors.Is(writeErr, os.ErrExist) {
+			return false, nil
+		}
+		return false, writeErr
 	}
 
-	invalidateCache()
+	invalidateCacheInternal()
 	return true, nil
+}
+
+func writeConfigInternal(path string, cfg any, exclusive bool) (err error) {
+	data, marshalErr := yaml.Marshal(cfg)
+	if marshalErr != nil {
+		return fmt.Errorf("failed to marshal config: %w", marshalErr)
+	}
+	if mkdirErr := os.MkdirAll(filepath.Dir(path), 0o700); mkdirErr != nil {
+		return fmt.Errorf("failed to create config directory: %w", mkdirErr)
+	}
+	writePath := path
+	if exclusive {
+		stagingDir, tempErr := os.MkdirTemp(filepath.Dir(path), ".arcanecli-*")
+		if tempErr != nil {
+			return fmt.Errorf("failed to create config staging directory: %w", tempErr)
+		}
+		defer func() {
+			if cleanupErr := os.RemoveAll(stagingDir); cleanupErr != nil {
+				err = errors.Join(err, fmt.Errorf("failed to remove config staging directory: %w", cleanupErr))
+			}
+		}()
+		writePath = filepath.Join(stagingDir, configFileName)
+	}
+	if writeErr := atomic.WriteFile(writePath, data, 0o600); writeErr != nil {
+		return fmt.Errorf("failed to write config file: %w", writeErr)
+	}
+	if exclusive {
+		// Linking publishes the complete file without replacing an existing path.
+		if linkErr := os.Link(writePath, path); linkErr != nil {
+			return fmt.Errorf("failed to create config file: %w", linkErr)
+		}
+	}
+	return nil
 }
 
 // BackupFile moves the active config file to a .bak path and removes the
@@ -337,6 +315,6 @@ func BackupFile() (backupPath string, moved bool, err error) {
 		return "", false, fmt.Errorf("failed to move config to backup: %w", backupConfigErr)
 	}
 
-	invalidateCache()
+	invalidateCacheInternal()
 	return backupPath, true, nil
 }

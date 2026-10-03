@@ -9,15 +9,15 @@ import (
 // PaginationResourceConfig defines pagination options for a specific resource.
 type PaginationResourceConfig struct {
 	// Limit is the default page size for list commands for this resource.
-	Limit int `yaml:"limit,omitempty" mapstructure:"limit"`
+	Limit int `yaml:"limit,omitempty"`
 }
 
 // PaginationConfig contains global and per-resource pagination settings.
 type PaginationConfig struct {
 	// Default applies to paginated resources that do not have explicit per-resource config.
-	Default PaginationResourceConfig `yaml:"default,omitempty" mapstructure:"default"`
+	Default PaginationResourceConfig `yaml:"default,omitempty"`
 	// Resources contains per-resource pagination settings keyed by resource name.
-	Resources map[string]PaginationResourceConfig `yaml:"resources,omitempty" mapstructure:"resources"`
+	Resources map[string]PaginationResourceConfig `yaml:"resources,omitempty"`
 }
 
 // KnownPaginatedResources is the canonical list of paginated CLI resources.
@@ -38,12 +38,11 @@ var KnownPaginatedResources = []string{
 	"apikeys",
 }
 
+var paginationResourceReplacer = strings.NewReplacer("_", "", "-", "", " ", "")
+
 // NormalizePaginatedResource normalizes resource names and common aliases.
 func NormalizePaginatedResource(resource string) string {
-	r := strings.ToLower(strings.TrimSpace(resource))
-	r = strings.ReplaceAll(r, "_", "")
-	r = strings.ReplaceAll(r, "-", "")
-	r = strings.ReplaceAll(r, " ", "")
+	r := paginationResourceReplacer.Replace(strings.ToLower(strings.TrimSpace(resource)))
 	switch r {
 	case "apikey", "apikeys", "keys", "key":
 		return "apikeys"
@@ -82,23 +81,23 @@ func NormalizePaginatedResource(resource string) string {
 // It is persisted to disk as YAML and loaded on each CLI invocation.
 type Config struct {
 	// ServerURL is the base URL of the Arcane server (e.g., http://localhost:3552)
-	ServerURL string `yaml:"server_url" mapstructure:"server_url"`
+	ServerURL string `yaml:"server_url"`
 	// APIKey is the API key for authentication (sent as X-API-KEY)
-	APIKey string `yaml:"api_key,omitempty" mapstructure:"api_key"`
+	APIKey string `yaml:"api_key,omitempty"`
 	// JWTToken is the JWT access token for authentication (sent as Authorization: Bearer)
-	JWTToken string `yaml:"jwt_token,omitempty" mapstructure:"jwt_token"`
+	JWTToken string `yaml:"jwt_token,omitempty"`
 	// RefreshToken is the refresh token for obtaining new access tokens
-	RefreshToken string `yaml:"refresh_token,omitempty" mapstructure:"refresh_token"`
+	RefreshToken string `yaml:"refresh_token,omitempty"`
 	// DefaultEnvironment is the default environment ID to use
-	DefaultEnvironment string `yaml:"default_environment,omitempty" mapstructure:"default_environment"`
+	DefaultEnvironment string `yaml:"default_environment,omitempty"`
 	// FederatedAudience is the default token audience for `arcane-cli auth federated`
-	FederatedAudience string `yaml:"federated_audience,omitempty" mapstructure:"federated_audience"`
+	FederatedAudience string `yaml:"federated_audience,omitempty"`
 	// LogLevel is the logging level (debug, info, warn, error, fatal, panic)
-	LogLevel string `yaml:"log_level,omitempty" mapstructure:"log_level"`
+	LogLevel string `yaml:"log_level,omitempty"`
 	// CLIUpdateChannel controls which channel self-update uses (stable or next).
-	CLIUpdateChannel string `yaml:"cli_update_channel,omitempty" mapstructure:"cli_update_channel"`
+	CLIUpdateChannel string `yaml:"cli_update_channel,omitempty"`
 	// Pagination contains global and per-resource pagination configuration.
-	Pagination PaginationConfig `yaml:"pagination,omitempty" mapstructure:"pagination"`
+	Pagination PaginationConfig `yaml:"pagination,omitempty"`
 }
 
 // HasAuth returns true if either an API key or JWT token is configured.
