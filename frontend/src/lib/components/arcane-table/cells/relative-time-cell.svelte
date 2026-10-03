@@ -1,7 +1,7 @@
 <script lang="ts">
 	import * as ArcaneTooltip from '#lib/components/arcane-tooltip/index.js';
-	import { formatDateTime, formatRelativeTime, parseInstant } from '#lib/utils/formatting.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { formatDateTime, formatRelativeTime, parseInstant } from '#lib/utils/formatting.js';
 
 	let { value }: { value: unknown } = $props();
 

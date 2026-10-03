@@ -7,12 +7,10 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/getarcaneapp/arcane/types/v2/base"
-	federatedtypes "github.com/getarcaneapp/arcane/types/v2/federated"
+	"github.com/getarcaneapp/arcane/types/v2/federated"
 	"github.com/labstack/echo/v5"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
 )
 
@@ -36,7 +34,7 @@ type ListFederatedCredentialsInput struct {
 }
 
 type CreateFederatedCredentialInput struct {
-	Body federatedtypes.CreateFederatedCredential
+	Body federated.CreateFederatedCredential
 }
 
 type GetFederatedCredentialInput struct {
@@ -45,117 +43,21 @@ type GetFederatedCredentialInput struct {
 
 type UpdateFederatedCredentialInput struct {
 	ID   string `path:"id" doc:"Federated credential ID"`
-	Body federatedtypes.UpdateFederatedCredential
+	Body federated.UpdateFederatedCredential
 }
 
 type DeleteFederatedCredentialInput struct {
 	ID string `path:"id" doc:"Federated credential ID"`
 }
 
-// RegisterFederatedTokenExchange registers the public RFC 8693 token exchange
-// endpoint. It intentionally uses Echo because the standard requires form
-// encoding while the rest of Arcane's Huma API is JSON-first.
-func RegisterFederatedTokenExchange(g *echo.Group, federatedCredentialService *FederatedCredentialService) {
-	g.POST("/auth/federated/token", func(c *echo.Context) error {
-		if federatedCredentialService == nil {
-			return c.JSON(http.StatusInternalServerError, federatedTokenExchangeError{
-				Error:            "server_error",
-				ErrorDescription: "service not available",
-			})
-		}
-		if err := c.Request().ParseForm(); err != nil {
-			return c.JSON(http.StatusBadRequest, federatedTokenExchangeError{
-				Error:            "invalid_request",
-				ErrorDescription: "invalid token exchange request",
-			})
-		}
-
-		form := c.Request().Form
-		resp, err := federatedCredentialService.ExchangeToken(c.Request().Context(), federatedtypes.TokenExchangeRequest{
-			GrantType:          form.Get("grant_type"),
-			SubjectToken:       form.Get("subject_token"),
-			SubjectTokenType:   form.Get("subject_token_type"),
-			Audience:           form.Get("audience"),
-			Scope:              form.Get("scope"),
-			RequestedTokenType: form.Get("requested_token_type"),
-		})
-		if err != nil {
-			return writeFederatedTokenExchangeErrorInternal(c, err)
-		}
-		return c.JSON(http.StatusOK, resp)
-	})
-}
-
-// RegisterFederatedCredentials registers federated credential management routes.
-func RegisterFederatedCredentials(api huma.API, federatedCredentialService *FederatedCredentialService) {
-	h := &FederatedCredentialHandler{
-		federatedCredentialService: federatedCredentialService,
-	}
-
-	huma.Register(api, huma.Operation{
-		OperationID: "list-federated-credentials",
-		Method:      http.MethodGet,
-		Path:        "/federated-credentials",
-		Summary:     "List federated credentials",
-		Description: "Get a paginated list of workload identity federation trust rules",
-		Tags:        []string{"Federated Credentials"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequirePermission(api, authz.PermFederatedList),
-	}, h.ListFederatedCredentials)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "create-federated-credential",
-		Method:      http.MethodPost,
-		Path:        "/federated-credentials",
-		Summary:     "Create a federated credential",
-		Description: "Create a workload identity federation trust rule",
-		Tags:        []string{"Federated Credentials"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequireGlobalAdmin(api),
-	}, h.CreateFederatedCredential)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-federated-credential",
-		Method:      http.MethodGet,
-		Path:        "/federated-credentials/{id}",
-		Summary:     "Get a federated credential",
-		Description: "Get details of a workload identity federation trust rule",
-		Tags:        []string{"Federated Credentials"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequirePermission(api, authz.PermFederatedRead),
-	}, h.GetFederatedCredential)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "update-federated-credential",
-		Method:      http.MethodPut,
-		Path:        "/federated-credentials/{id}",
-		Summary:     "Update a federated credential",
-		Description: "Update a workload identity federation trust rule",
-		Tags:        []string{"Federated Credentials"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequireGlobalAdmin(api),
-	}, h.UpdateFederatedCredential)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "delete-federated-credential",
-		Method:      http.MethodDelete,
-		Path:        "/federated-credentials/{id}",
-		Summary:     "Delete a federated credential",
-		Description: "Delete a workload identity federation trust rule and its service user",
-		Tags:        []string{"Federated Credentials"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequireGlobalAdmin(api),
-	}, h.DeleteFederatedCredential)
-}
-
-func (h *FederatedCredentialHandler) ListFederatedCredentials(ctx context.Context, input *ListFederatedCredentialsInput) (*handlerutil.Page[federatedtypes.FederatedCredential], error) {
+func (h *FederatedCredentialHandler) ListFederatedCredentials(ctx context.Context, input *ListFederatedCredentialsInput) (*handlerutil.Page[federated.FederatedCredential], error) {
 	credentials, paginationResp, err := h.federatedCredentialService.List(ctx, handlerutil.PaginationParams(input.Start, input.Limit, input.Sort, input.Order, input.Search))
 	if err != nil {
 		return nil, huma.Error500InternalServerError("failed to list federated credentials")
 	}
 
-	return &handlerutil.Page[federatedtypes.FederatedCredential]{
-		Body: base.Paginated[federatedtypes.FederatedCredential]{
+	return &handlerutil.Page[federated.FederatedCredential]{
+		Body: base.Paginated[federated.FederatedCredential]{
 			Success:    true,
 			Data:       credentials,
 			Pagination: handlerutil.PaginationResponse(paginationResp),
@@ -163,7 +65,7 @@ func (h *FederatedCredentialHandler) ListFederatedCredentials(ctx context.Contex
 	}, nil
 }
 
-func (h *FederatedCredentialHandler) CreateFederatedCredential(ctx context.Context, input *CreateFederatedCredentialInput) (*handlerutil.Out[federatedtypes.FederatedCredential], error) {
+func (h *FederatedCredentialHandler) CreateFederatedCredential(ctx context.Context, input *CreateFederatedCredentialInput) (*handlerutil.Out[federated.FederatedCredential], error) {
 	user, err := handlerutil.RequireUser(ctx)
 	if err != nil {
 		return nil, err
@@ -174,29 +76,29 @@ func (h *FederatedCredentialHandler) CreateFederatedCredential(ctx context.Conte
 		return nil, federatedCredentialManagementErrorInternal(err)
 	}
 
-	return &handlerutil.Out[federatedtypes.FederatedCredential]{
-		Body: base.ApiResponse[federatedtypes.FederatedCredential]{
+	return &handlerutil.Out[federated.FederatedCredential]{
+		Body: base.ApiResponse[federated.FederatedCredential]{
 			Success: true,
 			Data:    *credential,
 		},
 	}, nil
 }
 
-func (h *FederatedCredentialHandler) GetFederatedCredential(ctx context.Context, input *GetFederatedCredentialInput) (*handlerutil.Out[federatedtypes.FederatedCredential], error) {
+func (h *FederatedCredentialHandler) GetFederatedCredential(ctx context.Context, input *GetFederatedCredentialInput) (*handlerutil.Out[federated.FederatedCredential], error) {
 	credential, err := h.federatedCredentialService.Get(ctx, input.ID)
 	if err != nil {
 		return nil, federatedCredentialManagementErrorInternal(err)
 	}
 
-	return &handlerutil.Out[federatedtypes.FederatedCredential]{
-		Body: base.ApiResponse[federatedtypes.FederatedCredential]{
+	return &handlerutil.Out[federated.FederatedCredential]{
+		Body: base.ApiResponse[federated.FederatedCredential]{
 			Success: true,
 			Data:    *credential,
 		},
 	}, nil
 }
 
-func (h *FederatedCredentialHandler) UpdateFederatedCredential(ctx context.Context, input *UpdateFederatedCredentialInput) (*handlerutil.Out[federatedtypes.FederatedCredential], error) {
+func (h *FederatedCredentialHandler) UpdateFederatedCredential(ctx context.Context, input *UpdateFederatedCredentialInput) (*handlerutil.Out[federated.FederatedCredential], error) {
 	user, err := handlerutil.RequireUser(ctx)
 	if err != nil {
 		return nil, err
@@ -207,8 +109,8 @@ func (h *FederatedCredentialHandler) UpdateFederatedCredential(ctx context.Conte
 		return nil, federatedCredentialManagementErrorInternal(err)
 	}
 
-	return &handlerutil.Out[federatedtypes.FederatedCredential]{
-		Body: base.ApiResponse[federatedtypes.FederatedCredential]{
+	return &handlerutil.Out[federated.FederatedCredential]{
+		Body: base.ApiResponse[federated.FederatedCredential]{
 			Success: true,
 			Data:    *credential,
 		},

@@ -1,39 +1,40 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
 	import { onMount } from 'svelte';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import { activityStore } from '#lib/stores/activity.store.svelte.js';
-	import { createContainerUpdateActivityTracker } from '#lib/utils/container-update-activities.js';
+	import { toast } from 'svelte-sonner';
 
 	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
-	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import CheckedAtCell from '#lib/components/arcane-table/cells/checked-at-cell.svelte';
+	import DigestCell from '#lib/components/arcane-table/cells/digest-cell.svelte';
 	import {
 		UniversalMobileCard,
 		type BulkAction,
 		type ColumnSpec,
 		type MobileFieldVisibility
 	} from '#lib/components/arcane-table/index.js';
-	import DigestCell from '#lib/components/arcane-table/cells/digest-cell.svelte';
-	import CheckedAtCell from '#lib/components/arcane-table/cells/checked-at-cell.svelte';
+	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
+	import IfPermitted from '#lib/components/if-permitted.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import { ContainersIcon, UpdateIcon, EyeOffIcon, EyeOnIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import type { SearchPaginationSortRequest, Paginated } from '#lib/types/shared.js';
-	import type { ContainerSummaryDto } from '#lib/types/docker.js';
-	import type { ImageUpdateInfoDto } from '#lib/types/docker.js';
 	import { containerService } from '#lib/services/container-service.js';
 	import type { ContainersPaginatedResponse, ContainerListRequestOptions } from '#lib/services/container-service.js';
-	import { ContainersIcon, UpdateIcon, EyeOffIcon, EyeOnIcon } from '#lib/icons/index.js';
-	import { getContainerDisplayName } from '../../containers/container-table.helpers';
-	import IfPermitted from '#lib/components/if-permitted.svelte';
+	import { activityStore } from '#lib/stores/activity.store.svelte.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import type { ContainerSummaryDto } from '#lib/types/docker.js';
+	import type { ImageUpdateInfoDto } from '#lib/types/docker.js';
+	import type { SearchPaginationSortRequest, Paginated } from '#lib/types/shared.js';
+	import { extractApiErrorMessage } from '#lib/utils/api.js';
 	import { hasPermission } from '#lib/utils/auth.js';
+	import { bulkConfirmAndRun } from '#lib/utils/bulk-actions.js';
 	import { confirmAndUpdateContainer } from '#lib/utils/container-actions.js';
 	import { isAutoUpdateLabelDisabled } from '#lib/utils/container-auto-update.js';
-	import { extractApiErrorMessage } from '#lib/utils/api.js';
-	import { bulkConfirmAndRun } from '#lib/utils/bulk-actions.js';
+	import { createContainerUpdateActivityTracker } from '#lib/utils/container-update-activities.js';
 	import { formatImageUpdateCheckedAt, formatImageUpdateValue } from '#lib/utils/image-updates.js';
-	import { toast } from 'svelte-sonner';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+
+	import { getContainerDisplayName } from '../../containers/container-table.helpers';
 
 	type ContainerUpdateRow = {
 		id: string;

@@ -9,7 +9,7 @@ import (
 	"sync"
 
 	settingstypes "github.com/getarcaneapp/arcane/types/v2/settings"
-	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/kit/pkg"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 )

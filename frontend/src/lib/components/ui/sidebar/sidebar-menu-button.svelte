@@ -26,11 +26,13 @@
 </script>
 
 <script lang="ts">
-	import * as ArcaneTooltip from '#lib/components/arcane-tooltip/index.js';
-	import { cn, type WithElementRef, type WithoutChildrenOrChild } from '#lib/utils.js';
 	import { mergeProps } from 'bits-ui';
 	import type { ComponentProps, Snippet } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
+
+	import * as ArcaneTooltip from '#lib/components/arcane-tooltip/index.js';
+	import { cn, type WithElementRef, type WithoutChildrenOrChild } from '#lib/utils.js';
+
 	import { useSidebar } from './context.svelte.js';
 
 	let {

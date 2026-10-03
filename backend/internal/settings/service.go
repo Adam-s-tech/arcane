@@ -22,17 +22,20 @@ import (
 	"uuid"
 
 	"github.com/getarcaneapp/arcane/types/v2/base"
+	"github.com/getarcaneapp/arcane/types/v2/category"
 	"github.com/getarcaneapp/arcane/types/v2/features"
-	settingstypes "github.com/getarcaneapp/arcane/types/v2/settings"
+	searchtypes "github.com/getarcaneapp/arcane/types/v2/search"
+	"github.com/getarcaneapp/arcane/types/v2/settings"
 	"github.com/samber/mo"
 	"go.getarcane.app/kit/normalization"
-	kit "go.getarcane.app/kit/pkg"
-	libcrypto "go.getarcane.app/sys/crypto"
+	"go.getarcane.app/kit/pkg"
+	"go.getarcane.app/sys/crypto"
 	"gorm.io/gorm"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/search"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
@@ -574,7 +577,7 @@ func (s *SettingsService) updateSettingValueNoRefreshInternal(ctx context.Contex
 
 // UpdateSettings publishes the refreshed snapshot before returning. Each
 // subscriber's effects remain ordered and may finish after this method returns.
-func (s *SettingsService) UpdateSettings(ctx context.Context, updates settingstypes.Update) ([]SettingVariable, error) {
+func (s *SettingsService) UpdateSettings(ctx context.Context, updates settings.Update) ([]SettingVariable, error) {
 	if err := normalization.Normalize(&updates); err != nil {
 		return nil, err
 	}
@@ -608,7 +611,7 @@ func (s *SettingsService) publishSettingsChangesInternal(updates []libarcane.Set
 	}
 }
 
-func (s *SettingsService) updateSettingsInternal(ctx context.Context, updates settingstypes.Update) (settingsUpdateResultInternal, error) {
+func (s *SettingsService) updateSettingsInternal(ctx context.Context, updates settings.Update) (settingsUpdateResultInternal, error) {
 	defaultCfg := s.getDefaultSettings()
 	cfg := s.GetSettingsConfig().Clone()
 	oidcClientSecretUpdated := updates.OidcClientSecret != nil && !s.IsEnvOverrideActive("oidcClientSecret")
@@ -704,8 +707,8 @@ func (s *SettingsService) updateSettingsInternal(ctx context.Context, updates se
 	}, nil
 }
 
-func (s *SettingsService) prepareUpdateValues(updates settingstypes.Update, cfg, defaultCfg *Settings) ([]SettingVariable, error) {
-	rt := reflect.TypeFor[settingstypes.Update]()
+func (s *SettingsService) prepareUpdateValues(updates settings.Update, cfg, defaultCfg *Settings) ([]SettingVariable, error) {
+	rt := reflect.TypeFor[settings.Update]()
 	rv := reflect.ValueOf(updates)
 	valuesToUpdate := make([]SettingVariable, 0)
 
@@ -1146,7 +1149,7 @@ func (s *SettingsService) ensureEncryptedKeyInternal(ctx context.Context, keyNam
 		}
 
 		if sv.Value != "" {
-			decoded, decErr := libcrypto.Decrypt(sv.Value)
+			decoded, decErr := crypto.Decrypt(sv.Value)
 			if decErr != nil {
 				return fmt.Errorf("failed to decrypt signing key: %w", decErr)
 			}
@@ -1164,7 +1167,7 @@ func (s *SettingsService) ensureEncryptedKeyInternal(ctx context.Context, keyNam
 		if _, genErr := rand.Read(key); genErr != nil {
 			return fmt.Errorf("failed to generate signing key: %w", genErr)
 		}
-		encrypted, encErr := libcrypto.Encrypt(base64.StdEncoding.EncodeToString(key))
+		encrypted, encErr := crypto.Encrypt(base64.StdEncoding.EncodeToString(key))
 		if encErr != nil {
 			return fmt.Errorf("failed to encrypt signing key: %w", encErr)
 		}
@@ -1340,4 +1343,43 @@ func (s *SettingsService) Stop(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+// IsFeatureEnabled resolves feature availability on this environment.
+func (s *SettingsService) IsFeatureEnabled(ctx context.Context, id features.ID) bool {
+	definition, ok := features.Lookup(id)
+	if !ok {
+		return false
+	}
+	if s == nil {
+		return definition.DefaultEnabled
+	}
+	cfg := s.GetSettingsOrDefaults(ctx)
+	value, _, _, err := cfg.FieldByKey(definition.SettingKey)
+	if err != nil || value == "" {
+		return definition.DefaultEnabled
+	}
+	enabled, err := strconv.ParseBool(value)
+	return kit.Ternary(err != nil, definition.DefaultEnabled, enabled)
+}
+
+// RequireFeature rejects operations when their runtime feature is disabled.
+func (s *SettingsService) RequireFeature(ctx context.Context, id features.ID) error {
+	if s.IsFeatureEnabled(ctx, id) {
+		return nil
+	}
+	return fmt.Errorf("feature %s is disabled: %w", id, common.ErrFeatureDisabled)
+}
+
+type SettingsSearchService struct {
+	categories []category.Category
+}
+
+func NewSettingsSearchService() *SettingsSearchService {
+	return &SettingsSearchService{categories: search.BuildCategories[Settings](searchtypes.SettingsProfile)}
+}
+
+// GetSettingsCategories returns the category index initialized by the service.
+func (s *SettingsSearchService) GetSettingsCategories() []category.Category {
+	return s.categories
 }

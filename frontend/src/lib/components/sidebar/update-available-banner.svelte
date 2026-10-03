@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { cn } from '#lib/utils.js';
 	import { ArrowRightIcon, CircleArrowUpIcon } from '#lib/icons/index.js';
+	import { cn } from '#lib/utils.js';
 
 	let {
 		label,

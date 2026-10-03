@@ -1,23 +1,25 @@
 <script lang="ts" generics="TData extends Record<string, any> & { id: string }">
-	import type { ArcaneCell, ArcaneFeatures, ArcaneRow, ArcaneSvelteTable } from './table-features';
 	import { FlexRender as FlexRenderBase } from '@tanstack/svelte-table';
-	import { createVirtualizer } from '../ui/virtualizer.svelte';
+	import { untrack, type Component, type Snippet } from 'svelte';
+	import type { Attachment } from 'svelte/attachments';
+	import { slide } from 'svelte/transition';
+
 	import Skeleton from '#lib/components/ui/skeleton/skeleton.svelte';
 	import * as Table from '#lib/components/ui/table/index.js';
 	import { ArrowRightIcon, ArrowDownIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { cn } from '#lib/utils.js';
+
+	import { createVirtualizer } from '../ui/virtualizer.svelte';
+	import TableCheckbox from './arcane-table-checkbox.svelte';
 	import {
 		shouldIgnoreTableRowClick,
 		type GroupedData,
 		type GroupSelectionState,
 		type SelectionModifiers
 	} from './arcane-table.types.svelte';
-	import TableCheckbox from './arcane-table-checkbox.svelte';
-	import { untrack, type Component, type Snippet } from 'svelte';
-	import type { Attachment } from 'svelte/attachments';
-	import { slide } from 'svelte/transition';
 	import { getTableRowsForItems } from './arcane-table.utils';
+	import type { ArcaneCell, ArcaneFeatures, ArcaneRow, ArcaneSvelteTable } from './table-features';
 
 	void slide;
 

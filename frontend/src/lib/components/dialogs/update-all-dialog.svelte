@@ -1,24 +1,25 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
-	import * as Dialog from '#lib/components/ui/dialog/index.js';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import Spinner from '#lib/components/ui/spinner/spinner.svelte';
-	import { cn } from '#lib/utils.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import { onDestroy } from 'svelte';
 	import { refreshAll } from '$app/navigation';
+	import { onDestroy } from 'svelte';
+
+	import ReleaseNotes from '#lib/components/release-notes.svelte';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import Spinner from '#lib/components/ui/spinner/spinner.svelte';
+	import { SuccessIcon, ClockIcon, AlertIcon, AlertTriangleIcon, ExternalLinkIcon } from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import BaseAPIService, { APIError } from '#lib/services/api-service.js';
 	import systemUpgradeService, {
 		type UpdateAllJob,
 		type UpdateAllEnvironmentResult,
 		type UpdateAllEnvironmentStatus
 	} from '#lib/services/api/system-upgrade-service.js';
-	import { SuccessIcon, ClockIcon, AlertIcon, AlertTriangleIcon, ExternalLinkIcon } from '#lib/icons/index.js';
-	import BaseAPIService, { APIError } from '#lib/services/api-service.js';
-	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
-	import ReleaseNotes from '#lib/components/release-notes.svelte';
 	import type { AppVersionInformation } from '#lib/types/settings.js';
+	import { cn } from '#lib/utils.js';
+	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
 	import { formatRelativeTime, nowInstantString } from '#lib/utils/formatting.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+
 	import VersionUpdateSummary from './version-update-summary.svelte';
 
 	// open has no $bindable fallback: upstream binds can start out undefined, and

@@ -1,17 +1,18 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
 	// Dozzle reference: the grouped row shell and left-side timestamp treatment here were
 	// informed by amir20/dozzle's LogItem.vue and GroupedLogItem.vue.
 	import { dev } from '$app/env';
+	import { onDestroy } from 'svelte';
+
 	import * as Collapsible from '#lib/components/ui/collapsible/index.js';
 	import { ArrowDownIcon, ArrowRightIcon } from '#lib/icons/index.js';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import { ReconnectingWebSocket } from '#lib/utils/ws.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
 	import { cn } from '#lib/utils.js';
 	import { ansiToHtml, formatDateTime, nowInstantString } from '#lib/utils/formatting.js';
-	import { onDestroy } from 'svelte';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+	import { ReconnectingWebSocket } from '#lib/utils/ws.js';
+
 	import {
 		buildLogDisplayEntries,
 		tryParseStructuredLog,

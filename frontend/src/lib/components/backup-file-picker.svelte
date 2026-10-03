@@ -1,15 +1,16 @@
 <script lang="ts">
 	import { onDestroy, onMount, tick, untrack } from 'svelte';
-	import { tryCatch } from '#lib/utils/try-catch.js';
-	import { extractApiErrorMessage } from '#lib/utils/api.js';
 
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
 	import FileTreeRow from '#lib/components/file-tree-row.svelte';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import { createVirtualizer } from '#lib/components/ui/virtualizer.svelte.js';
-	import type { BackupFileEntry, BackupFileProvider, BackupFileRootLoadState } from '#lib/types/backup.js';
+	import VirtualRows from '#lib/components/virtual-rows.svelte';
 	import * as m from '#lib/paraglide/messages.js';
+	import type { BackupFileEntry, BackupFileProvider, BackupFileRootLoadState } from '#lib/types/backup.js';
+	import { extractApiErrorMessage } from '#lib/utils/api.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	type FolderPageState = {
 		entries: BackupFileEntry[];
@@ -249,6 +250,57 @@
 	}
 </script>
 
+{#snippet pickerRow(row: PickerRow)}
+	{#if row.kind === 'entry'}
+		<FileTreeRow
+			name={searchActive ? row.entry.path : row.entry.name}
+			path={row.entry.path}
+			depth={searchActive ? 0 : row.depth}
+			isDirectory={row.entry.isDirectory}
+			expanded={expandedFolders.has(row.entry.path)}
+			showDisclosure={!searchActive}
+			selectable
+			checked={entryCheckedInternal(row.entry)}
+			indeterminate={entryIndeterminateInternal(row.entry)}
+			disabled={selectAll || coveringAncestorInternal(row.entry.path) !== undefined}
+			loading={row.entry.isDirectory && expandedFolders.has(row.entry.path) && folderLoadingInternal(row.entry.path)}
+			expandLabel={m.workspace_file_expand_folder({ name: row.entry.name })}
+			collapseLabel={m.workspace_file_collapse_folder({ name: row.entry.name })}
+			onToggle={() => toggleFolderInternal(row.entry.path)}
+			onActivate={() =>
+				row.entry.isDirectory
+					? toggleFolderInternal(row.entry.path)
+					: toggleEntryInternal(row.entry, !entryCheckedInternal(row.entry))}
+			onCheckedChange={(checked) => toggleEntryInternal(row.entry, checked)}
+		/>
+	{:else}
+		{@const state = pages[row.folder]}
+		<div
+			class="flex min-h-8 items-center gap-1.5 pr-2 pl-(--indent) text-xs text-muted-foreground"
+			style={`--indent: ${0.5 + row.depth * 1}rem`}
+		>
+			{#if state?.error}
+				<span>{m.backup_file_browser_load_remaining_failed()}</span>
+				<span class="truncate" title={state.error}>{state.error}</span>
+				<ArcaneButton
+					action="base"
+					tone="ghost"
+					size="sm"
+					customLabel={m.common_retry()}
+					onclick={() => loadPageInternal(row.folder, state.continuationStart ?? 0, state.entries.length === 0)}
+				/>
+			{:else}
+				{#if !searchActive}
+					<span class="inline-flex size-4 shrink-0"></span>
+				{/if}
+				<span class="inline-flex size-4 shrink-0 items-center justify-center">
+					<Spinner class="size-4" />
+				</span>
+			{/if}
+		</div>
+	{/if}
+{/snippet}
+
 <div class="space-y-3">
 	<div class="flex items-center justify-between gap-2">
 		<Input class="h-9" placeholder={m.volume_search_files()} bind:value={() => search, updateSearchInternal} />
@@ -286,68 +338,7 @@
 				{m.volume_backup_no_files()}
 			</div>
 		{:else}
-			<div class="relative h-(--total-height) min-w-max" style={`--total-height: ${rowVirtualizer.totalSize}px`}>
-				{#each rowVirtualizer.virtualItems as virtualItem (virtualItem.key)}
-					{@const row = rows[virtualItem.index]}
-					{#if row}
-						<div
-							class="absolute top-0 left-0 w-full translate-y-(--row-start)"
-							style={`--row-start: ${virtualItem.start}px`}
-							data-index={virtualItem.index}
-							{@attach rowVirtualizer.measureElement}
-						>
-							{#if row.kind === 'entry'}
-								<FileTreeRow
-									name={searchActive ? row.entry.path : row.entry.name}
-									path={row.entry.path}
-									depth={searchActive ? 0 : row.depth}
-									isDirectory={row.entry.isDirectory}
-									expanded={expandedFolders.has(row.entry.path)}
-									showDisclosure={!searchActive}
-									selectable
-									checked={entryCheckedInternal(row.entry)}
-									indeterminate={entryIndeterminateInternal(row.entry)}
-									disabled={selectAll || coveringAncestorInternal(row.entry.path) !== undefined}
-									loading={row.entry.isDirectory && expandedFolders.has(row.entry.path) && folderLoadingInternal(row.entry.path)}
-									expandLabel={m.workspace_file_expand_folder({ name: row.entry.name })}
-									collapseLabel={m.workspace_file_collapse_folder({ name: row.entry.name })}
-									onToggle={() => toggleFolderInternal(row.entry.path)}
-									onActivate={() =>
-										row.entry.isDirectory
-											? toggleFolderInternal(row.entry.path)
-											: toggleEntryInternal(row.entry, !entryCheckedInternal(row.entry))}
-									onCheckedChange={(checked) => toggleEntryInternal(row.entry, checked)}
-								/>
-							{:else}
-								{@const state = pages[row.folder]}
-								<div
-									class="flex min-h-8 items-center gap-1.5 pr-2 pl-(--indent) text-xs text-muted-foreground"
-									style={`--indent: ${0.5 + row.depth * 1}rem`}
-								>
-									{#if state?.error}
-										<span>{m.backup_file_browser_load_remaining_failed()}</span>
-										<span class="truncate" title={state.error}>{state.error}</span>
-										<ArcaneButton
-											action="base"
-											tone="ghost"
-											size="sm"
-											customLabel={m.common_retry()}
-											onclick={() => loadPageInternal(row.folder, state.continuationStart ?? 0, state.entries.length === 0)}
-										/>
-									{:else}
-										{#if !searchActive}
-											<span class="inline-flex size-4 shrink-0"></span>
-										{/if}
-										<span class="inline-flex size-4 shrink-0 items-center justify-center">
-											<Spinner class="size-4" />
-										</span>
-									{/if}
-								</div>
-							{/if}
-						</div>
-					{/if}
-				{/each}
-			</div>
+			<VirtualRows virtualizer={rowVirtualizer} {rows} class="min-w-max" row={pickerRow} />
 		{/if}
 	</div>
 </div>

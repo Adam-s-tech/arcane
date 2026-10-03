@@ -1,29 +1,29 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import RemoveMenuItem from '#lib/components/arcane-table/cells/remove-menu-item.svelte';
-	import { backupRunColumns, backupRunMobileFields } from '#lib/components/arcane-table/backup-columns.js';
+
 	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
-	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
-	import { UniversalMobileCard, type ColumnSpec, type MobileFieldVisibility } from '#lib/components/arcane-table/index.js';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import { backupRunColumns, backupRunMobileFields, backupManagementBadge } from '#lib/components/arcane-table/backup-columns.js';
+	import BackupDestinationCell from '#lib/components/arcane-table/cells/backup-destination-cell.svelte';
+	import BackupManagementCell from '#lib/components/arcane-table/cells/backup-management-cell.svelte';
+	import BackupSizeCell from '#lib/components/arcane-table/cells/backup-size-cell.svelte';
 	import BackupStatusCell from '#lib/components/arcane-table/cells/backup-status-cell.svelte';
 	import BackupTriggerCell from '#lib/components/arcane-table/cells/backup-trigger-cell.svelte';
-	import BackupDestinationCell from '#lib/components/arcane-table/cells/backup-destination-cell.svelte';
-	import BackupSizeCell from '#lib/components/arcane-table/cells/backup-size-cell.svelte';
 	import CreatedAtCell from '#lib/components/arcane-table/cells/created-at-cell.svelte';
-	import BackupManagementCell from '#lib/components/arcane-table/cells/backup-management-cell.svelte';
+	import RemoveMenuItem from '#lib/components/arcane-table/cells/remove-menu-item.svelte';
+	import { UniversalMobileCard, type ColumnSpec, type MobileFieldVisibility } from '#lib/components/arcane-table/index.js';
+	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import { BackupIcon, RestartIcon, UploadIcon, ClockIcon, VolumesIcon, FileTextIcon } from '#lib/icons/index.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
 	import type { BackupHistoryEntry } from '#lib/types/system-backup.js';
-	import { BackupIcon, RestartIcon, UploadIcon, ClockIcon, VolumesIcon, FileTextIcon } from '#lib/icons/index.js';
-	import { bytes, formatDateTimeShort } from '#lib/utils/formatting.js';
 	import {
 		backupManagementFilterOptions,
-		backupManagementLabel,
 		backupStatusLabel,
 		backupStatusVariant,
 		backupTriggerLabel
 	} from '#lib/utils/backups.js';
-	import * as m from '#lib/paraglide/messages.js';
+	import { bytes, formatDateTimeShort } from '#lib/utils/formatting.js';
 
 	let {
 		backups = $bindable(),
@@ -116,10 +116,7 @@
 				variant: backupStatusVariant(item.status),
 				text: backupStatusLabel(item.status)
 			}),
-			(item) => ({
-				variant: 'purple',
-				text: backupManagementLabel(item.type)
-			})
+			backupManagementBadge
 		]}
 		fields={[
 			{

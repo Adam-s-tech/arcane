@@ -1,13 +1,17 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
+import {
+	discardPendingActivityToasts,
+	queueActivityCompletionToast
+} from '#lib/components/activity/activity-completion-toasts.js';
 import { activityService } from '#lib/services/activity-service.js';
 import { STREAM_CHANNEL_ACTIVITIES } from '#lib/services/stream-service.js';
-import { LOCAL_DOCKER_ENVIRONMENT_ID } from '#lib/stores/environment.store.svelte.js';
 import {
 	createEnvironmentStreamStore,
 	environmentDisplayName,
 	streamErrorMessage,
 	type StreamEnvStateBase
 } from '#lib/stores/environment-stream.svelte.js';
+import { LOCAL_DOCKER_ENVIRONMENT_ID } from '#lib/stores/environment.store.svelte.js';
+import userStore from '#lib/stores/user-store.svelte.js';
 import type {
 	Activity,
 	ActivityBatchGroup,
@@ -21,12 +25,8 @@ import type {
 	ActivityType
 } from '#lib/types/activity.type.js';
 import type { Environment } from '#lib/types/environment.js';
-import userStore from '#lib/stores/user-store.svelte.js';
-import {
-	discardPendingActivityToasts,
-	queueActivityCompletionToast
-} from '#lib/components/activity/activity-completion-toasts.js';
 import { instantEpochMilliseconds, parseInstant } from '#lib/utils/formatting.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
 
 const ACTIVITY_LIST_LIMIT = 50;
 const ACTIVITY_DETAIL_LIMIT = 500;

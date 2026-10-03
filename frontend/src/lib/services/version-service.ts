@@ -1,7 +1,9 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
 import { version as currentVersion } from '$app/env';
-import { apiClient } from './api-service';
+
 import type { AppVersionInformation } from '#lib/types/settings.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
+
+import { apiClient } from './api-service';
 
 function getCurrentVersion() {
 	return currentVersion;

@@ -1,8 +1,10 @@
+import { browser } from '$app/env';
+import type { Completion } from '@codemirror/autocomplete';
+import Ajv, { type ValidateFunction } from 'ajv';
+
 import { m } from '#lib/paraglide/messages.js';
 import { tryCatch } from '#lib/utils/try-catch.js';
-import Ajv, { type ValidateFunction } from 'ajv';
-import type { Completion } from '@codemirror/autocomplete';
-import { browser } from '$app/env';
+
 import type { SchemaDoc, SchemaStatus } from './types';
 
 const DOCKER_COMPOSE_SCHEMA_URL =

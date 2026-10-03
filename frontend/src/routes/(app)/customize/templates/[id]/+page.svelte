@@ -1,32 +1,16 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
+	import { goto, refreshAll } from '$app/navigation';
+	import { useQueryClient } from '@tanstack/svelte-query';
+	import { toast } from 'svelte-sonner';
 
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import { Spinner } from '#lib/components/ui/spinner/index.js';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import type { ActionButton } from '#lib/components/action-button-group/types.js';
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
 	import CodeEditor from '#lib/components/code-editor/editor.svelte';
-	import TemplateEditorWorkspace from '../components/template-editor-workspace.svelte';
-	import { ResourceDetailLayout } from '#lib/layouts/index.js';
-	import type { ActionButton } from '#lib/components/action-button-group/types.js';
-	import IfPermitted from '#lib/components/if-permitted.svelte';
-	import { goto, refreshAll } from '$app/navigation';
-	import { m } from '#lib/paraglide/messages.js';
-	import { useQueryClient } from '@tanstack/svelte-query';
-	import { queryKeys } from '#lib/query/query-keys.js';
-	import { templateService } from '#lib/services/template-service.js';
 	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
-	import { toast } from 'svelte-sonner';
-	import { createForm } from '#lib/utils/settings.svelte.js';
-
-	import { formatDateTimeShort } from '#lib/utils/formatting.js';
-	import { globalVariablesToMap } from '#lib/utils/template-load.js';
-	import {
-		createNamedTemplateSchema,
-		getTemplateEditorSaveState,
-		resetTemplateEditorFields,
-		runTemplateEditorSave
-	} from '#lib/utils/template-editor.js';
+	import IfPermitted from '#lib/components/if-permitted.svelte';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import {
 		EllipsisIcon,
 		CodeIcon,
@@ -38,6 +22,22 @@
 		MoveToFolderIcon,
 		TrashIcon
 	} from '#lib/icons/index.js';
+	import { ResourceDetailLayout } from '#lib/layouts/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { queryKeys } from '#lib/query/query-keys.js';
+	import { templateService } from '#lib/services/template-service.js';
+	import { formatDateTimeShort } from '#lib/utils/formatting.js';
+	import { createForm } from '#lib/utils/settings.svelte.js';
+	import {
+		createNamedTemplateSchema,
+		getTemplateEditorSaveState,
+		resetTemplateEditorFields,
+		runTemplateEditorSave
+	} from '#lib/utils/template-editor.js';
+	import { globalVariablesToMap } from '#lib/utils/template-load.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+
+	import TemplateEditorWorkspace from '../components/template-editor-workspace.svelte';
 
 	let { data } = $props();
 	const queryClient = useQueryClient();

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v5"
-	dashboardtypes "github.com/getarcaneapp/arcane/types/v2/dashboard"
+	"github.com/getarcaneapp/arcane/types/v2/dashboard"
 	imagetypes "github.com/getarcaneapp/arcane/types/v2/image"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/events"
@@ -21,7 +21,7 @@ import (
 	"github.com/moby/moby/api/types/volume"
 	"github.com/moby/moby/client"
 	"go.getarcane.app/docker/compat"
-	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/kit/pkg"
 	"go.getarcane.app/streams/bus"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/singleflight"
@@ -29,7 +29,7 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
-	docker "github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/timeouts"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 )
@@ -416,7 +416,7 @@ func (s *DockerClientService) listVolumesInternal(ctx context.Context) (*client.
 	return &volResp, nil
 }
 
-func (s *DockerClientService) GetSnapshot(ctx context.Context, envID string) (*dashboardtypes.DockerSnapshot, error) {
+func (s *DockerClientService) GetSnapshot(ctx context.Context, envID string) (*dashboard.DockerSnapshot, error) {
 	g, groupCtx := errgroup.WithContext(ctx)
 
 	var containers []container.Summary
@@ -462,7 +462,7 @@ func (s *DockerClientService) GetSnapshot(ctx context.Context, envID string) (*d
 		return nil, err
 	}
 
-	return &dashboardtypes.DockerSnapshot{
+	return &dashboard.DockerSnapshot{
 		Containers: containers,
 		Images:     images,
 		Networks:   networks,

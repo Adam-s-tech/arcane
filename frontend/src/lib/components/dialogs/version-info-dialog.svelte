@@ -1,20 +1,21 @@
 <script lang="ts">
-	import { ResponsiveDialog } from '#lib/components/ui/responsive-dialog/index.js';
+	import { mode } from 'mode-watcher';
+	import { toast } from 'svelte-sonner';
+
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
-	import { Switch } from '#lib/components/ui/switch/index.js';
-	import type { AppVersionInformation, Settings } from '#lib/types/settings.js';
-	import { m } from '#lib/paraglide/messages.js';
 	import { CopyButton } from '#lib/components/ui/copy-button/index.js';
+	import { ResponsiveDialog } from '#lib/components/ui/responsive-dialog/index.js';
+	import { Switch } from '#lib/components/ui/switch/index.js';
+	import { ExternalLinkIcon, GithubIcon, BookOpenIcon } from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { settingsService } from '#lib/services/settings-service.js';
+	import settingsStore from '#lib/stores/config-store.svelte.js';
+	import type { AppVersionInformation, Settings } from '#lib/types/settings.js';
+	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
+	import { hasPermission } from '#lib/utils/auth.js';
 	import { getApplicationLogo } from '#lib/utils/docker.js';
 	import { resolveLogoColor } from '#lib/utils/theme.svelte.js';
-	import { mode } from 'mode-watcher';
-	import { ExternalLinkIcon, GithubIcon, BookOpenIcon } from '#lib/icons/index.js';
-	import { hasPermission } from '#lib/utils/auth.js';
-	import settingsStore from '#lib/stores/config-store.svelte.js';
-	import { settingsService } from '#lib/services/settings-service.js';
-	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
 	import { tryCatch } from '#lib/utils/try-catch.js';
-	import { toast } from 'svelte-sonner';
 
 	interface Props {
 		open: boolean;

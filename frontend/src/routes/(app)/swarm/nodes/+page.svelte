@@ -1,19 +1,20 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import userStore from '#lib/stores/user-store.svelte.js';
-	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	import * as Alert from '#lib/components/ui/alert/index.js';
+	import { useEnvironmentRefresh } from '#lib/hooks/use-environment-refresh.svelte.js';
 	import { AlertTriangleIcon, UsersIcon } from '#lib/icons/index.js';
+	import { ResourcePageLayout, type StatCardConfig } from '#lib/layouts/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { swarmService } from '#lib/services/swarm-service.js';
-	import { ResourcePageLayout, type StatCardConfig } from '#lib/layouts/index.js';
-	import { useEnvironmentRefresh } from '#lib/hooks/use-environment-refresh.svelte.js';
-	import { simpleRefresh } from '#lib/utils/api.js';
-	import SwarmNodesTable from './components/nodes-table.svelte';
-	import { hasPermission } from '#lib/utils/auth.js';
 	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import userStore from '#lib/stores/user-store.svelte.js';
+	import { simpleRefresh } from '#lib/utils/api.js';
+	import { hasPermission } from '#lib/utils/auth.js';
 	import { createRefreshActionButtons } from '#lib/utils/resource-actions.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+
+	import SwarmNodesTable from './components/nodes-table.svelte';
 
 	let { data } = $props();
 

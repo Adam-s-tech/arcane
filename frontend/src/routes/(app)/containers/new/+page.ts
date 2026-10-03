@@ -1,7 +1,9 @@
-import type { PageLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
+
 import { environmentStore } from '#lib/stores/environment.store.svelte.js';
 import { userHasPermission } from '#lib/utils/auth.js';
+
+import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ parent }) => {
 	const { user } = await parent();

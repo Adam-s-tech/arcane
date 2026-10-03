@@ -1,6 +1,7 @@
 import { getIndentUnit, indentString } from '@codemirror/language';
 import { EditorState, Prec, type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
+
 import type { CodeLanguage } from './analysis/types';
 
 function getYamlIndent(state: EditorState, textBeforeCursor: string, currentIndent: string, isCursorAtLineEnd: boolean): string {

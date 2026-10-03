@@ -1,16 +1,16 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
 	import { startAuthentication, type PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
+
+	import * as Alert from '#lib/components/ui/alert/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import * as InputGroup from '#lib/components/ui/input-group/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
 	import { AlertIcon, ApiKeyIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { passkeyService } from '#lib/services/passkey-service.js';
 	import type { PasskeyChallenge, StepUpGrant } from '#lib/types/auth.js';
-	import * as Alert from '#lib/components/ui/alert/index.js';
-	import * as Dialog from '#lib/components/ui/dialog/index.js';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import * as InputGroup from '#lib/components/ui/input-group/index.js';
-	import { Label } from '#lib/components/ui/label/index.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	let {
 		open = $bindable(false),
@@ -110,11 +110,7 @@
 		</Dialog.Header>
 
 		{#if error}
-			<Alert.Root variant="destructive">
-				<AlertIcon class="size-4" />
-				<Alert.Title>{m.auth_failed_title()}</Alert.Title>
-				<Alert.Description>{error}</Alert.Description>
-			</Alert.Root>
+			<Alert.Root variant="destructive" icon={AlertIcon} heading={m.auth_failed_title()} description={error} />
 		{/if}
 
 		<div class="space-y-4">

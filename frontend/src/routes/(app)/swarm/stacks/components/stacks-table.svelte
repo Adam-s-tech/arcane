@@ -1,21 +1,22 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import { toast } from 'svelte-sonner';
+
 	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
 	import type { ColumnSpec, MobileFieldVisibility } from '#lib/components/arcane-table/index.js';
 	import { UniversalMobileCard } from '#lib/components/arcane-table/index.js';
+	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
+	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
+	import IfPermitted from '#lib/components/if-permitted.svelte';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import { LayersIcon, InspectIcon, TrashIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { swarmService } from '#lib/services/swarm-service.js';
-	import type { SwarmStackSummary } from '#lib/types/swarm.js';
 	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
-	import { formatRelativeTime } from '#lib/utils/formatting.js';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
-	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
-	import { toast } from 'svelte-sonner';
-	import { tryCatch } from '#lib/utils/try-catch.js';
+	import type { SwarmStackSummary } from '#lib/types/swarm.js';
 	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
-	import { goto } from '$app/navigation';
-	import IfPermitted from '#lib/components/if-permitted.svelte';
+	import { formatRelativeTime } from '#lib/utils/formatting.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	let {
 		stacks = $bindable(),

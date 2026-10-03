@@ -4,7 +4,6 @@ import Root, {
 	type ArcaneButtonElementProps,
 	type ArcaneButtonPropsWithoutHTML
 } from './arcane-button.svelte';
-
 import {
 	arcaneButtonVariants,
 	actionConfigs,

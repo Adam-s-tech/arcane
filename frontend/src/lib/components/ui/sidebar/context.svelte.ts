@@ -1,8 +1,9 @@
-import { IsTablet } from '#lib/hooks/is-tablet.svelte.js';
+import { PersistedState } from 'runed';
 import { createContext, onDestroy } from 'svelte';
 
+import { IsTablet } from '#lib/hooks/is-tablet.svelte.js';
 import userStore from '#lib/stores/user-store.svelte.js';
-import { PersistedState } from 'runed';
+
 import { SIDEBAR_KEYBOARD_SHORTCUT } from './constants.js';
 
 type Getter<T> = () => T;
@@ -121,7 +122,8 @@ class SidebarState {
 	};
 }
 
-export const [useSidebar, setSidebarContext] = createContext<SidebarState>();
+const [useSidebar, setSidebarContext] = createContext<SidebarState>();
+export { useSidebar };
 
 /**
  * Instantiates a new `SidebarState` instance and sets it in the context.

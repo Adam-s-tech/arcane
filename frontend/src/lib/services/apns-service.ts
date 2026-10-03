@@ -1,5 +1,6 @@
-import BaseAPIService from './api-service';
 import type { ApnsStatus } from '#lib/types/apns.js';
+
+import BaseAPIService from './api-service';
 
 class ApnsService extends BaseAPIService {
 	async getStatus(): Promise<ApnsStatus> {

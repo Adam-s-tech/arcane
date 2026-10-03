@@ -8,24 +8,26 @@
 </script>
 
 <script lang="ts">
-	import SidebarItemGroup from './sidebar-itemgroup.svelte';
-	import SidebarUser from './sidebar-user.svelte';
-	import SidebarEnvSwitcher from './sidebar-env-switcher.svelte';
+	import type { ComponentProps } from 'svelte';
+
+	import ActivityCenterTrigger from '#lib/components/activity/activity-center-trigger.svelte';
 	import EnvironmentSwitcherDialog from '#lib/components/dialogs/environment-switcher-dialog.svelte';
+	import VersionInfoDialog from '#lib/components/dialogs/version-info-dialog.svelte';
 	import * as Sidebar from '#lib/components/ui/sidebar/index.js';
 	import { useSidebar } from '#lib/components/ui/sidebar/index.js';
-	import type { ComponentProps } from 'svelte';
+	import { m } from '#lib/paraglide/messages.js';
+	import settingsStore from '#lib/stores/config-store.svelte.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import userStore from '#lib/stores/user-store.svelte.js';
 	import type { PermissionsManifest, User } from '#lib/types/auth.js';
 	import type { AppVersionInformation } from '#lib/types/settings.js';
+
+	import SidebarEnvSwitcher from './sidebar-env-switcher.svelte';
+	import SidebarItemGroup from './sidebar-itemgroup.svelte';
 	import SidebarLogo from './sidebar-logo.svelte';
-	import SidebarUpdatebanner from './sidebar-updatebanner.svelte';
 	import SidebarPinButton from './sidebar-pin-button.svelte';
-	import ActivityCenterTrigger from '#lib/components/activity/activity-center-trigger.svelte';
-	import userStore from '#lib/stores/user-store.svelte.js';
-	import settingsStore from '#lib/stores/config-store.svelte.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import VersionInfoDialog from '#lib/components/dialogs/version-info-dialog.svelte';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import SidebarUpdatebanner from './sidebar-updatebanner.svelte';
+	import SidebarUser from './sidebar-user.svelte';
 
 	let {
 		ref = $bindable(null),

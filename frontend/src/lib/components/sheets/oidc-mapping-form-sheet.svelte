@@ -1,19 +1,19 @@
 <script lang="ts">
-	import * as ResponsiveDialog from '#lib/components/ui/responsive-dialog/index.js';
-	import SheetFooterActions from '#lib/components/sheets/sheet-footer-actions.svelte';
-	import RoleScopeSelects from '#lib/components/sheets/role-scope-selects.svelte';
+	import { z } from 'zod/v4';
+
 	import FormInput from '#lib/components/form/form-input.svelte';
+	import RoleScopeSelects from '#lib/components/sheets/role-scope-selects.svelte';
+	import SheetFooterActions from '#lib/components/sheets/sheet-footer-actions.svelte';
+	import * as ResponsiveDialog from '#lib/components/ui/responsive-dialog/index.js';
+	import { m } from '#lib/paraglide/messages.js';
 	import type { OidcRoleMapping, Role } from '#lib/types/auth.js';
 	import type { Environment } from '#lib/types/environment.js';
-	import { z } from 'zod/v4';
-	import { createForm, preventDefault } from '#lib/utils/settings.svelte.js';
-
-	import { m } from '#lib/paraglide/messages.js';
 	import {
 		buildGlobalEnvironmentOptions,
 		createRoleEnvironmentLabelers,
 		GLOBAL_ENVIRONMENT_OPTION_ID
 	} from '#lib/utils/options.js';
+	import { createForm, preventDefault } from '#lib/utils/settings.svelte.js';
 
 	type Props = {
 		open: boolean;

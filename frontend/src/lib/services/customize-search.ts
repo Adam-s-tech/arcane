@@ -1,5 +1,6 @@
-import { apiClient } from './api-service';
 import type { CustomizeSearchResponse, CustomizeCategory } from '#lib/types/shared.js';
+
+import { apiClient } from './api-service';
 
 class CustomizeSearchService {
 	private baseUrl = '/customize';

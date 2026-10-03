@@ -1,5 +1,6 @@
-import { apiClient } from './api-service';
 import type { SettingsSearchResponse, SettingsCategory } from '#lib/types/shared.js';
+
+import { apiClient } from './api-service';
 
 class SettingsSearchService {
 	private baseUrl = '/settings';

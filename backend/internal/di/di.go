@@ -16,6 +16,7 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/build"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/container"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/dashboard"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/diagnostics"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/environment"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/event"
@@ -23,7 +24,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/gitops"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/gitrepo"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/image"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/imagepatch"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/imageupdate"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/job"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/kv"
@@ -39,7 +39,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/swarm"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/system"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/systembackup"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/template"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/updater"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/upload"
@@ -71,7 +70,9 @@ var ServiceOptions = fx.Options(
 		job.NewJobService,
 		role.NewRoleService,
 		apikey.NewApiKeyService,
-		user.NewUserService,
+		func(db *database.DB, roles *role.RoleService) *user.UserService {
+			return user.NewUserService(db, roles, session.RevokeAllUserSessionsExceptInDB)
+		},
 		federated.NewFederatedCredentialService,
 		kv.NewKVService,
 		appimages.NewApplicationImagesService,
@@ -81,11 +82,9 @@ var ServiceOptions = fx.Options(
 		apns.NewApnsService,
 		notification.NewNotificationService,
 		vulnerability.NewVulnerabilityService,
-		imagepatch.NewImagePatchService,
 		imageupdate.NewImageUpdateService,
 		image.NewImageService,
 		build.NewBuildService,
-		build.NewBuildWorkspaceService,
 		project.NewLifecycleService,
 		container.NewContainerService,
 		dashboard.NewDashboardService,
@@ -95,13 +94,11 @@ var ServiceOptions = fx.Options(
 		template.NewTemplateService,
 		oidc.NewOidcService,
 		system.NewSystemService,
-		system.NewSystemUpgradeService,
 		diagnostics.NewDiagnosticsService,
 		gitops.NewGitOpsSyncService,
 		variable.NewVariableService,
 		backup.NewRecoveryKeyStore,
 		upload.NewUploadService,
-		systembackup.NewSystemBackupService,
 		auth.NewAuthService,
 		settings.NewSettingsSearchService,
 		fx.Annotate(settings.NewSettingsService, fx.OnStop(func(ctx context.Context, service *settings.SettingsService) error { return service.Stop(ctx) })),
@@ -147,12 +144,10 @@ var ServiceOptions = fx.Options(
 		apns.New,
 		notification.New,
 		vulnerability.New,
-		imagepatch.New,
 		project.New,
 		gitops.New,
 		variable.New,
 		upload.New,
-		systembackup.New,
 		search.New,
 		provideActivityModuleInternal,
 		provideImageUpdateModuleInternal,

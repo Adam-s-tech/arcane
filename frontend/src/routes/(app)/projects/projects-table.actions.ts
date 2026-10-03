@@ -1,16 +1,18 @@
+import { toast } from 'svelte-sonner';
+
 import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
 import { m } from '#lib/paraglide/messages.js';
-import { deployOptionsStore } from '#lib/stores/deploy-options.store.svelte.js';
 import { gitOpsSyncService } from '#lib/services/gitops-sync-service.js';
 import { projectService } from '#lib/services/project-service.js';
+import { deployOptionsStore } from '#lib/stores/deploy-options.store.svelte.js';
 import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
-import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
-import { tryCatch } from '#lib/utils/try-catch.js';
 import { activityToastOptions, extractActivityId } from '#lib/utils/activity-toast.js';
-import type { TableActionConfig, TableBulkActionConfig } from '#lib/utils/table-action-types.js';
-import { toast } from 'svelte-sonner';
-import type { ActionStatus } from './projects-table.helpers';
+import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
 import { bulkConfirmAndRun } from '#lib/utils/bulk-actions.js';
+import type { TableActionConfig, TableBulkActionConfig } from '#lib/utils/table-action-types.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
+
+import type { ActionStatus } from './projects-table.helpers';
 
 type BulkLoadingState = {
 	up: boolean;

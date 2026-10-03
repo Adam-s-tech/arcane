@@ -1,24 +1,26 @@
 <script lang="ts">
-	import * as InputGroup from '#lib/components/ui/input-group/index.js';
-	import * as Select from '#lib/components/ui/select/index.js';
-	import ArcaneTablePagination from '#lib/components/arcane-table/arcane-table-pagination.svelte';
-	import EmptyState from '#lib/components/states/empty-state.svelte';
-	import TemplateCard from './template-card.svelte';
-	import { toast } from 'svelte-sonner';
-	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
-	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
-	import { tryCatch } from '#lib/utils/try-catch.js';
-	import { templateService } from '#lib/services/template-service.js';
-	import { templateTypeFilters } from '#lib/components/arcane-table/data.js';
-	import { debounced } from '#lib/utils/ws.js';
-	import { hasPermission } from '#lib/utils/auth.js';
-	import { m } from '#lib/paraglide/messages.js';
 	import { PersistedState } from 'runed';
 	import { onMount, untrack } from 'svelte';
+	import { toast } from 'svelte-sonner';
+
+	import ArcaneTablePagination from '#lib/components/arcane-table/arcane-table-pagination.svelte';
 	import type { CompactTablePrefs } from '#lib/components/arcane-table/arcane-table.types.svelte.js';
+	import { templateTypeFilters } from '#lib/components/arcane-table/data.js';
+	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
+	import EmptyState from '#lib/components/states/empty-state.svelte';
+	import * as InputGroup from '#lib/components/ui/input-group/index.js';
+	import * as Select from '#lib/components/ui/select/index.js';
+	import { SearchIcon, TemplateIcon } from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { templateService } from '#lib/services/template-service.js';
 	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
 	import type { Template } from '#lib/types/swarm.js';
-	import { SearchIcon, TemplateIcon } from '#lib/icons/index.js';
+	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
+	import { hasPermission } from '#lib/utils/auth.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+	import { debounced } from '#lib/utils/ws.js';
+
+	import TemplateCard from './template-card.svelte';
 
 	let {
 		templates = $bindable(),

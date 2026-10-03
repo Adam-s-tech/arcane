@@ -1,22 +1,22 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { tryCatch } from '#lib/utils/try-catch.js';
+	import { toast } from 'svelte-sonner';
 
-	import RemoveMenuItem from '#lib/components/arcane-table/cells/remove-menu-item.svelte';
 	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
-	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
+	import ActionMenuItem from '#lib/components/arcane-table/cells/action-menu-item.svelte';
+	import RemoveMenuItem from '#lib/components/arcane-table/cells/remove-menu-item.svelte';
 	import { UniversalMobileCard } from '#lib/components/arcane-table/index.js';
 	import type { ColumnSpec, MobileFieldVisibility } from '#lib/components/arcane-table/index.js';
+	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
+	import IfPermitted from '#lib/components/if-permitted.svelte';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import { EditIcon, RemoteEnvironmentIcon, ClockIcon, GlobeIcon, TestIcon } from '#lib/icons/index.js';
+	import * as m from '#lib/paraglide/messages.js';
+	import { s3DestinationService } from '#lib/services/s3-destination-service.js';
 	import type { S3Destination } from '#lib/types/s3-destination.js';
 	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
-	import { EditIcon, RemoteEnvironmentIcon, ClockIcon, GlobeIcon, TestIcon } from '#lib/icons/index.js';
 	import { formatOptionalDateTime } from '#lib/utils/formatting.js';
-	import * as m from '#lib/paraglide/messages.js';
-	import IfPermitted from '#lib/components/if-permitted.svelte';
-	import { Spinner } from '#lib/components/ui/spinner/index.js';
-	import { toast } from 'svelte-sonner';
-	import { s3DestinationService } from '#lib/services/s3-destination-service.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	let {
 		destinations = $bindable(),
@@ -91,14 +91,12 @@
 {#snippet RowActions({ item }: { item: S3Destination })}
 	<RowActionsMenu>
 		<IfPermitted perm="s3-destinations:test">
-			<DropdownMenu.Item onclick={() => testDestination(item)} disabled={testingId === item.id}>
-				{#if testingId === item.id}
-					<Spinner class="size-4" />
-				{:else}
-					<TestIcon class="size-4" />
-				{/if}
-				{m.test_connection()}
-			</DropdownMenu.Item>
+			<ActionMenuItem
+				icon={TestIcon}
+				label={m.test_connection()}
+				onclick={() => testDestination(item)}
+				loading={testingId === item.id}
+			/>
 		</IfPermitted>
 		<IfPermitted perm="s3-destinations:update">
 			<DropdownMenu.Item onclick={() => onEdit(item)}>

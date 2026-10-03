@@ -1,10 +1,10 @@
 <script lang="ts">
 	import * as ArcaneTooltip from '#lib/components/arcane-tooltip/index.js';
+	import * as StatStrip from '#lib/components/stat-strip/index.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import RiskGauge from '#lib/components/vulnerability/risk-gauge.svelte';
 	import RiskTrendChart from '#lib/components/vulnerability/risk-trend-chart.svelte';
 	import ShareBar from '#lib/components/vulnerability/share-bar.svelte';
-	import * as StatStrip from '#lib/components/stat-strip/index.js';
 	import { ArrowDownIcon, ArrowUpIcon, InfoIcon, ScanIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import type { VulnerabilityRiskDrivers, VulnerabilityRiskImage, VulnerabilityRiskOverview } from '#lib/types/environment.js';

@@ -1,25 +1,24 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
+	import { goto } from '$app/navigation';
+	import { untrack } from 'svelte';
+	import { toast } from 'svelte-sonner';
 
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
-	import { toast } from 'svelte-sonner';
-	import { createForm } from '#lib/utils/settings.svelte.js';
-
+	import ComposeTemplateEditor from '#lib/components/compose-template-editor.svelte';
+	import TemplateSelectionDialog from '#lib/components/dialogs/template-selection-dialog.svelte';
+	import { ArrowLeftIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { templateService } from '#lib/services/template-service.js';
-	import { goto } from '$app/navigation';
-	import TemplateSelectionDialog from '#lib/components/dialogs/template-selection-dialog.svelte';
-	import ComposeTemplateEditor from '#lib/components/ComposeTemplateEditor.svelte';
-	import { untrack } from 'svelte';
 	import type { Template } from '#lib/types/swarm.js';
-	import { globalVariablesToMap } from '#lib/utils/template-load.js';
-	import { ArrowLeftIcon } from '#lib/icons/index.js';
+	import { createForm } from '#lib/utils/settings.svelte.js';
 	import {
 		createTemplateContentSchema,
 		getTemplateEditorSaveState,
 		resetTemplateEditorFields,
 		runTemplateEditorSave
 	} from '#lib/utils/template-editor.js';
+	import { globalVariablesToMap } from '#lib/utils/template-load.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	let { data } = $props();
 

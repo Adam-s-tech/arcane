@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { cn } from '#lib/utils.js';
 	import type { HTMLInputAttributes } from 'svelte/elements';
+
+	import { cn } from '#lib/utils.js';
 
 	let {
 		ref = $bindable(null),

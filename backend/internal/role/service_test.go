@@ -1,4 +1,4 @@
-package role
+package role_test
 
 import (
 	"path/filepath"
@@ -12,8 +12,10 @@ import (
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/role"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/session"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/user"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 )
 
@@ -61,8 +63,8 @@ func TestBackfillLegacyRoleAssignments(t *testing.T) {
 	ctx := t.Context()
 
 	t.Run("no-op without legacy column", func(t *testing.T) {
-		_, roleSvc := setupUserAndRoleServices(t)
-		require.False(t, roleSvc.db.Migrator().HasColumn("users", "roles"))
+		db, roleSvc := setupUserAndRoleServices(t)
+		require.False(t, db.Migrator().HasColumn("users", "roles"))
 		require.NoError(t, roleSvc.BackfillLegacyRoleAssignments(ctx))
 		require.NoError(t, roleSvc.BackfillLegacyRoleAssignments(ctx))
 	})
@@ -72,7 +74,7 @@ func TestBackfillLegacyRoleAssignments(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { require.NoError(t, db.Close()) })
 		require.True(t, db.Migrator().HasColumn("users", "roles"))
-		roleSvc := NewRoleService(db)
+		roleSvc := role.NewRoleService(db)
 		require.NoError(t, roleSvc.EnsureBuiltInRoles(ctx))
 		require.NoError(t, db.Exec("INSERT INTO environments (id, name, api_url) VALUES (?, ?, ?)", "env-1", "env-1", "http://env-1").Error)
 
@@ -89,10 +91,10 @@ func TestBackfillLegacyRoleAssignments(t *testing.T) {
 		} {
 			require.NoError(t, db.Exec("INSERT INTO users (id, username, password_hash, roles) VALUES (?, ?, ?, ?)", id, id, "unused", roles).Error)
 		}
-		require.NoError(t, db.Create(&UserRoleAssignment{UserID: "seed-admin", RoleID: authz.BuiltInRoleAdmin, Source: RoleAssignmentSourceManual}).Error)
+		require.NoError(t, db.Create(&role.UserRoleAssignment{UserID: "seed-admin", RoleID: authz.BuiltInRoleAdmin, Source: role.RoleAssignmentSourceManual}).Error)
 		envID := "env-1"
-		require.NoError(t, roleSvc.SetUserAssignments(ctx, "scoped-manual", []UserRoleAssignment{{RoleID: authz.BuiltInRoleViewer, EnvironmentID: &envID}}))
-		require.NoError(t, roleSvc.ReplaceOidcAssignments(ctx, "global-oidc", []UserRoleAssignment{{RoleID: authz.BuiltInRoleViewer}}))
+		require.NoError(t, roleSvc.SetUserAssignments(ctx, "scoped-manual", []role.UserRoleAssignment{{RoleID: authz.BuiltInRoleViewer, EnvironmentID: &envID}}))
+		require.NoError(t, roleSvc.ReplaceOidcAssignments(ctx, "global-oidc", []role.UserRoleAssignment{{RoleID: authz.BuiltInRoleViewer}}))
 
 		require.NoError(t, roleSvc.BackfillLegacyRoleAssignments(ctx))
 		require.Equal(t, []string{authz.BuiltInRoleAdmin}, assignedRoleIDs(t, roleSvc, "legacy-admin"))
@@ -106,7 +108,7 @@ func TestBackfillLegacyRoleAssignments(t *testing.T) {
 		oidc, err := roleSvc.ListUserAssignments(ctx, "global-oidc")
 		require.NoError(t, err)
 		require.Len(t, oidc, 1)
-		require.Equal(t, RoleAssignmentSourceOidc, oidc[0].Source)
+		require.Equal(t, role.RoleAssignmentSourceOidc, oidc[0].Source)
 		ps, err := roleSvc.ResolveUserPermissionsInDB(ctx, db.DB, "scoped-manual")
 		require.NoError(t, err)
 		require.True(t, ps.Allows(authz.PermContainersList, "env-1"))
@@ -114,13 +116,13 @@ func TestBackfillLegacyRoleAssignments(t *testing.T) {
 
 		require.NoError(t, roleSvc.SetUserAssignments(ctx, "legacy-user", nil))
 		require.NoError(t, db.Exec("INSERT INTO users (id, username, password_hash, roles) VALUES (?, ?, ?, ?)", "later-admin", "later-admin", "unused", `["admin"]`).Error)
-		require.NoError(t, NewRoleService(db).BackfillLegacyRoleAssignments(ctx))
+		require.NoError(t, role.NewRoleService(db).BackfillLegacyRoleAssignments(ctx))
 		require.Empty(t, assignedRoleIDs(t, roleSvc, "legacy-user"))
 		require.Empty(t, assignedRoleIDs(t, roleSvc, "later-admin"))
 	})
 }
 
-func assignedRoleIDs(t *testing.T, roleSvc *RoleService, userID string) []string {
+func assignedRoleIDs(t *testing.T, roleSvc *role.RoleService, userID string) []string {
 	t.Helper()
 	assignments, err := roleSvc.ListUserAssignments(t.Context(), userID)
 	require.NoError(t, err)
@@ -145,8 +147,8 @@ func TestEnsureBuiltInRolesMigratesVariablePermissionsWithoutBackfillingCustomGr
 		Kind:      "scoped",
 		UserID:    &owner.ID,
 	}
-	require.NoError(t, roleSvc.db.WithContext(ctx).Create(&scopedKey).Error)
-	require.NoError(t, roleSvc.db.WithContext(ctx).Create(&ApiKeyPermission{
+	require.NoError(t, userSvc.WithContext(ctx).Create(&scopedKey).Error)
+	require.NoError(t, userSvc.WithContext(ctx).Create(&role.ApiKeyPermission{
 		ApiKeyID:   scopedKey.ID,
 		Permission: authz.PermTemplatesRead,
 	}).Error)
@@ -160,7 +162,7 @@ func TestEnsureBuiltInRolesMigratesVariablePermissionsWithoutBackfillingCustomGr
 			authz.PermVariablesSync,
 		}, permission)
 	})
-	require.NoError(t, roleSvc.db.WithContext(ctx).Model(&Role{}).
+	require.NoError(t, userSvc.WithContext(ctx).Model(&role.Role{}).
 		Where("id = ?", authz.BuiltInRoleEditor).
 		Update("permissions", database.StringSlice(oldEditorPermissions)).Error)
 
@@ -174,18 +176,18 @@ func TestEnsureBuiltInRolesMigratesVariablePermissionsWithoutBackfillingCustomGr
 		authz.PermVariablesSync,
 	}
 	for _, roleID := range []string{authz.BuiltInRoleAdmin, authz.BuiltInRoleEditor, authz.BuiltInRoleNoShellEditor} {
-		role, getErr := roleSvc.GetRole(ctx, roleID)
+		builtIn, getErr := roleSvc.GetRole(ctx, roleID)
 		require.NoError(t, getErr)
 		for _, permission := range allVariablePermissions {
-			require.Contains(t, []string(role.Permissions), permission, "role %s", roleID)
+			require.Contains(t, []string(builtIn.Permissions), permission, "role %s", roleID)
 		}
 	}
 	for _, roleID := range []string{authz.BuiltInRoleViewer, authz.BuiltInRoleDeployer} {
-		role, getErr := roleSvc.GetRole(ctx, roleID)
+		builtIn, getErr := roleSvc.GetRole(ctx, roleID)
 		require.NoError(t, getErr)
-		require.Contains(t, []string(role.Permissions), authz.PermVariablesRead)
+		require.Contains(t, []string(builtIn.Permissions), authz.PermVariablesRead)
 		for _, permission := range allVariablePermissions[1:] {
-			require.NotContains(t, []string(role.Permissions), permission, "role %s", roleID)
+			require.NotContains(t, []string(builtIn.Permissions), permission, "role %s", roleID)
 		}
 	}
 	monitor, err := roleSvc.GetRole(ctx, authz.BuiltInRoleMonitor)
@@ -198,8 +200,8 @@ func TestEnsureBuiltInRolesMigratesVariablePermissionsWithoutBackfillingCustomGr
 	require.NoError(t, err)
 	require.Equal(t, []string{authz.PermTemplatesRead}, []string(preservedCustomRole.Permissions))
 
-	var keyPermissions []ApiKeyPermission
-	require.NoError(t, roleSvc.db.WithContext(ctx).Where("api_key_id = ?", scopedKey.ID).Find(&keyPermissions).Error)
+	var keyPermissions []role.ApiKeyPermission
+	require.NoError(t, userSvc.WithContext(ctx).Where("api_key_id = ?", scopedKey.ID).Find(&keyPermissions).Error)
 	require.Len(t, keyPermissions, 1)
 	require.Equal(t, authz.PermTemplatesRead, keyPermissions[0].Permission)
 }
@@ -207,9 +209,9 @@ func TestEnsureBuiltInRolesMigratesVariablePermissionsWithoutBackfillingCustomGr
 func TestSetUserAssignmentsRejectsUnknownRole(t *testing.T) {
 	ctx := t.Context()
 	userSvc, roleSvc := setupUserAndRoleServices(t)
-	user := createTestUser(t, userSvc, "victim", "victim")
+	victim := createTestUser(t, userSvc, "victim", "victim")
 
-	err := roleSvc.SetUserAssignments(ctx, user.ID, []UserRoleAssignment{
+	err := roleSvc.SetUserAssignments(ctx, victim.ID, []role.UserRoleAssignment{
 		{RoleID: "role_does_not_exist"},
 	})
 	require.Error(t, err)
@@ -219,9 +221,9 @@ func TestSetUserAssignmentsRejectsUnknownRole(t *testing.T) {
 func TestReplaceOidcAssignmentsRejectsUnknownRole(t *testing.T) {
 	ctx := t.Context()
 	userSvc, roleSvc := setupUserAndRoleServices(t)
-	user := createTestUser(t, userSvc, "oidc-user", "oidc-user")
+	oidcUser := createTestUser(t, userSvc, "oidc-user", "oidc-user")
 
-	err := roleSvc.ReplaceOidcAssignments(ctx, user.ID, []UserRoleAssignment{
+	err := roleSvc.ReplaceOidcAssignments(ctx, oidcUser.ID, []role.UserRoleAssignment{
 		{RoleID: "role_does_not_exist"},
 	})
 	require.Error(t, err)
@@ -231,12 +233,12 @@ func TestReplaceOidcAssignmentsRejectsUnknownRole(t *testing.T) {
 func TestReplaceOidcAssignmentsRejectsUnknownEnvironment(t *testing.T) {
 	ctx := t.Context()
 	userSvc, roleSvc := setupUserAndRoleServices(t)
-	user := createTestUser(t, userSvc, "oidc-user-env", "oidc-user-env")
+	oidcUser := createTestUser(t, userSvc, "oidc-user-env", "oidc-user-env")
 	missingEnv := "env_does_not_exist"
 
 	// A valid role scoped to a non-existent environment must fail existence
 	// validation (mirrors SetUserAssignments) rather than attempting an insert.
-	err := roleSvc.ReplaceOidcAssignments(ctx, user.ID, []UserRoleAssignment{
+	err := roleSvc.ReplaceOidcAssignments(ctx, oidcUser.ID, []role.UserRoleAssignment{
 		{RoleID: authz.BuiltInRoleViewer, EnvironmentID: &missingEnv},
 	})
 	require.Error(t, err)
@@ -246,11 +248,11 @@ func TestReplaceOidcAssignmentsRejectsUnknownEnvironment(t *testing.T) {
 func TestEffectiveGlobalAdminCountIncludesCustomAllPermissionsRole(t *testing.T) {
 	ctx := t.Context()
 	userSvc, roleSvc := setupUserAndRoleServices(t)
-	user := createTestUser(t, userSvc, "custom-admin", "custom-admin")
+	customAdmin := createTestUser(t, userSvc, "custom-admin", "custom-admin")
 	customRole, err := roleSvc.CreateRole(ctx, "Custom Admin", nil, authz.AllPermissions())
 	require.NoError(t, err)
 
-	require.NoError(t, roleSvc.SetUserAssignments(ctx, user.ID, []UserRoleAssignment{
+	require.NoError(t, roleSvc.SetUserAssignments(ctx, customAdmin.ID, []role.UserRoleAssignment{
 		{RoleID: customRole.ID, EnvironmentID: nil},
 	}))
 
@@ -259,7 +261,7 @@ func TestEffectiveGlobalAdminCountIncludesCustomAllPermissionsRole(t *testing.T)
 	require.Equal(t, 1, count)
 	require.NoError(t, roleSvc.AssertGlobalAdminExists(ctx))
 
-	err = roleSvc.SetUserAssignments(ctx, user.ID, nil)
+	err = roleSvc.SetUserAssignments(ctx, customAdmin.ID, nil)
 	require.Error(t, err)
 	require.ErrorIs(t, err, common.ErrNoGlobalAdminRemains)
 }
@@ -270,24 +272,24 @@ func TestEffectiveGlobalAdminCountIgnoresEnvScopedAndServiceAccounts(t *testing.
 	customRole, err := roleSvc.CreateRole(ctx, "Custom Admin", nil, authz.AllPermissions())
 	require.NoError(t, err)
 	envID := "env-1"
-	createTestEnvironment(t, roleSvc.db, envID, "http://localhost:3552", nil)
+	createTestEnvironment(t, userSvc, envID, "http://localhost:3552", nil)
 
 	globalAdmin := createTestUser(t, userSvc, "global-admin", "global-admin")
 	envScopedAdmin := createTestUser(t, userSvc, "env-scoped-admin", "env-scoped-admin")
-	serviceAdmin := &common.User{
+	serviceAdmin := &user.User{
 		ID:               "service-admin",
 		Username:         "service-admin",
 		IsServiceAccount: true,
 	}
-	require.NoError(t, roleSvc.db.WithContext(ctx).Create(serviceAdmin).Error)
+	require.NoError(t, userSvc.WithContext(ctx).Create(serviceAdmin).Error)
 
-	require.NoError(t, roleSvc.SetUserAssignments(ctx, globalAdmin.ID, []UserRoleAssignment{
+	require.NoError(t, roleSvc.SetUserAssignments(ctx, globalAdmin.ID, []role.UserRoleAssignment{
 		{RoleID: customRole.ID, EnvironmentID: nil},
 	}))
-	require.NoError(t, roleSvc.SetUserAssignments(ctx, envScopedAdmin.ID, []UserRoleAssignment{
+	require.NoError(t, roleSvc.SetUserAssignments(ctx, envScopedAdmin.ID, []role.UserRoleAssignment{
 		{RoleID: customRole.ID, EnvironmentID: &envID},
 	}))
-	require.NoError(t, roleSvc.SetUserAssignments(ctx, serviceAdmin.ID, []UserRoleAssignment{
+	require.NoError(t, roleSvc.SetUserAssignments(ctx, serviceAdmin.ID, []role.UserRoleAssignment{
 		{RoleID: customRole.ID, EnvironmentID: nil},
 	}))
 
@@ -302,36 +304,36 @@ func setupAuthServiceTestDB(t *testing.T) *database.DB {
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(
 		&settings.SettingVariable{},
-		&common.User{},
+		&user.User{},
 		&session.UserSession{},
 		&testEnvironmentRow{},
-		&Role{},
-		&UserRoleAssignment{},
+		&role.Role{},
+		&role.UserRoleAssignment{},
 		&testApiKeyRow{},
-		&ApiKeyPermission{},
-		&OidcRoleMapping{},
+		&role.ApiKeyPermission{},
+		&role.OidcRoleMapping{},
 	))
 	return &database.DB{DB: db}
 }
 
-func setupUserAndRoleServices(t *testing.T) (*database.DB, *RoleService) {
+func setupUserAndRoleServices(t *testing.T) (*database.DB, *role.RoleService) {
 	t.Helper()
 	db := setupAuthServiceTestDB(t)
-	roleService := NewRoleService(db)
+	roleService := role.NewRoleService(db)
 	require.NoError(t, roleService.EnsureBuiltInRoles(t.Context()))
 	return db, roleService
 }
 
-func createTestUser(t *testing.T, db *database.DB, id, username string) *common.User {
+func createTestUser(t *testing.T, db *database.DB, id, username string) *user.User {
 	t.Helper()
-	created := &common.User{ID: id, Username: username}
+	created := &user.User{ID: id, Username: username}
 	require.NoError(t, db.WithContext(t.Context()).Create(created).Error)
 	return created
 }
 
-func grantGlobalAdmin(t *testing.T, roleService *RoleService, userID string) {
+func grantGlobalAdmin(t *testing.T, roleService *role.RoleService, userID string) {
 	t.Helper()
-	require.NoError(t, roleService.SetUserAssignments(t.Context(), userID, []UserRoleAssignment{
+	require.NoError(t, roleService.SetUserAssignments(t.Context(), userID, []role.UserRoleAssignment{
 		{RoleID: authz.BuiltInRoleAdmin},
 	}))
 }
@@ -349,8 +351,7 @@ func createTestEnvironment(t *testing.T, db *database.DB, id, apiURL string, acc
 	}).Error)
 }
 
-// Minimal stand-ins for environment.Environment and apikey.ApiKey: both of
-// those packages import role, so this in-package test cannot import them.
+// Minimal stand-ins for the environments and api_keys rows these tests need.
 type testEnvironmentRow struct {
 	database.BaseModel
 	Name        string
@@ -379,20 +380,20 @@ func (testApiKeyRow) TableName() string { return "api_keys" }
 func TestResolveExecutionPermissions(t *testing.T) {
 	t.Run("personal keys use current user permissions and explicit scope", func(t *testing.T) {
 		db, service := setupUserAndRoleServices(t)
-		user := createTestUser(t, db, "owner", "owner")
-		grantGlobalAdmin(t, service, user.ID)
+		owner := createTestUser(t, db, "owner", "owner")
+		grantGlobalAdmin(t, service, owner.ID)
 		environmentID := "env-1"
-		key := testApiKeyRow{ID: "personal", Kind: "personal", UserID: &user.ID, EnvironmentID: &environmentID}
+		key := testApiKeyRow{ID: "personal", Kind: "personal", UserID: &owner.ID, EnvironmentID: &environmentID}
 		require.NoError(t, db.Create(&key).Error)
-		permissions, err := service.ResolveExecutionPermissions(t.Context(), user.ID, key.ID)
+		permissions, err := service.ResolveExecutionPermissions(t.Context(), owner.ID, key.ID)
 		require.NoError(t, err)
 		require.True(t, permissions.Allows(authz.PermJobsManage, environmentID))
 		require.False(t, permissions.Allows(authz.PermJobsManage, "env-2"))
 		require.False(t, permissions.IsGlobalAdmin())
 
-		require.NoError(t, db.Where("user_id = ?", user.ID).Delete(&UserRoleAssignment{}).Error)
+		require.NoError(t, db.Where("user_id = ?", owner.ID).Delete(&role.UserRoleAssignment{}).Error)
 		for _, keyID := range []string{"", key.ID} {
-			permissions, err = service.ResolveExecutionPermissions(t.Context(), user.ID, keyID)
+			permissions, err = service.ResolveExecutionPermissions(t.Context(), owner.ID, keyID)
 			require.NoError(t, err)
 			require.False(t, permissions.Allows(authz.PermJobsManage, environmentID))
 		}
@@ -400,46 +401,46 @@ func TestResolveExecutionPermissions(t *testing.T) {
 
 	t.Run("scoped keys bypass cached grants", func(t *testing.T) {
 		db, service := setupUserAndRoleServices(t)
-		user := createTestUser(t, db, "owner", "owner")
+		owner := createTestUser(t, db, "owner", "owner")
 		environmentID := "env-1"
-		key := testApiKeyRow{ID: "scoped", Kind: "scoped", UserID: &user.ID, EnvironmentID: &environmentID}
+		key := testApiKeyRow{ID: "scoped", Kind: "scoped", UserID: &owner.ID, EnvironmentID: &environmentID}
 		require.NoError(t, db.Create(&key).Error)
-		require.NoError(t, service.SetApiKeyPermissions(t.Context(), key.ID, []ApiKeyPermission{{Permission: authz.PermJobsManage}}))
+		require.NoError(t, service.SetApiKeyPermissions(t.Context(), key.ID, []role.ApiKeyPermission{{Permission: authz.PermJobsManage}}))
 		cached, err := service.ResolveApiKeyPermissions(t.Context(), key.ID)
 		require.NoError(t, err)
 		require.True(t, cached.Allows(authz.PermJobsManage, "env-2"))
-		permissions, err := service.ResolveExecutionPermissions(t.Context(), user.ID, key.ID)
+		permissions, err := service.ResolveExecutionPermissions(t.Context(), owner.ID, key.ID)
 		require.NoError(t, err)
 		require.True(t, permissions.Allows(authz.PermJobsManage, environmentID))
 		require.False(t, permissions.Allows(authz.PermJobsManage, "env-2"))
 
-		require.NoError(t, db.Where("api_key_id = ?", key.ID).Delete(&ApiKeyPermission{}).Error)
-		permissions, err = service.ResolveExecutionPermissions(t.Context(), user.ID, key.ID)
+		require.NoError(t, db.Where("api_key_id = ?", key.ID).Delete(&role.ApiKeyPermission{}).Error)
+		permissions, err = service.ResolveExecutionPermissions(t.Context(), owner.ID, key.ID)
 		require.NoError(t, err)
 		require.False(t, permissions.Allows(authz.PermJobsManage, environmentID))
 	})
 
 	t.Run("rejects invalid persisted identities", func(t *testing.T) {
 		db, service := setupUserAndRoleServices(t)
-		user := createTestUser(t, db, "owner", "owner")
+		owner := createTestUser(t, db, "owner", "owner")
 		otherOwner := "other"
 		emptyEnvironment := ""
 		expired := time.Now().Add(-time.Minute)
 		for _, key := range []testApiKeyRow{
-			{ID: "expired", Kind: "personal", UserID: &user.ID, ExpiresAt: &expired},
+			{ID: "expired", Kind: "personal", UserID: &owner.ID, ExpiresAt: &expired},
 			{ID: "other-owner", Kind: "personal", UserID: &otherOwner},
 			{ID: "ownerless", Kind: "scoped"},
-			{ID: "invalid-kind", Kind: "unknown", UserID: &user.ID},
-			{ID: "invalid-scope", Kind: "personal", UserID: &user.ID, EnvironmentID: &emptyEnvironment},
+			{ID: "invalid-kind", Kind: "unknown", UserID: &owner.ID},
+			{ID: "invalid-scope", Kind: "personal", UserID: &owner.ID, EnvironmentID: &emptyEnvironment},
 		} {
 			require.NoError(t, db.Create(&key).Error)
-			_, err := service.ResolveExecutionPermissions(t.Context(), user.ID, key.ID)
+			_, err := service.ResolveExecutionPermissions(t.Context(), owner.ID, key.ID)
 			require.Error(t, err, key.ID)
 		}
-		_, err := service.ResolveExecutionPermissions(t.Context(), user.ID, "deleted-key")
+		_, err := service.ResolveExecutionPermissions(t.Context(), owner.ID, "deleted-key")
 		require.Error(t, err)
-		require.NoError(t, db.Delete(user).Error)
-		_, err = service.ResolveExecutionPermissions(t.Context(), user.ID, "")
+		require.NoError(t, db.Delete(owner).Error)
+		_, err = service.ResolveExecutionPermissions(t.Context(), owner.ID, "")
 		require.Error(t, err)
 	})
 }

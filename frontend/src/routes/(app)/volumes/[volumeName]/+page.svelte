@@ -1,7 +1,29 @@
 <script lang="ts">
-	import type { VolumeDetailDto } from '#lib/types/docker.js';
+	import { afterNavigate, goto } from '$app/navigation';
+	import { createQuery, skipToken, useQueryClient } from '@tanstack/svelte-query';
+	import { PersistedState } from 'runed';
+	import { onMount, tick } from 'svelte';
+	import { toast } from 'svelte-sonner';
+
+	import { ActionButtonGroup } from '#lib/components/action-button-group/index.js';
+	import type { ActionButton } from '#lib/components/action-button-group/types.js';
+	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+	import InUseStatus from '#lib/components/arcane-table/cells/in-use-status.svelte';
+	import CodePanel from '#lib/components/code-panel.svelte';
+	import { openConfirmDialog } from '#lib/components/confirm-dialog//index.js';
+	import EditorTabStrip from '#lib/components/editor-tab-strip.svelte';
+	import ResizableSplit from '#lib/components/resizable-split.svelte';
+	import { DetailMetaStrip, DetailSection, KeyValueCard, KeyValueGrid } from '#lib/components/resource-detail/index.js';
+	import * as Alert from '#lib/components/ui/alert/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
 	// fallow-ignore-file code-duplication -- useUrlTab initialization is the hook's intended per-page integration surface
 	import * as Card from '#lib/components/ui/card/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import { ResponsiveDialog } from '#lib/components/ui/responsive-dialog/index.js';
+	import * as Select from '#lib/components/ui/select/index.js';
+	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import WorkspaceFileTreePanel from '#lib/components/workspace-file-tree-panel.svelte';
+	import { useUrlTab } from '#lib/hooks/use-url-tab.svelte.js';
 	import {
 		VolumesIcon,
 		ClockIcon,
@@ -14,37 +36,24 @@
 		FileTextIcon,
 		AlertIcon
 	} from '#lib/icons/index.js';
-	import { afterNavigate, goto } from '$app/navigation';
-	import { onMount, tick } from 'svelte';
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import { formatDateTimeShort, truncateString } from '#lib/utils/formatting.js';
-	import { openConfirmDialog } from '#lib/components/confirm-dialog//index.js';
-	import { toast } from 'svelte-sonner';
-	import { tryCatch } from '#lib/utils/try-catch.js';
-	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
-	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+	import TabbedPageLayout from '#lib/layouts/tabbed-page-layout.svelte';
 	import { m } from '#lib/paraglide/messages.js';
+	import { queryKeys } from '#lib/query/query-keys.js';
+	import { volumeBackupService } from '#lib/services/volume-backup-service.js';
 	import { volumeService } from '#lib/services/volume-service.js';
 	import { volumeWorkspaceService } from '#lib/services/volume-workspace-service.js';
-	import type { ActionButton } from '#lib/components/action-button-group/types.js';
-	import TabbedPageLayout from '#lib/layouts/tabbed-page-layout.svelte';
-	import { ActionButtonGroup } from '#lib/components/action-button-group/index.js';
-	import BackupList from '../components/volume-backup-table.svelte';
 	import settingsStore from '#lib/stores/config-store.svelte.js';
 	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import { hasPermission } from '#lib/utils/auth.js';
-	import { activityToastOptions, extractActivityId } from '#lib/utils/activity-toast.js';
-	import { DetailMetaStrip, DetailSection, KeyValueCard, KeyValueGrid } from '#lib/components/resource-detail/index.js';
-	import InUseStatus from '#lib/components/arcane-table/cells/in-use-status.svelte';
-	import { useUrlTab } from '#lib/hooks/use-url-tab.svelte.js';
-	import { createQuery, skipToken, useQueryClient } from '@tanstack/svelte-query';
-	import { queryKeys } from '#lib/query/query-keys.js';
-	import WorkspaceFileTreePanel from '#lib/components/workspace-file-tree-panel.svelte';
-	import EditorTabStrip from '#lib/components/editor-tab-strip.svelte';
-	import CodePanel from '#lib/components/code-panel.svelte';
-	import ResizableSplit from '#lib/components/resizable-split.svelte';
-	import { composeTreeSplitProps } from '#lib/utils/compose-flow.js';
+	import type { VolumeDetailDto } from '#lib/types/docker.js';
+	import type { BackupEntry } from '#lib/types/shared.js';
 	import type { VolumeWorkspaceFileChange, VolumeWorkspaceFileContent } from '#lib/types/volume-workspace.js';
+	import { activityToastOptions, extractActivityId } from '#lib/utils/activity-toast.js';
+	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
+	import { hasPermission } from '#lib/utils/auth.js';
+	import { composeTreeSplitProps } from '#lib/utils/compose-flow.js';
+	import { formatDateTimeShort, truncateString } from '#lib/utils/formatting.js';
+	import { bytes } from '#lib/utils/formatting.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 	import {
 		applyWorkspaceFileChangesForDisplay,
 		buildWorkspaceMultipartUpdate,
@@ -60,15 +69,8 @@
 		workspaceFileParentPath,
 		workspaceFilePathMatches
 	} from '#lib/utils/workspace-files.js';
-	import { volumeBackupService } from '#lib/services/volume-backup-service.js';
-	import type { BackupEntry } from '#lib/types/shared.js';
-	import { ResponsiveDialog } from '#lib/components/ui/responsive-dialog/index.js';
-	import * as Select from '#lib/components/ui/select/index.js';
-	import { Label } from '#lib/components/ui/label/index.js';
-	import * as Alert from '#lib/components/ui/alert/index.js';
-	import { Spinner } from '#lib/components/ui/spinner/index.js';
-	import { bytes } from '#lib/utils/formatting.js';
-	import { PersistedState } from 'runed';
+
+	import BackupList from '../components/volume-backup-table.svelte';
 	import { volumeWorkspaceReadOnlyMessage } from '../components/volume-workspace-utils';
 
 	let { data } = $props();

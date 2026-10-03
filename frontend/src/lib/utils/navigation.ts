@@ -1,6 +1,7 @@
 import { browser } from '$app/env';
 import { PersistedState } from 'runed';
 import { createContext } from 'svelte';
+
 import {
 	DEFAULT_LANDING_PAGE,
 	defaultMobileNavigationSettings,

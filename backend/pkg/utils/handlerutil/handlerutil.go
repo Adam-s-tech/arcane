@@ -14,11 +14,13 @@ import (
 	"github.com/getarcaneapp/arcane/types/v2/auth"
 	"github.com/getarcaneapp/arcane/types/v2/base"
 	"github.com/getarcaneapp/arcane/types/v2/features"
+	usertypes "github.com/getarcaneapp/arcane/types/v2/user"
 	"go.getarcane.app/kit/pkg/mapping"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/userctx"
 )
 
 // Out is the huma response envelope for endpoints returning base.ApiResponse[T].
@@ -78,8 +80,8 @@ func PaginationResponse(p pagination.Response) base.PaginationResponse {
 }
 
 // RequireUser returns the authenticated user from the request context or a 401 error.
-func RequireUser(ctx context.Context) (*common.User, error) {
-	user, exists := common.CurrentUserFromContext(ctx)
+func RequireUser(ctx context.Context) (*usertypes.Actor, error) {
+	user, exists := userctx.CurrentUserFromContext(ctx)
 	if !exists || user == nil {
 		return nil, huma.Error401Unauthorized("Not authenticated")
 	}
@@ -167,9 +169,9 @@ func Operation(operationID, method, path, summary, description string, tags ...s
 	}
 }
 
-func CurrentActor(ctx context.Context) common.User {
-	actor := common.User{}
-	if currentUser, exists := common.CurrentUserFromContext(ctx); exists && currentUser != nil {
+func CurrentActor(ctx context.Context) usertypes.Actor {
+	actor := usertypes.Actor{}
+	if currentUser, exists := userctx.CurrentUserFromContext(ctx); exists && currentUser != nil {
 		actor = *currentUser
 	}
 	return actor

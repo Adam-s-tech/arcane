@@ -1,20 +1,22 @@
 <script lang="ts">
-	import { NetworksIcon, ConnectionIcon } from '#lib/icons/index.js';
-	import { toast } from 'svelte-sonner';
-	import type { NetworkCreateOptions, NetworkUsageCounts } from '#lib/types/docker.js';
-	import CreateNetworkSheet from '#lib/components/sheets/create-network-sheet.svelte';
-	import NetworkTable from './components/network-table.svelte';
-	import { m } from '#lib/paraglide/messages.js';
-	import { networkService } from '#lib/services/network-service.js';
-	import { ResourceListPageState } from '#lib/utils/resource-list-page.svelte.js';
-	import { queryKeys } from '#lib/query/query-keys.js';
-	import { untrack } from 'svelte';
-	import { useEnvironmentRefresh } from '#lib/hooks/use-environment-refresh.svelte.js';
-	import { ResourcePageLayout, type ActionButton, type StatCardConfig } from '#lib/layouts/index.js';
 	import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
+	import { untrack } from 'svelte';
+	import { toast } from 'svelte-sonner';
+
+	import CreateNetworkSheet from '#lib/components/sheets/create-network-sheet.svelte';
+	import { useEnvironmentRefresh } from '#lib/hooks/use-environment-refresh.svelte.js';
+	import { NetworksIcon, ConnectionIcon } from '#lib/icons/index.js';
+	import { ResourcePageLayout, type ActionButton, type StatCardConfig } from '#lib/layouts/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { queryKeys } from '#lib/query/query-keys.js';
+	import { networkService } from '#lib/services/network-service.js';
+	import type { NetworkCreateOptions, NetworkUsageCounts } from '#lib/types/docker.js';
 	import { activityToastOptions, extractActivityId } from '#lib/utils/activity-toast.js';
 	import { extractApiErrorMessage } from '#lib/utils/api.js';
+	import { ResourceListPageState } from '#lib/utils/resource-list-page.svelte.js';
 	import { tryCatch } from '#lib/utils/try-catch.js';
+
+	import NetworkTable from './components/network-table.svelte';
 
 	let { data } = $props();
 	const queryClient = useQueryClient();

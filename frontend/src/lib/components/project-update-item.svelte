@@ -1,11 +1,12 @@
 <script lang="ts">
-	import type { ProjectUpdateInfo } from '#lib/types/swarm.js';
-	import { getProjectUpdateStatus, getProjectUpdateText, parseImageRef } from '#lib/utils/docker.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import UpdateStatusPopover from '#lib/components/update-status-popover.svelte';
-	import UpdateStatusBanner from '#lib/components/update-status-banner.svelte';
+	import { mergeProps } from 'bits-ui';
+	import type { Component } from 'svelte';
+
 	import ImageUpdateItem from '#lib/components/image-update-item.svelte';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import UncheckedRingIcon from '#lib/components/unchecked-ring-icon.svelte';
+	import UpdateStatusBanner from '#lib/components/update-status-banner.svelte';
+	import UpdateStatusPopover from '#lib/components/update-status-popover.svelte';
 	import {
 		AlertIcon,
 		ArrowRightIcon,
@@ -16,10 +17,10 @@
 		RefreshIcon,
 		VerifiedCheckIcon
 	} from '#lib/icons/index.js';
-	import type { Component } from 'svelte';
+	import { m } from '#lib/paraglide/messages.js';
+	import type { ProjectUpdateInfo } from '#lib/types/swarm.js';
+	import { getProjectUpdateStatus, getProjectUpdateText, parseImageRef } from '#lib/utils/docker.js';
 	import { formatDateTimeShort } from '#lib/utils/formatting.js';
-	import UncheckedRingIcon from '#lib/components/unchecked-ring-icon.svelte';
-	import { mergeProps } from 'bits-ui';
 
 	interface Props {
 		updateInfo?: ProjectUpdateInfo;

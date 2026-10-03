@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"maps"
 	"net/http"
 	"net/http/httptest"
@@ -20,14 +21,15 @@ import (
 	"testing"
 	"time"
 
-	composetypes "github.com/compose-spec/compose-go/v2/types"
-	composeapi "github.com/docker/compose/v5/pkg/api"
+	"github.com/compose-spec/compose-go/v2/types"
+	"github.com/docker/compose/v5/pkg/api"
 	"github.com/getarcaneapp/arcane/types/v2/containerregistry"
 	imagetypes "github.com/getarcaneapp/arcane/types/v2/image"
 	projecttypes "github.com/getarcaneapp/arcane/types/v2/project"
+	usertypes "github.com/getarcaneapp/arcane/types/v2/user"
 	volumetypes "github.com/getarcaneapp/arcane/types/v2/volume"
 	"github.com/libtnb/sqlite"
-	dockerauthconfig "github.com/moby/moby/api/pkg/authconfig"
+	"github.com/moby/moby/api/pkg/authconfig"
 	"github.com/moby/moby/api/types/container"
 	dockertypesimage "github.com/moby/moby/api/types/image"
 	dockerregistry "github.com/moby/moby/api/types/registry"
@@ -51,6 +53,14 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/image"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/imageupdate"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/kv"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/project/children/deployment"
+	projectdetails "github.com/getarcaneapp/arcane/backend/v2/internal/project/children/details"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/project/children/lifecycle"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/project/children/listing"
+	projectsync "github.com/getarcaneapp/arcane/backend/v2/internal/project/children/sync"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/project/children/tags"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/project/children/update"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/project/children/workspace"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/registry"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
@@ -65,7 +75,7 @@ type testBuildBuilder struct {
 	err error
 }
 
-func (b testBuildBuilder) BuildImage(_ context.Context, _ string, _ buildtypes.BuildRequest, _ io.Writer, _ string, _ *common.User) (*buildtypes.BuildResult, error) {
+func (b testBuildBuilder) BuildImage(_ context.Context, _ string, _ buildtypes.BuildRequest, _ io.Writer, _ string, _ *usertypes.Actor) (*buildtypes.BuildResult, error) {
 	if b.err != nil {
 		return nil, b.err
 	}
@@ -88,8 +98,9 @@ func setupProjectTestDB(t *testing.T) *database.DB {
 
 func TestUpdateProjectWorkspaceRejectsInvalidManifestBeforeProjectLookup(t *testing.T) {
 	service := &ProjectService{}
+	service.initChildrenInternal(nil, nil)
 
-	_, err := service.UpdateProjectWorkspace(t.Context(), "missing", projecttypes.WorkspaceUpdateManifest{}, nil, common.User{})
+	_, err := service.UpdateProjectWorkspace(t.Context(), "missing", projecttypes.WorkspaceUpdateManifest{}, nil, usertypes.Actor{})
 	require.ErrorIs(t, err, common.ErrProjectWorkspaceBadRequest)
 	require.ErrorContains(t, err, "revision")
 }
@@ -97,7 +108,7 @@ func TestUpdateProjectWorkspaceRejectsInvalidManifestBeforeProjectLookup(t *test
 func TestValidateWorkspaceChangesAgainstGitOps(t *testing.T) {
 	owned := map[string]struct{}{"compose.yaml": {}, "conf/app.conf": {}}
 
-	err := validateWorkspaceChangesAgainstGitOpsInternal([]projecttypes.WorkspaceFileChange{
+	err := workspace.ValidateWorkspaceChangesAgainstGitOps([]projecttypes.WorkspaceFileChange{
 		{Operation: projecttypes.FileOpUpdateFile, RelativePath: "conf/app.conf"},
 	}, owned)
 	require.ErrorIs(t, err, common.ErrProjectWorkspaceForbidden)
@@ -105,14 +116,14 @@ func TestValidateWorkspaceChangesAgainstGitOps(t *testing.T) {
 
 	// Recursively deleting a folder that still holds a sync-owned file must
 	// also be rejected.
-	err = validateWorkspaceChangesAgainstGitOpsInternal([]projecttypes.WorkspaceFileChange{
+	err = workspace.ValidateWorkspaceChangesAgainstGitOps([]projecttypes.WorkspaceFileChange{
 		{Operation: projecttypes.FileOpDelete, RelativePath: "conf", Recursive: true},
 	}, owned)
 	require.ErrorIs(t, err, common.ErrProjectWorkspaceForbidden)
 
 	// The operator overlay (e.g. a secret env file the repo cannot carry)
 	// stays editable.
-	err = validateWorkspaceChangesAgainstGitOpsInternal([]projecttypes.WorkspaceFileChange{
+	err = workspace.ValidateWorkspaceChangesAgainstGitOps([]projecttypes.WorkspaceFileChange{
 		{Operation: projecttypes.FileOpCreateFile, RelativePath: "app.env"},
 	}, owned)
 	require.NoError(t, err)
@@ -142,7 +153,7 @@ func newTestDockerClientInternal(t *testing.T, server *httptest.Server) *client.
 
 func decodeRegistryAuthInternal(t *testing.T, encoded string) dockerregistry.AuthConfig {
 	t.Helper()
-	cfg, err := dockerauthconfig.Decode(encoded)
+	cfg, err := authconfig.Decode(encoded)
 	require.NoError(t, err)
 	return *cfg
 }
@@ -321,7 +332,7 @@ func TestProjectService_DestroyProject_RemovesFilesWhenRequested(t *testing.T) {
 	}
 	require.NoError(t, db.Create(project).Error)
 
-	require.NoError(t, svc.DestroyProject(ctx, project.ID, true, false, common.User{}))
+	require.NoError(t, svc.DestroyProject(ctx, project.ID, true, false, usertypes.Actor{}))
 
 	_, statErr := os.Stat(projectPath)
 	assert.ErrorIs(t, statErr, os.ErrNotExist)
@@ -346,7 +357,7 @@ func TestProjectService_DestroyProject_PreservesFilesWhenRequested(t *testing.T)
 	}
 	require.NoError(t, db.Create(project).Error)
 
-	require.NoError(t, svc.DestroyProject(ctx, project.ID, false, false, common.User{}))
+	require.NoError(t, svc.DestroyProject(ctx, project.ID, false, false, usertypes.Actor{}))
 
 	assert.NoDirExists(t, projectPath)
 	assert.NoFileExists(t, projectDataPath)
@@ -386,93 +397,6 @@ func TestProjectService_GetProjectFromDatabaseByID(t *testing.T) {
 	assert.Contains(t, err.Error(), "project not found")
 }
 
-func TestProjectService_GetServiceCounts(t *testing.T) {
-	tests := []struct {
-		name        string
-		services    []ProjectServiceInfo
-		wantTotal   int
-		wantRunning int
-	}{
-		{
-			name: "mixed status",
-			services: []ProjectServiceInfo{
-				{Name: "s1", Status: "running"},
-				{Name: "s2", Status: "exited"},
-				{Name: "s3", Status: "up"},
-			},
-			wantTotal:   3,
-			wantRunning: 2,
-		},
-		{
-			name: "all stopped",
-			services: []ProjectServiceInfo{
-				{Name: "s1", Status: "exited"},
-			},
-			wantTotal:   1,
-			wantRunning: 0,
-		},
-		{
-			name:        "empty",
-			services:    []ProjectServiceInfo{},
-			wantTotal:   0,
-			wantRunning: 0,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			total, running := getServiceCounts(tt.services)
-			assert.Equal(t, tt.wantTotal, total)
-			assert.Equal(t, tt.wantRunning, running)
-		})
-	}
-}
-
-func TestProjectService_CalculateProjectStatus(t *testing.T) {
-	tests := []struct {
-		name     string
-		services []ProjectServiceInfo
-		want     ProjectStatus
-	}{
-		{
-			name:     "empty",
-			services: []ProjectServiceInfo{},
-			want:     ProjectStatusUnknown,
-		},
-		{
-			name: "all running",
-			services: []ProjectServiceInfo{
-				{Status: "running"},
-				{Status: "up"},
-			},
-			want: ProjectStatusRunning,
-		},
-		{
-			name: "all stopped",
-			services: []ProjectServiceInfo{
-				{Status: "exited"},
-				{Status: "stopped"},
-			},
-			want: ProjectStatusStopped,
-		},
-		{
-			name: "partial",
-			services: []ProjectServiceInfo{
-				{Status: "running"},
-				{Status: "exited"},
-			},
-			want: ProjectStatusPartiallyRunning,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := calculateProjectStatus(tt.services)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
 func TestProjectService_UpdateProjectStatusInternal(t *testing.T) {
 	db := setupProjectTestDB(t)
 	ctx := t.Context()
@@ -495,23 +419,6 @@ func TestProjectService_UpdateProjectStatusInternal(t *testing.T) {
 	} else {
 		assert.Fail(t, "UpdatedAt should not be nil")
 	}
-}
-
-func TestProjectService_IncrementStatusCounts(t *testing.T) {
-	running := 0
-	stopped := 0
-
-	incrementStatusCounts(ProjectStatusRunning, &running, &stopped)
-	assert.Equal(t, 1, running)
-	assert.Equal(t, 0, stopped)
-
-	incrementStatusCounts(ProjectStatusStopped, &running, &stopped)
-	assert.Equal(t, 1, running)
-	assert.Equal(t, 1, stopped)
-
-	incrementStatusCounts(ProjectStatusUnknown, &running, &stopped)
-	assert.Equal(t, 1, running)
-	assert.Equal(t, 1, stopped)
 }
 
 func TestProjectService_GetProjectByComposeName(t *testing.T) {
@@ -663,7 +570,7 @@ func TestProjectService_PullProjectImages_UpdatesCurrentImageRecordAfterPull(t *
 	dockerService := &docker.DockerClientService{Client: newTestDockerClientInternal(t, server)}
 	eventService := event.NewEventService(db, nil, nil)
 	imageUpdateService := imageupdate.NewImageUpdateService(db, nil, nil, dockerService, nil, nil, nil)
-	imageService := image.NewImageService(db, dockerService, nil, imageUpdateService, nil, eventService)
+	imageService := image.NewImageService(db, dockerService, nil, imageUpdateService, nil, eventService, nil, nil)
 	svc := NewProjectService(db, settingsService, nil, imageService, dockerService, nil, nil, nil, config.Load(), nil, nil)
 
 	projectPath := createComposeProjectDir(t, projectsDir, "compose-pull")
@@ -709,7 +616,7 @@ func TestProjectService_PullProjectImages_UpdatesCurrentImageRecordAfterPull(t *
 		CheckTime:      now.Add(2 * time.Minute),
 	}).Error)
 
-	require.NoError(t, svc.PullProjectImages(ctx, projectRecord.ID, io.Discard, common.SystemUser, nil))
+	require.NoError(t, svc.PullProjectImages(ctx, projectRecord.ID, io.Discard, usertypes.SystemUser, nil))
 
 	// sha256:old-* records represent update records for OTHER containers still running
 	// the old image. Pulling the image for one container must not mark them as up-to-date
@@ -759,7 +666,7 @@ func TestProjectService_EnsureImagesPresent_UpdatesCurrentImageRecordAfterPull(t
 	dockerService := &docker.DockerClientService{Client: newTestDockerClientInternal(t, server)}
 	eventService := event.NewEventService(db, nil, nil)
 	imageUpdateService := imageupdate.NewImageUpdateService(db, nil, nil, dockerService, nil, nil, nil)
-	imageService := image.NewImageService(db, dockerService, nil, imageUpdateService, nil, eventService)
+	imageService := image.NewImageService(db, dockerService, nil, imageUpdateService, nil, eventService, nil, nil)
 	svc := NewProjectService(db, settingsService, nil, imageService, dockerService, nil, nil, nil, config.Load(), nil, nil)
 
 	require.NoError(t, db.Create(&imageupdate.ImageUpdateRecord{
@@ -776,16 +683,16 @@ func TestProjectService_EnsureImagesPresent_UpdatesCurrentImageRecordAfterPull(t
 		t,
 		svc.composeCoordinator.EnsureImagesPresent(
 			ctx,
-			&composetypes.Project{
-				Services: composetypes.Services{
+			&types.Project{
+				Services: types.Services{
 					"api": {
 						Image:      imageRef,
-						PullPolicy: composetypes.PullPolicyAlways,
+						PullPolicy: types.PullPolicyAlways,
 					},
 				},
 			},
 			io.Discard,
-			svc.composeImageOperationsInternal(
+			svc.deployment.ImageOperations(
 				nil,
 				nil,
 			),
@@ -827,7 +734,7 @@ func TestProjectService_PullImageForService_UpdatesCurrentImageRecordAfterPull(t
 	dockerService := &docker.DockerClientService{Client: newTestDockerClientInternal(t, server)}
 	eventService := event.NewEventService(db, nil, nil)
 	imageUpdateService := imageupdate.NewImageUpdateService(db, nil, nil, dockerService, nil, nil, nil)
-	imageService := image.NewImageService(db, dockerService, nil, imageUpdateService, nil, eventService)
+	imageService := image.NewImageService(db, dockerService, nil, imageUpdateService, nil, eventService, nil, nil)
 	svc := NewProjectService(db, settingsService, nil, imageService, dockerService, nil, nil, nil, config.Load(), nil, nil)
 
 	require.NoError(t, db.Create(&imageupdate.ImageUpdateRecord{
@@ -840,7 +747,7 @@ func TestProjectService_PullImageForService_UpdatesCurrentImageRecordAfterPull(t
 		CheckTime:      time.Now().UTC().Add(-time.Hour),
 	}).Error)
 
-	require.NoError(t, svc.pullAndReconcileImageInternal(ctx, imageRef, io.Discard, common.SystemUser, nil))
+	require.NoError(t, svc.deployment.Pull(ctx, imageRef, io.Discard, usertypes.SystemUser, nil))
 
 	// sha256:old-worker may still be in use by another container — must not be cleared (fixes #2453).
 	var oldRecord imageupdate.ImageUpdateRecord
@@ -890,12 +797,12 @@ func TestProjectService_ComposePullSelectedServicesInternal_ReconcilesOnlyOnSucc
 	dockerService := &docker.DockerClientService{Client: newTestDockerClientInternal(t, server)}
 	eventService := event.NewEventService(db, nil, nil)
 	imageUpdateService := imageupdate.NewImageUpdateService(db, nil, nil, dockerService, nil, nil, nil)
-	imageService := image.NewImageService(db, dockerService, nil, imageUpdateService, nil, eventService)
+	imageService := image.NewImageService(db, dockerService, nil, imageUpdateService, nil, eventService, nil, nil)
 	svc := NewProjectService(db, settingsService, nil, imageService, dockerService, nil, nil, nil, config.Load(), nil, nil)
 
-	projectDef := &composetypes.Project{
+	projectDef := &types.Project{
 		Name: "compose-selected",
-		Services: composetypes.Services{
+		Services: types.Services{
 			"app": {
 				Name:  "app",
 				Image: privateImageRef,
@@ -910,7 +817,7 @@ func TestProjectService_ComposePullSelectedServicesInternal_ReconcilesOnlyOnSucc
 			},
 			"builder": {
 				Name:  "builder",
-				Build: &composetypes.BuildConfig{Context: "."},
+				Build: &types.BuildConfig{Context: "."},
 			},
 		},
 	}
@@ -942,7 +849,7 @@ func TestProjectService_ComposePullSelectedServicesInternal_ReconcilesOnlyOnSucc
 		Enabled:  true,
 	}}
 
-	require.NoError(t, svc.composeCoordinator.PullServices(ctx, projectDef, []string{"app", "app-copy", "sidecar", "builder"}, svc.composeImageOperationsInternal(nil, credentials), nil))
+	require.NoError(t, svc.composeCoordinator.PullServices(ctx, projectDef, []string{"app", "app-copy", "sidecar", "builder"}, svc.deployment.ImageOperations(nil, credentials), nil))
 	assert.Equal(t, 1, pullsByRef[privateImageRef], "duplicate service refs should only be pulled once")
 	assert.Equal(t, 1, pullsByRef[publicImageRef], "selected public image should still be pulled")
 	assert.Len(t, pullsByRef, 2, "build-backed services should not trigger image pulls")
@@ -994,12 +901,12 @@ func TestProjectService_ComposePullSelectedServicesInternal_LeavesRecordsWhenPul
 
 	dockerService := &docker.DockerClientService{Client: newTestDockerClientInternal(t, failingServer)}
 	imageUpdateService := imageupdate.NewImageUpdateService(db, nil, nil, dockerService, nil, nil, nil)
-	imageService := image.NewImageService(db, dockerService, nil, imageUpdateService, nil, event.NewEventService(db, nil, nil))
+	imageService := image.NewImageService(db, dockerService, nil, imageUpdateService, nil, event.NewEventService(db, nil, nil), nil, nil)
 	svc := NewProjectService(db, settingsService, nil, imageService, dockerService, nil, nil, nil, config.Load(), nil, nil)
 
-	projectDef := &composetypes.Project{
+	projectDef := &types.Project{
 		Name: "compose-selected",
-		Services: composetypes.Services{
+		Services: types.Services{
 			"app": {
 				Name:  "app",
 				Image: imageRef,
@@ -1017,7 +924,7 @@ func TestProjectService_ComposePullSelectedServicesInternal_LeavesRecordsWhenPul
 		CheckTime:      time.Now().UTC().Add(-time.Hour),
 	}).Error)
 
-	err = svc.composeCoordinator.PullServices(ctx, projectDef, []string{"app"}, svc.composeImageOperationsInternal(nil, nil), nil)
+	err = svc.composeCoordinator.PullServices(ctx, projectDef, []string{"app"}, svc.deployment.ImageOperations(nil, nil), nil)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "failed to pull image")
 
@@ -1052,7 +959,7 @@ func TestProjectService_UpdateProjectServicesHardFailsWhenPullFailsInternal(t *t
 
 	dockerService := &docker.DockerClientService{Client: newTestDockerClientInternal(t, failingServer)}
 	imageUpdateService := imageupdate.NewImageUpdateService(db, nil, nil, dockerService, nil, nil, nil)
-	imageService := image.NewImageService(db, dockerService, nil, imageUpdateService, nil, event.NewEventService(db, nil, nil))
+	imageService := image.NewImageService(db, dockerService, nil, imageUpdateService, nil, event.NewEventService(db, nil, nil), nil, nil)
 
 	projectPath := createComposeProjectDir(t, projectsDir, "compose-update-pull-fail")
 	require.NoError(
@@ -1092,13 +999,13 @@ func TestProjectService_UpdateProjectServicesHardFailsWhenPullFailsInternal(t *t
 		composeUpProjectServicesInternal = originalComposeUp
 	})
 	upCalled := false
-	composeUpProjectServicesInternal = func(context.Context, *composetypes.Project, []string, bool, bool, bool, map[string]dockerregistry.AuthConfig, time.Duration) error {
+	composeUpProjectServicesInternal = func(context.Context, *types.Project, []string, bool, bool, bool, map[string]dockerregistry.AuthConfig, time.Duration) error {
 		upCalled = true
 		return errors.New("compose up should not run")
 	}
 
 	svc := NewProjectService(db, settingsService, nil, imageService, dockerService, nil, nil, nil, config.Load(), nil, nil)
-	err = svc.UpdateProjectServices(ctx, projectRecord.ID, []string{"app"}, common.SystemUser, true)
+	err = svc.UpdateProjectServices(ctx, projectRecord.ID, []string{"app"}, usertypes.SystemUser, true)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "pull updated service images")
 	assert.False(t, upCalled, "compose up must not run after a pull failure")
@@ -1140,7 +1047,7 @@ func TestProjectService_UpdateProjectServicesForcesRecreateInternal(t *testing.T
 	dockerService := &docker.DockerClientService{Client: newTestDockerClientInternal(t, server)}
 	imageUpdateService := imageupdate.NewImageUpdateService(db, nil, nil, dockerService, nil, nil, nil)
 	eventService := event.NewEventService(db, nil, nil)
-	imageService := image.NewImageService(db, dockerService, nil, imageUpdateService, nil, eventService)
+	imageService := image.NewImageService(db, dockerService, nil, imageUpdateService, nil, eventService, nil, nil)
 
 	projectPath := createComposeProjectDir(t, projectsDir, "compose-update-force")
 	require.NoError(
@@ -1166,7 +1073,7 @@ func TestProjectService_UpdateProjectServicesForcesRecreateInternal(t *testing.T
 			ID:     service + "-container",
 			Names:  []string{"/compose-update-force-" + service + "-1"},
 			State:  state,
-			Labels: map[string]string{composeapi.ProjectLabel: "compose-update-force", composeapi.ServiceLabel: service, composeapi.ConfigHashLabel: service + "-hash"},
+			Labels: map[string]string{api.ProjectLabel: "compose-update-force", api.ServiceLabel: service, api.ConfigHashLabel: service + "-hash"},
 		}
 	}
 	runtimeServer := newProjectRuntimeDockerServerInternal(t, []container.Summary{
@@ -1192,7 +1099,7 @@ func TestProjectService_UpdateProjectServicesForcesRecreateInternal(t *testing.T
 		composeUpProjectServicesInternal = originalComposeUp
 	})
 	var stopped []string
-	composeStopProjectServicesInternal = func(_ context.Context, _ *composetypes.Project, services []string) error {
+	composeStopProjectServicesInternal = func(_ context.Context, _ *types.Project, services []string) error {
 		stopped = services
 		return nil
 	}
@@ -1200,7 +1107,7 @@ func TestProjectService_UpdateProjectServicesForcesRecreateInternal(t *testing.T
 	forceRecreate := false
 	composeUpProjectServicesInternal = func(
 		_ context.Context,
-		selected *composetypes.Project,
+		selected *types.Project,
 		services []string,
 		removeOrphans, force, _ bool,
 		_ map[string]dockerregistry.AuthConfig,
@@ -1217,7 +1124,7 @@ func TestProjectService_UpdateProjectServicesForcesRecreateInternal(t *testing.T
 	}
 
 	svc := NewProjectService(db, settingsService, eventService, imageService, dockerService, nil, nil, nil, config.Load(), nil, nil)
-	err = svc.UpdateProjectServices(ctx, projectRecord.ID, []string{"app"}, common.SystemUser, true)
+	err = svc.UpdateProjectServices(ctx, projectRecord.ID, []string{"app"}, usertypes.SystemUser, true)
 	require.Error(t, err)
 	assert.True(t, eventService.ShouldSuppressDaemonEvent("container", "replacement", "app", "compose-update-force"), "failed updates retain correlation through rollback grace")
 	assert.False(t, eventService.ShouldSuppressDaemonEvent("container", "unrelated", "unrelated", "other-project"))
@@ -1322,7 +1229,7 @@ func TestProjectService_UpdateProject_RenameFailsWhenVolumeMigrationPreparationF
 	}
 	require.NoError(t, db.Create(project).Error)
 
-	_, err = svc.UpdateProject(ctx, project.ID, new("bar"), nil, nil, nil, common.User{
+	_, err = svc.UpdateProject(ctx, project.ID, new("bar"), nil, nil, nil, usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -1406,8 +1313,8 @@ func TestProjectService_PrepareProjectRenameVolumeMigrationForUpdate_UsesCompose
 				"Name":   "nginx_data",
 				"Driver": "local",
 				"Labels": map[string]string{
-					composeapi.ProjectLabel: "nginx",
-					composeapi.VolumeLabel:  "data",
+					api.ProjectLabel: "nginx",
+					api.VolumeLabel:  "data",
 				},
 			})) {
 				return
@@ -1616,8 +1523,7 @@ func TestProjectService_UpdateProject_ClearsJournalForNonRenameWhenRecoveryDocke
 
 	eventService := event.NewEventService(db, nil, nil)
 	kvService := kv.NewKVService(db)
-	svc := NewProjectService(db, settingsService, eventService, nil, nil, nil, nil, nil, config.Load(), nil, nil)
-	svc.KVService = kvService
+	svc := NewProjectService(db, settingsService, eventService, nil, nil, nil, nil, nil, config.Load(), kvService, nil)
 
 	oldDir := "nginx"
 	projectPath := createComposeProjectDir(t, projectsDir, oldDir)
@@ -1652,7 +1558,7 @@ func TestProjectService_UpdateProject_ClearsJournalForNonRenameWhenRecoveryDocke
 	require.NoError(t, kvService.Set(ctx, projecttypes.RenameJournalKeyPrefix+project.ID, string(payload)))
 
 	envContent := "FOO=bar\n"
-	updated, err := svc.UpdateProject(ctx, project.ID, nil, nil, &envContent, nil, common.User{
+	updated, err := svc.UpdateProject(ctx, project.ID, nil, nil, &envContent, nil, usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -1683,8 +1589,7 @@ func TestProjectService_UpdateProject_AllowsRenameAfterJournalRecoveryWithoutDoc
 
 	eventService := event.NewEventService(db, nil, nil)
 	kvService := kv.NewKVService(db)
-	svc := NewProjectService(db, settingsService, eventService, nil, nil, nil, nil, nil, config.Load(), nil, nil)
-	svc.KVService = kvService
+	svc := NewProjectService(db, settingsService, eventService, nil, nil, nil, nil, nil, config.Load(), kvService, nil)
 	configureProjectRuntimeDockerInternal(t, nil)
 
 	oldDir := "nginx"
@@ -1719,7 +1624,7 @@ func TestProjectService_UpdateProject_AllowsRenameAfterJournalRecoveryWithoutDoc
 	require.NoError(t, err)
 	require.NoError(t, kvService.Set(ctx, projecttypes.RenameJournalKeyPrefix+project.ID, string(payload)))
 
-	updated, err := svc.UpdateProject(ctx, project.ID, new("web"), nil, nil, nil, common.User{
+	updated, err := svc.UpdateProject(ctx, project.ID, new("web"), nil, nil, nil, usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -1761,7 +1666,7 @@ func TestProjectService_UpdateProject_RenamesDirectoryWhenNameChanges(t *testing
 	}
 	require.NoError(t, db.Create(project).Error)
 
-	updated, err := svc.UpdateProject(ctx, project.ID, new("bar"), nil, nil, nil, common.User{
+	updated, err := svc.UpdateProject(ctx, project.ID, new("bar"), nil, nil, nil, usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -1813,7 +1718,7 @@ func TestProjectService_UpdateProject_RenameFailsWhenTargetDirectoryExists(t *te
 	}
 	require.NoError(t, db.Create(project).Error)
 
-	_, err = svc.UpdateProject(ctx, project.ID, new("bar"), nil, nil, nil, common.User{
+	_, err = svc.UpdateProject(ctx, project.ID, new("bar"), nil, nil, nil, usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -1857,7 +1762,7 @@ func TestProjectService_UpdateProject_RenameFailsWhenProjectRunning(t *testing.T
 	}
 	require.NoError(t, db.Create(project).Error)
 
-	_, err = svc.UpdateProject(ctx, project.ID, new("bar"), nil, nil, nil, common.User{
+	_, err = svc.UpdateProject(ctx, project.ID, new("bar"), nil, nil, nil, usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -1896,10 +1801,10 @@ func TestProjectService_UpdateProject_RenameRejectsStaleStoppedWhenRuntimeIsRunn
 			State:  container.StateRunning,
 			Status: "Up 30 seconds",
 			Labels: map[string]string{
-				composeapi.ProjectLabel:    "foo",
-				composeapi.ServiceLabel:    "app",
-				composeapi.ConfigHashLabel: "app-hash",
-				composeapi.WorkingDirLabel: filepath.Join(projectsDir, "Foo"),
+				api.ProjectLabel:    "foo",
+				api.ServiceLabel:    "app",
+				api.ConfigHashLabel: "app-hash",
+				api.WorkingDirLabel: filepath.Join(projectsDir, "Foo"),
 			},
 		},
 	})
@@ -1916,7 +1821,7 @@ func TestProjectService_UpdateProject_RenameRejectsStaleStoppedWhenRuntimeIsRunn
 	}
 	require.NoError(t, db.Create(project).Error)
 
-	_, err = svc.UpdateProject(ctx, project.ID, new("bar"), nil, nil, nil, common.User{
+	_, err = svc.UpdateProject(ctx, project.ID, new("bar"), nil, nil, nil, usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -1964,7 +1869,7 @@ func TestProjectService_UpdateProject_RenameResolvesUnknownStoppedStatusBeforeVo
 	}
 	require.NoError(t, db.Create(project).Error)
 
-	updated, err := svc.UpdateProject(ctx, project.ID, new("bar"), nil, nil, nil, common.User{
+	updated, err := svc.UpdateProject(ctx, project.ID, new("bar"), nil, nil, nil, usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -2013,10 +1918,10 @@ func TestProjectService_UpdateProject_RenameRejectsUnknownWhenRuntimeIsRunning(t
 			State:  container.StateRunning,
 			Status: "Up 30 seconds",
 			Labels: map[string]string{
-				composeapi.ProjectLabel:    "foo",
-				composeapi.ServiceLabel:    "app",
-				composeapi.ConfigHashLabel: "app-hash",
-				composeapi.WorkingDirLabel: "/host/path/projects/Foo",
+				api.ProjectLabel:    "foo",
+				api.ServiceLabel:    "app",
+				api.ConfigHashLabel: "app-hash",
+				api.WorkingDirLabel: "/host/path/projects/Foo",
 			},
 		},
 	})
@@ -2036,7 +1941,7 @@ func TestProjectService_UpdateProject_RenameRejectsUnknownWhenRuntimeIsRunning(t
 	}
 	require.NoError(t, db.Create(project).Error)
 
-	_, err = svc.UpdateProject(ctx, project.ID, new("bar"), nil, nil, nil, common.User{
+	_, err = svc.UpdateProject(ctx, project.ID, new("bar"), nil, nil, nil, usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -2088,7 +1993,7 @@ services:
 `
 	env := "COMPOSE_PROJECT_NAME=\n"
 
-	updated, err := svc.UpdateProject(ctx, project.ID, nil, new(compose), new(env), nil, common.User{
+	updated, err := svc.UpdateProject(ctx, project.ID, nil, new(compose), new(env), nil, usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -2131,7 +2036,7 @@ func TestProjectService_UpdateProject_AllowsMissingEnvFileDuringComposeValidatio
       - .env
 `
 
-	updated, err := svc.UpdateProject(ctx, project.ID, nil, new(compose), nil, nil, common.User{
+	updated, err := svc.UpdateProject(ctx, project.ID, nil, new(compose), nil, nil, usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -2178,7 +2083,7 @@ func TestProjectService_UpdateProject_EnvRetargetWritesExplicitIdenticalComposeT
 	// byte-identical to the previous base: the caller intends the retargeted
 	// base to carry this content.
 	explicitCompose := baseContent
-	_, err = svc.UpdateProject(ctx, project.ID, nil, &explicitCompose, new("COMPOSE_FILE=alt.yaml\n"), nil, common.User{
+	_, err = svc.UpdateProject(ctx, project.ID, nil, &explicitCompose, new("COMPOSE_FILE=alt.yaml\n"), nil, usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -2230,7 +2135,7 @@ func TestProjectService_UpdateProject_EnvRetargetWithoutComposePayloadPreservesN
 
 	// Clients omit composeContent when the compose editor is unchanged: an
 	// env-only retarget must switch the selection without touching either file.
-	_, err = svc.UpdateProject(ctx, project.ID, nil, nil, new("COMPOSE_FILE=alt.yaml\n"), nil, common.User{
+	_, err = svc.UpdateProject(ctx, project.ID, nil, nil, new("COMPOSE_FILE=alt.yaml\n"), nil, usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -2281,7 +2186,7 @@ func TestProjectService_UpdateProject_EnvRetargetWritesEditedComposeToSelectedBa
 	require.NoError(t, db.Create(project).Error)
 
 	editedCompose := "services:\n  alt:\n    image: redis:alpine\n"
-	_, err = svc.UpdateProject(ctx, project.ID, nil, &editedCompose, new("COMPOSE_FILE=alt.yaml\n"), nil, common.User{
+	_, err = svc.UpdateProject(ctx, project.ID, nil, &editedCompose, new("COMPOSE_FILE=alt.yaml\n"), nil, usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -2329,7 +2234,7 @@ services:
     image: nginx:alpine
 `
 
-	updated, err := svc.UpdateProject(ctx, project.ID, nil, new(compose), nil, nil, common.User{
+	updated, err := svc.UpdateProject(ctx, project.ID, nil, new(compose), nil, nil, usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -2367,7 +2272,7 @@ services:
     image: nginx:alpine
 `
 
-	project, err := svc.CreateProject(ctx, "with-external-include", compose, nil, projecttypes.CreateProjectWorkspaceManifest{}, nil, nil, nil, common.User{
+	project, err := svc.CreateProject(ctx, "with-external-include", compose, nil, projecttypes.CreateProjectWorkspaceManifest{}, nil, nil, nil, usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -2404,7 +2309,7 @@ func TestProjectService_UpdateProject_AllowsExternalInclude(t *testing.T) {
 	}
 	require.NoError(t, db.Create(project).Error)
 
-	user := common.User{ID: "u1", Username: "tester"}
+	user := usertypes.Actor{ID: "u1", Username: "tester"}
 
 	compose := `include:
   - ../shared.yaml
@@ -2446,7 +2351,7 @@ func TestProjectService_CreateProject_CommitsWorkspaceAndConfigurationTogether(t
 		map[int][]byte{0: []byte("workspace content\n")},
 		nil,
 		nil,
-		common.User{ID: "u1", Username: "tester"},
+		usertypes.Actor{ID: "u1", Username: "tester"},
 	)
 	require.NoError(t, err)
 	require.NotNil(t, created)
@@ -2480,7 +2385,7 @@ func TestProjectService_CreateProject_RollsBackInvalidWorkspaceManifest(t *testi
 		nil,
 		nil,
 		nil,
-		common.User{ID: "u1", Username: "tester"},
+		usertypes.Actor{ID: "u1", Username: "tester"},
 	)
 	require.Error(t, err)
 	require.Nil(t, created)
@@ -2525,7 +2430,7 @@ func TestProjectService_UpdateProject_UsesExistingEnvFileDuringComposeValidation
       - .env
 `
 
-	updated, err := svc.UpdateProject(ctx, project.ID, nil, new(compose), nil, nil, common.User{
+	updated, err := svc.UpdateProject(ctx, project.ID, nil, new(compose), nil, nil, usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -2575,7 +2480,7 @@ func TestProjectService_UpdateProject_CreatesOverrideWithDefaultName(t *testing.
 	svc, project, projectPath := newProjectServiceForOverrideTestInternal(t, "override-create")
 
 	override := "services:\n  app:\n    image: busybox:latest\n"
-	_, err := svc.UpdateProject(ctx, project.ID, nil, nil, nil, new(override), common.User{
+	_, err := svc.UpdateProject(ctx, project.ID, nil, nil, nil, new(override), usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -2602,7 +2507,7 @@ func TestProjectService_UpdateProject_PreservesExistingOverrideName(t *testing.T
 	require.NoError(t, os.WriteFile(filepath.Join(projectPath, "docker-compose.override.yml"), []byte("services:\n  app:\n    image: alpine:3\n"), 0o600))
 
 	override := "services:\n  app:\n    image: busybox:latest\n"
-	_, err := svc.UpdateProject(ctx, project.ID, nil, nil, nil, new(override), common.User{
+	_, err := svc.UpdateProject(ctx, project.ID, nil, nil, nil, new(override), usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -2622,7 +2527,7 @@ func TestProjectService_UpdateProject_DeletesOverrideOnBlank(t *testing.T) {
 	require.NoError(t, os.WriteFile(overridePath, []byte("services:\n  app:\n    image: busybox:latest\n"), 0o600))
 
 	// A non-nil blank override deletes the file so the deploy stops merging it.
-	_, err := svc.UpdateProject(ctx, project.ID, nil, nil, nil, new(""), common.User{
+	_, err := svc.UpdateProject(ctx, project.ID, nil, nil, nil, new(""), usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -2640,7 +2545,7 @@ func TestProjectService_UpdateProject_MergedValidationFailureLeavesDiskUnchanged
 	// backup/restore must leave both the base and the override untouched on disk.
 	newCompose := "services:\n  app:\n    image: nginx:1.27\n"
 	badOverride := "services:\n  app:\n    image: \"unterminated\n"
-	_, err := svc.UpdateProject(ctx, project.ID, nil, new(newCompose), nil, new(badOverride), common.User{
+	_, err := svc.UpdateProject(ctx, project.ID, nil, new(newCompose), nil, new(badOverride), usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -2686,7 +2591,7 @@ func TestProjectService_UpdateProject_UsesProvidedEnvContentDuringComposeValidat
 `
 	env := "FOO=updated\n"
 
-	updated, err := svc.UpdateProject(ctx, project.ID, nil, new(compose), new(env), nil, common.User{
+	updated, err := svc.UpdateProject(ctx, project.ID, nil, new(compose), new(env), nil, usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -2733,7 +2638,7 @@ func TestProjectService_UpdateProject_ReturnsEnvParseErrorDuringComposeValidatio
 `
 	env := "BROKEN=${UNTERMINATED\n"
 
-	updated, err := svc.UpdateProject(ctx, project.ID, nil, new(compose), new(env), nil, common.User{
+	updated, err := svc.UpdateProject(ctx, project.ID, nil, new(compose), new(env), nil, usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -2779,7 +2684,7 @@ func TestProjectService_UpdateProject_UsesGlobalEnvDuringComposeValidation(t *te
       - ${MYPATH}cats/templates:/app/templates
 `
 
-	updated, err := svc.UpdateProject(ctx, project.ID, nil, new(compose), nil, nil, common.User{
+	updated, err := svc.UpdateProject(ctx, project.ID, nil, new(compose), nil, nil, usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -2827,7 +2732,7 @@ func TestProjectService_UpdateProject_DoesNotResolveHostEnvThroughGlobalEnvDurin
       - ${DATA_NAS_FOLDER}:/data
 `
 
-	updated, err := svc.UpdateProject(ctx, project.ID, nil, new(compose), nil, nil, common.User{
+	updated, err := svc.UpdateProject(ctx, project.ID, nil, new(compose), nil, nil, usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -2866,7 +2771,7 @@ func TestProjectService_UpdateProject_DerivesProjectOverrideEnvWhenGitSourceExis
 	}
 	require.NoError(t, db.Create(project).Error)
 
-	updated, err := svc.UpdateProject(ctx, project.ID, nil, nil, new("BASE=git\nLOCAL_ONLY=example\n"), nil, common.User{
+	updated, err := svc.UpdateProject(ctx, project.ID, nil, nil, new("BASE=git\nLOCAL_ONLY=example\n"), nil, usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -2918,7 +2823,7 @@ func TestProjectService_UpdateProject_UnchangedGitEnvLeavesFilesUntouched(t *tes
 	}
 	require.NoError(t, db.Create(project).Error)
 
-	updated, err := svc.UpdateProject(ctx, project.ID, nil, nil, &effectiveContent, nil, common.User{
+	updated, err := svc.UpdateProject(ctx, project.ID, nil, nil, &effectiveContent, nil, usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -2947,7 +2852,7 @@ func TestProjectService_PersistEffectiveEnvContent_RemovesStaleOverrideWithoutGi
 	require.NoError(t, os.WriteFile(filepath.Join(projectPath, ".env"), []byte(effectiveContent), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(projectPath, "project.env"), []byte("TOKEN=stale\n"), 0o600))
 
-	require.NoError(t, persistEffectiveEnvContentInternal(t.Context(), projectPath, projectsDir, effectiveContent))
+	require.NoError(t, projectsync.PersistEffectiveEnvContent(t.Context(), projectPath, projectsDir, effectiveContent))
 
 	effectiveBytes, readErr := os.ReadFile(filepath.Join(projectPath, ".env"))
 	require.NoError(t, readErr)
@@ -2967,7 +2872,7 @@ func TestProjectService_PersistEffectiveEnvContent_RemovesStaleGitOverride(t *te
 	require.NoError(t, os.WriteFile(filepath.Join(projectPath, ".env.git"), []byte(effectiveContent), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(projectPath, "project.env"), []byte("TOKEN=stale\n"), 0o600))
 
-	require.NoError(t, persistEffectiveEnvContentInternal(t.Context(), projectPath, projectsDir, effectiveContent))
+	require.NoError(t, projectsync.PersistEffectiveEnvContent(t.Context(), projectPath, projectsDir, effectiveContent))
 
 	effectiveBytes, readErr := os.ReadFile(filepath.Join(projectPath, ".env"))
 	require.NoError(t, readErr)
@@ -3011,7 +2916,7 @@ func TestProjectService_UpdateProject_DeletingGitBackedKeyFallsBackToGit(t *test
 	}
 	require.NoError(t, db.Create(project).Error)
 
-	updated, err := svc.UpdateProject(ctx, project.ID, nil, nil, new("BASE=git\nLOCAL_ONLY=1\n"), nil, common.User{
+	updated, err := svc.UpdateProject(ctx, project.ID, nil, nil, new("BASE=git\nLOCAL_ONLY=1\n"), nil, usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -3060,7 +2965,7 @@ func TestProjectService_ApplyGitSyncProjectFiles_MigratesDirectEnvIntoProjectOve
 	require.NoError(t, db.Create(project).Error)
 
 	gitEnv := "TOKEN=git\nREMOTE_ONLY=1\n"
-	updated, _, err := svc.ApplyGitSyncProjectFiles(ctx, project.ID, "services:\n  app:\n    image: nginx:alpine\n", &gitEnv, nil, "", common.User{
+	updated, _, err := svc.ApplyGitSyncProjectFiles(ctx, project.ID, "services:\n  app:\n    image: nginx:alpine\n", &gitEnv, nil, "", usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -3118,7 +3023,7 @@ func TestProjectService_ApplyGitSyncProjectFiles_PreservesGitEnvSyntax(t *testin
 	gitEnv := "# keep git formatting\nZ_LAST=last\nCLOUDFLARE_CLIENT_SECRET=$$pbkdf2-sha512$$310000$$XXX\nQUOTED_SECRET='$pbkdf2-sha512$310000$XXX'\nA_FIRST=first"
 
 	for i := range 2 {
-		updated, changed, applyGitSyncProjectFilesErr := svc.ApplyGitSyncProjectFiles(ctx, project.ID, compose, &gitEnv, nil, "", common.User{
+		updated, changed, applyGitSyncProjectFilesErr := svc.ApplyGitSyncProjectFiles(ctx, project.ID, compose, &gitEnv, nil, "", usertypes.Actor{
 			ID:       "u1",
 			Username: "tester",
 		})
@@ -3174,7 +3079,7 @@ func TestProjectService_ApplyGitSyncProjectFiles_NormalizesStaleCopiedGitOverrid
 	}
 	require.NoError(t, db.Create(project).Error)
 
-	updated, _, err := svc.ApplyGitSyncProjectFiles(ctx, project.ID, "services:\n  app:\n    image: nginx:alpine\n", new("BASE=git-updated\nSHARED=1\nREMOTE_ONLY=1\n"), nil, "", common.User{
+	updated, _, err := svc.ApplyGitSyncProjectFiles(ctx, project.ID, "services:\n  app:\n    image: nginx:alpine\n", new("BASE=git-updated\nSHARED=1\nREMOTE_ONLY=1\n"), nil, "", usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -3222,7 +3127,7 @@ func TestProjectService_ApplyGitSyncProjectFiles_RemovesLegacyDeletedGitMasks(t 
 	}
 	require.NoError(t, db.Create(project).Error)
 
-	updated, _, err := svc.ApplyGitSyncProjectFiles(ctx, project.ID, "services:\n  app:\n    image: nginx:alpine\n", new("TOKEN=git-updated\nSHARED=1\nREMOTE_ONLY=1\n"), nil, "", common.User{
+	updated, _, err := svc.ApplyGitSyncProjectFiles(ctx, project.ID, "services:\n  app:\n    image: nginx:alpine\n", new("TOKEN=git-updated\nSHARED=1\nREMOTE_ONLY=1\n"), nil, "", usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -3270,7 +3175,7 @@ func TestProjectService_ApplyGitSyncProjectFiles_RemovesGitEnvSource(t *testing.
 	}
 	require.NoError(t, db.Create(project).Error)
 
-	updated, _, err := svc.ApplyGitSyncProjectFiles(ctx, project.ID, "services:\n  app:\n    image: nginx:alpine\n", nil, nil, "", common.User{
+	updated, _, err := svc.ApplyGitSyncProjectFiles(ctx, project.ID, "services:\n  app:\n    image: nginx:alpine\n", nil, nil, "", usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -3313,7 +3218,7 @@ func TestProjectService_ApplyGitSyncProjectFiles_WritesAndRemovesComposeOverride
 	require.NoError(t, db.Create(project).Error)
 
 	overrideContent := "services:\n  app:\n    image: busybox:latest\n"
-	updated, _, err := svc.ApplyGitSyncProjectFiles(ctx, project.ID, "services:\n  app:\n    image: nginx:alpine\n", nil, new(overrideContent), "compose.override.yaml", common.User{
+	updated, _, err := svc.ApplyGitSyncProjectFiles(ctx, project.ID, "services:\n  app:\n    image: nginx:alpine\n", nil, new(overrideContent), "compose.override.yaml", usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -3325,7 +3230,7 @@ func TestProjectService_ApplyGitSyncProjectFiles_WritesAndRemovesComposeOverride
 	assert.Equal(t, overrideContent, string(overrideBytes))
 
 	// A subsequent sync without an override removes the previously synced file.
-	updated, _, err = svc.ApplyGitSyncProjectFiles(ctx, project.ID, "services:\n  app:\n    image: nginx:alpine\n", nil, nil, "", common.User{
+	updated, _, err = svc.ApplyGitSyncProjectFiles(ctx, project.ID, "services:\n  app:\n    image: nginx:alpine\n", nil, nil, "", usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -3371,7 +3276,7 @@ func TestProjectService_ApplyGitSyncProjectFiles_UsesGlobalEnvDuringComposeValid
       - ${MYPATH}cats/templates:/app/templates
 `
 
-	updated, _, err := svc.ApplyGitSyncProjectFiles(ctx, project.ID, compose, nil, nil, "", common.User{
+	updated, _, err := svc.ApplyGitSyncProjectFiles(ctx, project.ID, compose, nil, nil, "", usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -3423,7 +3328,7 @@ func TestProjectService_ApplyGitSyncProjectFiles_TolerantOfUndefinedComposeVar(t
 	}
 	require.NoError(t, db.Create(project).Error)
 
-	updated, _, err := svc.ApplyGitSyncProjectFiles(ctx, project.ID, compose, nil, nil, "", common.User{
+	updated, _, err := svc.ApplyGitSyncProjectFiles(ctx, project.ID, compose, nil, nil, "", usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -3433,44 +3338,6 @@ func TestProjectService_ApplyGitSyncProjectFiles_TolerantOfUndefinedComposeVar(t
 	composeBytes, readErr := os.ReadFile(filepath.Join(projectPath, "compose.yaml"))
 	require.NoError(t, readErr)
 	assert.Equal(t, compose, string(composeBytes))
-}
-
-func TestProjectService_PersistGitSyncEnvFiles_UsesPreparedState(t *testing.T) {
-	db := setupProjectTestDB(t)
-	ctx := t.Context()
-
-	projectsDir := t.TempDir()
-	t.Setenv("PROJECTS_DIRECTORY", projectsDir)
-
-	settingsService, err := newSettingsServiceForTestInternal(t, ctx, db)
-	require.NoError(t, err)
-
-	eventService := event.NewEventService(db, nil, nil)
-	svc := NewProjectService(db, settingsService, eventService, nil, nil, nil, nil, nil, config.Load(), nil, nil)
-
-	dirName := "git-sync-prepared-state"
-	projectPath := filepath.Join(projectsDir, dirName)
-	require.NoError(t, os.MkdirAll(projectPath, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(projectPath, "compose.yaml"), []byte("services:\n  app:\n    image: nginx:alpine\n"), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(projectPath, ".env"), []byte("BASE=git\nTOKEN=local\n"), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(projectPath, ".env.git"), []byte("BASE=git\nTOKEN=git\n"), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(projectPath, "project.env"), []byte("TOKEN=local\n"), 0o600))
-
-	update, err := svc.prepareGitSyncEnvUpdateInternal(projectPath, new("BASE=git-updated\nTOKEN=git\nREMOTE=1\n"))
-	require.NoError(t, err)
-	require.NotNil(t, update.effectiveContent)
-
-	require.NoError(t, os.WriteFile(filepath.Join(projectPath, "project.env"), []byte("TOKEN=unexpected\n"), 0o600))
-
-	require.NoError(t, persistGitSyncEnvFilesInternal(t.Context(), projectPath, projectsDir, update))
-
-	overrideBytes, readErr := os.ReadFile(filepath.Join(projectPath, "project.env"))
-	require.NoError(t, readErr)
-	assert.Equal(t, "TOKEN=local\n", string(overrideBytes))
-
-	effectiveBytes, readErr := os.ReadFile(filepath.Join(projectPath, ".env"))
-	require.NoError(t, readErr)
-	assert.Equal(t, "BASE=git-updated\nTOKEN=local\nREMOTE=1\n", string(effectiveBytes))
 }
 
 func TestProjectService_GetProjectDetails_ReturnsEffectiveEnvContent(t *testing.T) {
@@ -3623,7 +3490,7 @@ func TestProjectService_GetProjectDetails_IncludesUpdateInfo(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, settingsService.SetStringSetting(ctx, "projectsDirectory", projectsDir))
 
-	imageService := image.NewImageService(db, nil, nil, nil, nil, nil)
+	imageService := image.NewImageService(db, nil, nil, nil, nil, nil, nil, nil)
 	svc := NewProjectService(db, settingsService, nil, imageService, nil, nil, nil, nil, config.Load(), nil, nil)
 
 	projectPath := createComposeProjectDir(t, projectsDir, "updates-demo")
@@ -3690,10 +3557,10 @@ func TestProjectService_GetProjectDetails_RefreshesRuntimeStatusWithoutRuntimeSe
 				},
 			},
 			Labels: map[string]string{
-				composeapi.ProjectLabel:    "projecta",
-				composeapi.ServiceLabel:    "server",
-				composeapi.ConfigHashLabel: "server-hash",
-				composeapi.WorkingDirLabel: "/host/path/projects/projectA",
+				api.ProjectLabel:    "projecta",
+				api.ServiceLabel:    "server",
+				api.ConfigHashLabel: "server-hash",
+				api.WorkingDirLabel: "/host/path/projects/projectA",
 			},
 		},
 		{
@@ -3703,10 +3570,10 @@ func TestProjectService_GetProjectDetails_RefreshesRuntimeStatusWithoutRuntimeSe
 			State:  container.StateRunning,
 			Status: "Up 30 seconds",
 			Labels: map[string]string{
-				composeapi.ProjectLabel:    "projecta",
-				composeapi.ServiceLabel:    "worker",
-				composeapi.ConfigHashLabel: "worker-hash",
-				composeapi.WorkingDirLabel: "/host/path/projects/projectA",
+				api.ProjectLabel:    "projecta",
+				api.ServiceLabel:    "worker",
+				api.ConfigHashLabel: "worker-hash",
+				api.WorkingDirLabel: "/host/path/projects/projectA",
 			},
 		},
 	})
@@ -3755,10 +3622,10 @@ func TestProjectService_GetProjectDetails_PopulatesRuntimeServicesFromComposePs(
 			State:  container.StateRunning,
 			Status: "Up 30 seconds",
 			Labels: map[string]string{
-				composeapi.ProjectLabel:    "projecta",
-				composeapi.ServiceLabel:    "server",
-				composeapi.ConfigHashLabel: "server-hash",
-				composeapi.WorkingDirLabel: "/host/path/projects/projectA",
+				api.ProjectLabel:    "projecta",
+				api.ServiceLabel:    "server",
+				api.ConfigHashLabel: "server-hash",
+				api.WorkingDirLabel: "/host/path/projects/projectA",
 			},
 		},
 	})
@@ -3796,7 +3663,7 @@ func TestBuildProjectLabelFilterAccessorInternal(t *testing.T) {
 		{ID: "other", RuntimeServices: []projecttypes.RuntimeService{{Name: "web", ContainerLabels: map[string]string{"heal": "false"}}}},
 		{ID: "down"},
 	}
-	paginationConfig := pagination.Config[projecttypes.Details]{FilterAccessors: []pagination.FilterAccessor[projecttypes.Details]{buildProjectLabelFilterAccessorInternal()}}
+	paginationConfig := pagination.Config[projecttypes.Details]{FilterAccessors: []pagination.FilterAccessor[projecttypes.Details]{listing.BuildProjectLabelFilterAccessor()}}
 
 	tests := []struct {
 		name   string
@@ -3832,7 +3699,7 @@ func TestProjectService_ListProjects_FiltersByUpdateStatus(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, settingsService.SetStringSetting(ctx, "projectsDirectory", projectsDir))
 
-	imageService := image.NewImageService(db, nil, nil, nil, nil, nil)
+	imageService := image.NewImageService(db, nil, nil, nil, nil, nil, nil, nil)
 	svc := NewProjectService(db, settingsService, nil, imageService, nil, nil, nil, nil, config.Load(), nil, nil)
 
 	updatedPath := createComposeProjectDir(t, projectsDir, "updated-demo")
@@ -3938,7 +3805,7 @@ func TestProjectService_ListProjects_FiltersByUpdateStatus(t *testing.T) {
 func TestBuildDiscoveredComposeProjectUpdateRowsInternal(t *testing.T) {
 	db := setupProjectTestDB(t)
 	ctx := t.Context()
-	imageService := image.NewImageService(db, nil, nil, nil, nil, nil)
+	imageService := image.NewImageService(db, nil, nil, nil, nil, nil, nil, nil)
 	now := time.Now().UTC()
 
 	require.NoError(t, db.Create(&imageupdate.ImageUpdateRecord{
@@ -3959,7 +3826,7 @@ func TestBuildDiscoveredComposeProjectUpdateRowsInternal(t *testing.T) {
 		CurrentVersion: "7",
 		CheckTime:      now,
 	}).Error)
-	rows := buildDiscoveredComposeProjectUpdateRowsInternal(ctx, []container.Summary{
+	rows := discoveryListingForTestInternal(imageService).DiscoveredUpdateRows(ctx, []container.Summary{
 		{
 			ID:      "media-web",
 			Names:   []string{"/media-web-1"},
@@ -3988,7 +3855,7 @@ func TestBuildDiscoveredComposeProjectUpdateRowsInternal(t *testing.T) {
 			State:   "running",
 			Labels:  map[string]string{},
 		},
-	}, map[string]struct{}{"known": {}}, imageService, iconcatalog.DefaultCatalog)
+	}, map[string]struct{}{"known": {}}, iconcatalog.DefaultCatalog)
 
 	require.Len(t, rows, 1)
 	row := rows[0]
@@ -4006,7 +3873,7 @@ func TestBuildDiscoveredComposeProjectUpdateRowsInternal(t *testing.T) {
 func TestBuildDiscoveredComposeProjectUpdateRowsInternal_FallsBackToImageID(t *testing.T) {
 	db := setupProjectTestDB(t)
 	ctx := t.Context()
-	imageService := image.NewImageService(db, nil, nil, nil, nil, nil)
+	imageService := image.NewImageService(db, nil, nil, nil, nil, nil, nil, nil)
 
 	require.NoError(t, db.Create(&imageupdate.ImageUpdateRecord{
 		ID:             "sha256:media-image",
@@ -4052,7 +3919,7 @@ func TestBuildDiscoveredComposeProjectUpdateRowsInternal_FallsBackToImageID(t *t
 			},
 		},
 	}
-	rows := buildDiscoveredComposeProjectUpdateRowsInternal(ctx, containers, map[string]struct{}{}, imageService, iconcatalog.DefaultCatalog)
+	rows := discoveryListingForTestInternal(imageService).DiscoveredUpdateRows(ctx, containers, map[string]struct{}{}, iconcatalog.DefaultCatalog)
 
 	require.Len(t, rows, 1, "replicas count once and a tag policy never inherits the digest check")
 	assert.Equal(t, "compose:media", rows[0].ID)
@@ -4060,6 +3927,7 @@ func TestBuildDiscoveredComposeProjectUpdateRowsInternal_FallsBackToImageID(t *t
 
 	// The tracked-project path resolves the same record through the runtime image ID.
 	service := &ProjectService{imageService: imageService}
+	service.initChildrenInternal(nil, nil)
 	detail := projecttypes.Details{
 		ID: "tracked",
 		RuntimeServices: []projecttypes.RuntimeService{
@@ -4168,16 +4036,16 @@ func TestProjectService_ArchiveProject_RequiresStoppedProject(t *testing.T) {
 			State:  container.StateRunning,
 			Status: "Up 30 seconds",
 			Labels: map[string]string{
-				composeapi.ProjectLabel:    "running-demo",
-				composeapi.ServiceLabel:    "app",
-				composeapi.ConfigHashLabel: "app-hash",
-				composeapi.WorkingDirLabel: "/host/path/projects/running-demo",
+				api.ProjectLabel:    "running-demo",
+				api.ServiceLabel:    "app",
+				api.ConfigHashLabel: "app-hash",
+				api.WorkingDirLabel: "/host/path/projects/running-demo",
 			},
 		},
 	})
 
 	svc := NewProjectService(db, settingsService, nil, nil, nil, nil, nil, nil, config.Load(), nil, nil)
-	err = svc.ArchiveProject(ctx, "project-running", common.User{ID: "user-1", Username: "tester"})
+	err = svc.ArchiveProject(ctx, "project-running", usertypes.Actor{ID: "user-1", Username: "tester"})
 	require.Error(t, err)
 	require.ErrorIs(t, err, common.ErrProjectMustBeStopped)
 
@@ -4208,7 +4076,7 @@ func TestProjectService_ArchiveProject_TogglesArchiveFlag(t *testing.T) {
 	configureProjectRuntimeDockerInternal(t, nil)
 
 	svc := NewProjectService(db, settingsService, nil, nil, nil, nil, nil, nil, config.Load(), nil, nil)
-	user := common.User{ID: "user-1", Username: "tester"}
+	user := usertypes.Actor{ID: "user-1", Username: "tester"}
 
 	require.NoError(t, svc.ArchiveProject(ctx, "project-stopped", user))
 	var stored Project
@@ -4254,7 +4122,7 @@ func TestProjectService_ArchiveProject_LiveVerificationErrorPolicy(t *testing.T)
 	t.Setenv("DOCKER_HOST", "tcp://127.0.0.1:1")
 
 	svc := NewProjectService(db, settingsService, nil, nil, nil, nil, nil, nil, config.Load(), nil, nil)
-	user := common.User{ID: "user-1", Username: "tester"}
+	user := usertypes.Actor{ID: "user-1", Username: "tester"}
 
 	err = svc.ArchiveProject(ctx, "project-unreachable", user)
 	require.Error(t, err)
@@ -4268,117 +4136,6 @@ func TestProjectService_ArchiveProject_LiveVerificationErrorPolicy(t *testing.T)
 	assert.True(t, archived.IsArchived)
 }
 
-func TestProjectService_MapProjectToDto_SetsRedeployDisabledFromRuntimeServices(t *testing.T) {
-	projectPath := filepath.Join(t.TempDir(), "arcane")
-	now := time.Now()
-	proj := Project{
-		Name:         "arcane-directory",
-		Path:         projectPath,
-		ServiceCount: 1,
-		ID:           "project-arcane",
-		CreatedAt:    now,
-		UpdatedAt:    &now,
-	}
-
-	tests := []struct {
-		name               string
-		containerID        string
-		currentContainerID string
-		currentErr         error
-		labels             map[string]string
-		wantProject        bool
-		wantService        bool
-	}{
-		{
-			name:               "current Arcane server container disables project redeploy",
-			containerID:        "arcane1234567890",
-			currentContainerID: "arcane1234567890",
-			labels: map[string]string{
-				"com.docker.compose.project": "arcane",
-				"com.docker.compose.service": "server",
-				labels.LabelArcane:           "true",
-			},
-			wantProject: true,
-			wantService: true,
-		},
-		{
-			name:               "current legacy Arcane server container disables project redeploy",
-			containerID:        "arcane1234567890",
-			currentContainerID: "arcane1234567890",
-			labels: map[string]string{
-				"com.docker.compose.project":   "arcane",
-				"com.docker.compose.service":   "server",
-				labels.LabelArcaneLegacyServer: "true",
-			},
-			wantProject: true,
-			wantService: true,
-		},
-		{
-			name:        "Arcane server container fails closed when current container is unavailable",
-			containerID: "arcane1234567890",
-			currentErr:  errors.New("not running in docker"),
-			labels: map[string]string{
-				"com.docker.compose.project": "arcane",
-				"com.docker.compose.service": "server",
-				labels.LabelArcane:           "true",
-			},
-			wantProject: true,
-			wantService: true,
-		},
-		{
-			name:               "Arcane agent container stays redeployable",
-			containerID:        "agent1234567890",
-			currentContainerID: "agent1234567890",
-			labels: map[string]string{
-				"com.docker.compose.project": "arcane",
-				"com.docker.compose.service": "agent",
-				labels.LabelArcane:           "true",
-				labels.LabelArcaneAgent:      "true",
-			},
-		},
-		{
-			name:               "non Arcane container stays redeployable",
-			containerID:        "regular1234567890",
-			currentContainerID: "regular1234567890",
-			labels: map[string]string{
-				"com.docker.compose.project": "arcane",
-				"com.docker.compose.service": "postgres",
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.labels[composeapi.WorkingDirLabel] = projectPath
-			details := projectListRowInternal(t.Context(), filepath.Dir(projectPath), proj, projectContainerSnapshotInternal{byProject: map[string][]container.Summary{
-				"arcane": {
-					{
-						ID:     tt.containerID,
-						Image:  "ghcr.io/getarcaneapp/arcane:latest",
-						State:  "running",
-						Status: "Up",
-						Names:  []string{"/arcane-server"},
-						Labels: tt.labels,
-					},
-					{
-						ID: "unrelated-container",
-						Labels: map[string]string{
-							composeapi.ProjectLabel:    "arcane",
-							composeapi.WorkingDirLabel: filepath.Join(filepath.Dir(projectPath), "unrelated"),
-							composeapi.ServiceLabel:    "other",
-						},
-					},
-				},
-			}, currentContainerID: tt.currentContainerID, currentContainerErr: tt.currentErr})
-
-			require.Equal(t, tt.wantProject, details.RedeployDisabled)
-			require.Len(t, details.RuntimeServices, 1)
-			require.Equal(t, tt.containerID, details.RuntimeServices[0].ContainerID)
-			require.Equal(t, tt.wantService, details.RuntimeServices[0].RedeployDisabled)
-		})
-	}
-}
-
 func TestProjectService_ProjectListRows_PersistsInferredServiceCount(t *testing.T) {
 	db := setupProjectTestDB(t)
 	projectsDir := t.TempDir()
@@ -4389,22 +4146,21 @@ func TestProjectService_ProjectListRows_PersistsInferredServiceCount(t *testing.
 	require.NoError(t, db.Create(&inferred).Error)
 	require.NoError(t, db.Create(&known).Error)
 	service := &ProjectService{db: db}
+	service.initChildrenInternal(nil, nil)
 
-	snapshot := projectContainerSnapshotInternal{byProject: map[string][]container.Summary{
-		"inferred": {
-			{ID: "c1", State: "running", Names: []string{"/inferred-web"}, Labels: map[string]string{
-				composeapi.ProjectLabel: "inferred", composeapi.ServiceLabel: "web", composeapi.WorkingDirLabel: projectPath,
-			}},
-			{ID: "c2", State: "exited", Names: []string{"/inferred-db"}, Labels: map[string]string{
-				composeapi.ProjectLabel: "inferred", composeapi.ServiceLabel: "db", composeapi.WorkingDirLabel: projectPath,
-			}},
-		},
-		"known": {
-			{ID: "c3", State: "running", Names: []string{"/known-web"}, Labels: map[string]string{
-				composeapi.ProjectLabel: "known", composeapi.ServiceLabel: "web", composeapi.WorkingDirLabel: known.Path,
-			}},
-		},
-	}}
+	containers := []container.Summary{
+		{ID: "c1", State: "running", Names: []string{"/inferred-web"}, Labels: map[string]string{
+			api.ProjectLabel: "inferred", api.ServiceLabel: "web", api.WorkingDirLabel: projectPath,
+		}},
+		{ID: "c2", State: "exited", Names: []string{"/inferred-db"}, Labels: map[string]string{
+			api.ProjectLabel: "inferred", api.ServiceLabel: "db", api.WorkingDirLabel: projectPath,
+		}},
+		{ID: "c3", State: "running", Names: []string{"/known-web"}, Labels: map[string]string{
+			api.ProjectLabel: "known", api.ServiceLabel: "web", api.WorkingDirLabel: known.Path,
+		}},
+	}
+	service.listing = listing.New(func(context.Context) ([]container.Summary, error) { return containers, nil }, nil, nil)
+	snapshot := service.listing.Snapshot(t.Context())
 
 	rows := service.projectListRowsInternal(t.Context(), projectsDir, []Project{inferred, known}, snapshot)
 	require.Len(t, rows, 2)
@@ -4485,7 +4241,7 @@ func TestProjectService_DeployProject_StopsOnBuildPreparationError(t *testing.T)
 	buildSvc := testBuildBuilder{err: errors.New("boom build")}
 	svc := NewProjectService(db, settingsService, nil, nil, nil, buildSvc, nil, nil, config.Load(), nil, nil)
 
-	err = svc.DeployProject(ctx, "p1", common.User{ID: "u1", Username: "tester"}, nil)
+	err = svc.DeployProject(ctx, "p1", usertypes.Actor{ID: "u1", Username: "tester"}, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to prepare project images for deploy")
 	assert.Contains(t, err.Error(), "boom build")
@@ -4522,7 +4278,7 @@ func TestProjectService_DeployProject_BuildsGeneratedImageWithoutPull(t *testing
 	buildSvc := testBuildBuilder{err: errors.New("boom build")}
 	svc := NewProjectService(db, settingsService, nil, nil, nil, buildSvc, nil, nil, config.Load(), nil, nil)
 
-	err = svc.DeployProject(ctx, proj.ID, common.User{ID: "u1", Username: "tester"}, nil)
+	err = svc.DeployProject(ctx, proj.ID, usertypes.Actor{ID: "u1", Username: "tester"}, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to prepare project images for deploy")
 	assert.Contains(t, err.Error(), "boom build")
@@ -5354,7 +5110,7 @@ func TestProjectService_UpdateProject_WritesThroughSymlinkedProjectPath(t *testi
 	updatedCompose := "services:\n  app:\n    image: nginx:1.27-alpine\n"
 	updatedEnv := "FOO=updated\n"
 
-	updated, err := svc.UpdateProject(ctx, project.ID, nil, new(updatedCompose), new(updatedEnv), nil, common.User{
+	updated, err := svc.UpdateProject(ctx, project.ID, nil, new(updatedCompose), new(updatedEnv), nil, usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -5407,7 +5163,7 @@ func TestProjectService_UpdateProject_WritesThroughExternalEnvSymlink(t *testing
 	require.NoError(t, db.Create(project).Error)
 
 	updatedEnv := "FOO=updated\n"
-	updated, err := svc.UpdateProject(ctx, project.ID, nil, nil, &updatedEnv, nil, common.User{
+	updated, err := svc.UpdateProject(ctx, project.ID, nil, nil, &updatedEnv, nil, usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -5472,7 +5228,7 @@ func TestProjectService_UpdateProject_RestoresExternalEnvSymlinkTargetWhenProjec
 	}))
 
 	updatedEnv := "FOO=updated\n"
-	_, err = svc.UpdateProject(ctx, project.ID, nil, nil, &updatedEnv, nil, common.User{
+	_, err = svc.UpdateProject(ctx, project.ID, nil, nil, &updatedEnv, nil, usertypes.Actor{
 		ID:       "u1",
 		Username: "tester",
 	})
@@ -5615,8 +5371,7 @@ func TestProjectService_RecoverProjectRenameJournals_RollsBackUncommittedDirecto
 	require.NoError(t, db.Create(project).Error)
 
 	kvService := kv.NewKVService(db)
-	svc := NewProjectService(db, nil, nil, nil, nil, nil, nil, nil, config.Load(), nil, nil)
-	svc.KVService = kvService
+	svc := NewProjectService(db, nil, nil, nil, nil, nil, nil, nil, config.Load(), kvService, nil)
 	journal := projecttypes.RenameJournal{
 		ProjectID:  project.ID,
 		OldName:    "nginx",
@@ -5670,8 +5425,7 @@ func TestProjectService_RecoverProjectRenameJournals_StartedPhaseSkipsVolumeRoll
 	require.NoError(t, db.Create(project).Error)
 
 	kvService := kv.NewKVService(db)
-	svc := NewProjectService(db, nil, nil, nil, nil, nil, nil, nil, config.Load(), nil, nil)
-	svc.KVService = kvService
+	svc := NewProjectService(db, nil, nil, nil, nil, nil, nil, nil, config.Load(), kvService, nil)
 	journal := projecttypes.RenameJournal{
 		ProjectID:  project.ID,
 		OldName:    "nginx",
@@ -5734,8 +5488,7 @@ func TestProjectService_RecoverProjectRenameJournals_RelocatesTargetWhenBothPath
 	require.NoError(t, db.Create(project).Error)
 
 	kvService := kv.NewKVService(db)
-	svc := NewProjectService(db, nil, nil, nil, nil, nil, nil, nil, config.Load(), nil, nil)
-	svc.KVService = kvService
+	svc := NewProjectService(db, nil, nil, nil, nil, nil, nil, nil, config.Load(), kvService, nil)
 	journal := projecttypes.RenameJournal{
 		ProjectID:  project.ID,
 		OldName:    "nginx",
@@ -5798,8 +5551,7 @@ func TestProjectService_RecoverProjectRenameJournals_ClearsStartedJournalWhenDir
 	require.NoError(t, db.Create(project).Error)
 
 	kvService := kv.NewKVService(db)
-	svc := NewProjectService(db, nil, nil, nil, nil, nil, nil, nil, config.Load(), nil, nil)
-	svc.KVService = kvService
+	svc := NewProjectService(db, nil, nil, nil, nil, nil, nil, nil, config.Load(), kvService, nil)
 	journal := projecttypes.RenameJournal{
 		ProjectID:  project.ID,
 		OldName:    "nginx",
@@ -5864,8 +5616,7 @@ func TestProjectService_RecoverProjectRenameJournals_ClearsPreservedTargetJourna
 	t.Cleanup(server.Close)
 
 	kvService := kv.NewKVService(db)
-	svc := NewProjectService(db, nil, nil, nil, &docker.DockerClientService{Client: newTestDockerClientInternal(t, server)}, nil, nil, nil, config.Load(), nil, nil)
-	svc.KVService = kvService
+	svc := NewProjectService(db, nil, nil, nil, &docker.DockerClientService{Client: newTestDockerClientInternal(t, server)}, nil, nil, nil, config.Load(), kvService, nil)
 	journal := projecttypes.RenameJournal{
 		ProjectID:  project.ID,
 		OldName:    "nginx",
@@ -5918,8 +5669,7 @@ func TestProjectService_RecoverProjectRenameJournals_ClearsCommittedJournal(t *t
 	require.NoError(t, db.Create(project).Error)
 
 	kvService := kv.NewKVService(db)
-	svc := NewProjectService(db, nil, nil, nil, nil, nil, nil, nil, config.Load(), nil, nil)
-	svc.KVService = kvService
+	svc := NewProjectService(db, nil, nil, nil, nil, nil, nil, nil, config.Load(), kvService, nil)
 	journal := projecttypes.RenameJournal{
 		ProjectID:  project.ID,
 		OldName:    "nginx",
@@ -5959,8 +5709,7 @@ func TestProjectService_FinalizeProjectRenameAfterCommit_ClearsJournalAfterSourc
 	require.NoError(t, db.Create(project).Error)
 
 	kvService := kv.NewKVService(db)
-	svc := NewProjectService(db, nil, nil, nil, nil, nil, nil, nil, config.Load(), nil, nil)
-	svc.KVService = kvService
+	svc := NewProjectService(db, nil, nil, nil, nil, nil, nil, nil, config.Load(), kvService, nil)
 	journal := &projecttypes.RenameJournal{
 		ProjectID:  project.ID,
 		OldName:    "nginx",
@@ -5971,11 +5720,11 @@ func TestProjectService_FinalizeProjectRenameAfterCommit_ClearsJournalAfterSourc
 		NewDirName: newDir,
 		Phase:      projecttypes.RenameJournalPhaseTargetsCopied,
 	}
-	require.NoError(t, svc.writeProjectRenameJournalInternal(ctx, journal, projecttypes.RenameJournalPhaseTargetsCopied))
+	require.NoError(t, svc.updates.WriteJournal(ctx, journal, projecttypes.RenameJournalPhaseTargetsCopied))
 
 	migration := &fakeProjectVolumeRenameMigrationInternal{}
 	journalActive := true
-	projects.FinalizeRenameAfterCommit(ctx, svc.renameRecoveryOperationsInternal(), project.ID, migration, journal, &journalActive)
+	projects.FinalizeRenameAfterCommit(ctx, svc.updates.Operations(), project.ID, migration, journal, &journalActive)
 	require.True(t, migration.commitCalled)
 	require.False(t, journalActive)
 
@@ -6001,8 +5750,7 @@ func TestProjectService_FinalizeProjectRenameAfterCommit_KeepsJournalWhenSourceC
 	require.NoError(t, db.Create(project).Error)
 
 	kvService := kv.NewKVService(db)
-	svc := NewProjectService(db, nil, nil, nil, nil, nil, nil, nil, config.Load(), nil, nil)
-	svc.KVService = kvService
+	svc := NewProjectService(db, nil, nil, nil, nil, nil, nil, nil, config.Load(), kvService, nil)
 	journal := &projecttypes.RenameJournal{
 		ProjectID:  project.ID,
 		OldName:    "nginx",
@@ -6013,13 +5761,13 @@ func TestProjectService_FinalizeProjectRenameAfterCommit_KeepsJournalWhenSourceC
 		NewDirName: newDir,
 		Phase:      projecttypes.RenameJournalPhaseTargetsCopied,
 	}
-	require.NoError(t, svc.writeProjectRenameJournalInternal(ctx, journal, projecttypes.RenameJournalPhaseTargetsCopied))
+	require.NoError(t, svc.updates.WriteJournal(ctx, journal, projecttypes.RenameJournalPhaseTargetsCopied))
 
 	migration := &fakeProjectVolumeRenameMigrationInternal{
 		commitErr: volumes.NewSourceCleanupError("nginx_data", errors.New("source cleanup failed")),
 	}
 	journalActive := true
-	projects.FinalizeRenameAfterCommit(ctx, svc.renameRecoveryOperationsInternal(), project.ID, migration, journal, &journalActive)
+	projects.FinalizeRenameAfterCommit(ctx, svc.updates.Operations(), project.ID, migration, journal, &journalActive)
 	require.True(t, migration.commitCalled)
 	require.True(t, journalActive)
 
@@ -6087,8 +5835,7 @@ func TestProjectService_RecoverProjectRenameJournals_KeepsJournalWhenDirectoryRo
 
 	kvService := kv.NewKVService(db)
 	dockerService := &docker.DockerClientService{Client: newTestDockerClientInternal(t, server)}
-	svc := NewProjectService(db, nil, nil, nil, dockerService, nil, nil, nil, config.Load(), nil, nil)
-	svc.KVService = kvService
+	svc := NewProjectService(db, nil, nil, nil, dockerService, nil, nil, nil, config.Load(), kvService, nil)
 	journal := projecttypes.RenameJournal{
 		ProjectID:  project.ID,
 		OldName:    "nginx",
@@ -6182,8 +5929,7 @@ func TestProjectService_RecoverProjectRenameJournals_CompletesCommittedVolumeJou
 
 	kvService := kv.NewKVService(db)
 	dockerService := &docker.DockerClientService{Client: newTestDockerClientInternal(t, server)}
-	svc := NewProjectService(db, nil, nil, nil, dockerService, nil, nil, nil, config.Load(), nil, nil)
-	svc.KVService = kvService
+	svc := NewProjectService(db, nil, nil, nil, dockerService, nil, nil, nil, config.Load(), kvService, nil)
 	journal := projecttypes.RenameJournal{
 		ProjectID:  project.ID,
 		OldName:    "nginx",
@@ -6256,8 +6002,7 @@ func TestProjectService_RecoverProjectRenameJournals_RollsBackCommittedJournalWh
 
 	kvService := kv.NewKVService(db)
 	dockerService := &docker.DockerClientService{Client: newTestDockerClientInternal(t, server)}
-	svc := NewProjectService(db, nil, nil, nil, dockerService, nil, nil, nil, config.Load(), nil, nil)
-	svc.KVService = kvService
+	svc := NewProjectService(db, nil, nil, nil, dockerService, nil, nil, nil, config.Load(), kvService, nil)
 	journal := projecttypes.RenameJournal{
 		ProjectID:  project.ID,
 		OldName:    "nginx",
@@ -6367,8 +6112,7 @@ func TestProjectService_RecoverProjectRenameJournals_ClearsJournalAfterDBRestore
 
 	kvService := kv.NewKVService(db)
 	dockerService := &docker.DockerClientService{Client: newTestDockerClientInternal(t, server)}
-	svc := NewProjectService(db, nil, nil, nil, dockerService, nil, nil, nil, config.Load(), nil, nil)
-	svc.KVService = kvService
+	svc := NewProjectService(db, nil, nil, nil, dockerService, nil, nil, nil, config.Load(), kvService, nil)
 	journal := projecttypes.RenameJournal{
 		ProjectID:  project.ID,
 		OldName:    "nginx",
@@ -6445,8 +6189,7 @@ func TestProjectService_RecoverProjectRenameJournals_KeepsRollbackCleanupWhenDoc
 	require.NoError(t, db.Create(project).Error)
 
 	kvService := kv.NewKVService(db)
-	svc := NewProjectService(db, nil, nil, nil, nil, nil, nil, nil, config.Load(), nil, nil)
-	svc.KVService = kvService
+	svc := NewProjectService(db, nil, nil, nil, nil, nil, nil, nil, config.Load(), kvService, nil)
 	cleanup := projecttypes.RenameRollbackCleanup{
 		ProjectID: project.ID,
 		OldName:   "nginx",
@@ -6509,8 +6252,7 @@ func TestProjectService_RecoverProjectRenameJournals_ClearsCommittedJournalWhenS
 
 	kvService := kv.NewKVService(db)
 	dockerService := &docker.DockerClientService{Client: newTestDockerClientInternal(t, server)}
-	svc := NewProjectService(db, nil, nil, nil, dockerService, nil, nil, nil, config.Load(), nil, nil)
-	svc.KVService = kvService
+	svc := NewProjectService(db, nil, nil, nil, dockerService, nil, nil, nil, config.Load(), kvService, nil)
 	journal := projecttypes.RenameJournal{
 		ProjectID:  project.ID,
 		OldName:    "nginx",
@@ -6596,8 +6338,7 @@ func TestProjectService_RecoverProjectRenameJournals_ClearsCommittedJournalAndCl
 
 	kvService := kv.NewKVService(db)
 	dockerService := &docker.DockerClientService{Client: newTestDockerClientInternal(t, server)}
-	svc := NewProjectService(db, nil, nil, nil, dockerService, nil, nil, nil, config.Load(), nil, nil)
-	svc.KVService = kvService
+	svc := NewProjectService(db, nil, nil, nil, dockerService, nil, nil, nil, config.Load(), kvService, nil)
 	journal := projecttypes.RenameJournal{
 		ProjectID:  project.ID,
 		OldName:    "nginx",
@@ -6680,8 +6421,7 @@ func TestProjectService_RecoverProjectRenameJournals_MarksSourceCleanupPendingWh
 
 	kvService := kv.NewKVService(db)
 	dockerService := &docker.DockerClientService{Client: newTestDockerClientInternal(t, server)}
-	svc := NewProjectService(db, nil, nil, nil, dockerService, nil, nil, nil, config.Load(), nil, nil)
-	svc.KVService = kvService
+	svc := NewProjectService(db, nil, nil, nil, dockerService, nil, nil, nil, config.Load(), kvService, nil)
 	journal := projecttypes.RenameJournal{
 		ProjectID:  project.ID,
 		OldName:    "nginx",
@@ -6766,8 +6506,7 @@ func TestProjectService_RecoverProjectRenameJournals_ClearsSourceCleanupPendingJ
 
 	kvService := kv.NewKVService(db)
 	dockerService := &docker.DockerClientService{Client: newTestDockerClientInternal(t, server)}
-	svc := NewProjectService(db, nil, nil, nil, dockerService, nil, nil, nil, config.Load(), nil, nil)
-	svc.KVService = kvService
+	svc := NewProjectService(db, nil, nil, nil, dockerService, nil, nil, nil, config.Load(), kvService, nil)
 	journal := projecttypes.RenameJournal{
 		ProjectID:  project.ID,
 		OldName:    "nginx",
@@ -6866,8 +6605,7 @@ func TestProjectService_RecoverProjectRenameJournals_RollsBackSourceCleanupPendi
 
 	kvService := kv.NewKVService(db)
 	dockerService := &docker.DockerClientService{Client: newTestDockerClientInternal(t, server)}
-	svc := NewProjectService(db, nil, nil, nil, dockerService, nil, nil, nil, config.Load(), nil, nil)
-	svc.KVService = kvService
+	svc := NewProjectService(db, nil, nil, nil, dockerService, nil, nil, nil, config.Load(), kvService, nil)
 	journal := projecttypes.RenameJournal{
 		ProjectID:  project.ID,
 		OldName:    "nginx",
@@ -6957,8 +6695,7 @@ func TestProjectService_RecoverProjectRenameJournals_KeepsSourceCleanupPendingJo
 
 	kvService := kv.NewKVService(db)
 	dockerService := &docker.DockerClientService{Client: newTestDockerClientInternal(t, server)}
-	svc := NewProjectService(db, nil, nil, nil, dockerService, nil, nil, nil, config.Load(), nil, nil)
-	svc.KVService = kvService
+	svc := NewProjectService(db, nil, nil, nil, dockerService, nil, nil, nil, config.Load(), kvService, nil)
 	journal := projecttypes.RenameJournal{
 		ProjectID:  project.ID,
 		OldName:    "nginx",
@@ -7024,8 +6761,7 @@ func TestProjectService_RecoverProjectRenameJournals_ClearsStartedJournalWhenDir
 	require.NoError(t, db.Create(project).Error)
 
 	kvService := kv.NewKVService(db)
-	svc := NewProjectService(db, nil, nil, nil, nil, nil, nil, nil, config.Load(), nil, nil)
-	svc.KVService = kvService
+	svc := NewProjectService(db, nil, nil, nil, nil, nil, nil, nil, config.Load(), kvService, nil)
 	journal := projecttypes.RenameJournal{
 		ProjectID:  project.ID,
 		OldName:    "nginx",
@@ -7095,8 +6831,7 @@ func TestProjectService_RecoverProjectRenameJournals_ClearsMissingPathJournalWhe
 
 	kvService := kv.NewKVService(db)
 	dockerService := &docker.DockerClientService{Client: newTestDockerClientInternal(t, server)}
-	svc := NewProjectService(db, nil, nil, nil, dockerService, nil, nil, nil, config.Load(), nil, nil)
-	svc.KVService = kvService
+	svc := NewProjectService(db, nil, nil, nil, dockerService, nil, nil, nil, config.Load(), kvService, nil)
 	journal := projecttypes.RenameJournal{
 		ProjectID:  project.ID,
 		OldName:    "nginx",
@@ -7170,8 +6905,7 @@ func TestProjectService_RecoverProjectRenameJournals_ClearsJournalWhenRollbackSo
 
 	kvService := kv.NewKVService(db)
 	dockerService := &docker.DockerClientService{Client: newTestDockerClientInternal(t, server)}
-	svc := NewProjectService(db, nil, nil, nil, dockerService, nil, nil, nil, config.Load(), nil, nil)
-	svc.KVService = kvService
+	svc := NewProjectService(db, nil, nil, nil, dockerService, nil, nil, nil, config.Load(), kvService, nil)
 	journal := projecttypes.RenameJournal{
 		ProjectID:  project.ID,
 		OldName:    "nginx",
@@ -7250,8 +6984,7 @@ func TestProjectService_RecoverProjectRenameJournals_ClearsJournalWhenRollbackTa
 
 	kvService := kv.NewKVService(db)
 	dockerService := &docker.DockerClientService{Client: newTestDockerClientInternal(t, server)}
-	svc := NewProjectService(db, nil, nil, nil, dockerService, nil, nil, nil, config.Load(), nil, nil)
-	svc.KVService = kvService
+	svc := NewProjectService(db, nil, nil, nil, dockerService, nil, nil, nil, config.Load(), kvService, nil)
 	journal := projecttypes.RenameJournal{
 		ProjectID:  project.ID,
 		OldName:    "nginx",
@@ -7336,8 +7069,7 @@ func TestProjectService_RecoverProjectRenameJournals_ClearsJournalWhenTargetPres
 
 	kvService := kv.NewKVService(db)
 	dockerService := &docker.DockerClientService{Client: newTestDockerClientInternal(t, server)}
-	svc := NewProjectService(db, nil, nil, nil, dockerService, nil, nil, nil, config.Load(), nil, nil)
-	svc.KVService = kvService
+	svc := NewProjectService(db, nil, nil, nil, dockerService, nil, nil, nil, config.Load(), kvService, nil)
 	journal := projecttypes.RenameJournal{
 		ProjectID:  project.ID,
 		OldName:    "nginx",
@@ -7370,34 +7102,12 @@ func TestProjectService_RecoverProjectRenameJournals_ClearsJournalWhenTargetPres
 	require.NoDirExists(t, newPath)
 }
 
-func TestProjectListRow_SeedsHasBuildDirectiveFromPersistedRefs(t *testing.T) {
-	ctx := t.Context()
-	projectsDirectory := t.TempDir()
-
-	now := time.Now()
-	tests := []struct {
-		name               string
-		buildImageRefsJSON *string
-		want               bool
-	}{
-		{name: "build refs persisted", buildImageRefsJSON: new(`["demo-worker"]`), want: true},
-		{name: "no build services", buildImageRefsJSON: new(`[]`), want: false},
-		{name: "refs never resolved", buildImageRefsJSON: nil, want: false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := Project{ID: tt.name, Name: tt.name, Path: t.TempDir(), UpdatedAt: &now, BuildImageRefsJSON: tt.buildImageRefsJSON}
-			assert.Equal(t, tt.want, projectListRowInternal(ctx, projectsDirectory, p, projectContainerSnapshotInternal{}).HasBuildDirective)
-		})
-	}
-}
-
 func TestProjectPathMapperUsesCurrentSettingsInternal(t *testing.T) {
 	db := setupProjectTestDB(t)
 	settingsService, err := newSettingsServiceForTestInternal(t, t.Context(), db)
 	require.NoError(t, err)
 	service := &ProjectService{settingsService: settingsService}
+	service.initChildrenInternal(nil, nil)
 	containerDir := t.TempDir()
 	for _, hostDir := range []string{t.TempDir(), t.TempDir()} {
 		require.NoError(t, settingsService.SetStringSetting(t.Context(), "projectsDirectory", containerDir+":"+hostDir))
@@ -7420,8 +7130,8 @@ func TestPrepareProjectServiceImages(t *testing.T) {
 		"environment:\r\n      VERSION: ${VERSION}\r\n\r\n  worker:\r\n    image: 'docker.io/library/app:1.3.0'  \r\n  " +
 		"tagged:\r\n    image: !!str app:1.3.0\r\n  escaped:\r\n    image: \"app:1.3.0\"\r\n  untouched:\r\n    image: " +
 		"app:1.2.0 # stays\r\n\r\r  plain:\r\n    image: app:1.3.0"
-	effective := &composetypes.Project{
-		Services: composetypes.Services{
+	effective := &types.Project{
+		Services: types.Services{
 			"web": {
 				Image: "app:1.2.0",
 			},
@@ -7442,7 +7152,7 @@ func TestPrepareProjectServiceImages(t *testing.T) {
 			},
 		},
 	}
-	updated, names, err := prepareProjectServiceImagesInternal(source, effective, map[string]updatertypes.ServiceImageChange{
+	updated, names, err := update.PrepareProjectServiceImages(source, effective, map[string]updatertypes.ServiceImageChange{
 		"web":     {ExpectedRef: "docker.io/library/app:1.2.0", TargetRef: "app:1.3.0"},
 		"worker":  {ExpectedRef: "app:1.2.0", TargetRef: "docker.io/library/app:1.3.0"},
 		"tagged":  {ExpectedRef: "app:1.2.0", TargetRef: "app:1.3.0"},
@@ -7468,8 +7178,8 @@ func TestPrepareProjectServiceImagesRejectsUnsupportedSource(t *testing.T) {
 		{"multi-line plain image", "services:\n  web:\n    image: app:${VERSION}\n      tail\n", "app:1.2.0"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			effective := &composetypes.Project{Services: composetypes.Services{"web": {Image: "app:1.2.0"}}}
-			updated, _, err := prepareProjectServiceImagesInternal([]byte(tt.source), effective, map[string]updatertypes.ServiceImageChange{"web": {ExpectedRef: tt.expected, TargetRef: "app:1.3.0"}})
+			effective := &types.Project{Services: types.Services{"web": {Image: "app:1.2.0"}}}
+			updated, _, err := update.PrepareProjectServiceImages([]byte(tt.source), effective, map[string]updatertypes.ServiceImageChange{"web": {ExpectedRef: tt.expected, TargetRef: "app:1.3.0"}})
 			require.Error(t, err)
 			require.Nil(t, updated)
 		})
@@ -7496,7 +7206,7 @@ func TestPersistProjectServiceImages(t *testing.T) {
 				ctx, cancel = context.WithCancel(ctx)
 				cancel()
 			}
-			err := persistProjectServiceImagesInternal(ctx, directory, "/compose.yaml", original, updated)
+			err := update.PersistProjectServiceImages(ctx, directory, "/compose.yaml", original, updated)
 			content, readErr := os.ReadFile(path)
 			require.NoError(t, readErr)
 			if name == "success" {
@@ -7522,7 +7232,8 @@ func TestUpdateProjectServiceImagesRejectsManagedOrArchived(t *testing.T) {
 			}
 			require.NoError(t, db.Create(&proj).Error)
 			service := &ProjectService{db: db}
-			err := service.UpdateProjectServiceImages(t.Context(), proj.ID, map[string]updatertypes.ServiceImageChange{"web": {ExpectedRef: "app:1.0.0", TargetRef: "app:1.1.0"}}, common.User{})
+			service.initChildrenInternal(nil, nil)
+			err := service.UpdateProjectServiceImages(t.Context(), proj.ID, map[string]updatertypes.ServiceImageChange{"web": {ExpectedRef: "app:1.0.0", TargetRef: "app:1.1.0"}}, usertypes.Actor{})
 			require.Error(t, err)
 			if name == "archived" {
 				require.ErrorIs(t, err, common.ErrProjectArchived)
@@ -7562,9 +7273,10 @@ func TestUpdateProjectServiceImagesPersistsBeforeDeploymentAndRetries(t *testing
 	deploymentError := errors.New("deployment failed after source persistence")
 	coordinator := &serviceImageCoordinatorInternal{err: deploymentError}
 	service := &ProjectService{db: db, settingsService: settingsService, eventService: event.NewEventService(db, nil, nil), composeCoordinator: coordinator}
+	service.initChildrenInternal(nil, nil)
 	changes := map[string]updatertypes.ServiceImageChange{"app": {ExpectedRef: "app:1.2.0", TargetRef: "app:1.3.0"}}
 	for range 2 {
-		updateProjectServiceImagesErr := service.UpdateProjectServiceImages(ctx, proj.ID, changes, common.SystemUser)
+		updateProjectServiceImagesErr := service.UpdateProjectServiceImages(ctx, proj.ID, changes, usertypes.SystemUser)
 		require.ErrorIs(t, updateProjectServiceImagesErr, deploymentError)
 		content, readComposeErr := os.ReadFile(filepath.Join(projectPath, "compose.yaml"))
 		require.NoError(t, readComposeErr)
@@ -7599,7 +7311,8 @@ func TestUpdateProjectServiceImagesRejectsOverrideBeforeWriting(t *testing.T) {
 	proj := &Project{ID: "image-overrides", Name: "image-overrides", Path: projectPath}
 	require.NoError(t, db.Create(proj).Error)
 	service := &ProjectService{db: db, settingsService: settingsService}
-	err = service.UpdateProjectServiceImages(ctx, proj.ID, map[string]updatertypes.ServiceImageChange{"app": {ExpectedRef: "app:1.2.0", TargetRef: "app:1.3.0"}}, common.SystemUser)
+	service.initChildrenInternal(nil, nil)
+	err = service.UpdateProjectServiceImages(ctx, proj.ID, map[string]updatertypes.ServiceImageChange{"app": {ExpectedRef: "app:1.2.0", TargetRef: "app:1.3.0"}}, usertypes.SystemUser)
 	require.ErrorContains(t, err, "overrides")
 	content, err := os.ReadFile(filepath.Join(projectPath, "compose.yaml"))
 	require.NoError(t, err)
@@ -7656,26 +7369,27 @@ func TestDiscoveredProjectTagUpdatesRemainScoped(t *testing.T) {
 		},
 		{ID: "second", Image: "example:3.1.0", ImageID: "shared", Labels: map[string]string{"com.docker.compose.project": "second-project", "com.docker.compose.service": "web"}},
 	}
-	imageSvc := image.NewImageService(db, nil, nil, nil, nil, nil)
-	rows := buildDiscoveredComposeProjectUpdateRowsInternal(t.Context(), containers, nil, imageSvc, "")
+	imageSvc := image.NewImageService(db, nil, nil, nil, nil, nil, nil, nil)
+	rows := discoveryListingForTestInternal(imageSvc).DiscoveredUpdateRows(t.Context(), containers, nil, "")
 	require.Len(t, rows, 1)
 	require.Equal(t, "first-project", rows[0].Name)
 	require.True(t, rows[0].UpdateInfo.HasUpdate)
 	require.Equal(t, target, rows[0].UpdateInfo.UpdateInfoByRef["example:3.1.0"].LatestVersion)
-	service := &ProjectService{imageService: image.NewImageService(db, nil, nil, nil, nil, nil)}
+	service := &ProjectService{imageService: image.NewImageService(db, nil, nil, nil, nil, nil, nil, nil)}
+	service.initChildrenInternal(nil, nil)
 	detail := projecttypes.Details{ID: "tracked", RuntimeServices: []projecttypes.RuntimeService{{ContainerID: "first", Image: "example:3.1.0", ContainerLabels: tagLabels}}}
 	service.enrichProjectUpdateInfoInternal(t.Context(), &detail)
 	require.True(t, detail.UpdateInfo.HasUpdate)
 	require.Equal(t, target, detail.UpdateInfo.UpdateInfoByRef["example:3.1.0"].LatestVersion)
 	delete(containers[1].Labels, labels.LabelUpdateStrategy)
-	rows = buildDiscoveredComposeProjectUpdateRowsInternal(t.Context(), containers, nil, imageSvc, "")
+	rows = discoveryListingForTestInternal(imageSvc).DiscoveredUpdateRows(t.Context(), containers, nil, "")
 	require.Empty(t, rows, "removing the strategy label falls back to digest checks")
 	detail.RuntimeServices[0].ContainerLabels = containers[1].Labels
 	service.enrichProjectUpdateInfoInternal(t.Context(), &detail)
 	require.False(t, detail.UpdateInfo.HasUpdate, "an undeclared strategy no longer inherits a tag record")
 	// Turning off automatic installation keeps the check current (#3532).
 	containers[1].Labels = map[string]string{labels.LabelUpdateStrategy: "tag", labels.LabelUpdater: "off", "com.docker.compose.project": "first-project", "com.docker.compose.service": "web"}
-	rows = buildDiscoveredComposeProjectUpdateRowsInternal(t.Context(), containers, nil, imageSvc, "")
+	rows = discoveryListingForTestInternal(imageSvc).DiscoveredUpdateRows(t.Context(), containers, nil, "")
 	require.Len(t, rows, 1, "updater=false containers keep their check results")
 	for _, policy := range []map[string]string{
 		{
@@ -7697,7 +7411,7 @@ func TestDiscoveredProjectTagUpdatesRemainScoped(t *testing.T) {
 		current := map[string]string{"com.docker.compose.project": "first-project", "com.docker.compose.service": "web"}
 		maps.Copy(current, policy)
 		containers[1].Labels = current
-		rows = buildDiscoveredComposeProjectUpdateRowsInternal(t.Context(), containers, nil, imageSvc, "")
+		rows = discoveryListingForTestInternal(imageSvc).DiscoveredUpdateRows(t.Context(), containers, nil, "")
 		require.Empty(t, rows, "stale records must not mark discovered projects updated")
 		detail.RuntimeServices[0].ContainerLabels = current
 		service.enrichProjectUpdateInfoInternal(t.Context(), &detail)
@@ -7711,7 +7425,7 @@ func TestProjectTagSummaryDoesNotMutateSharedReferenceResults(t *testing.T) {
 		"first":  {HasUpdate: true, UpdateType: "tag", LatestVersion: "3.2.0"},
 		"second": {HasUpdate: true, UpdateType: "tag", LatestVersion: "4.0.0"},
 	}
-	merged := mergeProjectContainerUpdateInfoInternal(base, []projecttypes.RuntimeService{{ContainerID: "first", Image: "example:3.1.0"}, {ContainerID: "second", Image: "example:3.1.0"}}, scoped)
+	merged := projectdetails.MergeProjectContainerUpdateInfo(base, []projecttypes.RuntimeService{{ContainerID: "first", Image: "example:3.1.0"}, {ContainerID: "second", Image: "example:3.1.0"}}, scoped)
 	require.True(t, merged["example:3.1.0"].HasUpdate)
 	require.Empty(t, merged["example:3.1.0"].LatestVersion)
 	require.False(t, base["example:3.1.0"].HasUpdate)
@@ -7721,7 +7435,7 @@ func TestProjectTagSummaryDoesNotMutateSharedReferenceResults(t *testing.T) {
 	// opted out of update checks, and kept while one still monitors it.
 	base = map[string]*imagetypes.UpdateInfo{"example:3.1.0": {HasUpdate: true, UpdateType: "digest"}, "other:1.0": {HasUpdate: true, UpdateType: "digest"}}
 	unmonitored := map[string]string{imageref.UpdateCheckLabel: "false"}
-	merged = mergeProjectContainerUpdateInfoInternal(
+	merged = projectdetails.MergeProjectContainerUpdateInfo(
 		base,
 		[]projecttypes.RuntimeService{
 			{
@@ -7741,7 +7455,7 @@ func TestProjectTagSummaryDoesNotMutateSharedReferenceResults(t *testing.T) {
 	)
 	require.True(t, merged["example:3.1.0"].HasUpdate, "updater=false keeps the shared result")
 	require.True(t, merged["other:1.0"].HasUpdate, "references without runtime services are untouched")
-	merged = mergeProjectContainerUpdateInfoInternal(base, []projecttypes.RuntimeService{{ContainerID: "a", Image: "example:3.1.0", ContainerLabels: unmonitored}}, nil)
+	merged = projectdetails.MergeProjectContainerUpdateInfo(base, []projecttypes.RuntimeService{{ContainerID: "a", Image: "example:3.1.0", ContainerLabels: unmonitored}}, nil)
 	require.NotContains(t, merged, "example:3.1.0")
 	require.True(t, base["example:3.1.0"].HasUpdate)
 }
@@ -7773,7 +7487,8 @@ func TestCountProjectsWithPendingTagUpdatesUsesRuntimeContainers(t *testing.T) {
 			},
 		).Error,
 	)
-	service := &ProjectService{db: db, settingsService: settingsService, imageService: image.NewImageService(db, nil, nil, nil, nil, nil)}
+	service := &ProjectService{db: db, settingsService: settingsService, imageService: image.NewImageService(db, nil, nil, nil, nil, nil, nil, nil)}
+	service.initChildrenInternal(nil, nil)
 	containers := []container.Summary{
 		{
 			ID:      "first-container",
@@ -7886,7 +7601,8 @@ func TestProjectServiceManualUpdateDiscoversTags(t *testing.T) {
 			transport := &serviceTagTransportInternal{tags: tt.tags}
 			registryService := registry.NewContainerRegistryService(db, nil, nil, nil, &http.Client{Transport: transport})
 			service := &ProjectService{db: db, settingsService: settingsService, eventService: event.NewEventService(db, nil, nil), composeCoordinator: coordinator, containerRegistryService: registryService}
-			err = service.UpdateProjectServices(ctx, proj.ID, []string{"app", "selected-digest"}, common.SystemUser, !tt.skipDiscovery)
+			service.initChildrenInternal(nil, nil)
+			err = service.UpdateProjectServices(ctx, proj.ID, []string{"app", "selected-digest"}, usertypes.SystemUser, !tt.skipDiscovery)
 			require.ErrorIs(t, err, deploymentError)
 			require.Equal(t, tt.wantCalls, transport.calls)
 			require.Len(t, coordinator.requests, 1)
@@ -7908,33 +7624,36 @@ func TestProjectServiceManualUpdateDiscoversTags(t *testing.T) {
 func TestProjectServiceManualUpdateRejectsUnsafeTagPolicies(t *testing.T) {
 	for _, tt := range []struct {
 		name   string
-		change func(*composetypes.ServiceConfig)
+		change func(*types.ServiceConfig)
 	}{
-		{name: "disabled", change: func(s *composetypes.ServiceConfig) { s.Labels[labels.LabelUpdater] = "false" }},
-		{name: "invalid constraint", change: func(s *composetypes.ServiceConfig) { s.Labels[labels.LabelUpdateConstraint] = "not semver" }},
-		{name: "local build", change: func(s *composetypes.ServiceConfig) { s.Build = &composetypes.BuildConfig{Context: "."} }},
-		{name: "digest pin", change: func(s *composetypes.ServiceConfig) { s.Image = "app@sha256:" + strings.Repeat("a", 64) }},
+		{name: "disabled", change: func(s *types.ServiceConfig) { s.Labels[labels.LabelUpdater] = "false" }},
+		{name: "invalid constraint", change: func(s *types.ServiceConfig) { s.Labels[labels.LabelUpdateConstraint] = "not semver" }},
+		{name: "local build", change: func(s *types.ServiceConfig) { s.Build = &types.BuildConfig{Context: "."} }},
+		{name: "digest pin", change: func(s *types.ServiceConfig) { s.Image = "app@sha256:" + strings.Repeat("a", 64) }},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			serviceConfig := composetypes.ServiceConfig{Image: "app:1.2.0", Labels: composetypes.Labels{labels.LabelUpdateStrategy: "tag"}}
+			serviceConfig := types.ServiceConfig{Image: "app:1.2.0", Labels: types.Labels{labels.LabelUpdateStrategy: "tag"}}
 			tt.change(&serviceConfig)
 			service := &ProjectService{}
-			changes, err := service.projectServiceImageChangesInternal(t.Context(), &Project{}, &composetypes.Project{Services: composetypes.Services{"app": serviceConfig}})
+			service.initChildrenInternal(nil, nil)
+			changes, err := service.updates.ImageChanges(t.Context(), &types.Project{Services: types.Services{"app": serviceConfig}}, false)
 			require.Error(t, err)
 			require.NotContains(t, err.Error(), "registry service unavailable")
 			require.Nil(t, changes)
 		})
 	}
-	local := composetypes.ServiceConfig{Name: "app", Image: "app:1.2.0", Build: &composetypes.BuildConfig{Context: "."}}
-	changes, err := (&ProjectService{}).projectServiceImageChangesInternal(t.Context(), &Project{}, &composetypes.Project{Services: composetypes.Services{"app": local}})
+	local := types.ServiceConfig{Name: "app", Image: "app:1.2.0", Build: &types.BuildConfig{Context: "."}}
+	emptyService := &ProjectService{}
+	emptyService.initChildrenInternal(nil, nil)
+	changes, err := emptyService.updates.ImageChanges(t.Context(), &types.Project{Services: types.Services{"app": local}}, false)
 	require.NoError(t, err)
 	require.Empty(t, changes, "automatic inference must preserve local-build handling")
 }
 
 func TestConfiguredProjectTagChecksMatchCurrentServicePolicy(t *testing.T) {
-	services := []composetypes.ServiceConfig{
-		{Name: "stable", Image: "example:3.1.0", Labels: composetypes.Labels{labels.LabelUpdateStrategy: "tag", labels.LabelUpdateConstraint: "3.x"}},
-		{Name: "next", Image: "example:3.1.0", Labels: composetypes.Labels{labels.LabelUpdateStrategy: "tag", labels.LabelUpdateConstraint: "4.x"}},
+	services := []types.ServiceConfig{
+		{Name: "stable", Image: "example:3.1.0", Labels: types.Labels{labels.LabelUpdateStrategy: "tag", labels.LabelUpdateConstraint: "3.x"}},
+		{Name: "next", Image: "example:3.1.0", Labels: types.Labels{labels.LabelUpdateStrategy: "tag", labels.LabelUpdateConstraint: "4.x"}},
 	}
 	byRef := map[string]*imagetypes.UpdateInfo{"example:3.1.0": {HasUpdate: false, UpdateType: "digest", CheckTime: time.Now()}}
 	unknown := BuildConfiguredUpdateInfo("project", services, byRef, nil)
@@ -7985,7 +7704,7 @@ func TestStoppedProjectTagPolicyNeverInheritsSharedDigestCheck(t *testing.T) {
 	projectRecord := &Project{ID: "tag-stopped", Name: "tag-stopped", DirName: new("tag-stopped"), Path: projectPath, Status: ProjectStatusStopped, ImageRefsJSON: `["nginx:3.1.0"]`}
 	require.NoError(t, db.Create(projectRecord).Error)
 	require.NoError(t, db.Create(&imageupdate.ImageUpdateRecord{ID: "shared-digest", Repository: "docker.io/library/nginx", Tag: "3.1.0", UpdateType: "digest", CheckTime: time.Now()}).Error)
-	imageService := image.NewImageService(db, nil, nil, nil, nil, nil)
+	imageService := image.NewImageService(db, nil, nil, nil, nil, nil, nil, nil)
 	service := NewProjectService(db, settingsService, nil, imageService, nil, nil, nil, nil, config.Load(), nil, nil)
 	detail, err := service.GetProjectDetails(t.Context(), projectRecord.ID, projecttypes.AllDetails())
 	require.NoError(t, err)
@@ -8046,7 +7765,7 @@ func TestConfiguredProjectUsesScheduledRuntimeChecks(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, settingsService.SetStringSetting(ctx, "projectsDirectory", directory))
 			path := createComposeProjectDir(t, directory, "scheduled-project")
-			sourceLabels := composetypes.Labels{labels.LabelUpdateStrategy: "auto"}
+			sourceLabels := types.Labels{labels.LabelUpdateStrategy: "auto"}
 			source := "services:\n  web:\n    image: " + tt.sourceRef + "\n    labels:\n      com.getarcaneapp.arcane.updater.strategy: auto\n"
 			if tt.sourceConstraint != "" {
 				sourceLabels[labels.LabelUpdateConstraint] = tt.sourceConstraint
@@ -8081,8 +7800,9 @@ func TestConfiguredProjectUsesScheduledRuntimeChecks(t *testing.T) {
 			runtimeLabels := map[string]string{"com.docker.compose.project": "scheduled-project", "com.docker.compose.service": "web", labels.LabelUpdateStrategy: "auto"}
 			runtimeLabels[labels.LabelUpdateConstraint] = cmp.Or(tt.runtimeConstraint, runtimeLabels[labels.LabelUpdateConstraint])
 			runtimeServices := []projecttypes.RuntimeService{{Name: "web", ContainerID: "scheduled", Image: "example:3.1.0", ContainerLabels: runtimeLabels}}
-			service := &ProjectService{db: db, settingsService: settingsService, imageService: image.NewImageService(db, nil, nil, nil, nil, nil)}
-			detail := projecttypes.Details{ID: proj.ID, Services: []composetypes.ServiceConfig{{Name: "web", Image: tt.sourceRef, Labels: sourceLabels}}, RuntimeServices: runtimeServices}
+			service := &ProjectService{db: db, settingsService: settingsService, imageService: image.NewImageService(db, nil, nil, nil, nil, nil, nil, nil)}
+			service.initChildrenInternal(nil, nil)
+			detail := projecttypes.Details{ID: proj.ID, Services: []types.ServiceConfig{{Name: "web", Image: tt.sourceRef, Labels: sourceLabels}}, RuntimeServices: runtimeServices}
 			service.enrichProjectUpdateInfoInternal(ctx, &detail)
 			require.Equal(t, tt.wantUpdate, detail.UpdateInfo.HasUpdate)
 			list := []projecttypes.Details{{ID: proj.ID, RuntimeServices: runtimeServices}}
@@ -8101,7 +7821,7 @@ func TestConfiguredProjectUsesScheduledRuntimeChecks(t *testing.T) {
 }
 
 func TestConfiguredProjectAggregatesReplicaAndPreviewChecks(t *testing.T) {
-	configs := []composetypes.ServiceConfig{{Name: "web", Image: "example:3.1.0"}}
+	configs := []types.ServiceConfig{{Name: "web", Image: "example:3.1.0"}}
 	runtimeServices := []projecttypes.RuntimeService{
 		{Name: "web", ContainerID: "one", Image: "example:3.1.0"},
 		{Name: "web", ContainerID: "two", Image: "docker.io/library/example:3.1.0"},
@@ -8112,7 +7832,7 @@ func TestConfiguredProjectAggregatesReplicaAndPreviewChecks(t *testing.T) {
 		"two":       {HasUpdate: true, LatestVersion: "3.2.0", UpdateType: "tag"},
 		"unrelated": {HasUpdate: true, LatestVersion: "4.0.0", UpdateType: "tag"},
 	}
-	runtimeUpdates := configuredRuntimeServiceUpdateInfoInternal(configs, runtimeServices, scoped)
+	runtimeUpdates := projectdetails.ConfiguredRuntimeServiceUpdateInfo(configs, runtimeServices, scoped)
 	require.Len(t, runtimeUpdates, 1)
 	require.True(t, runtimeUpdates["web"].HasUpdate)
 	require.Empty(t, runtimeUpdates["web"].LatestVersion, "conflicting replica targets must not choose an arbitrary version")
@@ -8148,13 +7868,13 @@ func TestConfiguredProjectAggregatesReplicaAndPreviewChecks(t *testing.T) {
 func TestPrepareProjectBindDirectoriesInternal(t *testing.T) {
 	t.Parallel()
 
-	newProject := func(volumes ...composetypes.ServiceVolumeConfig) *composetypes.Project {
-		return &composetypes.Project{Services: composetypes.Services{
+	newProject := func(volumes ...types.ServiceVolumeConfig) *types.Project {
+		return &types.Project{Services: types.Services{
 			"app": {Name: "app", Volumes: volumes},
 		}}
 	}
-	bind := func(source string) composetypes.ServiceVolumeConfig {
-		return composetypes.ServiceVolumeConfig{Type: composetypes.VolumeTypeBind, Source: source, Target: "/t", Bind: &composetypes.ServiceVolumeBind{CreateHostPath: true}}
+	bind := func(source string) types.ServiceVolumeConfig {
+		return types.ServiceVolumeConfig{Type: types.VolumeTypeBind, Source: source, Target: "/t", Bind: &types.ServiceVolumeBind{CreateHostPath: true}}
 	}
 
 	t.Run("creates missing nested directories only", func(t *testing.T) {
@@ -8170,16 +7890,16 @@ func TestPrepareProjectBindDirectoriesInternal(t *testing.T) {
 		noCreate.Bind.CreateHostPath = false
 		project := newProject(
 			bind(filepath.Join(projectPath, "caddy", "conf")),
-			composetypes.ServiceVolumeConfig{Type: composetypes.VolumeTypeBind, Source: filepath.Join(projectPath, "plain"), Target: "/p"},
+			types.ServiceVolumeConfig{Type: types.VolumeTypeBind, Source: filepath.Join(projectPath, "plain"), Target: "/p"},
 			bind(existingFile),
 			bind(existingDir),
 			bind(projectPath),
 			bind(filepath.Join(outside, "elsewhere")),
 			noCreate,
-			composetypes.ServiceVolumeConfig{Type: composetypes.VolumeTypeVolume, Source: "named", Target: "/v"},
+			types.ServiceVolumeConfig{Type: types.VolumeTypeVolume, Source: "named", Target: "/v"},
 		)
 
-		require.NoError(t, prepareProjectBindDirectoriesInternal(projectPath)(t.Context(), project))
+		require.NoError(t, deployment.PrepareProjectBindDirectories(projectPath)(t.Context(), project))
 
 		assert.DirExists(t, filepath.Join(projectPath, "caddy", "conf"))
 		assert.DirExists(t, filepath.Join(projectPath, "plain"), "long syntax without bind block is auto-created like the daemon would")
@@ -8211,7 +7931,7 @@ func TestPrepareProjectBindDirectoriesInternal(t *testing.T) {
 			bind(filepath.Join(projectPath, "local", "conf")),
 		)
 
-		require.NoError(t, prepareProjectBindDirectoriesInternal(projectPath)(t.Context(), project))
+		require.NoError(t, deployment.PrepareProjectBindDirectories(projectPath)(t.Context(), project))
 
 		info, err := os.Stat(existingExternal)
 		require.NoError(t, err)
@@ -8226,14 +7946,760 @@ func TestPrepareProjectBindDirectoriesInternal(t *testing.T) {
 		projectPath := t.TempDir()
 		require.NoError(t, os.Symlink("loop", filepath.Join(projectPath, "loop")))
 
-		err := prepareProjectBindDirectoriesInternal(projectPath)(t.Context(), newProject(bind(filepath.Join(projectPath, "loop", "conf"))))
+		err := deployment.PrepareProjectBindDirectories(projectPath)(t.Context(), newProject(bind(filepath.Join(projectPath, "loop", "conf"))))
 		require.ErrorIs(t, err, acfs.ErrSymlinkLoop)
 		assert.Contains(t, err.Error(), "service app")
 
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
-		err = prepareProjectBindDirectoriesInternal(projectPath)(ctx, newProject(bind(filepath.Join(projectPath, "conf"))))
+		err = deployment.PrepareProjectBindDirectories(projectPath)(ctx, newProject(bind(filepath.Join(projectPath, "conf"))))
 		require.ErrorIs(t, err, context.Canceled)
 		assert.NoDirExists(t, filepath.Join(projectPath, "conf"))
 	})
+}
+
+// TestProjectService_ApplyGitSyncProjectFiles_TolerantOfPermissionLockedEnv verifies
+// a permission-locked (e.g. chmod 000, foreign-owned) .env does not brick a git sync:
+// the compose file still updates, the sync succeeds, and the locked file is left
+// untouched instead of aborting the whole update.
+func TestProjectService_ApplyGitSyncProjectFiles_TolerantOfPermissionLockedEnv(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires Unix permission semantics")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("permission bits are ignored when running as root")
+	}
+
+	db := setupProjectTestDB(t)
+	ctx := t.Context()
+
+	projectsDir := t.TempDir()
+	t.Setenv("PROJECTS_DIRECTORY", projectsDir)
+
+	settingsService, err := newSettingsServiceForTestInternal(t, ctx, db)
+	require.NoError(t, err)
+
+	eventService := event.NewEventService(db, nil, nil)
+	svc := NewProjectService(db, settingsService, eventService, nil, nil, nil, nil, nil, config.Load(), nil, nil)
+
+	dirName := "git-sync-locked-env"
+	projectPath := filepath.Join(projectsDir, dirName)
+	require.NoError(t, os.MkdirAll(projectPath, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(projectPath, "compose.yaml"), []byte("services:\n  app:\n    image: nginx:alpine\n"), 0o600))
+
+	envPath := filepath.Join(projectPath, ".env")
+	require.NoError(t, os.WriteFile(envPath, []byte("FOO=locked\n"), 0o600))
+	require.NoError(t, os.Chmod(envPath, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(envPath, 0o644) })
+
+	project := &Project{
+		ID:      "proj-git-sync-locked-env",
+		Name:    "git-sync-locked-env",
+		DirName: &dirName,
+		Path:    projectPath,
+		Status:  ProjectStatusStopped,
+	}
+	require.NoError(t, db.Create(project).Error)
+
+	updated, _, err := svc.ApplyGitSyncProjectFiles(ctx, project.ID, "services:\n  app:\n    image: nginx:1.27-alpine\n", new("FOO=fromgit\n"), nil, "", usertypes.Actor{
+		ID:       "u1",
+		Username: "tester",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, updated)
+
+	composeBytes, err := os.ReadFile(filepath.Join(projectPath, "compose.yaml"))
+	require.NoError(t, err)
+	assert.Contains(t, string(composeBytes), "nginx:1.27-alpine")
+
+	// The locked .env survived untouched — sync did not attempt to overwrite it.
+	require.NoError(t, os.Chmod(envPath, 0o644))
+	envBytes, err := os.ReadFile(envPath)
+	require.NoError(t, err)
+	assert.Equal(t, "FOO=locked\n", string(envBytes))
+}
+
+func TestPrepareProjectBindDirectoriesInternal_PermissionFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires Unix permission semantics")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("permission bits are ignored when running as root")
+	}
+
+	for _, tc := range []struct {
+		name       string
+		dirMode    os.FileMode
+		fileMode   os.FileMode
+		createFile bool
+		wantError  bool
+	}{
+		{name: "missing directory in unwritable parent", dirMode: 0o500, wantError: true},
+		{name: "missing directory in non-searchable parent", dirMode: 0o600},
+		{name: "existing file in non-searchable parent", dirMode: 0o600, fileMode: 0o640, createFile: true},
+		{name: "unreadable file in searchable parent", dirMode: 0o700, fileMode: 0o000, createFile: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			projectPath := t.TempDir()
+			locked := filepath.Join(projectPath, "locked")
+			require.NoError(t, os.Mkdir(locked, 0o700))
+			t.Cleanup(func() { assert.NoError(t, os.Chmod(locked, 0o700)) })
+			source := filepath.Join(locked, "conf")
+			var originalInfo os.FileInfo
+			if tc.createFile {
+				require.NoError(t, os.WriteFile(source, []byte("config"), tc.fileMode))
+				var err error
+				originalInfo, err = os.Stat(source)
+				require.NoError(t, err)
+			}
+			require.NoError(t, os.Chmod(locked, tc.dirMode))
+			if tc.createFile {
+				_, err := os.ReadFile(source)
+				require.ErrorIs(t, err, fs.ErrPermission)
+			}
+			_, statErr := os.Lstat(source)
+			switch {
+			case tc.dirMode&0o100 == 0:
+				require.ErrorIs(t, statErr, fs.ErrPermission)
+			case tc.createFile:
+				require.NoError(t, statErr)
+			default:
+				require.ErrorIs(t, statErr, fs.ErrNotExist)
+			}
+
+			project := &types.Project{Services: types.Services{
+				"app": {Name: "app", Volumes: []types.ServiceVolumeConfig{{
+					Type: types.VolumeTypeBind, Source: source, Target: "/etc/caddy",
+				}}},
+			}}
+
+			err := deployment.PrepareProjectBindDirectories(projectPath)(t.Context(), project)
+			if tc.wantError {
+				require.ErrorIs(t, err, fs.ErrPermission)
+				assert.Contains(t, err.Error(), source)
+				assert.Contains(t, err.Error(), "service app")
+			} else {
+				require.NoError(t, err)
+			}
+			dirInfo, err := os.Stat(locked)
+			require.NoError(t, err)
+			assert.Equal(t, tc.dirMode, dirInfo.Mode().Perm())
+			require.NoError(t, os.Chmod(locked, 0o700))
+			if !tc.createFile {
+				_, lstatErr := os.Lstat(source)
+				require.ErrorIs(t, lstatErr, fs.ErrNotExist)
+				return
+			}
+			info, err := os.Stat(source)
+			require.NoError(t, err)
+			assert.True(t, os.SameFile(originalInfo, info))
+			assert.Equal(t, originalInfo.Mode(), info.Mode())
+			assert.Equal(t, originalInfo.ModTime(), info.ModTime())
+			require.NoError(t, os.Chmod(source, 0o600))
+			content, err := os.ReadFile(source)
+			require.NoError(t, err)
+			assert.Equal(t, "config", string(content))
+		})
+	}
+}
+
+func newEnvDirectoryProjectInternal(t *testing.T, id string) (*ProjectService, *Project, string, context.Context) {
+	t.Helper()
+
+	db := setupProjectTestDB(t)
+	ctx := t.Context()
+
+	projectsDir := t.TempDir()
+	t.Setenv("PROJECTS_DIRECTORY", projectsDir)
+
+	settingsService, err := newSettingsServiceForTestInternal(t, ctx, db)
+	require.NoError(t, err)
+	require.NoError(t, settingsService.SetStringSetting(ctx, "projectsDirectory", projectsDir))
+
+	svc := NewProjectService(db, settingsService, event.NewEventService(db, nil, nil), nil, nil, nil, nil, nil, config.Load(), nil, nil)
+
+	projectPath := createComposeProjectDir(t, projectsDir, id)
+	envDir := filepath.Join(projectPath, ".env")
+	require.NoError(t, os.Mkdir(envDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(envDir, "keep"), []byte("x"), 0o644))
+
+	project := &Project{
+		ID:      "proj-" + id,
+		Name:    id,
+		DirName: new(id),
+		Path:    projectPath,
+		Status:  ProjectStatusStopped,
+	}
+	require.NoError(t, db.Create(project).Error)
+
+	return svc, project, envDir, ctx
+}
+
+func assertEnvDirectoryIntactInternal(t *testing.T, envDir string) {
+	t.Helper()
+	info, err := os.Stat(envDir)
+	require.NoError(t, err)
+	assert.True(t, info.IsDir())
+	assert.FileExists(t, filepath.Join(envDir, "keep"))
+}
+
+func TestProjectService_EnvDirectory_SyncAndDetails(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires Unix permission semantics")
+	}
+	svc, project, envDir, ctx := newEnvDirectoryProjectInternal(t, "env-dir-scan")
+
+	require.NoError(t, svc.SyncProjectsFromFileSystem(ctx))
+	all, err := svc.ListAllProjects(ctx)
+	require.NoError(t, err)
+	require.Len(t, all, 1)
+	assert.Equal(t, project.Path, all[0].Path)
+
+	details, err := svc.GetProjectDetails(ctx, project.ID, projecttypes.AllDetails())
+	require.NoError(t, err)
+	assert.Empty(t, details.EnvContent)
+	assert.Contains(t, details.ComposeContent, "nginx:alpine")
+
+	assertEnvDirectoryIntactInternal(t, envDir)
+}
+
+func TestProjectService_EnvDirectory_UpdateCompose(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires Unix permission semantics")
+	}
+	svc, project, envDir, ctx := newEnvDirectoryProjectInternal(t, "env-dir-update")
+
+	_, err := svc.UpdateProject(ctx, project.ID, nil, new("services:\n  app:\n    image: nginx:1.27-alpine\n"), nil, nil, usertypes.Actor{ID: "u1", Username: "tester"})
+	require.NoError(t, err)
+
+	composeBytes, err := os.ReadFile(filepath.Join(project.Path, "compose.yaml"))
+	require.NoError(t, err)
+	assert.Contains(t, string(composeBytes), "nginx:1.27-alpine")
+	assertEnvDirectoryIntactInternal(t, envDir)
+}
+
+func TestProjectService_EnvDirectory_GitSync(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires Unix permission semantics")
+	}
+	svc, project, envDir, ctx := newEnvDirectoryProjectInternal(t, "env-dir-git")
+
+	_, _, err := svc.ApplyGitSyncProjectFiles(ctx, project.ID, "services:\n  app:\n    image: nginx:1.27-alpine\n", new("FOO=fromgit\n"), nil, "", usertypes.Actor{ID: "u1", Username: "tester"})
+	require.NoError(t, err)
+
+	composeBytes, err := os.ReadFile(filepath.Join(project.Path, "compose.yaml"))
+	require.NoError(t, err)
+	assert.Contains(t, string(composeBytes), "nginx:1.27-alpine")
+	assertEnvDirectoryIntactInternal(t, envDir)
+}
+
+func TestProjectService_EnvDirectory_EnvSaveFails(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires Unix permission semantics")
+	}
+	svc, project, envDir, ctx := newEnvDirectoryProjectInternal(t, "env-dir-save")
+
+	_, err := svc.UpdateProject(ctx, project.ID, nil, nil, new("FOO=bar\n"), nil, usertypes.Actor{ID: "u1", Username: "tester"})
+	require.ErrorContains(t, err, ".env is a directory")
+	assertEnvDirectoryIntactInternal(t, envDir)
+}
+
+func TestProjectService_OverrideEnvDirectory_EnvSaveFails(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires Unix permission semantics")
+	}
+	svc, project, envDir, ctx := newEnvDirectoryProjectInternal(t, "override-dir-save")
+	require.NoError(t, os.RemoveAll(envDir))
+	require.NoError(t, os.WriteFile(filepath.Join(project.Path, ".env.git"), []byte("FOO=git\n"), 0o644))
+	overrideDir := filepath.Join(project.Path, "project.env")
+	require.NoError(t, os.Mkdir(overrideDir, 0o755))
+
+	_, err := svc.UpdateProject(ctx, project.ID, nil, nil, new("FOO=local\n"), nil, usertypes.Actor{ID: "u1", Username: "tester"})
+	require.ErrorContains(t, err, "project.env is a directory")
+	info, err := os.Stat(overrideDir)
+	require.NoError(t, err)
+	assert.True(t, info.IsDir())
+}
+
+func TestComposeFileInternal(t *testing.T) {
+	t.Parallel()
+
+	const resolved = "/projects/app/compose.yaml"
+	transient := errors.New("transient")
+
+	type call struct {
+		wantPath  string
+		wantErr   error
+		wantCalls int
+	}
+
+	tests := []struct {
+		name      string
+		env       *projectMetadataEnvInternal
+		projectID string
+		// results is returned by resolve in order; the last entry repeats.
+		results []error
+		calls   []call
+	}{
+		{
+			name:      "caches success",
+			env:       &projectMetadataEnvInternal{},
+			projectID: "p1",
+			results:   []error{nil},
+			calls: []call{
+				{wantPath: resolved, wantCalls: 1},
+				{wantPath: resolved, wantCalls: 1},
+			},
+		},
+		{
+			name:      "retries after failure then caches success",
+			env:       &projectMetadataEnvInternal{},
+			projectID: "p1",
+			results:   []error{transient, nil},
+			calls: []call{
+				{wantErr: transient, wantCalls: 1},
+				{wantPath: resolved, wantCalls: 2},
+				{wantPath: resolved, wantCalls: 2},
+			},
+		},
+		{
+			name:      "repeated failures are never memoized",
+			env:       &projectMetadataEnvInternal{},
+			projectID: "p1",
+			results:   []error{transient},
+			calls: []call{
+				{wantErr: transient, wantCalls: 1},
+				{wantErr: transient, wantCalls: 2},
+			},
+		},
+		{
+			name:      "nil env resolves every call",
+			env:       nil,
+			projectID: "p1",
+			results:   []error{nil},
+			calls: []call{
+				{wantPath: resolved, wantCalls: 1},
+				{wantPath: resolved, wantCalls: 2},
+			},
+		},
+		{
+			name:      "empty project ID resolves every call",
+			env:       &projectMetadataEnvInternal{},
+			projectID: "",
+			results:   []error{nil},
+			calls: []call{
+				{wantPath: resolved, wantCalls: 1},
+				{wantPath: resolved, wantCalls: 2},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			calls := 0
+			resolve := func() (string, error) {
+				calls++
+				err := tt.results[min(calls, len(tt.results))-1]
+				if err != nil {
+					return "", err
+				}
+				return resolved, nil
+			}
+
+			for i, want := range tt.calls {
+				path, err := tt.env.composeFileInternal(tt.projectID, resolve)
+				if !errors.Is(err, want.wantErr) {
+					t.Fatalf("call %d: err = %v, want %v", i+1, err, want.wantErr)
+				}
+				if path != want.wantPath {
+					t.Fatalf("call %d: path = %q, want %q", i+1, path, want.wantPath)
+				}
+				if calls != want.wantCalls {
+					t.Fatalf("call %d: resolve invoked %d times, want %d", i+1, calls, want.wantCalls)
+				}
+			}
+		})
+	}
+}
+
+func TestProjectTags_ReconcilePreservesUIAndComposeOwnershipIsReadOnly(t *testing.T) {
+	db := setupProjectTestDB(t)
+	service := &ProjectService{db: db}
+	service.initChildrenInternal(nil, nil)
+	ctx := t.Context()
+	projectModel := Project{
+		ID:              "project-tags",
+		Name:            "tagged",
+		Path:            "/tmp/tagged",
+		Status:          ProjectStatusStopped,
+		IsArchived:      true,
+		GitOpsManagedBy: new("gitops-1"),
+	}
+	require.NoError(t, db.Create(&projectModel).Error)
+
+	projectTags, err := service.UpdateProjectTag(ctx, projectModel.ID, " Database ", projecttypes.TagColorPurple, true, usertypes.Actor{})
+	require.NoError(t, err)
+	require.Equal(t, []projecttypes.Tag{{Name: "database", Color: projecttypes.TagColorPurple, Sources: []projecttypes.TagSource{projecttypes.TagSourceUI}}}, projectTags)
+
+	require.NoError(t, service.reconcileComposeProjectTagsInternal(ctx, projectModel.ID, []projecttypes.TagOption{
+		{Name: "DATABASE", Color: projecttypes.TagColorBlue},
+		{Name: "maintenance-window", Color: projecttypes.TagColorOrange},
+	}))
+	projectTags, err = service.GetProjectTags(ctx, projectModel.ID)
+	require.NoError(t, err)
+	require.Equal(t, []projecttypes.Tag{
+		{Name: "database", Color: projecttypes.TagColorBlue, Sources: []projecttypes.TagSource{projecttypes.TagSourceUI, projecttypes.TagSourceCompose}},
+		{Name: "maintenance-window", Color: projecttypes.TagColorOrange, Sources: []projecttypes.TagSource{projecttypes.TagSourceCompose}},
+	}, projectTags)
+
+	_, err = service.UpdateProjectTag(ctx, projectModel.ID, "database", "", false, usertypes.Actor{})
+	require.ErrorIs(t, err, tags.ErrComposeTagReadOnly)
+	_, err = service.UpdateProjectTag(ctx, projectModel.ID, "maintenance-window", projecttypes.TagColorBlue, true, usertypes.Actor{})
+	require.ErrorIs(t, err, tags.ErrComposeTagReadOnly)
+
+	require.NoError(t, service.reconcileComposeProjectTagsInternal(ctx, projectModel.ID, nil))
+	projectTags, err = service.UpdateProjectTag(ctx, projectModel.ID, "database", "", false, usertypes.Actor{})
+	require.NoError(t, err)
+	require.Empty(t, projectTags)
+}
+
+func TestProjectTags_FilterUsesExactORNames(t *testing.T) {
+	db := setupProjectTestDB(t)
+	ctx := t.Context()
+	seededProjects := []Project{
+		{ID: "one", Name: "one", Path: "/tmp/one", Status: ProjectStatusStopped},
+		{ID: "two", Name: "two", Path: "/tmp/two", Status: ProjectStatusStopped},
+		{ID: "three", Name: "three", Path: "/tmp/three", Status: ProjectStatusStopped},
+	}
+	require.NoError(t, db.Create(&seededProjects).Error)
+	require.NoError(t, db.Create(&[]ProjectTag{
+		{ProjectID: "one", Name: "database", Source: string(projecttypes.TagSourceUI)},
+		{ProjectID: "two", Name: "maintenance", Source: string(projecttypes.TagSourceCompose)},
+		{ProjectID: "three", Name: "database-prod", Source: string(projecttypes.TagSourceUI)},
+	}).Error)
+
+	var result []Project
+	err := listing.ApplyProjectTagsDBFilter(db.WithContext(ctx).Model(&Project{}), " DATABASE,maintenance ").Order("id").Find(&result).Error
+	require.NoError(t, err)
+	require.Len(t, result, 2)
+	require.ElementsMatch(t, []string{"one", "two"}, []string{result[0].ID, result[1].ID})
+	require.NotContains(t, []string{result[0].ID, result[1].ID}, "three")
+
+	result = nil
+	err = listing.ApplyProjectSearchDBFilter(db.WithContext(ctx).Model(&Project{}), "MAINT").Find(&result).Error
+	require.NoError(t, err)
+	require.Len(t, result, 1)
+	require.Equal(t, "two", result[0].ID)
+}
+
+func setupLifecycleTestDB(t *testing.T) *database.DB {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(
+		&settings.SettingVariable{},
+		&Project{},
+		&GitOpsSync{},
+		&event.Event{},
+	))
+	return &database.DB{DB: db}
+}
+
+func newLifecycleTestService(t *testing.T, db *database.DB) (*LifecycleService, *settings.SettingsService) {
+	t.Helper()
+	settingsService, err := settings.NewSettingsService(t.Context(), db)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, settingsService.Stop(context.WithoutCancel(t.Context()))) })
+	events := event.NewEventService(db, nil, nil)
+	return NewLifecycleService(db, settingsService, events, nil, nil), settingsService
+}
+
+func writeLifecycleProjectDirWithScript(t *testing.T, scriptRel, scriptBody string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if scriptRel != "" {
+		full := filepath.Join(dir, scriptRel)
+		require.NoError(t, os.MkdirAll(filepath.Dir(full), 0o755))
+		require.NoError(t, os.WriteFile(full, []byte(scriptBody), 0o644))
+	}
+	return dir
+}
+
+func TestParseLifecycleEnvText_Empty(t *testing.T) {
+	got, err := ParseEnvText(nil)
+	require.NoError(t, err)
+	assert.Empty(t, got)
+
+	empty := "   "
+	got, err = ParseEnvText(&empty)
+	require.NoError(t, err)
+	assert.Empty(t, got)
+}
+
+func TestParseLifecycleEnvText_Valid(t *testing.T) {
+	raw := "FOO=bar\nBAZ_2=qux"
+	got, err := ParseEnvText(&raw)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]string{"FOO": "bar", "BAZ_2": "qux"}, got)
+}
+
+func TestParseLifecycleEnvText_RejectsInvalidKeys(t *testing.T) {
+	cases := map[string]string{
+		"leading digit": "1FOO=bar",
+		"dash":          "FOO-BAR=baz",
+		"dot":           "foo.bar=baz",
+		"no equals":     "FOO bar",
+	}
+	for name, raw := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := ParseEnvText(&raw)
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestParseLifecycleExtraMountsText_Empty(t *testing.T) {
+	got, err := ParseExtraMountsText(nil)
+	require.NoError(t, err)
+	assert.Nil(t, got)
+}
+
+func TestParseLifecycleExtraMountsText_Valid(t *testing.T) {
+	raw := "/host/age.key:/age.key:ro\n/host/data:/data"
+	got, err := ParseExtraMountsText(&raw)
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	assert.Equal(t, "/host/age.key", got[0].Source)
+	assert.Equal(t, "/age.key", got[0].Target)
+	assert.True(t, got[0].Readonly)
+	assert.Equal(t, "/host/data", got[1].Source)
+	assert.Equal(t, "/data", got[1].Target)
+	assert.False(t, got[1].Readonly)
+}
+
+func TestParseLifecycleExtraMountsText_RejectsRelativePaths(t *testing.T) {
+	cases := []string{
+		"relative/path:/in/container",
+		"/host/path:relative/target",
+	}
+	for _, raw := range cases {
+		t.Run(raw, func(t *testing.T) {
+			_, err := ParseExtraMountsText(&raw)
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestParseLifecycleExtraMountsText_RejectsInvalidMode(t *testing.T) {
+	raw := "/host/data:/data:wat"
+	_, err := ParseExtraMountsText(&raw)
+	require.Error(t, err)
+}
+
+func TestRunPreDeploy_NilProject(t *testing.T) {
+	db := setupLifecycleTestDB(t)
+	svc, _ := newLifecycleTestService(t, db)
+	require.NoError(t, svc.RunPreDeploy(t.Context(), nil, usertypes.Actor{}))
+}
+
+func TestRunPreDeploy_ProjectNotGitOpsManaged(t *testing.T) {
+	db := setupLifecycleTestDB(t)
+	svc, settingsService := newLifecycleTestService(t, db)
+	require.NoError(t, settingsService.SetStringSetting(t.Context(), "lifecycleEnabled", "true"))
+
+	project := &Project{
+		Name:            "demo",
+		Path:            t.TempDir(),
+		GitOpsManagedBy: nil,
+	}
+	require.NoError(t, svc.RunPreDeploy(t.Context(), project, usertypes.Actor{}))
+}
+
+func TestRunPreDeploy_KillSwitchDisabled(t *testing.T) {
+	db := setupLifecycleTestDB(t)
+	svc, _ := newLifecycleTestService(t, db)
+
+	syncID := "sync-1"
+	project := &Project{
+		Name:            "demo",
+		Path:            t.TempDir(),
+		GitOpsManagedBy: &syncID,
+	}
+	project.ID = "proj-1"
+	require.NoError(t, db.Create(project).Error)
+
+	scriptPath := "pre-deploy.sh"
+	runnerImage := "alpine:latest"
+	sync := &GitOpsSync{
+		Name:                 "demo-sync",
+		EnvironmentID:        "0",
+		RepositoryID:         "repo-1",
+		Branch:               "main",
+		ComposePath:          "docker-compose.yaml",
+		TargetType:           "project",
+		ProjectName:          "demo",
+		ProjectID:            &project.ID,
+		PreDeployScriptPath:  &scriptPath,
+		PreDeployRunnerImage: &runnerImage,
+	}
+	sync.ID = syncID
+	require.NoError(t, db.Create(sync).Error)
+
+	require.NoError(t, svc.RunPreDeploy(t.Context(), project, usertypes.Actor{}))
+}
+
+func TestRunPreDeploy_NoScriptConfigured(t *testing.T) {
+	db := setupLifecycleTestDB(t)
+	svc, settingsService := newLifecycleTestService(t, db)
+	require.NoError(t, settingsService.SetStringSetting(t.Context(), "lifecycleEnabled", "true"))
+
+	syncID := "sync-1"
+	project := &Project{
+		Name:            "demo",
+		Path:            t.TempDir(),
+		GitOpsManagedBy: &syncID,
+	}
+	project.ID = "proj-1"
+	require.NoError(t, db.Create(project).Error)
+
+	sync := &GitOpsSync{
+		Name:          "demo-sync",
+		EnvironmentID: "0",
+		RepositoryID:  "repo-1",
+		Branch:        "main",
+		ComposePath:   "docker-compose.yaml",
+		TargetType:    "project",
+		ProjectName:   "demo",
+		ProjectID:     &project.ID,
+	}
+	sync.ID = syncID
+	require.NoError(t, db.Create(sync).Error)
+
+	require.NoError(t, svc.RunPreDeploy(t.Context(), project, usertypes.Actor{}))
+}
+
+func TestRunPreDeploy_MissingRunnerImage(t *testing.T) {
+	db := setupLifecycleTestDB(t)
+	svc, settingsService := newLifecycleTestService(t, db)
+	require.NoError(t, settingsService.SetStringSetting(t.Context(), "lifecycleEnabled", "true"))
+	require.NoError(t, settingsService.SetStringSetting(t.Context(), "lifecycleDefaultRunnerImage", " "))
+
+	syncID := "sync-1"
+	projectDir := writeLifecycleProjectDirWithScript(t, "pre-deploy.sh", "echo hi\n")
+	project := &Project{
+		Name:            "demo",
+		Path:            projectDir,
+		GitOpsManagedBy: &syncID,
+	}
+	project.ID = "proj-1"
+	require.NoError(t, db.Create(project).Error)
+
+	scriptPath := "pre-deploy.sh"
+	sync := &GitOpsSync{
+		Name:                "demo-sync",
+		EnvironmentID:       "0",
+		RepositoryID:        "repo-1",
+		Branch:              "main",
+		ComposePath:         "docker-compose.yaml",
+		TargetType:          "project",
+		ProjectName:         "demo",
+		ProjectID:           &project.ID,
+		PreDeployScriptPath: &scriptPath,
+	}
+	sync.ID = syncID
+	require.NoError(t, db.Create(sync).Error)
+
+	err := svc.RunPreDeploy(t.Context(), project, usertypes.Actor{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "runner image")
+}
+
+func TestResolveRunnerImage_UsesSettingDefault(t *testing.T) {
+	db := setupLifecycleTestDB(t)
+	svc, settingsService := newLifecycleTestService(t, db)
+	require.NoError(t, settingsService.SetStringSetting(t.Context(), "lifecycleDefaultRunnerImage", "alpine:latest"))
+
+	assert.Equal(t, "alpine:latest", svc.hooks.RunnerImage(t.Context(), nil))
+
+	override := "debian:stable-slim"
+	assert.Equal(t, override, svc.hooks.RunnerImage(t.Context(), &override))
+}
+
+func TestRunPreDeploy_PathTraversalRejected(t *testing.T) {
+	db := setupLifecycleTestDB(t)
+	svc, settingsService := newLifecycleTestService(t, db)
+	require.NoError(t, settingsService.SetStringSetting(t.Context(), "lifecycleEnabled", "true"))
+
+	syncID := "sync-1"
+	project := &Project{
+		Name:            "demo",
+		Path:            t.TempDir(),
+		GitOpsManagedBy: &syncID,
+	}
+	project.ID = "proj-1"
+	require.NoError(t, db.Create(project).Error)
+
+	scriptPath := "../etc/passwd"
+	runnerImage := "alpine:latest"
+	sync := &GitOpsSync{
+		Name:                 "demo-sync",
+		EnvironmentID:        "0",
+		RepositoryID:         "repo-1",
+		Branch:               "main",
+		ComposePath:          "docker-compose.yaml",
+		TargetType:           "project",
+		ProjectName:          "demo",
+		ProjectID:            &project.ID,
+		PreDeployScriptPath:  &scriptPath,
+		PreDeployRunnerImage: &runnerImage,
+	}
+	sync.ID = syncID
+	require.NoError(t, db.Create(sync).Error)
+
+	err := svc.RunPreDeploy(t.Context(), project, usertypes.Actor{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "script path")
+}
+
+func TestLoadGitOpsSyncForProject_ReturnsNilWhenAbsent(t *testing.T) {
+	db := setupLifecycleTestDB(t)
+	sync, err := loadGitOpsSyncForProjectInternal(t.Context(), db, "nonexistent")
+	require.NoError(t, err)
+	assert.Nil(t, sync)
+}
+
+func TestPersistLastRun_UpdatesGitOpsSyncRow(t *testing.T) {
+	db := setupLifecycleTestDB(t)
+	svc, _ := newLifecycleTestService(t, db)
+
+	sync := &GitOpsSync{
+		Name:          "demo-sync",
+		EnvironmentID: "0",
+		RepositoryID:  "repo-1",
+		Branch:        "main",
+		ComposePath:   "docker-compose.yaml",
+		TargetType:    "project",
+		ProjectName:   "demo",
+	}
+	sync.ID = "sync-1"
+	require.NoError(t, db.Create(sync).Error)
+
+	now := time.Now().UTC().Truncate(time.Second)
+	svc.persistLastRunInternal(t.Context(), sync.ID, lifecycle.LifecycleStatusSuccess, "all good", now)
+
+	var got GitOpsSync
+	require.NoError(t, db.Where("id = ?", sync.ID).First(&got).Error)
+	require.NotNil(t, got.PreDeployLastRunAt)
+	require.NotNil(t, got.PreDeployLastRunStatus)
+	require.NotNil(t, got.PreDeployLastRunOutput)
+	assert.Equal(t, lifecycle.LifecycleStatusSuccess, *got.PreDeployLastRunStatus)
+	assert.Equal(t, "all good", *got.PreDeployLastRunOutput)
+}
+
+func discoveryListingForTestInternal(imageService *image.ImageService) *listing.Service {
+	service := &ProjectService{imageService: imageService}
+	service.initChildrenInternal(nil, nil)
+	return service.listing
 }

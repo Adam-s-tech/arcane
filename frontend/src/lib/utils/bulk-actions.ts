@@ -1,14 +1,15 @@
 import { toast } from 'svelte-sonner';
-import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
-import { streamCacheBuster } from '#lib/utils/streaming.js';
+
 import { markActivityToastShown } from '#lib/components/activity/activity-completion-toasts.js';
+import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
 import { runWithActivityBatchId } from '#lib/services/api-service.js';
-import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
-import { tryCatch } from '#lib/utils/try-catch.js';
-import type { Result } from '#lib/types/result.js';
-import { activityToastOptions, extractActivityId } from '#lib/utils/activity-toast.js';
 import { activityStore } from '#lib/stores/activity.store.svelte.js';
 import type { Activity } from '#lib/types/activity.type.js';
+import type { Result } from '#lib/types/result.js';
+import { activityToastOptions, extractActivityId } from '#lib/utils/activity-toast.js';
+import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
+import { streamCacheBuster } from '#lib/utils/streaming.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
 
 /**
  * Shared helpers for table bulk operations (start/stop/remove/prune/…). These

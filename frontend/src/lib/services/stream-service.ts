@@ -1,6 +1,7 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
-import BaseAPIService, { handleUnauthorizedResponseInternal } from './api-service';
 import { streamCacheBuster } from '#lib/utils/streaming.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
+
+import BaseAPIService, { handleUnauthorizedResponseInternal } from './api-service';
 
 /** Channels the multiplexed client stream can carry. Must match types/stream. */
 export const STREAM_CHANNEL_ENVIRONMENTS = 'environments';

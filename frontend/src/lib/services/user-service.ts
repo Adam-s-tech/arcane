@@ -1,7 +1,8 @@
-import BaseAPIService from './api-service';
 import type { User, CreateUser, TimeFormat, UserPreferences } from '#lib/types/auth.js';
 import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
 import { transformPaginationParams } from '#lib/utils/tables.js';
+
+import BaseAPIService from './api-service';
 
 class UserAPIService extends BaseAPIService {
 	async getUsers(options?: SearchPaginationSortRequest): Promise<Paginated<User>> {

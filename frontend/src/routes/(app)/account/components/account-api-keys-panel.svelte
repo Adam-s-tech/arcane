@@ -1,16 +1,16 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
 	import { onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
-	import ApiKeyFormSheet from '#lib/components/sheets/api-key-form-sheet.svelte';
+
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+	import ApiKeyFormSheet from '#lib/components/sheets/api-key-form-sheet.svelte';
+	import { AddIcon, ApiKeyIcon, CopyIcon, TrashIcon } from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
 	import { apiKeyService } from '#lib/services/api-key-service.js';
 	import type { ApiKey, ApiKeyCreated, ApiKeyPermissionGrant, CreateUserApiKey } from '#lib/types/auth.js';
-	import { AddIcon, ApiKeyIcon, CopyIcon, TrashIcon } from '#lib/icons/index.js';
+	import { confirmDeleteApiKey } from '#lib/utils/api-keys.js';
 	import { formatDate, formatRelativeTime } from '#lib/utils/formatting.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import { confirmAndRun } from '#lib/utils/bulk-actions.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	let apiKeys = $state<ApiKey[]>([]);
 	let apiKeysLoading = $state(false);
@@ -67,19 +67,12 @@
 	}
 
 	function deleteApiKey(id: string, name: string) {
-		const safeName = name.trim() || m.common_unknown();
-		confirmAndRun({
-			title: m.api_key_delete_title({ name: safeName }),
-			message: m.api_key_delete_message({ name: safeName }),
-			confirmLabel: m.common_delete(),
-			destructive: true,
-			setLoading: (loading) => (deletingKeyId = loading ? id : null),
+		confirmDeleteApiKey({
+			name,
 			run: () => apiKeyService.deleteMine(id),
-			failureMessage: m.api_key_delete_failed({ name: safeName }),
-			onSuccess: async () => {
-				toast.success(m.account_api_key_deleted());
-				await loadApiKeys();
-			}
+			setLoading: (loading) => (deletingKeyId = loading ? id : null),
+			successMessage: () => m.account_api_key_deleted(),
+			onDeleted: loadApiKeys
 		});
 	}
 

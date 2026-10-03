@@ -1,9 +1,10 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
 import Convert from 'ansi-to-html';
 import { Temporal } from 'temporal-polyfill';
 import { z } from 'zod/v4';
+
 import { getLocale, setLocale as setParaglideLocale, type Locale } from '#lib/paraglide/runtime.js';
 import { timeFormatStore } from '#lib/stores/time-format.store.svelte.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
 
 // --- String helpers ---
 

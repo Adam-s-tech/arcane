@@ -12,32 +12,32 @@ import (
 	"strings"
 	"testing"
 
+	usertypes "github.com/getarcaneapp/arcane/types/v2/user"
 	"github.com/libtnb/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	buildtypes "go.getarcane.app/builds/types"
+	"go.getarcane.app/builds/types"
 	"go.getarcane.app/sys/crypto"
 	"gorm.io/gorm"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/event"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/gitrepo"
-	buildgit "github.com/getarcaneapp/arcane/backend/v2/pkg/gitutil"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/gitutil"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
 )
 
 func TestBuildService_ResolveBuildRequest_PassesThroughLocalContext(t *testing.T) {
 	contextDir := t.TempDir()
 	svc := &BuildService{
-		gitCloneFn: func(context.Context, string, string, buildgit.AuthConfig) (string, error) {
+		gitCloneFn: func(context.Context, string, string, git.AuthConfig) (string, error) {
 			require.FailNow(t, "git clone should not run for local contexts")
 			return "", nil
 		},
 	}
 
-	req := buildtypes.BuildRequest{
+	req := types.BuildRequest{
 		ContextDir: contextDir,
 		Dockerfile: "Dockerfile",
 	}
@@ -67,14 +67,14 @@ func TestBuildService_ResolveBuildRequest_ClonesRemoteGitContext(t *testing.T) {
 
 	cleanupCalled := false
 	svc := &BuildService{
-		gitProbeFn: func(context.Context, string, buildgit.AuthConfig) error {
+		gitProbeFn: func(context.Context, string, git.AuthConfig) error {
 			require.FailNow(t, "git remote probe should not run for .git URLs")
 			return nil
 		},
-		gitCloneFn: func(_ context.Context, repositoryURL, ref string, auth buildgit.AuthConfig) (string, error) {
+		gitCloneFn: func(_ context.Context, repositoryURL, ref string, auth git.AuthConfig) (string, error) {
 			assert.Equal(t, "https://github.com/getarcaneapp/arcane.git", repositoryURL)
 			assert.Equal(t, "main", ref)
-			assert.Equal(t, buildgit.AuthConfig{}, auth)
+			assert.Equal(t, git.AuthConfig{}, auth)
 			return repoPath, nil
 		},
 		gitCleanupFn: func(path string) error {
@@ -84,7 +84,7 @@ func TestBuildService_ResolveBuildRequest_ClonesRemoteGitContext(t *testing.T) {
 		},
 	}
 
-	req := buildtypes.BuildRequest{
+	req := types.BuildRequest{
 		ContextDir: "https://github.com/getarcaneapp/arcane.git#main:docker/app",
 		Dockerfile: "Dockerfile",
 	}
@@ -103,18 +103,18 @@ func TestBuildService_ResolveBuildRequest_ProbesAndClonesRemoteGitContextWithout
 	probeCalled := false
 	cloneCalled := false
 	svc := &BuildService{
-		gitProbeFn: func(_ context.Context, repositoryURL string, auth buildgit.AuthConfig) error {
+		gitProbeFn: func(_ context.Context, repositoryURL string, auth git.AuthConfig) error {
 			probeCalled = true
 			assert.Equal(t, "https://git.sr.ht/~jordanreger/nws-alerts", repositoryURL)
-			assert.Equal(t, buildgit.AuthConfig{}, auth)
+			assert.Equal(t, git.AuthConfig{}, auth)
 			return nil
 		},
-		gitCloneFn: func(_ context.Context, repositoryURL, ref string, auth buildgit.AuthConfig) (string, error) {
+		gitCloneFn: func(_ context.Context, repositoryURL, ref string, auth git.AuthConfig) (string, error) {
 			cloneCalled = true
 			assert.True(t, probeCalled)
 			assert.Equal(t, "https://git.sr.ht/~jordanreger/nws-alerts", repositoryURL)
 			assert.Equal(t, "main", ref)
-			assert.Equal(t, buildgit.AuthConfig{}, auth)
+			assert.Equal(t, git.AuthConfig{}, auth)
 			return repoPath, nil
 		},
 		gitCleanupFn: func(string) error { return nil },
@@ -122,7 +122,7 @@ func TestBuildService_ResolveBuildRequest_ProbesAndClonesRemoteGitContextWithout
 
 	resolvedReq, cleanup, err := svc.resolveBuildRequestInternal(
 		t.Context(),
-		buildtypes.BuildRequest{ContextDir: "https://git.sr.ht/~jordanreger/nws-alerts#main:docker/app"},
+		types.BuildRequest{ContextDir: "https://git.sr.ht/~jordanreger/nws-alerts#main:docker/app"},
 		nil,
 		"",
 	)
@@ -138,7 +138,7 @@ func TestBuildService_ResolveBuildRequest_RequiresGitRepositoryServiceForRemoteC
 
 	_, cleanup, err := svc.resolveBuildRequestInternal(
 		t.Context(),
-		buildtypes.BuildRequest{ContextDir: "https://github.com/getarcaneapp/arcane.git#main"},
+		types.BuildRequest{ContextDir: "https://github.com/getarcaneapp/arcane.git#main"},
 		nil,
 		"",
 	)
@@ -149,12 +149,12 @@ func TestBuildService_ResolveBuildRequest_RequiresGitRepositoryServiceForRemoteC
 
 func TestBuildService_ResolveBuildRequest_RejectsNonGitHTTPContextViaProbeFailure(t *testing.T) {
 	svc := &BuildService{
-		gitProbeFn: func(_ context.Context, repositoryURL string, auth buildgit.AuthConfig) error {
+		gitProbeFn: func(_ context.Context, repositoryURL string, auth git.AuthConfig) error {
 			assert.Equal(t, "https://example.com/archive.tar.gz", repositoryURL)
-			assert.Equal(t, buildgit.AuthConfig{}, auth)
+			assert.Equal(t, git.AuthConfig{}, auth)
 			return assert.AnError
 		},
-		gitCloneFn: func(context.Context, string, string, buildgit.AuthConfig) (string, error) {
+		gitCloneFn: func(context.Context, string, string, git.AuthConfig) (string, error) {
 			require.FailNow(t, "git clone should not run when remote probe fails")
 			return "", nil
 		},
@@ -162,7 +162,7 @@ func TestBuildService_ResolveBuildRequest_RejectsNonGitHTTPContextViaProbeFailur
 
 	_, cleanup, err := svc.resolveBuildRequestInternal(
 		t.Context(),
-		buildtypes.BuildRequest{ContextDir: "https://example.com/archive.tar.gz"},
+		types.BuildRequest{ContextDir: "https://example.com/archive.tar.gz"},
 		nil,
 		"",
 	)
@@ -205,14 +205,14 @@ func TestBuildService_ResolveBuildRequest_UsesSavedGitCredentials(t *testing.T) 
 	t.Run("http auth", func(t *testing.T) {
 		svc := &BuildService{
 			gitRepository: repoService,
-			gitProbeFn: func(_ context.Context, repositoryURL string, auth buildgit.AuthConfig) error {
+			gitProbeFn: func(_ context.Context, repositoryURL string, auth git.AuthConfig) error {
 				assert.Equal(t, "https://github.com/getarcaneapp/private-build", repositoryURL)
 				assert.Equal(t, "http", auth.AuthType)
 				assert.Equal(t, "builder", auth.Username)
 				assert.Equal(t, "token-123", auth.Token)
 				return nil
 			},
-			gitCloneFn: func(_ context.Context, repositoryURL, _ string, auth buildgit.AuthConfig) (string, error) {
+			gitCloneFn: func(_ context.Context, repositoryURL, _ string, auth git.AuthConfig) (string, error) {
 				assert.Equal(t, "https://github.com/getarcaneapp/private-build", repositoryURL)
 				assert.Equal(t, "http", auth.AuthType)
 				assert.Equal(t, "builder", auth.Username)
@@ -224,7 +224,7 @@ func TestBuildService_ResolveBuildRequest_UsesSavedGitCredentials(t *testing.T) 
 
 		_, cleanup, resolveBuildRequestErr := svc.resolveBuildRequestInternal(
 			t.Context(),
-			buildtypes.BuildRequest{ContextDir: "https://github.com/getarcaneapp/private-build#main"},
+			types.BuildRequest{ContextDir: "https://github.com/getarcaneapp/private-build#main"},
 			nil,
 			"",
 		)
@@ -235,11 +235,11 @@ func TestBuildService_ResolveBuildRequest_UsesSavedGitCredentials(t *testing.T) 
 	t.Run("ssh auth", func(t *testing.T) {
 		svc := &BuildService{
 			gitRepository: repoService,
-			gitProbeFn: func(context.Context, string, buildgit.AuthConfig) error {
+			gitProbeFn: func(context.Context, string, git.AuthConfig) error {
 				require.FailNow(t, "git remote probe should not run for ssh URLs")
 				return nil
 			},
-			gitCloneFn: func(_ context.Context, _, _ string, auth buildgit.AuthConfig) (string, error) {
+			gitCloneFn: func(_ context.Context, _, _ string, auth git.AuthConfig) (string, error) {
 				assert.Equal(t, "ssh", auth.AuthType)
 				assert.Equal(t, "ssh-private-key", auth.SSHKey)
 				assert.Equal(t, "strict", auth.SSHHostKeyVerification)
@@ -250,7 +250,7 @@ func TestBuildService_ResolveBuildRequest_UsesSavedGitCredentials(t *testing.T) 
 
 		_, cleanup, resolveBuildRequestErr := svc.resolveBuildRequestInternal(
 			t.Context(),
-			buildtypes.BuildRequest{ContextDir: "git@github.com:getarcaneapp/private-ssh.git#main"},
+			types.BuildRequest{ContextDir: "git@github.com:getarcaneapp/private-ssh.git#main"},
 			nil,
 			"",
 		)
@@ -266,21 +266,21 @@ func TestBuildService_BuildImage_PreservesRemoteSourceInHistory(t *testing.T) {
 	repoPath := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(repoPath, "Dockerfile"), []byte("FROM alpine:3.20\n"), 0o644))
 
-	captured := buildtypes.BuildRequest{}
+	captured := types.BuildRequest{}
 	svc := &BuildService{
 		db: db,
 		builder: testBuildRecorder{
-			onBuild: func(req buildtypes.BuildRequest) {
+			onBuild: func(req types.BuildRequest) {
 				captured = req
 			},
 		},
-		gitCloneFn: func(_ context.Context, _, _ string, _ buildgit.AuthConfig) (string, error) {
+		gitCloneFn: func(_ context.Context, _, _ string, _ git.AuthConfig) (string, error) {
 			return repoPath, nil
 		},
 		gitCleanupFn: func(string) error { return nil },
 	}
 
-	req := buildtypes.BuildRequest{
+	req := types.BuildRequest{
 		ContextDir: "https://github.com/getarcaneapp/arcane.git#main",
 		Dockerfile: "Dockerfile",
 		Tags:       []string{"ghcr.io/getarcaneapp/arcane:test"},
@@ -308,12 +308,12 @@ func TestBuildService_BuildImage_FailureRecordsHistoryAndEvent(t *testing.T) {
 			err: buildErr,
 		},
 	}
-	user := &common.User{
+	user := &usertypes.Actor{
 		ID:       "user-1",
 		Username: "tester",
 	}
 
-	req := buildtypes.BuildRequest{
+	req := types.BuildRequest{
 		ContextDir: "/builds/demo",
 		Dockerfile: "Dockerfile",
 		Tags:       []string{"arcane.local/demo:test"},
@@ -347,7 +347,7 @@ func TestBuildService_BuildImage_FailureExporterErrorsAppearInOutputHistoryAndEv
 	db, err := setupBuildHistoryTestDB()
 	require.NoError(t, err)
 
-	buildErr := &buildtypes.BuildKitImageExporterError{
+	buildErr := &types.BuildKitImageExporterError{
 		ProviderName: "depot",
 		Err:          errors.New(`failed to solve: failed to solve: exporter "image" could not be found`),
 	}
@@ -358,18 +358,18 @@ func TestBuildService_BuildImage_FailureExporterErrorsAppearInOutputHistoryAndEv
 		eventService: event.NewEventService(db, nil, nil),
 		builder: testBuildRecorder{
 			err: buildErr,
-			onProgress: func(_ buildtypes.BuildRequest, w io.Writer) {
+			onProgress: func(_ types.BuildRequest, w io.Writer) {
 				_, _ = w.Write([]byte(buildErr.Error()))
 			},
 		},
 	}
 
-	user := &common.User{
+	user := &usertypes.Actor{
 		ID:       "user-2",
 		Username: "registry-test",
 	}
 
-	req := buildtypes.BuildRequest{
+	req := types.BuildRequest{
 		ContextDir: "/builds/demo",
 		Dockerfile: "Dockerfile",
 		Tags:       []string{"ghcr.io/getarcaneapp/arcane:test"},
@@ -422,12 +422,12 @@ func TestSanitizeBuildContextForEventInternal_RedactsURLCredentials(t *testing.T
 }
 
 type testBuildRecorder struct {
-	onBuild    func(buildtypes.BuildRequest)
-	onProgress func(buildtypes.BuildRequest, io.Writer)
+	onBuild    func(types.BuildRequest)
+	onProgress func(types.BuildRequest, io.Writer)
 	err        error
 }
 
-func (b testBuildRecorder) BuildImage(_ context.Context, req buildtypes.BuildRequest, writer io.Writer, _ string) (*buildtypes.BuildResult, error) {
+func (b testBuildRecorder) BuildImage(_ context.Context, req types.BuildRequest, writer io.Writer, _ string) (*types.BuildResult, error) {
 	if b.onBuild != nil {
 		b.onBuild(req)
 	}
@@ -437,7 +437,7 @@ func (b testBuildRecorder) BuildImage(_ context.Context, req buildtypes.BuildReq
 		}
 		return nil, b.err
 	}
-	return &buildtypes.BuildResult{Provider: "local"}, nil
+	return &types.BuildResult{Provider: "local"}, nil
 }
 
 func TestBuildService_ListImageBuilds_OmitsOutputColumn(t *testing.T) {

@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { cn } from '#lib/utils.js';
 	import type { Snippet } from 'svelte';
 	import type { Attachment } from 'svelte/attachments';
+
+	import { cn } from '#lib/utils.js';
 
 	interface Props {
 		itemCount: number;

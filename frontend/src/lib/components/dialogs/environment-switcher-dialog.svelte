@@ -1,26 +1,26 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
-	import { ResponsiveDialog } from '#lib/components/ui/responsive-dialog/index.js';
-	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
-	import * as InputGroup from '#lib/components/ui/input-group/index.js';
-	import { Spinner } from '#lib/components/ui/spinner/index.js';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import { environmentManagementService } from '#lib/services/env-mgmt-service.js';
-	import { queryKeys } from '#lib/query/query-keys.js';
-	import type { Environment } from '#lib/types/environment.js';
 	import { goto } from '$app/navigation';
-	import { toast } from 'svelte-sonner';
-	import { m } from '#lib/paraglide/messages.js';
-	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
-	import { cn } from '#lib/utils.js';
-	import settingsStore from '#lib/stores/config-store.svelte.js';
-	import { debounced } from '#lib/utils/ws.js';
-	import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
-	import { tick, untrack } from 'svelte';
-	import { EnvironmentsIcon, RemoteEnvironmentIcon, AddIcon, SearchIcon, CloseIcon, SettingsIcon } from '#lib/icons/index.js';
 	import { useQueryClient } from '@tanstack/svelte-query';
+	import { tick, untrack } from 'svelte';
+	import { toast } from 'svelte-sonner';
+
+	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+	import SearchInput from '#lib/components/form/search-input.svelte';
 	import IfPermitted from '#lib/components/if-permitted.svelte';
+	import { ResponsiveDialog } from '#lib/components/ui/responsive-dialog/index.js';
+	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import { EnvironmentsIcon, RemoteEnvironmentIcon, AddIcon, SettingsIcon } from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { queryKeys } from '#lib/query/query-keys.js';
+	import { environmentManagementService } from '#lib/services/env-mgmt-service.js';
+	import settingsStore from '#lib/stores/config-store.svelte.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import type { Environment } from '#lib/types/environment.js';
+	import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
+	import { cn } from '#lib/utils.js';
+	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+	import { debounced } from '#lib/utils/ws.js';
 
 	type Props = {
 		open: boolean;
@@ -253,32 +253,15 @@
 		{#if open}
 			<div class="hidden" {@attach openSession} aria-hidden="true"></div>
 		{/if}
-		<InputGroup.Root>
-			<InputGroup.Addon>
-				<SearchIcon aria-hidden="true" />
-			</InputGroup.Addon>
-			<InputGroup.Input
-				type="text"
-				placeholder={m.common_search()}
-				value={searchQuery}
-				oninput={(e) => {
-					searchQuery = (e.target as HTMLInputElement).value;
-					debouncedSearch(searchQuery);
-				}}
-			/>
-			{#if searchQuery}
-				<InputGroup.Addon align="inline-end">
-					<InputGroup.Button
-						size="icon-xs"
-						onclick={clearSearch}
-						title={m.common_clear_search()}
-						aria-label={m.common_clear_search()}
-					>
-						<CloseIcon class="size-4" />
-					</InputGroup.Button>
-				</InputGroup.Addon>
-			{/if}
-		</InputGroup.Root>
+		<SearchInput
+			onClear={clearSearch}
+			placeholder={m.common_search()}
+			value={searchQuery}
+			oninput={(e) => {
+				searchQuery = (e.target as HTMLInputElement).value;
+				debouncedSearch(searchQuery);
+			}}
+		/>
 
 		<div bind:this={scrollContainer} onscroll={handleScroll} class="max-h-screen-50 min-h-50 overflow-y-auto">
 			{#if isLoading}

@@ -41,7 +41,7 @@ services:
     image: ghcr.io/getarcaneapp/arcane:latest
     container_name: arcane
     ports:
-      - "3552:3552"
+      - '3552:3552'
     volumes:
       - arcane-data:/app/data
     environment:
@@ -56,8 +56,7 @@ services:
     depends_on:
       - docker-socket-proxy
     healthcheck:
-      test:
-        ["CMD", "./arcane", "health", "--timeout", "2s"]
+      test: ['CMD', './arcane', 'health', '--timeout', '2s']
       interval: 10s
       timeout: 3s
       retries: 5

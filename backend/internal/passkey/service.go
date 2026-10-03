@@ -22,14 +22,14 @@ import (
 	"github.com/getarcaneapp/arcane/types/v2/auth"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
-	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/kit/pkg"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/session"
+	userdomain "github.com/getarcaneapp/arcane/backend/v2/internal/user"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	"github.com/getarcaneapp/arcane/backend/v2/resources"
 )
@@ -130,7 +130,7 @@ type StepUpGrant struct {
 // an MFA transaction so the eventual session cannot be assigned client-chosen
 // source or network metadata.
 type AuthenticationCompletion struct {
-	User   *common.User
+	User   *userdomain.User
 	Meta   auth.SessionMeta
 	Source string
 }
@@ -191,7 +191,7 @@ func (s *PasskeyService) readyInternal() error {
 }
 
 type webAuthnUser struct {
-	model              common.User
+	model              userdomain.User
 	credentials        []webauthn.Credential
 	credentialModelIDs map[string]string
 }
@@ -220,7 +220,7 @@ func (s *PasskeyService) loadWebAuthnUserInternal(ctx context.Context, userID st
 		return nil, ErrPasskeyTransaction
 	}
 
-	var user common.User
+	var user userdomain.User
 	if err := s.db.WithContext(ctx).Where("id = ?", userID).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrPasskeyTransaction
@@ -535,7 +535,7 @@ func (s *PasskeyService) FinishRegistration(ctx context.Context, userID, session
 	return &summary, nil
 }
 
-func (s *PasskeyService) FinishPasskeyLogin(ctx context.Context, ceremonyID string, payload []byte) (*common.User, error) {
+func (s *PasskeyService) FinishPasskeyLogin(ctx context.Context, ceremonyID string, payload []byte) (*userdomain.User, error) {
 	if err := s.readyInternal(); err != nil {
 		return nil, err
 	}
@@ -596,7 +596,7 @@ func (s *PasskeyService) FinishMobilePasskeyLogin(ctx context.Context, ceremonyI
 	return &auth.MobilePasskeyCompletion{TransactionID: transaction.ID, ExpiresAt: transaction.ExpiresAt}, nil
 }
 
-func (s *PasskeyService) ExchangeMobilePasskeyLogin(ctx context.Context, transactionID, codeVerifier string) (*common.User, error) {
+func (s *PasskeyService) ExchangeMobilePasskeyLogin(ctx context.Context, transactionID, codeVerifier string) (*userdomain.User, error) {
 	if err := s.readyInternal(); err != nil {
 		return nil, err
 	}
@@ -870,7 +870,7 @@ func (s *PasskeyService) DeletePasskey(ctx context.Context, userID, passkeyID, s
 		return err
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var user common.User
+		var user userdomain.User
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", userID).First(&user).Error; err != nil {
 			return fmt.Errorf("failed to lock user for passkey deletion: %w", err)
 		}
@@ -927,7 +927,7 @@ func (s *PasskeyService) EnableMFA(ctx context.Context, userID, sessionID, stepU
 		return nil, err
 	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var user common.User
+		var user userdomain.User
 		if lockMFAUserErr := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", userID).First(&user).Error; lockMFAUserErr != nil {
 			return fmt.Errorf("failed to lock user for MFA enable: %w", lockMFAUserErr)
 		}
@@ -941,7 +941,7 @@ func (s *PasskeyService) EnableMFA(ctx context.Context, userID, sessionID, stepU
 		if user.PasskeyMFAEnabled {
 			return ErrPasskeyMFAAlreadyEnabled
 		}
-		if enableMFAErr := tx.Model(&common.User{}).Where("id = ?", userID).Update("passkey_mfa_enabled", true).Error; enableMFAErr != nil {
+		if enableMFAErr := tx.Model(&userdomain.User{}).Where("id = ?", userID).Update("passkey_mfa_enabled", true).Error; enableMFAErr != nil {
 			return fmt.Errorf("failed to enable passkey MFA: %w", enableMFAErr)
 		}
 		if clearRecoveryCodesErr := tx.Where("user_id = ?", userID).Delete(&PasskeyRecoveryCode{}).Error; clearRecoveryCodesErr != nil {
@@ -966,14 +966,14 @@ func (s *PasskeyService) DisableMFA(ctx context.Context, userID, sessionID, step
 		return err
 	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var user common.User
+		var user userdomain.User
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", userID).First(&user).Error; err != nil {
 			return fmt.Errorf("failed to lock user for MFA disable: %w", err)
 		}
 		if !user.PasskeyMFAEnabled {
 			return ErrPasskeyMFANotEnabled
 		}
-		if err := tx.Model(&common.User{}).Where("id = ?", userID).Update("passkey_mfa_enabled", false).Error; err != nil {
+		if err := tx.Model(&userdomain.User{}).Where("id = ?", userID).Update("passkey_mfa_enabled", false).Error; err != nil {
 			return fmt.Errorf("failed to disable passkey MFA: %w", err)
 		}
 		if err := tx.Where("user_id = ?", userID).Delete(&PasskeyRecoveryCode{}).Error; err != nil {
@@ -1004,7 +1004,7 @@ func (s *PasskeyService) RegenerateRecoveryCodes(ctx context.Context, userID, se
 		return nil, err
 	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var user common.User
+		var user userdomain.User
 		if loadRecoveryUserErr := tx.Where("id = ?", userID).First(&user).Error; loadRecoveryUserErr != nil {
 			return fmt.Errorf("failed to load user for recovery code regeneration: %w", loadRecoveryUserErr)
 		}
@@ -1032,14 +1032,14 @@ func (s *PasskeyService) ResetMFAForUser(ctx context.Context, userID string) err
 		return err
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var user common.User
+		var user userdomain.User
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", userID).First(&user).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return ErrPasskeyTransaction
 			}
 			return fmt.Errorf("failed to load user for MFA reset: %w", err)
 		}
-		if err := tx.Model(&common.User{}).Where("id = ?", userID).Update("passkey_mfa_enabled", false).Error; err != nil {
+		if err := tx.Model(&userdomain.User{}).Where("id = ?", userID).Update("passkey_mfa_enabled", false).Error; err != nil {
 			return fmt.Errorf("failed to disable passkey MFA: %w", err)
 		}
 		if err := tx.Where("user_id = ?", userID).Delete(&PasskeyRecoveryCode{}).Error; err != nil {
@@ -1136,7 +1136,7 @@ func (s *PasskeyService) loadPendingTransactionInternal(ctx context.Context, tra
 	return &transaction, nil
 }
 
-func (s *PasskeyService) finishKnownUserAssertionInternal(ctx context.Context, transaction *AuthTransaction, purpose string, payload []byte) (*common.User, error) {
+func (s *PasskeyService) finishKnownUserAssertionInternal(ctx context.Context, transaction *AuthTransaction, purpose string, payload []byte) (*userdomain.User, error) {
 	if transaction == nil || len(payload) == 0 || len(payload) > maxPasskeyPayloadBytes {
 		return nil, ErrPasskeyResponse
 	}
@@ -1228,8 +1228,8 @@ func (s *PasskeyService) authorizeManagementInternal(ctx context.Context, userID
 	return s.VerifyStepUpToken(ctx, userID, sessionID, stepUpToken)
 }
 
-func (s *PasskeyService) loadUserModelInternal(ctx context.Context, userID string) (*common.User, error) {
-	var user common.User
+func (s *PasskeyService) loadUserModelInternal(ctx context.Context, userID string) (*userdomain.User, error) {
+	var user userdomain.User
 	if err := s.db.WithContext(ctx).Where("id = ?", userID).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrPasskeyTransaction

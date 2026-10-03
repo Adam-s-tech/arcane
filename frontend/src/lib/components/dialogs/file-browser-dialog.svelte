@@ -1,15 +1,16 @@
 <script lang="ts">
-	import { ResponsiveDialog } from '#lib/components/ui/responsive-dialog/index.js';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import { Spinner } from '#lib/components/ui/spinner/index.js';
-	import { ScrollArea } from '#lib/components/ui/scroll-area/index.js';
-	import { gitRepositoryService } from '#lib/services/git-repository-service.js';
-	import { queryKeys } from '#lib/query/query-keys.js';
-	import type { FileTreeNode } from '#lib/types/automation.js';
-	import { FolderOpenIcon, FileTextIcon, ArrowRightIcon } from '#lib/icons/index.js';
-	import { m } from '#lib/paraglide/messages.js';
 	import { createQuery } from '@tanstack/svelte-query';
 	import type { Snippet } from 'svelte';
+
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { ResponsiveDialog } from '#lib/components/ui/responsive-dialog/index.js';
+	import { ScrollArea } from '#lib/components/ui/scroll-area/index.js';
+	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import { FolderOpenIcon, FileTextIcon, ArrowRightIcon } from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { queryKeys } from '#lib/query/query-keys.js';
+	import { gitRepositoryService } from '#lib/services/git-repository-service.js';
+	import type { FileTreeNode } from '#lib/types/automation.js';
 
 	type FileBrowserDialogProps = {
 		open: boolean;

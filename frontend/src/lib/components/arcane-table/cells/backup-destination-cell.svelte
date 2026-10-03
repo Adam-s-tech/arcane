@@ -1,6 +1,6 @@
 <script lang="ts">
-	import * as m from '#lib/paraglide/messages.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import type { BackupRun } from '#lib/types/backup.js';
 	import { backupDestinationLabel, backupDestinationName } from '#lib/utils/backups.js';
 

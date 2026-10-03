@@ -1,26 +1,25 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
+	import { createMutation, useQueryClient } from '@tanstack/svelte-query';
 	import { toast } from 'svelte-sonner';
-	import * as ResponsiveDialog from '#lib/components/ui/responsive-dialog/index.js';
-	import * as Tabs from '#lib/components/ui/tabs/index.js';
+	import { z } from 'zod/v4';
+
+	import AgentCommandBlock from '#lib/components/agent-command-block.svelte';
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
 	import FormInput from '#lib/components/form/form-input.svelte';
 	import LabeledSwitch from '#lib/components/form/labeled-switch.svelte';
 	import UrlInput from '#lib/components/form/url-input.svelte';
-	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import { CopyButton } from '#lib/components/ui/copy-button/index.js';
-	import AgentCommandBlock from '#lib/components/agent-command-block.svelte';
-	import type { CreateEnvironmentDTO, DeploymentSnippetFile } from '#lib/types/environment.js';
-	import { z } from 'zod/v4';
-	import { createForm, preventDefault } from '#lib/utils/settings.svelte.js';
-
-	import { m } from '#lib/paraglide/messages.js';
-	import { environmentManagementService } from '#lib/services/env-mgmt-service.js';
-	import { queryKeys } from '#lib/query/query-keys.js';
+	import * as ResponsiveDialog from '#lib/components/ui/responsive-dialog/index.js';
+	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import { RemoteEnvironmentIcon, EdgeConnectionIcon, DownloadIcon } from '#lib/icons/index.js';
-	import { createMutation, useQueryClient } from '@tanstack/svelte-query';
+	import { m } from '#lib/paraglide/messages.js';
+	import { queryKeys } from '#lib/query/query-keys.js';
+	import { environmentManagementService } from '#lib/services/env-mgmt-service.js';
+	import type { CreateEnvironmentDTO, DeploymentSnippetFile } from '#lib/types/environment.js';
 	import { downloadTextFile } from '#lib/utils/formatting.js';
+	import { createForm, preventDefault } from '#lib/utils/settings.svelte.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	type NewEnvironmentSheetProps = {
 		open: boolean;

@@ -13,7 +13,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humaecho"
 	"github.com/getarcaneapp/arcane/types/v2/base"
-	uploadtypes "github.com/getarcaneapp/arcane/types/v2/upload"
+	"github.com/getarcaneapp/arcane/types/v2/upload"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
@@ -26,12 +26,10 @@ type UploadHandler struct {
 	uploadService *UploadService
 }
 
-// --- Huma Input/Output Wrappers ---
-
 type CreateUploadSessionInput struct {
 	EnvironmentID string `path:"id"`
 	Kind          string `path:"kind" enum:"image,volume-backup,build-workspace"`
-	Body          uploadtypes.CreateSessionRequest
+	Body          upload.CreateSessionRequest
 }
 
 type UploadChunkInput struct {
@@ -87,16 +85,16 @@ func requireUploadPermissionInternal(ctx context.Context, kind, environmentID st
 	return nil
 }
 
-func sessionResponseInternal(session *uploadtypes.Session) *handlerutil.Out[uploadtypes.Session] {
-	return &handlerutil.Out[uploadtypes.Session]{
-		Body: base.ApiResponse[uploadtypes.Session]{
+func sessionResponseInternal(session *upload.Session) *handlerutil.Out[upload.Session] {
+	return &handlerutil.Out[upload.Session]{
+		Body: base.ApiResponse[upload.Session]{
 			Success: true,
 			Data:    *session,
 		},
 	}
 }
 
-func (h *UploadHandler) CreateSession(ctx context.Context, input *CreateUploadSessionInput) (*handlerutil.Out[uploadtypes.Session], error) {
+func (h *UploadHandler) CreateSession(ctx context.Context, input *CreateUploadSessionInput) (*handlerutil.Out[upload.Session], error) {
 	if err := requireUploadPermissionInternal(ctx, input.Kind, input.EnvironmentID); err != nil {
 		return nil, err
 	}
@@ -110,7 +108,7 @@ func (h *UploadHandler) CreateSession(ctx context.Context, input *CreateUploadSe
 	return sessionResponseInternal(session), nil
 }
 
-func (h *UploadHandler) UploadChunk(ctx context.Context, input *UploadChunkInput) (*handlerutil.Out[uploadtypes.Session], error) {
+func (h *UploadHandler) UploadChunk(ctx context.Context, input *UploadChunkInput) (*handlerutil.Out[upload.Session], error) {
 	if err := requireUploadPermissionInternal(ctx, input.Kind, input.EnvironmentID); err != nil {
 		return nil, err
 	}
@@ -124,7 +122,7 @@ func (h *UploadHandler) UploadChunk(ctx context.Context, input *UploadChunkInput
 	return sessionResponseInternal(session), nil
 }
 
-func (h *UploadHandler) GetSession(ctx context.Context, input *GetUploadSessionInput) (*handlerutil.Out[uploadtypes.Session], error) {
+func (h *UploadHandler) GetSession(ctx context.Context, input *GetUploadSessionInput) (*handlerutil.Out[upload.Session], error) {
 	if err := requireUploadPermissionInternal(ctx, input.Kind, input.EnvironmentID); err != nil {
 		return nil, err
 	}
@@ -209,7 +207,7 @@ func LegacyMultipartMiddleware(api huma.API, service *UploadService, kind string
 			return
 		}
 
-		payload, err := json.Marshal(uploadtypes.ConsumeRequest{UploadID: session.ID})
+		payload, err := json.Marshal(upload.ConsumeRequest{UploadID: session.ID})
 		if err != nil {
 			writeErr(http.StatusInternalServerError, err.Error())
 			return
@@ -219,53 +217,4 @@ func LegacyMultipartMiddleware(api huma.API, service *UploadService, kind string
 		request.Header.Set("Content-Type", "application/json")
 		next(ctx)
 	}}
-}
-
-// RegisterUploads registers the upload-session routes. The required permission
-// depends on the {kind} path parameter, so the operations carry no static
-// permission metadata; enforcement happens in-handler and, for remote
-// environments, in the proxy's upload special case.
-func RegisterUploads(api huma.API, service *UploadService) {
-	h := &UploadHandler{uploadService: service}
-
-	huma.Register(api, huma.Operation{
-		OperationID: "create-upload-session",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/uploads/{kind}",
-		Summary:     "Create an upload session",
-		Description: "Start a chunked upload session; the file arrives as independently retryable chunks",
-		Tags:        []string{"Uploads"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, h.CreateSession)
-
-	huma.Register(api, huma.Operation{
-		OperationID:  "upload-chunk",
-		Method:       http.MethodPut,
-		Path:         "/environments/{id}/uploads/{kind}/{uploadId}/chunks/{index}",
-		Summary:      "Upload a chunk",
-		Description:  "Upload one chunk of an upload session; re-sending a chunk is idempotent",
-		Tags:         []string{"Uploads"},
-		Security:     handlerutil.DefaultOperationSecurity(),
-		MaxBodyBytes: uploadtypes.MaxChunkSize,
-	}, h.UploadChunk)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-upload-session",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/uploads/{kind}/{uploadId}",
-		Summary:     "Get an upload session",
-		Description: "Inspect an upload session to resume by re-sending only the missing chunks",
-		Tags:        []string{"Uploads"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, h.GetSession)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "delete-upload-session",
-		Method:      http.MethodDelete,
-		Path:        "/environments/{id}/uploads/{kind}/{uploadId}",
-		Summary:     "Delete an upload session",
-		Description: "Abort an upload session and discard its received chunks",
-		Tags:        []string{"Uploads"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, h.DeleteSession)
 }

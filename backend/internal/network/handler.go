@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"context"
 	"errors"
-	"net/http"
 	"sort"
 	"strings"
 
@@ -12,18 +11,16 @@ import (
 	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
 	"github.com/getarcaneapp/arcane/types/v2/base"
 	networktypes "github.com/getarcaneapp/arcane/types/v2/network"
-	dockernetwork "github.com/moby/moby/api/types/network"
+	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
 	"github.com/samber/mo"
-	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/kit/pkg"
 	"go.getarcane.app/kit/pkg/mapping"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/docker"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	activitylib "github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
@@ -91,97 +88,6 @@ type DisconnectContainerInput struct {
 	Body          networktypes.DisconnectContainerRequest
 }
 
-// RegisterNetworks registers network endpoints.
-func RegisterNetworks(api huma.API, networkSvc *NetworkService, dockerSvc *docker.DockerClientService, activitySvc *activity.ActivityService, appCtx handlerutil.ActivityAppContext) {
-	h := &NetworkHandler{
-		networkService:  networkSvc,
-		dockerService:   dockerSvc,
-		activityService: activitySvc,
-		appCtx:          appCtx.Context(),
-	}
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "list-networks",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/networks",
-		Summary:     "List networks",
-		Tags:        []string{"Networks"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermNetworksList, h.ListNetworks)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "network-counts",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/networks/counts",
-		Summary:     "Network counts",
-		Tags:        []string{"Networks"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermNetworksList, h.GetNetworkCounts)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "create-network",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/networks",
-		Summary:     "Create network",
-		Tags:        []string{"Networks"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermNetworksCreate, h.CreateNetwork)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "get-network-topology",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/networks/topology",
-		Summary:     "Get network topology",
-		Tags:        []string{"Networks"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermNetworksRead, h.GetNetworkTopology)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "get-network",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/networks/{networkId}",
-		Summary:     "Get network",
-		Tags:        []string{"Networks"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermNetworksRead, h.GetNetwork)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "delete-network",
-		Method:      http.MethodDelete,
-		Path:        "/environments/{id}/networks/{networkId}",
-		Summary:     "Delete network",
-		Tags:        []string{"Networks"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermNetworksDelete, h.DeleteNetwork)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "prune-networks",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/networks/prune",
-		Summary:     "Prune networks",
-		Tags:        []string{"Networks"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermNetworksPrune, h.PruneNetworks)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "connect-network-container",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/networks/{networkId}/connect",
-		Summary:     "Connect container to network",
-		Tags:        []string{"Networks"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermNetworksConnect, h.ConnectContainer)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "disconnect-network-container",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/networks/{networkId}/disconnect",
-		Summary:     "Disconnect container from network",
-		Tags:        []string{"Networks"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermNetworksDisconnect, h.DisconnectContainer)
-}
-
 func (h *NetworkHandler) ListNetworks(ctx context.Context, input *ListNetworksInput) (*ListNetworksOutput, error) {
 	params := handlerutil.PaginationParams(input.Start, input.Limit, input.Sort, input.Order, input.Search)
 	if input.InUse != "" {
@@ -235,7 +141,7 @@ func (h *NetworkHandler) CreateNetwork(ctx context.Context, input *CreateNetwork
 		dockerOptions.EnableIPv6 = nil
 	}
 
-	var response *dockernetwork.CreateResponse
+	var response *network.CreateResponse
 	runtimeCtx := utils.ActivityRuntimeContext(ctx, h.appCtx)
 	activityID, err := activitylib.RunHandlerActivity(runtimeCtx, h.activityService, activitylib.HandlerOptions{
 		EnvironmentID:  input.EnvironmentID,
@@ -260,7 +166,7 @@ func (h *NetworkHandler) CreateNetwork(ctx context.Context, input *CreateNetwork
 		return nil, huma.Error500InternalServerError("Failed to create network: " + err.Error())
 	}
 
-	out, err := mapping.MapOne[dockernetwork.CreateResponse, networktypes.CreateResponse](*response)
+	out, err := mapping.MapOne[network.CreateResponse, networktypes.CreateResponse](*response)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("Failed to map network: " + err.Error())
 	}
@@ -280,7 +186,7 @@ func (h *NetworkHandler) GetNetwork(ctx context.Context, input *GetNetworkInput)
 		return nil, huma.Error404NotFound("Network not found: " + err.Error())
 	}
 
-	out, err := mapping.MapOne[dockernetwork.Inspect, networktypes.Inspect](*networkInspect)
+	out, err := mapping.MapOne[network.Inspect, networktypes.Inspect](*networkInspect)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("Failed to map network: " + err.Error())
 	}
@@ -464,7 +370,7 @@ func (h *NetworkHandler) DisconnectContainer(ctx context.Context, input *Disconn
 }
 
 func (h *NetworkHandler) PruneNetworks(ctx context.Context, input *PruneNetworksInput) (*handlerutil.Out[networktypes.PruneReport], error) {
-	var report *dockernetwork.PruneReport
+	var report *network.PruneReport
 	runtimeCtx := utils.ActivityRuntimeContext(ctx, h.appCtx)
 	activityID, err := activitylib.RunHandlerActivity(runtimeCtx, h.activityService, activitylib.HandlerOptions{
 		EnvironmentID:  input.EnvironmentID,
@@ -483,7 +389,7 @@ func (h *NetworkHandler) PruneNetworks(ctx context.Context, input *PruneNetworks
 		return nil, huma.Error500InternalServerError("Failed to prune networks: " + err.Error())
 	}
 
-	out, err := mapping.MapOne[dockernetwork.PruneReport, networktypes.PruneReport](*report)
+	out, err := mapping.MapOne[network.PruneReport, networktypes.PruneReport](*report)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("Failed to map network: " + err.Error())
 	}

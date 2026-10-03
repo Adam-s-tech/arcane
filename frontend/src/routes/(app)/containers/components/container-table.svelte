@@ -1,55 +1,27 @@
 <script lang="ts">
-	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
-	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
-	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import { goto } from '$app/navigation';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
-	import IfPermitted from '#lib/components/if-permitted.svelte';
-	import ContainerActionMenuItem from '#lib/components/arcane-table/cells/container-action-menu-item.svelte';
-	import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import { formatDateTimeShort, truncateImageDigest } from '#lib/utils/formatting.js';
-	import type { ContainerSummaryDto } from '#lib/types/docker.js';
-	import type { ColumnSpec, BulkAction } from '#lib/components/arcane-table/index.js';
-	import type { SortState } from '#lib/components/arcane-table/arcane-table.types.svelte';
-	import { m } from '#lib/paraglide/messages.js';
-	import { PortBadge } from '#lib/components/badges/index.js';
-	import { UniversalMobileCard } from '#lib/components/arcane-table/index.js';
-	import {
-		containerService,
-		type ContainerListRequestOptions,
-		type ContainersPaginatedResponse
-	} from '#lib/services/container-service.js';
-	import * as ArcaneTooltip from '#lib/components/arcane-tooltip/index.js';
-	import ImageUpdateItem from '#lib/components/image-update-item.svelte';
+	import { useQueryClient } from '@tanstack/svelte-query';
+	import { mode } from 'mode-watcher';
 	import { PersistedState } from 'runed';
 	import { onMount } from 'svelte';
-	import { useQueryClient } from '@tanstack/svelte-query';
-	import { activityStore } from '#lib/stores/activity.store.svelte.js';
-	import { createContainerUpdateActivityTracker } from '#lib/utils/container-update-activities.js';
-	import { mode } from 'mode-watcher';
-	import { ContainerStatsManager } from './container-stats-manager.svelte';
-	import ContainerStatsSync from './container-stats-sync.svelte';
-	import ContainerStatsCell from './container-stats-cell.svelte';
-	import { ContainerResourcePoller } from './container-resource-poller.svelte';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import { hasPermission } from '#lib/utils/auth.js';
-	import * as Alert from '#lib/components/ui/alert/index.js';
-	import IconImage from '#lib/components/icon-image.svelte';
-	import { COMPOSE_PROJECT_LABEL, getContainerIpAddresses, getThemedIconUrl, parseImageRef } from '#lib/utils/docker.js';
-	import { hasAnyLoadingState } from '#lib/utils/bulk-actions.js';
 	import { Temporal } from 'temporal-polyfill';
-	import { createContainerActions } from '../container-table.actions';
-	import settingsStore from '#lib/stores/config-store.svelte.js';
-	import {
-		getActionStatusMessage,
-		getContainerDisplayName,
-		getProjectName,
-		getStateBadgeVariant,
-		getContainerStatusLabel,
-		type ActionStatus
-	} from '../container-table.helpers';
+
+	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
+	import type { SortState } from '#lib/components/arcane-table/arcane-table.types.svelte';
+	import ActionMenuItem from '#lib/components/arcane-table/cells/action-menu-item.svelte';
+	import type { ColumnSpec, BulkAction } from '#lib/components/arcane-table/index.js';
+	import { UniversalMobileCard } from '#lib/components/arcane-table/index.js';
+	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
+	import * as ArcaneTooltip from '#lib/components/arcane-tooltip/index.js';
+	import { PortBadge } from '#lib/components/badges/index.js';
+	import IconImage from '#lib/components/icon-image.svelte';
+	import IfPermitted from '#lib/components/if-permitted.svelte';
+	import ImageUpdateItem from '#lib/components/image-update-item.svelte';
+	import * as Alert from '#lib/components/ui/alert/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import {
 		StartIcon,
 		StopIcon,
@@ -70,6 +42,36 @@
 		AlertTriangleIcon,
 		InfoIcon
 	} from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import {
+		containerService,
+		type ContainerListRequestOptions,
+		type ContainersPaginatedResponse
+	} from '#lib/services/container-service.js';
+	import { activityStore } from '#lib/stores/activity.store.svelte.js';
+	import settingsStore from '#lib/stores/config-store.svelte.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import type { ContainerSummaryDto } from '#lib/types/docker.js';
+	import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
+	import { hasPermission } from '#lib/utils/auth.js';
+	import { hasAnyLoadingState } from '#lib/utils/bulk-actions.js';
+	import { createContainerUpdateActivityTracker } from '#lib/utils/container-update-activities.js';
+	import { COMPOSE_PROJECT_LABEL, getContainerIpAddresses, getThemedIconUrl, parseImageRef } from '#lib/utils/docker.js';
+	import { formatDateTimeShort, truncateImageDigest } from '#lib/utils/formatting.js';
+
+	import { createContainerActions } from '../container-table.actions';
+	import {
+		getActionStatusMessage,
+		getContainerDisplayName,
+		getProjectName,
+		getStateBadgeVariant,
+		getContainerStatusLabel,
+		type ActionStatus
+	} from '../container-table.helpers';
+	import { ContainerResourcePoller } from './container-resource-poller.svelte';
+	import ContainerStatsCell from './container-stats-cell.svelte';
+	import { ContainerStatsManager } from './container-stats-manager.svelte';
+	import ContainerStatsSync from './container-stats-sync.svelte';
 	import KillContainerDialog from './kill-container-dialog.svelte';
 
 	type FieldVisibility = Record<string, boolean>;
@@ -925,7 +927,7 @@
 			<DropdownMenu.Separator />
 
 			{#if item.updateInfo?.hasUpdate && canUpdateContainers}
-				<ContainerActionMenuItem
+				<ActionMenuItem
 					onclick={() => handleUpdateContainer(item)}
 					disabled={isAnyLoading}
 					icon={UpdateIcon}
@@ -935,7 +937,7 @@
 			{/if}
 			{#if item.state === 'paused'}
 				<IfPermitted perm="containers:pause" envId={currentEnvId}>
-					<ContainerActionMenuItem
+					<ActionMenuItem
 						onclick={() => performContainerAction('unpause', item.id)}
 						disabled={isAnyLoading}
 						icon={PlayIcon}
@@ -944,7 +946,7 @@
 					/>
 				</IfPermitted>
 			{:else if item.state !== 'running' && canStartContainers}
-				<ContainerActionMenuItem
+				<ActionMenuItem
 					onclick={() => performContainerAction('start', item.id)}
 					disabled={isAnyLoading}
 					icon={StartIcon}
@@ -953,7 +955,7 @@
 				/>
 			{:else if item.state === 'running'}
 				<IfPermitted perm="containers:stop" envId={currentEnvId}>
-					<ContainerActionMenuItem
+					<ActionMenuItem
 						icon={StopIcon}
 						label={m.common_stop()}
 						onclick={() => performContainerAction('stop', item.id)}
@@ -963,7 +965,7 @@
 				</IfPermitted>
 
 				<IfPermitted perm="containers:restart" envId={currentEnvId}>
-					<ContainerActionMenuItem
+					<ActionMenuItem
 						icon={RefreshIcon}
 						label={m.common_restart()}
 						onclick={() => performContainerAction('restart', item.id)}
@@ -973,7 +975,7 @@
 				</IfPermitted>
 
 				<IfPermitted perm="containers:pause" envId={currentEnvId}>
-					<ContainerActionMenuItem
+					<ActionMenuItem
 						onclick={() => performContainerAction('pause', item.id)}
 						disabled={isAnyLoading}
 						icon={PauseIcon}
@@ -997,7 +999,7 @@
 						{m.common_redeploy()}
 					</DropdownMenu.Item>
 				{:else}
-					<ContainerActionMenuItem
+					<ActionMenuItem
 						onclick={() => handleRedeployContainer(item)}
 						disabled={isAnyLoading}
 						icon={RedeployIcon}
@@ -1010,7 +1012,7 @@
 			<DropdownMenu.Separator />
 
 			<IfPermitted perm="containers:delete" envId={currentEnvId}>
-				<ContainerActionMenuItem
+				<ActionMenuItem
 					icon={TrashIcon}
 					label={m.common_remove()}
 					onclick={() => handleRemoveContainer(item.id, getContainerDisplayName(item))}

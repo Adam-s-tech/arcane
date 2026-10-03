@@ -9,17 +9,18 @@ import (
 	"github.com/getarcaneapp/arcane/types/v2"
 	"github.com/getarcaneapp/arcane/types/v2/features"
 	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
-	kit "go.getarcane.app/kit/pkg"
+	"github.com/getarcaneapp/arcane/types/v2/user"
+	"go.getarcane.app/kit/pkg"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/imagepatch"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/image"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 	scheduleutil "github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/schedule"
 )
 
 const AutoPatchJobName = "auto-patch"
 
-var autoPatchSystemUser = common.User{
+var autoPatchSystemUser = user.Actor{
 	Username: "System",
 }
 
@@ -27,15 +28,15 @@ var autoPatchSystemUser = common.User{
 // found fixable OS package vulnerabilities. It is opt-in via the
 // "imageAutoPatchEnabled" setting.
 type AutoPatchJob struct {
-	imagePatchService *imagepatch.ImagePatchService
-	settingsService   *settings.SettingsService
+	imageService    *image.ImageService
+	settingsService *settings.SettingsService
 }
 
 // NewAutoPatchJob creates a new AutoPatchJob.
-func NewAutoPatchJob(imagePatchService *imagepatch.ImagePatchService, settingsService *settings.SettingsService) *AutoPatchJob {
+func NewAutoPatchJob(imageService *image.ImageService, settingsService *settings.SettingsService) *AutoPatchJob {
 	return &AutoPatchJob{
-		imagePatchService: imagePatchService,
-		settingsService:   settingsService,
+		imageService:    imageService,
+		settingsService: settingsService,
 	}
 }
 
@@ -68,7 +69,7 @@ func (j *AutoPatchJob) Run(ctx context.Context) (schedulertypes.Outcome, error) 
 
 	slog.InfoContext(ctx, "scheduled image patching started")
 
-	patched, skipped, err := j.imagePatchService.PatchFlaggedImages(ctx, types.LocalDockerEnvironmentID, autoPatchSystemUser)
+	patched, skipped, err := j.imageService.PatchFlaggedImages(ctx, types.LocalDockerEnvironmentID, autoPatchSystemUser)
 	if errors.Is(err, common.ErrFeatureDisabled) {
 		status := kit.Ternary(patched > 0, schedulertypes.Partial, schedulertypes.Skipped)
 		return schedulertypes.Outcome{Status: status, Message: err.Error()}, nil

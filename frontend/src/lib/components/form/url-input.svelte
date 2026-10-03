@@ -1,9 +1,9 @@
 <script lang="ts">
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
 	import * as ButtonGroup from '#lib/components/ui/button-group/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
 	import { ArrowDownIcon } from '#lib/icons/index.js';
 
 	type Props = {

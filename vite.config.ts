@@ -8,38 +8,22 @@ export default defineConfig({
 		printWidth: 100,
 		sortPackageJson: true,
 		ignorePatterns: [
-			'.arcane.json',
-			'.custom-gcl.yml',
-			'.depot/**',
-			'.devcontainer/**',
-			'.github/**',
-			'.vscode/**',
 			'backend/**',
 			'cli/**',
-			'docker/**',
 			'types/**',
-			'AI_POLICY.md',
-			'CHANGELOG.md',
-			'CONTRIBUTING.md',
-			'SECURITY.md',
-			'cliff.toml',
-			'depot.json',
-			'pnpm-lock.yaml',
+			'.devcontainer/devcontainer-lock.json',
 			'frontend/.svelte-kit/**',
 			'frontend/build/**',
 			'frontend/messages/**',
-			'frontend/project.inlang/**',
 			'frontend/src/lib/paraglide/**',
-			'tests/.auth/**',
-			'tests/.bin/**',
-			'tests/.report/**',
-			'tests/test-results/**'
+			'tests/.report/**'
 		],
 		overrides: [
 			{
 				files: ['frontend/**'],
 				options: {
 					printWidth: 130,
+					sortImports: true,
 					sortPackageJson: false,
 					svelte: true,
 					sortTailwindcss: {

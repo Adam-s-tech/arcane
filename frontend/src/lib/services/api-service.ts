@@ -1,7 +1,8 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
-import { m } from '#lib/paraglide/messages.js';
 import ky, { HTTPError as KyHTTPError, NetworkError, TimeoutError, type Options as KyOptions, type SearchParamsOption } from 'ky';
 import { toast } from 'svelte-sonner';
+
+import { m } from '#lib/paraglide/messages.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
 
 export interface APIRequestConfig {
 	baseURL?: string;

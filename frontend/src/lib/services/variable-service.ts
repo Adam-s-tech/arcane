@@ -1,10 +1,11 @@
-import BaseAPIService from './api-service';
 import type {
 	GlobalVariable,
 	GlobalVariableCreateDto,
 	GlobalVariableUpdateDto,
 	VariableMutationResponse
 } from '#lib/types/variable.js';
+
+import BaseAPIService from './api-service';
 
 class VariableService extends BaseAPIService {
 	async list(): Promise<GlobalVariable[]> {

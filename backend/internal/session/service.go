@@ -12,7 +12,7 @@ import (
 
 	"github.com/getarcaneapp/arcane/types/v2/auth"
 	"github.com/samber/mo"
-	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/kit/pkg"
 	"gorm.io/gorm"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"

@@ -5,6 +5,8 @@ import type {
 	ProjectWorkspaceUpdateManifest
 } from '#lib/types/project-workspace.js';
 import { downloadBlob, filenameFromPath } from '#lib/utils/browser-download.js';
+import { createWorkspaceFormData } from '#lib/utils/workspace-files.js';
+
 import BaseAPIService from './api-service';
 
 class ProjectWorkspaceService extends BaseAPIService {
@@ -34,9 +36,7 @@ class ProjectWorkspaceService extends BaseAPIService {
 		environmentId?: string
 	): Promise<ProjectWorkspace> {
 		const envId = await this.resolveEnvironmentId(environmentId);
-		const form = new FormData();
-		form.append('manifest', JSON.stringify(manifest));
-		for (const file of files) form.append('files', file, file.name);
+		const form = createWorkspaceFormData(manifest, files);
 		return this.handleResponse(this.api.put(`/environments/${envId}/projects/${projectId}/workspace`, form));
 	}
 

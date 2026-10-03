@@ -1,9 +1,10 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
-import { networkService } from '#lib/services/network-service.js';
 import { queryKeys } from '#lib/query/query-keys.js';
-import { throwPageLoadError } from '#lib/utils/api.js';
-import type { PageLoad } from './$types';
+import { networkService } from '#lib/services/network-service.js';
 import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+import { throwPageLoadError } from '#lib/utils/api.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
+
+import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ parent }) => {
 	const { queryClient } = await parent();

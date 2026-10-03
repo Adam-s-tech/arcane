@@ -3,14 +3,12 @@ package apikey
 import (
 	"context"
 	"errors"
-	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
-	apikeytypes "github.com/getarcaneapp/arcane/types/v2/apikey"
+	"github.com/getarcaneapp/arcane/types/v2/apikey"
 	"github.com/getarcaneapp/arcane/types/v2/base"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
 )
 
@@ -18,8 +16,6 @@ import (
 type ApiKeyHandler struct {
 	apiKeyService *ApiKeyService
 }
-
-// --- Huma Input/Output Wrappers ---
 
 type ListApiKeysInput struct {
 	Search string `query:"search" doc:"Search query for filtering by name or description"`
@@ -30,11 +26,11 @@ type ListApiKeysInput struct {
 }
 
 type CreateApiKeyInput struct {
-	Body apikeytypes.CreateApiKey
+	Body apikey.CreateApiKey
 }
 
 type CreateMyApiKeyInput struct {
-	Body apikeytypes.CreateUserApiKey
+	Body apikey.CreateUserApiKey
 }
 
 type GetApiKeyInput struct {
@@ -43,116 +39,15 @@ type GetApiKeyInput struct {
 
 type UpdateApiKeyInput struct {
 	ID   string `path:"id" doc:"API key ID"`
-	Body apikeytypes.UpdateApiKey
+	Body apikey.UpdateApiKey
 }
 
 type DeleteApiKeyInput struct {
 	ID string `path:"id" doc:"API key ID"`
 }
 
-// RegisterApiKeys registers API key management routes using Huma.
-func RegisterApiKeys(api huma.API, apiKeyService *ApiKeyService) {
-	h := &ApiKeyHandler{
-		apiKeyService: apiKeyService,
-	}
-
-	huma.Register(api, huma.Operation{
-		OperationID: "list-api-keys",
-		Method:      http.MethodGet,
-		Path:        "/api-keys",
-		Summary:     "List API keys",
-		Description: "Get a paginated list of API keys",
-		Tags:        []string{"API Keys"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequirePermission(api, authz.PermApiKeysList),
-	}, h.ListApiKeys)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "create-api-key",
-		Method:      http.MethodPost,
-		Path:        "/api-keys",
-		Summary:     "Create an API key",
-		Description: "Create a new API key for programmatic access",
-		Tags:        []string{"API Keys"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequirePermission(api, authz.PermApiKeysCreate),
-	}, h.CreateApiKey)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-api-key",
-		Method:      http.MethodGet,
-		Path:        "/api-keys/{id}",
-		Summary:     "Get an API key",
-		Description: "Get details of a specific API key by ID",
-		Tags:        []string{"API Keys"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequirePermission(api, authz.PermApiKeysRead),
-	}, h.GetApiKey)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "update-api-key",
-		Method:      http.MethodPut,
-		Path:        "/api-keys/{id}",
-		Summary:     "Update an API key",
-		Description: "Update an existing API key's details",
-		Tags:        []string{"API Keys"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequirePermission(api, authz.PermApiKeysUpdate),
-	}, h.UpdateApiKey)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "delete-api-key",
-		Method:      http.MethodDelete,
-		Path:        "/api-keys/{id}",
-		Summary:     "Delete an API key",
-		Description: "Delete an API key by ID",
-		Tags:        []string{"API Keys"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequirePermission(api, authz.PermApiKeysDelete),
-	}, h.DeleteApiKey)
-
-	// Self-service endpoints — no admin permission required, scoped to the
-	// caller's own keys via current-user context.
-	huma.Register(api, huma.Operation{
-		OperationID: "list-my-api-keys",
-		Method:      http.MethodGet,
-		Path:        "/auth/me/api-keys",
-		Summary:     "List my API keys",
-		Description: "List API keys owned by the current user",
-		Tags:        []string{"API Keys"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, h.ListMyApiKeys)
-
-	// Personal keys inherit the owner's permissions, so creating or deleting
-	// them is session-only (BearerAuth, no ApiKeyAuth): a stolen API key must
-	// not be able to mint or remove persistence credentials.
-	huma.Register(api, huma.Operation{
-		OperationID: "create-my-api-key",
-		Method:      http.MethodPost,
-		Path:        "/auth/me/api-keys",
-		Summary:     "Create my API key",
-		Description: "Create a new personal API key owned by the current user. Personal keys inherit the owner's role permissions.",
-		Tags:        []string{"API Keys"},
-		Security: []map[string][]string{
-			{"BearerAuth": {}},
-		},
-	}, h.CreateMyApiKey)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "delete-my-api-key",
-		Method:      http.MethodDelete,
-		Path:        "/auth/me/api-keys/{id}",
-		Summary:     "Delete my API key",
-		Description: "Delete one of the current user's own API keys",
-		Tags:        []string{"API Keys"},
-		Security: []map[string][]string{
-			{"BearerAuth": {}},
-		},
-	}, h.DeleteMyApiKey)
-}
-
 // ListApiKeys returns a paginated list of API keys.
-func (h *ApiKeyHandler) ListApiKeys(ctx context.Context, input *ListApiKeysInput) (*handlerutil.Page[apikeytypes.ApiKey], error) {
+func (h *ApiKeyHandler) ListApiKeys(ctx context.Context, input *ListApiKeysInput) (*handlerutil.Page[apikey.ApiKey], error) {
 	params := handlerutil.PaginationParams(input.Start, input.Limit, input.Sort, input.Order, input.Search)
 
 	apiKeys, paginationResp, err := h.apiKeyService.ListApiKeys(ctx, params)
@@ -160,8 +55,8 @@ func (h *ApiKeyHandler) ListApiKeys(ctx context.Context, input *ListApiKeysInput
 		return nil, huma.Error500InternalServerError("Failed to list API keys: " + err.Error())
 	}
 
-	return &handlerutil.Page[apikeytypes.ApiKey]{
-		Body: base.Paginated[apikeytypes.ApiKey]{
+	return &handlerutil.Page[apikey.ApiKey]{
+		Body: base.Paginated[apikey.ApiKey]{
 			Success:    true,
 			Data:       apiKeys,
 			Pagination: handlerutil.PaginationResponse(paginationResp),
@@ -171,7 +66,7 @@ func (h *ApiKeyHandler) ListApiKeys(ctx context.Context, input *ListApiKeysInput
 
 // CreateApiKey creates a new scoped API key. Requested grants are capped by
 // the calling credential's effective permissions.
-func (h *ApiKeyHandler) CreateApiKey(ctx context.Context, input *CreateApiKeyInput) (*handlerutil.Out[apikeytypes.ApiKeyCreatedDto], error) {
+func (h *ApiKeyHandler) CreateApiKey(ctx context.Context, input *CreateApiKeyInput) (*handlerutil.Out[apikey.ApiKeyCreatedDto], error) {
 	user, err := handlerutil.RequireUser(ctx)
 	if err != nil {
 		return nil, err
@@ -186,8 +81,8 @@ func (h *ApiKeyHandler) CreateApiKey(ctx context.Context, input *CreateApiKeyInp
 		return nil, huma.Error500InternalServerError("Failed to create API key")
 	}
 
-	return &handlerutil.Out[apikeytypes.ApiKeyCreatedDto]{
-		Body: base.ApiResponse[apikeytypes.ApiKeyCreatedDto]{
+	return &handlerutil.Out[apikey.ApiKeyCreatedDto]{
+		Body: base.ApiResponse[apikey.ApiKeyCreatedDto]{
 			Success: true,
 			Data:    *apiKey,
 		},
@@ -195,14 +90,14 @@ func (h *ApiKeyHandler) CreateApiKey(ctx context.Context, input *CreateApiKeyInp
 }
 
 // GetApiKey returns details of a specific API key.
-func (h *ApiKeyHandler) GetApiKey(ctx context.Context, input *GetApiKeyInput) (*handlerutil.Out[apikeytypes.ApiKey], error) {
+func (h *ApiKeyHandler) GetApiKey(ctx context.Context, input *GetApiKeyInput) (*handlerutil.Out[apikey.ApiKey], error) {
 	apiKey, err := h.apiKeyService.GetApiKey(ctx, input.ID)
 	if err != nil {
 		return nil, huma.Error404NotFound("API key not found")
 	}
 
-	return &handlerutil.Out[apikeytypes.ApiKey]{
-		Body: base.ApiResponse[apikeytypes.ApiKey]{
+	return &handlerutil.Out[apikey.ApiKey]{
+		Body: base.ApiResponse[apikey.ApiKey]{
 			Success: true,
 			Data:    *apiKey,
 		},
@@ -210,7 +105,7 @@ func (h *ApiKeyHandler) GetApiKey(ctx context.Context, input *GetApiKeyInput) (*
 }
 
 // UpdateApiKey updates an existing API key.
-func (h *ApiKeyHandler) UpdateApiKey(ctx context.Context, input *UpdateApiKeyInput) (*handlerutil.Out[apikeytypes.ApiKey], error) {
+func (h *ApiKeyHandler) UpdateApiKey(ctx context.Context, input *UpdateApiKeyInput) (*handlerutil.Out[apikey.ApiKey], error) {
 	if _, err := handlerutil.RequireUser(ctx); err != nil {
 		return nil, err
 	}
@@ -233,8 +128,8 @@ func (h *ApiKeyHandler) UpdateApiKey(ctx context.Context, input *UpdateApiKeyInp
 		return nil, huma.Error500InternalServerError("Failed to update API key")
 	}
 
-	return &handlerutil.Out[apikeytypes.ApiKey]{
-		Body: base.ApiResponse[apikeytypes.ApiKey]{
+	return &handlerutil.Out[apikey.ApiKey]{
+		Body: base.ApiResponse[apikey.ApiKey]{
 			Success: true,
 			Data:    *apiKey,
 		},
@@ -264,7 +159,7 @@ func (h *ApiKeyHandler) DeleteApiKey(ctx context.Context, input *DeleteApiKeyInp
 }
 
 // ListMyApiKeys lists API keys owned by the current user (self-service).
-func (h *ApiKeyHandler) ListMyApiKeys(ctx context.Context, input *struct{}) (*handlerutil.Out[[]apikeytypes.ApiKey], error) {
+func (h *ApiKeyHandler) ListMyApiKeys(ctx context.Context, input *struct{}) (*handlerutil.Out[[]apikey.ApiKey], error) {
 	user, err := handlerutil.RequireUser(ctx)
 	if err != nil {
 		return nil, err
@@ -275,8 +170,8 @@ func (h *ApiKeyHandler) ListMyApiKeys(ctx context.Context, input *struct{}) (*ha
 		return nil, huma.Error500InternalServerError("Failed to list API keys: " + err.Error())
 	}
 
-	return &handlerutil.Out[[]apikeytypes.ApiKey]{
-		Body: base.ApiResponse[[]apikeytypes.ApiKey]{
+	return &handlerutil.Out[[]apikey.ApiKey]{
+		Body: base.ApiResponse[[]apikey.ApiKey]{
 			Success: true,
 			Data:    keys,
 		},
@@ -286,7 +181,7 @@ func (h *ApiKeyHandler) ListMyApiKeys(ctx context.Context, input *struct{}) (*ha
 // CreateMyApiKey creates a new personal API key owned by the current user
 // (self-service). Personal keys inherit the owner's role permissions, and may
 // only be minted from an interactive session — never by another API key.
-func (h *ApiKeyHandler) CreateMyApiKey(ctx context.Context, input *CreateMyApiKeyInput) (*handlerutil.Out[apikeytypes.ApiKeyCreatedDto], error) {
+func (h *ApiKeyHandler) CreateMyApiKey(ctx context.Context, input *CreateMyApiKeyInput) (*handlerutil.Out[apikey.ApiKeyCreatedDto], error) {
 	// Defense in depth alongside the BearerAuth-only Security requirement:
 	// only session auth sets a session ID, so API-key and sudo callers stop here.
 	if _, ok := middleware.GetCurrentSessionIDFromContext(ctx); !ok {
@@ -303,8 +198,8 @@ func (h *ApiKeyHandler) CreateMyApiKey(ctx context.Context, input *CreateMyApiKe
 		return nil, huma.Error500InternalServerError("Failed to create API key")
 	}
 
-	return &handlerutil.Out[apikeytypes.ApiKeyCreatedDto]{
-		Body: base.ApiResponse[apikeytypes.ApiKeyCreatedDto]{
+	return &handlerutil.Out[apikey.ApiKeyCreatedDto]{
+		Body: base.ApiResponse[apikey.ApiKeyCreatedDto]{
 			Success: true,
 			Data:    *apiKey,
 		},

@@ -1,21 +1,23 @@
 <script lang="ts">
-	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import * as ArcaneTooltip from '#lib/components/arcane-tooltip/index.js';
-	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
-	import { CopyButton } from '#lib/components/ui/copy-button/index.js';
 	import { toast } from 'svelte-sonner';
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
-	import type { ApiKey } from '#lib/types/auth.js';
+
+	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
 	import type { ColumnSpec, MobileFieldVisibility, BulkAction } from '#lib/components/arcane-table/index.js';
 	import { UniversalMobileCard } from '#lib/components/arcane-table/index.js';
-	import { apiKeyService } from '#lib/services/api-key-service.js';
-	import { formatOptionalDateTime, isPastDate } from '#lib/utils/formatting.js';
-	import * as m from '#lib/paraglide/messages.js';
-	import { ApiKeyIcon, TrashIcon, EditIcon } from '#lib/icons/index.js';
+	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
+	import * as ArcaneTooltip from '#lib/components/arcane-tooltip/index.js';
 	import IfPermitted from '#lib/components/if-permitted.svelte';
-	import { bulkConfirmAndRun, confirmAndRun } from '#lib/utils/bulk-actions.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { CopyButton } from '#lib/components/ui/copy-button/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import { ApiKeyIcon, TrashIcon, EditIcon } from '#lib/icons/index.js';
+	import * as m from '#lib/paraglide/messages.js';
+	import { apiKeyService } from '#lib/services/api-key-service.js';
+	import type { ApiKey } from '#lib/types/auth.js';
+	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
+	import { confirmDeleteApiKey } from '#lib/utils/api-keys.js';
+	import { bulkConfirmAndRun } from '#lib/utils/bulk-actions.js';
+	import { formatOptionalDateTime, isPastDate } from '#lib/utils/formatting.js';
 
 	let {
 		apiKeys = $bindable(),
@@ -98,19 +100,12 @@
 	}
 
 	function handleDeleteApiKey(apiKeyId: string, name: string) {
-		const safeName = name?.trim() || m.common_unknown();
-		confirmAndRun({
-			title: m.api_key_delete_title({ name: safeName }),
-			message: m.api_key_delete_message({ name: safeName }),
-			confirmLabel: m.common_delete(),
-			destructive: true,
-			setLoading: (loading) => (isLoading.removing = loading),
+		confirmDeleteApiKey({
+			name,
 			run: () => apiKeyService.delete(apiKeyId),
-			failureMessage: m.api_key_delete_failed({ name: safeName }),
-			onSuccess: async () => {
-				toast.success(m.api_key_delete_success({ name: safeName }));
-				await onApiKeysChanged();
-			}
+			setLoading: (loading) => (isLoading.removing = loading),
+			successMessage: (safeName) => m.api_key_delete_success({ name: safeName }),
+			onDeleted: () => onApiKeysChanged()
 		});
 	}
 

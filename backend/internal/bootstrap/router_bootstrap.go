@@ -10,9 +10,10 @@ import (
 	"strings"
 
 	"github.com/getarcaneapp/arcane/types/v2"
+	usertypes "github.com/getarcaneapp/arcane/types/v2/user"
 	"github.com/labstack/echo/v5"
 	echomiddleware "github.com/labstack/echo/v5/middleware"
-	slogecho "github.com/samber/slog-echo/v2"
+	"github.com/samber/slog-echo/v2"
 	"go.uber.org/fx"
 
 	"github.com/getarcaneapp/arcane/backend/v2/api"
@@ -20,7 +21,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/frontend"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/apikey"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/auth"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/federated"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
@@ -98,8 +98,8 @@ func requestLoggerMiddlewareInternal() echo.MiddlewareFunc {
 }
 
 func createAuthValidatorInternal(deps api.HandlerDeps) middleware.AuthValidator {
-	resolveUser := func(ctx context.Context, user *common.User) *authz.PermissionSet {
-		ps, err := deps.Role.Service().ResolvePermissions(ctx, user)
+	resolveUser := func(ctx context.Context, user *usertypes.Actor) *authz.PermissionSet {
+		ps, err := deps.Role.Service().ResolvePermissions(ctx, user.ID)
 		if err != nil || ps == nil {
 			slog.WarnContext(ctx, "failed to resolve user permissions for env proxy", "error", err)
 			return authz.NewPermissionSet()
@@ -114,7 +114,7 @@ func createAuthValidatorInternal(deps api.HandlerDeps) middleware.AuthValidator 
 		}
 		return ps
 	}
-	return func(ctx context.Context, c *echo.Context) (*authz.PermissionSet, *common.User, bool) {
+	return func(ctx context.Context, c *echo.Context) (*authz.PermissionSet, *usertypes.Actor, bool) {
 		req := c.Request()
 		// Check for API key authentication
 		if apiKey := req.Header.Get(middleware.HeaderApiKey); apiKey != "" {
@@ -122,9 +122,9 @@ func createAuthValidatorInternal(deps api.HandlerDeps) middleware.AuthValidator 
 			// permissions; scoped keys are limited to their own grants.
 			if user, key, err := deps.ApiKey.Service().ValidateApiKeyWithID(ctx, apiKey); err == nil && user != nil {
 				if key != nil && key.Kind != apikey.ApiKeyKindPersonal {
-					return resolveKey(ctx, key.ID), user, true
+					return resolveKey(ctx, key.ID), user.Actor(), true
 				}
-				return resolveUser(ctx, user), user, true
+				return resolveUser(ctx, user.Actor()), user.Actor(), true
 			}
 			// Environment bootstrap key (user_id = NULL): used by the proxy when forwarding
 			// requests to a remote env whose apiUrl resolves back to this manager.
@@ -142,10 +142,10 @@ func createAuthValidatorInternal(deps api.HandlerDeps) middleware.AuthValidator 
 	}
 }
 
-func verifyRouterRequestUserInternal(ctx context.Context, authService *auth.AuthService, req *http.Request) (*common.User, bool) {
+func verifyRouterRequestUserInternal(ctx context.Context, authService *auth.AuthService, req *http.Request) (*usertypes.Actor, bool) {
 	if authHeader := req.Header.Get("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
 		user, _, err := authService.VerifyToken(ctx, strings.TrimPrefix(authHeader, "Bearer "))
-		return user, err == nil && user != nil
+		return user.Actor(), err == nil && user != nil
 	}
 
 	browserToken, err := cookie.GetTokenCookie(req)
@@ -153,7 +153,7 @@ func verifyRouterRequestUserInternal(ctx context.Context, authService *auth.Auth
 		return nil, false
 	}
 	user, _, err := authService.VerifyBrowserToken(ctx, browserToken)
-	return user, err == nil && user != nil
+	return user.Actor(), err == nil && user != nil
 }
 
 type RouterParams struct {

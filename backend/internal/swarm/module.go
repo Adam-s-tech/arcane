@@ -2,11 +2,21 @@
 package swarm
 
 import (
+	"net/http"
+
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/environment"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/event"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/swarm/children/configs"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/swarm/children/nodes"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/swarm/children/secrets"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/swarm/children/services"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/swarm/children/stacks"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
 )
 
 type Module struct {
@@ -29,8 +39,188 @@ func (m *Module) Service() *SwarmService {
 
 func (m *Module) RegisterRoutes(api huma.API) {
 	if m == nil {
-		RegisterSwarm(api, nil, nil, nil, nil)
-		return
+		m = &Module{}
 	}
-	RegisterSwarm(api, m.service, m.environment, m.event, m.config)
+	service := m.service
+	if service == nil {
+		service = &SwarmService{}
+	}
+
+	h := NewHandler(m.service, m.event)
+	RegisterSwarm(api, h)
+	services.RegisterRoutes(api, services.NewHandler(service.services, h.auditSwarmMutation, mapSwarmServiceErrorInternal))
+	nodes.RegisterRoutes(api, nodes.NewHandler(service.nodes, h.auditSwarmMutation, mapSwarmServiceErrorInternal, m.environment, m.config))
+	stacks.RegisterRoutes(api, stacks.NewHandler(service.stacks, h.auditSwarmMutation, mapSwarmServiceErrorInternal))
+	configs.RegisterRoutes(api, configs.NewHandler(service.configs, h.auditSwarmMutation, mapSwarmServiceErrorInternal))
+	secrets.RegisterRoutes(api, secrets.NewHandler(service.secrets, h.auditSwarmMutation, mapSwarmServiceErrorInternal))
+}
+
+// RegisterSwarm registers the swarm task and cluster lifecycle operations.
+func RegisterSwarm(api huma.API, h *SwarmHandler) {
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "list-swarm-tasks",
+			Method:      http.MethodGet,
+			Path:        "/environments/{id}/swarm/tasks",
+			Summary:     "List swarm tasks",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmRead,
+		h.ListTasks,
+	)
+
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "get-swarm-status",
+			Method:      http.MethodGet,
+			Path:        "/environments/{id}/swarm/status",
+			Summary:     "Get swarm status",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmRead,
+		h.GetSwarmStatus,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "get-swarm-info",
+			Method:      http.MethodGet,
+			Path:        "/environments/{id}/swarm/info",
+			Summary:     "Get swarm info",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmRead,
+		h.GetSwarmInfo,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "init-swarm",
+			Method:      http.MethodPost,
+			Path:        "/environments/{id}/swarm/init",
+			Summary:     "Initialize swarm",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmInit,
+		h.InitSwarm,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "join-swarm",
+			Method:      http.MethodPost,
+			Path:        "/environments/{id}/swarm/join",
+			Summary:     "Join swarm",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmJoin,
+		h.JoinSwarm,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "leave-swarm",
+			Method:      http.MethodPost,
+			Path:        "/environments/{id}/swarm/leave",
+			Summary:     "Leave swarm",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmLeave,
+		h.LeaveSwarm,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "unlock-swarm",
+			Method:      http.MethodPost,
+			Path:        "/environments/{id}/swarm/unlock",
+			Summary:     "Unlock swarm",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmUnlock,
+		h.UnlockSwarm,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "get-swarm-unlock-key",
+			Method:      http.MethodGet,
+			Path:        "/environments/{id}/swarm/unlock-key",
+			Summary:     "Get swarm unlock key",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmUnlock,
+		h.GetUnlockKey,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "get-swarm-join-tokens",
+			Method:      http.MethodGet,
+			Path:        "/environments/{id}/swarm/join-tokens",
+			Summary:     "Get swarm join tokens",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmUnlock,
+		h.GetJoinTokens,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "rotate-swarm-join-tokens",
+			Method:      http.MethodPost,
+			Path:        "/environments/{id}/swarm/join-tokens/rotate",
+			Summary:     "Rotate swarm join tokens",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmUnlock,
+		h.RotateJoinTokens,
+	)
+	middleware.RegisterWithPermission(
+		api,
+		huma.Operation{
+			OperationID: "update-swarm-spec",
+			Method:      http.MethodPut,
+			Path:        "/environments/{id}/swarm/spec",
+			Summary:     "Update swarm spec",
+			Tags: []string{
+				"Swarm",
+			},
+			Security: handlerutil.DefaultOperationSecurity(),
+		},
+		authz.PermSwarmSpec,
+		h.UpdateSwarmSpec,
+	)
 }

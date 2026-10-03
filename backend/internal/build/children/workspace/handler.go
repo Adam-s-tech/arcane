@@ -1,0 +1,136 @@
+package workspace
+
+import (
+	"context"
+	"io"
+	"path"
+
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/getarcaneapp/arcane/types/v2/base"
+	uploadtypes "github.com/getarcaneapp/arcane/types/v2/upload"
+	"github.com/getarcaneapp/arcane/types/v2/workspace"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/upload"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
+)
+
+// Handler provides file browsing endpoints for manual build workspaces.
+type Handler struct {
+	service       *Service
+	uploadService *upload.UploadService
+}
+
+type BrowseBuildsInput struct {
+	EnvironmentID string `path:"id" doc:"Environment ID"`
+	Path          string `query:"path" default:"/" doc:"Directory path to browse"`
+}
+
+type GetBuildFileContentInput struct {
+	EnvironmentID string `path:"id" doc:"Environment ID"`
+	Path          string `query:"path" doc:"File path"`
+	MaxBytes      int64  `query:"maxBytes" default:"1048576" doc:"Maximum bytes to read (default 1MB)"`
+}
+
+type BuildFileContentResponse struct {
+	Content  []byte `json:"content"`
+	MimeType string `json:"mimeType"`
+}
+
+type DownloadBuildFileInput struct {
+	EnvironmentID string `path:"id" doc:"Environment ID"`
+	Path          string `query:"path" doc:"File path"`
+}
+
+type DownloadBuildFileOutput struct {
+	ContentType        string `header:"Content-Type"`
+	ContentDisposition string `header:"Content-Disposition"`
+	ContentLength      int64  `header:"Content-Length"`
+	Body               io.ReadCloser
+}
+
+type UploadBuildFileInput struct {
+	EnvironmentID string `path:"id" doc:"Environment ID"`
+	Path          string `query:"path" default:"/" doc:"Destination path"`
+	Body          uploadtypes.ConsumeRequest
+}
+
+type CreateBuildDirectoryInput struct {
+	EnvironmentID string `path:"id" doc:"Environment ID"`
+	Path          string `query:"path" doc:"Directory path to create"`
+}
+
+type DeleteBuildFileInput struct {
+	EnvironmentID string `path:"id" doc:"Environment ID"`
+	Path          string `query:"path" doc:"File or directory path to delete"`
+}
+
+func (h *Handler) BrowseDirectory(ctx context.Context, input *BrowseBuildsInput) (*handlerutil.Out[[]workspace.FileEntry], error) {
+	entries, err := h.service.ListDirectory(ctx, input.Path)
+	if err != nil {
+		return nil, huma.Error500InternalServerError(err.Error())
+	}
+	return &handlerutil.Out[[]workspace.FileEntry]{Body: base.ApiResponse[[]workspace.FileEntry]{Success: true, Data: entries}}, nil
+}
+
+func (h *Handler) GetFileContent(ctx context.Context, input *GetBuildFileContentInput) (*handlerutil.Out[BuildFileContentResponse], error) {
+	content, mimeType, err := h.service.GetFileContent(ctx, input.Path, input.MaxBytes)
+	if err != nil {
+		return nil, huma.Error500InternalServerError(err.Error())
+	}
+	return &handlerutil.Out[BuildFileContentResponse]{Body: base.ApiResponse[BuildFileContentResponse]{
+		Success: true,
+		Data:    BuildFileContentResponse{Content: content, MimeType: mimeType},
+	}}, nil
+}
+
+func (h *Handler) DownloadFile(ctx context.Context, input *DownloadBuildFileInput) (*DownloadBuildFileOutput, error) {
+	reader, size, err := h.service.DownloadFile(ctx, input.Path)
+	if err != nil {
+		return nil, huma.Error500InternalServerError(err.Error())
+	}
+	return &DownloadBuildFileOutput{
+		ContentType:        "application/octet-stream",
+		ContentDisposition: "attachment; filename=" + path.Base(input.Path),
+		ContentLength:      size,
+		Body:               reader,
+	}, nil
+}
+
+func (h *Handler) UploadFile(ctx context.Context, input *UploadBuildFileInput) (*base.ApiResponse[base.MessageResponse], error) {
+	file, session, cleanup, err := h.uploadService.Consume(ctx, uploadtypes.KindBuildWorkspace, input.Body.UploadID)
+	if err != nil {
+		if httpErr := upload.SessionHTTPError(err); httpErr != nil {
+			return nil, httpErr
+		}
+		return nil, huma.Error500InternalServerError(err.Error())
+	}
+	defer cleanup()
+
+	if uploadFileErr := h.service.UploadFile(ctx, input.Path, file, session.Filename, session.Size); uploadFileErr != nil {
+		return nil, huma.Error500InternalServerError(uploadFileErr.Error())
+	}
+	return &base.ApiResponse[base.MessageResponse]{
+		Success: true,
+		Data:    base.MessageResponse{Message: "File uploaded successfully"},
+	}, nil
+}
+
+func (h *Handler) CreateDirectory(ctx context.Context, input *CreateBuildDirectoryInput) (*base.ApiResponse[base.MessageResponse], error) {
+	if err := h.service.CreateDirectory(ctx, input.Path); err != nil {
+		return nil, huma.Error500InternalServerError(err.Error())
+	}
+	return &base.ApiResponse[base.MessageResponse]{
+		Success: true,
+		Data:    base.MessageResponse{Message: "Directory created successfully"},
+	}, nil
+}
+
+func (h *Handler) DeleteFile(ctx context.Context, input *DeleteBuildFileInput) (*base.ApiResponse[base.MessageResponse], error) {
+	if err := h.service.DeleteFile(ctx, input.Path); err != nil {
+		return nil, huma.Error500InternalServerError(err.Error())
+	}
+	return &base.ApiResponse[base.MessageResponse]{
+		Success: true,
+		Data:    base.MessageResponse{Message: "Deleted successfully"},
+	}, nil
+}

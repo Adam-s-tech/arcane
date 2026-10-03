@@ -9,6 +9,7 @@ import {
 } from '@tanstack/svelte-table';
 import { metaHelper } from '@tanstack/table-core';
 import type { Cell, Column, ColumnDef, FilterFn, Row, RowData, Table } from '@tanstack/table-core';
+
 // Type-only cycle with arcane-table.types.svelte.ts (which imports only types from here) — erased at emit.
 import type { ColumnAlign, ColumnWidth, FilterOption } from './arcane-table.types.svelte';
 

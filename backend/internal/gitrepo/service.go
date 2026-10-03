@@ -9,6 +9,7 @@ import (
 
 	"github.com/getarcaneapp/arcane/types/v2/base"
 	"github.com/getarcaneapp/arcane/types/v2/gitops"
+	"github.com/getarcaneapp/arcane/types/v2/user"
 	"github.com/samber/mo"
 	"go.getarcane.app/builds/pkg/contextsource"
 	"go.getarcane.app/kit/normalization"
@@ -19,7 +20,7 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/event"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
-	git "github.com/getarcaneapp/arcane/backend/v2/pkg/gitutil"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/gitutil"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/timeouts"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
@@ -121,7 +122,7 @@ const (
 	defaultCommitAuthorEmail = "arcane@localhost"
 )
 
-func (s *GitRepositoryService) CreateRepository(ctx context.Context, req gitops.CreateRepositoryRequest, actor common.User) (*GitRepository, error) {
+func (s *GitRepositoryService) CreateRepository(ctx context.Context, req gitops.CreateRepositoryRequest, actor user.Actor) (*GitRepository, error) {
 	if err := normalization.Normalize(&req); err != nil {
 		return nil, err
 	}
@@ -190,7 +191,7 @@ func (s *GitRepositoryService) CreateRepository(ctx context.Context, req gitops.
 	return &repository, nil
 }
 
-func (s *GitRepositoryService) UpdateRepository(ctx context.Context, id string, req gitops.UpdateRepositoryRequest, actor common.User) (*GitRepository, error) {
+func (s *GitRepositoryService) UpdateRepository(ctx context.Context, id string, req gitops.UpdateRepositoryRequest, actor user.Actor) (*GitRepository, error) {
 	if err := normalization.Normalize(&req); err != nil {
 		return nil, err
 	}
@@ -296,7 +297,7 @@ func (s *GitRepositoryService) UpdateRepository(ctx context.Context, id string, 
 	return s.GetRepositoryByID(ctx, id)
 }
 
-func (s *GitRepositoryService) DeleteRepository(ctx context.Context, id string, actor common.User) error {
+func (s *GitRepositoryService) DeleteRepository(ctx context.Context, id string, actor user.Actor) error {
 	// Check if repository is used by any syncs
 	var count int64
 	if err := s.db.WithContext(ctx).Table("gitops_syncs").Where("repository_id = ?", id).Count(&count).Error; err != nil {
@@ -333,7 +334,7 @@ func (s *GitRepositoryService) DeleteRepository(ctx context.Context, id string, 
 	return nil
 }
 
-func (s *GitRepositoryService) TestConnection(ctx context.Context, id, branch string, actor common.User) error {
+func (s *GitRepositoryService) TestConnection(ctx context.Context, id, branch string, actor user.Actor) error {
 	localSettings := s.settingsService.GetSettingsConfig()
 	ctx, cancel := context.WithTimeout(ctx, timeouts.GetDuration(localSettings.GitOperationTimeout.AsInt(), timeouts.DefaultGitOperation))
 	defer cancel()

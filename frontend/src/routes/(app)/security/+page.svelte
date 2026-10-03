@@ -1,36 +1,37 @@
 <script lang="ts">
-	import FeatureDisabled from '#lib/components/features/feature-disabled.svelte';
-	import { featureStore } from '#lib/stores/features.store.svelte.js';
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
-	import { ResourcePageLayout, type ActionButton } from '#lib/layouts/index.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import { vulnerabilityService } from '#lib/services/vulnerability-service.js';
-	import { imageService } from '#lib/services/image-service.js';
-	import { extractApiErrorMessage, parallelRefresh } from '#lib/utils/api.js';
-	import { useEnvironmentRefresh } from '#lib/hooks/use-environment-refresh.svelte.js';
-	import type { VulnerabilityRiskOverview, VulnerabilityWithImage } from '#lib/types/environment.js';
-	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
 	import { onMount, onDestroy, untrack } from 'svelte';
-	import SecurityVulnerabilityTable from './components/security-vulnerability-table.svelte';
-	import SecurityPatchTable from './components/security-patch-table.svelte';
-	import SecurityOverview from './components/security-overview.svelte';
-	import type { ImagePatchTargetDto } from '#lib/types/docker.js';
 	import { toast } from 'svelte-sonner';
-	import { ActivityIcon, ImagesIcon, InspectIcon, ScanIcon, ShieldAlertIcon, ShieldCheckIcon } from '#lib/icons/index.js';
+
+	import FeatureDisabled from '#lib/components/features/feature-disabled.svelte';
 	import { EmptyState } from '#lib/components/states/index.js';
 	import { TabBar, type TabItem } from '#lib/components/tab-bar/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import { useEnvironmentRefresh } from '#lib/hooks/use-environment-refresh.svelte.js';
+	import { useUrlTab } from '#lib/hooks/use-url-tab.svelte.js';
+	import { ActivityIcon, ImagesIcon, InspectIcon, ScanIcon, ShieldAlertIcon, ShieldCheckIcon } from '#lib/icons/index.js';
+	import { ResourcePageLayout, type ActionButton } from '#lib/layouts/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { imageService } from '#lib/services/image-service.js';
+	import { vulnerabilityService } from '#lib/services/vulnerability-service.js';
 	import { activityStore } from '#lib/stores/activity.store.svelte.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import { featureStore } from '#lib/stores/features.store.svelte.js';
+	import type { ImagePatchTargetDto } from '#lib/types/docker.js';
+	import type { VulnerabilityRiskOverview, VulnerabilityWithImage } from '#lib/types/environment.js';
+	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
+	import { extractApiErrorMessage, parallelRefresh } from '#lib/utils/api.js';
 	import { hasPermission } from '#lib/utils/auth.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 	import {
 		getSeveritySegments,
 		mapVulnerabilityPage,
 		mapVulnerabilityRequest,
 		withVulnerabilityToggles
 	} from '#lib/utils/vulnerability.js';
-	import { useUrlTab } from '#lib/hooks/use-url-tab.svelte.js';
+
+	import SecurityOverview from './components/security-overview.svelte';
+	import SecurityPatchTable from './components/security-patch-table.svelte';
+	import SecurityVulnerabilityTable from './components/security-vulnerability-table.svelte';
 
 	let { data } = $props();
 	let displayedEnvId = $derived(data.envId);

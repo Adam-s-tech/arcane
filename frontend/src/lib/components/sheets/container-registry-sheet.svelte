@@ -1,20 +1,20 @@
 <script lang="ts">
-	import * as ResponsiveDialog from '#lib/components/ui/responsive-dialog/index.js';
-	import SheetFooterActions from '#lib/components/sheets/sheet-footer-actions.svelte';
+	import { z } from 'zod/v4';
+
 	import FormInput from '#lib/components/form/form-input.svelte';
 	import SwitchWithLabel from '#lib/components/form/labeled-switch.svelte';
 	import SelectWithLabel from '#lib/components/form/select-with-label.svelte';
+	import SheetFooterActions from '#lib/components/sheets/sheet-footer-actions.svelte';
+	import * as ResponsiveDialog from '#lib/components/ui/responsive-dialog/index.js';
+	import { m } from '#lib/paraglide/messages.js';
 	import type {
 		ContainerRegistry,
 		ContainerRegistryCreateDto,
 		ContainerRegistryUpdateDto,
 		RegistryType
 	} from '#lib/types/docker.js';
-	import { z } from 'zod/v4';
-	import { createForm, preventDefault } from '#lib/utils/settings.svelte.js';
-
 	import { parseLines } from '#lib/utils/form-parsers.js';
-	import { m } from '#lib/paraglide/messages.js';
+	import { createForm, preventDefault } from '#lib/utils/settings.svelte.js';
 
 	type ContainerRegistryFormProps = {
 		open: boolean;

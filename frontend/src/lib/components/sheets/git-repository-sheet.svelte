@@ -1,16 +1,16 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import * as ResponsiveDialog from '#lib/components/ui/responsive-dialog/index.js';
-	import SheetFooterActions from '#lib/components/sheets/sheet-footer-actions.svelte';
+	import { z } from 'zod/v4';
+
 	import FormInput from '#lib/components/form/form-input.svelte';
 	import SwitchWithLabel from '#lib/components/form/labeled-switch.svelte';
-	import * as Select from '#lib/components/ui/select/index.js';
+	import SheetFooterActions from '#lib/components/sheets/sheet-footer-actions.svelte';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import type { GitRepository, GitRepositoryCreateDto, GitRepositoryUpdateDto } from '#lib/types/automation.js';
-	import { z } from 'zod/v4';
-	import { createForm, preventDefault } from '#lib/utils/settings.svelte.js';
-
+	import * as ResponsiveDialog from '#lib/components/ui/responsive-dialog/index.js';
+	import * as Select from '#lib/components/ui/select/index.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import type { GitRepository, GitRepositoryCreateDto, GitRepositoryUpdateDto } from '#lib/types/automation.js';
+	import { createForm, preventDefault } from '#lib/utils/settings.svelte.js';
 
 	type GitRepositoryFormProps = {
 		open: boolean;

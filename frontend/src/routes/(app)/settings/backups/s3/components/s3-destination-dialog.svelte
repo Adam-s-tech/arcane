@@ -1,18 +1,17 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
-	import { ResponsiveDialog } from '#lib/components/ui/responsive-dialog/index.js';
-	import SheetFooterActions from '#lib/components/sheets/sheet-footer-actions.svelte';
-	import FormInput from '#lib/components/form/form-input.svelte';
-	import LabeledSwitch from '#lib/components/form/labeled-switch.svelte';
-	import type { CreateS3Destination, S3Destination } from '#lib/types/s3-destination.js';
-	import { createForm, preventDefault } from '#lib/utils/settings.svelte.js';
-
-	import { s3DestinationService } from '#lib/services/s3-destination-service.js';
 	import { toast } from 'svelte-sonner';
 	import { z } from 'zod/v4';
+
+	import FormInput from '#lib/components/form/form-input.svelte';
+	import LabeledSwitch from '#lib/components/form/labeled-switch.svelte';
+	import SheetFooterActions from '#lib/components/sheets/sheet-footer-actions.svelte';
+	import { ResponsiveDialog } from '#lib/components/ui/responsive-dialog/index.js';
 	import * as m from '#lib/paraglide/messages.js';
+	import { s3DestinationService } from '#lib/services/s3-destination-service.js';
+	import type { CreateS3Destination, S3Destination } from '#lib/types/s3-destination.js';
+	import { createForm, preventDefault } from '#lib/utils/settings.svelte.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	let {
 		open = $bindable(),

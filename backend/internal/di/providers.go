@@ -259,24 +259,24 @@ func provideProjectServiceInternal(
 type updaterServiceParams struct {
 	fx.In
 
-	Context       context.Context
-	Config        *config.Config
-	Lifecycle     fx.Lifecycle
-	ActorRuntime  *francis.Runtime
-	Coordinator   *runs.Coordinator
-	Admission     *runs.Admission
-	Roles         *role.RoleService
-	DB            *database.DB
-	Settings      *settings.SettingsService
-	Docker        *docker.DockerClientService
-	Project       *project.ProjectService
-	ImageUpdate   *imageupdate.ImageUpdateService
-	Registry      *registry.ContainerRegistryService
-	Event         *event.EventService
-	Image         *image.ImageService
-	Notification  *notification.NotificationService
-	SystemUpgrade *system.SystemUpgradeService
-	Activity      *activity.ActivityService
+	Context      context.Context
+	Config       *config.Config
+	Lifecycle    fx.Lifecycle
+	ActorRuntime *francis.Runtime
+	Coordinator  *runs.Coordinator
+	Admission    *runs.Admission
+	Roles        *role.RoleService
+	DB           *database.DB
+	Settings     *settings.SettingsService
+	Docker       *docker.DockerClientService
+	Project      *project.ProjectService
+	ImageUpdate  *imageupdate.ImageUpdateService
+	Registry     *registry.ContainerRegistryService
+	Event        *event.EventService
+	Image        *image.ImageService
+	Notification *notification.NotificationService
+	System       *system.SystemService
+	Activity     *activity.ActivityService
 }
 
 func provideUpdaterServiceInternal(p updaterServiceParams) (*updater.UpdaterService, error) {
@@ -290,7 +290,7 @@ func provideUpdaterServiceInternal(p updaterServiceParams) (*updater.UpdaterServ
 		p.Event,
 		p.Image,
 		p.Notification,
-		p.SystemUpgrade,
+		p.System,
 		p.Activity,
 		p.Config,
 		p.Coordinator,

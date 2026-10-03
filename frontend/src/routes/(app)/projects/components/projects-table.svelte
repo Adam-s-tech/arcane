@@ -1,43 +1,45 @@
 <script lang="ts">
-	import type { Snippet } from 'svelte';
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
-	import type { Project, ProjectTagColor, ProjectTagOption } from '#lib/types/swarm.js';
-	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
-	import ContainerActionMenuItem from '#lib/components/arcane-table/cells/container-action-menu-item.svelte';
-	import { AlertIcon, BoxIcon, EditIcon, StartIcon, RestartIcon, StopIcon, TrashIcon, RedeployIcon } from '#lib/icons/index.js';
 	import { goto } from '$app/navigation';
 	import { mode } from 'mode-watcher';
+	import type { Snippet } from 'svelte';
 	import { toast } from 'svelte-sonner';
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import * as ArcaneTooltip from '#lib/components/arcane-tooltip/index.js';
-	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
-	import { getStatusVariant, getThemedIconUrl } from '#lib/utils/docker.js';
-	import { capitalizeFirstLetter, formatDateTimeShort } from '#lib/utils/formatting.js';
+
+	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
+	import ActionMenuItem from '#lib/components/arcane-table/cells/action-menu-item.svelte';
 	import type { ColumnSpec, MobileFieldVisibility, BulkAction } from '#lib/components/arcane-table/index.js';
 	import { UniversalMobileCard } from '#lib/components/arcane-table/index.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import { projectService } from '#lib/services/project-service.js';
-	import { FolderOpenIcon, LayersIcon, CalendarIcon, ProjectsIcon, GitBranchIcon, RefreshIcon } from '#lib/icons/index.js';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import { hasPermission } from '#lib/utils/auth.js';
-	import { hasAnyLoadingState } from '#lib/utils/bulk-actions.js';
-	import IfPermitted from '#lib/components/if-permitted.svelte';
+	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
+	import * as ArcaneTooltip from '#lib/components/arcane-tooltip/index.js';
 	import IconImage from '#lib/components/icon-image.svelte';
-	import type { ActionStatus } from '../projects-table.helpers';
-	import { createProjectActions } from '../projects-table.actions';
-	import ProjectUpdateItem from '#lib/components/project-update-item.svelte';
+	import IfPermitted from '#lib/components/if-permitted.svelte';
 	import ProjectTagEditor from '#lib/components/project-tag-editor.svelte';
+	import ProjectUpdateItem from '#lib/components/project-update-item.svelte';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
+	import { AlertIcon, BoxIcon, EditIcon, StartIcon, RestartIcon, StopIcon, TrashIcon, RedeployIcon } from '#lib/icons/index.js';
+	import { FolderOpenIcon, LayersIcon, CalendarIcon, ProjectsIcon, GitBranchIcon, RefreshIcon } from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { projectService } from '#lib/services/project-service.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
+	import type { Project, ProjectTagColor, ProjectTagOption } from '#lib/types/swarm.js';
+	import { hasPermission } from '#lib/utils/auth.js';
+	import { hasAnyLoadingState } from '#lib/utils/bulk-actions.js';
+	import { getStatusVariant, getThemedIconUrl } from '#lib/utils/docker.js';
 	import {
 		getProjectUpdateStatus,
 		getProjectUpdateText,
 		getProjectUpdateTooltip,
 		getProjectUpdateVariant
 	} from '#lib/utils/docker.js';
+	import { capitalizeFirstLetter, formatDateTimeShort } from '#lib/utils/formatting.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+	import { summarizeUpdateCheckResult } from '#lib/utils/update-actions.js';
+
+	import { createProjectActions } from '../projects-table.actions';
+	import type { ActionStatus } from '../projects-table.helpers';
 
 	let {
 		projects = $bindable(),
@@ -94,13 +96,7 @@
 			const operationResult = await tryCatch(
 				(async () => {
 					const result = await projectService.checkUpdates(project.id);
-					const firstError = result.errorMessage?.trim();
-					const hasErrors = !!firstError;
-					if (hasErrors) {
-						toast.error(firstError || m.containers_check_updates_failed());
-					} else {
-						toast.success(m.images_update_check_completed());
-					}
+					summarizeUpdateCheckResult(result);
 					await refreshProjects(requestOptions);
 				})()
 			);
@@ -479,7 +475,7 @@
 		</DropdownMenu.Item>
 
 		{#if item.gitOpsManagedBy && canUpdateProject}
-			<ContainerActionMenuItem
+			<ActionMenuItem
 				onclick={() => handleSyncFromGit(item.id, item.gitOpsManagedBy!)}
 				disabled={isAnyLoading}
 				icon={RefreshIcon}
@@ -492,7 +488,7 @@
 
 		{#if item.status !== 'running'}
 			<IfPermitted perm="projects:deploy" envId={currentEnvId}>
-				<ContainerActionMenuItem
+				<ActionMenuItem
 					onclick={() => performProjectAction('start', item.id)}
 					disabled={lifecycleDisabled}
 					title={archivedTitle}
@@ -503,7 +499,7 @@
 			</IfPermitted>
 		{:else}
 			<IfPermitted perm="projects:down" envId={currentEnvId}>
-				<ContainerActionMenuItem
+				<ActionMenuItem
 					onclick={() => performProjectAction('stop', item.id)}
 					disabled={lifecycleDisabled}
 					title={archivedTitle}
@@ -514,7 +510,7 @@
 			</IfPermitted>
 
 			<IfPermitted perm="projects:restart">
-				<ContainerActionMenuItem
+				<ActionMenuItem
 					onclick={() => performProjectAction('restart', item.id)}
 					disabled={lifecycleDisabled}
 					title={archivedTitle}
@@ -532,7 +528,7 @@
 					{m.compose_pull_redeploy()}
 				</DropdownMenu.Item>
 			{:else}
-				<ContainerActionMenuItem
+				<ActionMenuItem
 					onclick={() => performProjectAction('redeploy', item.id)}
 					disabled={lifecycleDisabled}
 					title={archivedTitle}
@@ -547,7 +543,7 @@
 
 		<IfPermitted perm="projects:archive" envId={currentEnvId}>
 			{#if item.isArchived}
-				<ContainerActionMenuItem
+				<ActionMenuItem
 					onclick={() => performProjectAction('unarchive', item.id)}
 					disabled={isAnyLoading}
 					icon={BoxIcon}
@@ -555,7 +551,7 @@
 					loading={status === 'unarchiving'}
 				/>
 			{:else}
-				<ContainerActionMenuItem
+				<ActionMenuItem
 					onclick={() => performProjectAction('archive', item.id)}
 					disabled={isProjectArchiveBlocked(item) || isAnyLoading}
 					title={isProjectArchiveBlocked(item) ? m.projects_archive_requires_stopped() : undefined}
@@ -567,7 +563,7 @@
 		</IfPermitted>
 
 		<IfPermitted perm="projects:delete">
-			<ContainerActionMenuItem
+			<ActionMenuItem
 				destructive
 				onclick={() => handleDestroyProject(item.id)}
 				disabled={isAnyLoading}

@@ -1,20 +1,21 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
+	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
+	import { onDestroy } from 'svelte';
 
-	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+	import ReleaseNotes from '#lib/components/release-notes.svelte';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import Spinner from '#lib/components/ui/spinner/spinner.svelte';
+	import { ExternalLinkIcon, SuccessIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { queryKeys } from '#lib/query/query-keys.js';
-	import { onDestroy } from 'svelte';
-	import systemUpgradeService from '#lib/services/api/system-upgrade-service.js';
 	import BaseAPIService from '#lib/services/api-service.js';
-	import { cn } from '#lib/utils.js';
-	import { ExternalLinkIcon, SuccessIcon } from '#lib/icons/index.js';
+	import systemUpgradeService from '#lib/services/api/system-upgrade-service.js';
 	import type { AppVersionInformation } from '#lib/types/settings.js';
-	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
+	import { cn } from '#lib/utils.js';
 	import { formatRelativeTime } from '#lib/utils/formatting.js';
-	import ReleaseNotes from '#lib/components/release-notes.svelte';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+
 	import VersionUpdateSummary from './version-update-summary.svelte';
 
 	// open/upgrading have no $bindable fallback: upstream binds can start out

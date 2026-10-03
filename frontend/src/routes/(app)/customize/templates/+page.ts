@@ -1,9 +1,10 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
-import { templateService } from '#lib/services/template-service.js';
 import { queryKeys } from '#lib/query/query-keys.js';
-import type { Template, TemplateRegistry } from '#lib/types/swarm.js';
+import { templateService } from '#lib/services/template-service.js';
 import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
+import type { Template, TemplateRegistry } from '#lib/types/swarm.js';
 import { resolveInitialTableRequest } from '#lib/utils/tables.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
+
 import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({

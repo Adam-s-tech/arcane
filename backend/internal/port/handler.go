@@ -2,14 +2,11 @@ package port
 
 import (
 	"context"
-	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/getarcaneapp/arcane/types/v2/base"
-	porttypes "github.com/getarcaneapp/arcane/types/v2/port"
+	"github.com/getarcaneapp/arcane/types/v2/port"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
 )
 
@@ -26,20 +23,7 @@ type ListPortsInput struct {
 	Limit         int    `query:"limit" default:"20" doc:"Number of items per page"`
 }
 
-func RegisterPorts(api huma.API, portSvc *PortService) {
-	h := &PortHandler{portService: portSvc}
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "list-ports",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/ports",
-		Summary:     "List port mappings",
-		Tags:        []string{"Ports"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermContainersList, h.ListPorts)
-}
-
-func (h *PortHandler) ListPorts(ctx context.Context, input *ListPortsInput) (*handlerutil.Page[porttypes.PortMapping], error) {
+func (h *PortHandler) ListPorts(ctx context.Context, input *ListPortsInput) (*handlerutil.Page[port.PortMapping], error) {
 	params := handlerutil.PaginationParams(input.Start, input.Limit, input.Sort, input.Order, input.Search)
 
 	items, paginationResp, err := h.portService.ListPortsPaginated(ctx, params)
@@ -47,8 +31,8 @@ func (h *PortHandler) ListPorts(ctx context.Context, input *ListPortsInput) (*ha
 		return nil, huma.Error500InternalServerError("failed to list ports")
 	}
 
-	return &handlerutil.Page[porttypes.PortMapping]{
-		Body: base.Paginated[porttypes.PortMapping]{
+	return &handlerutil.Page[port.PortMapping]{
+		Body: base.Paginated[port.PortMapping]{
 			Success:    true,
 			Data:       items,
 			Pagination: handlerutil.PaginationResponse(paginationResp),

@@ -1,26 +1,26 @@
 <script lang="ts">
-	import FeatureDisabled from '#lib/components/features/feature-disabled.svelte';
-	import { featureStore } from '#lib/stores/features.store.svelte.js';
-	import { onMount } from 'svelte';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import { queryKeys } from '#lib/query/query-keys.js';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import userStore from '#lib/stores/user-store.svelte.js';
-	import { hasPermission } from '#lib/utils/auth.js';
-	import { Switch } from '#lib/components/ui/switch/index.js';
-	import { Textarea } from '#lib/components/ui/textarea/index.js';
+	import { onMount } from 'svelte';
+	import { toast } from 'svelte-sonner';
+
+	import CodeEditor from '#lib/components/code-editor/editor.svelte';
+	import FeatureDisabled from '#lib/components/features/feature-disabled.svelte';
 	import SearchableSelect from '#lib/components/form/searchable-select.svelte';
 	import SelectWithLabel from '#lib/components/form/select-with-label.svelte';
-	import { Input } from '#lib/components/ui/input/index.js';
 	import SettingsRow from '#lib/components/settings/settings-row.svelte';
 	import SettingsSection from '#lib/components/settings/settings-section.svelte';
-	import CodeEditor from '#lib/components/code-editor/editor.svelte';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Switch } from '#lib/components/ui/switch/index.js';
+	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import { toast } from 'svelte-sonner';
+	import { queryKeys } from '#lib/query/query-keys.js';
 	import { networkService } from '#lib/services/network-service.js';
-	import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import { featureStore } from '#lib/stores/features.store.svelte.js';
+	import userStore from '#lib/stores/user-store.svelte.js';
 	import type { Settings } from '#lib/types/settings.js';
-
+	import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
+	import { hasPermission } from '#lib/utils/auth.js';
 	import { arcaneImageRegistryOptions, arcaneTrivyDbImages } from '#lib/utils/registry.js';
 
 	type TrivySecurityFormValues = Pick<

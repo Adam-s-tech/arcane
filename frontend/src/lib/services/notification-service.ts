@@ -1,6 +1,7 @@
-import BaseAPIService from './api-service';
-import type { NotificationSettings, TestNotificationResponse } from '#lib/types/notifications.js';
 import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+import type { NotificationSettings, TestNotificationResponse } from '#lib/types/notifications.js';
+
+import BaseAPIService from './api-service';
 
 class NotificationService extends BaseAPIService {
 	async getSettings(environmentId?: string): Promise<NotificationSettings[]> {

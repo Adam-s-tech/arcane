@@ -19,7 +19,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/libtnb/sqlite"
 	"github.com/moby/moby/api/types/container"
-	dockertypesimage "github.com/moby/moby/api/types/image"
+	"github.com/moby/moby/api/types/image"
 	"github.com/moby/moby/client"
 	"github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/assert"
@@ -84,7 +84,7 @@ func TestVersionService_GetAppVersionInfoDoesNotUseStoredDigestUpdateForSemverBu
 			}
 
 			w.Header().Set("Content-Type", "application/json")
-			if !assert.NoError(t, json.NewEncoder(w).Encode(dockertypesimage.InspectResponse{
+			if !assert.NoError(t, json.NewEncoder(w).Encode(image.InspectResponse{
 				ID:          imageID,
 				RepoTags:    []string{imageRef},
 				RepoDigests: []string{"ghcr.io/getarcaneapp/arcane@" + currentDigest},
@@ -243,7 +243,7 @@ func newNextChannelDockerServerInternal(t *testing.T, containerID, imageID, repo
 			}))
 		case strings.Contains(r.URL.Path, "/images/") && strings.HasSuffix(r.URL.Path, "/json"):
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(dockertypesimage.InspectResponse{
+			assert.NoError(t, json.NewEncoder(w).Encode(image.InspectResponse{
 				ID:          imageID,
 				RepoTags:    []string{imageRef},
 				RepoDigests: []string{repo + "@" + currentDigest},

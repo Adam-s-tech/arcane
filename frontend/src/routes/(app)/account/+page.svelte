@@ -1,27 +1,28 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
 	import { toast } from 'svelte-sonner';
-	import HeaderCard from '#lib/components/header-card.svelte';
-	import * as Tabs from '#lib/components/ui/tabs/index.js';
-	import { TabBar, type TabItem } from '#lib/components/tab-bar/index.js';
-	import { useUrlTab } from '#lib/hooks/use-url-tab.svelte.js';
-	import * as Avatar from '#lib/components/ui/avatar/index.js';
-	import * as ImageCropper from '#lib/components/ui/image-cropper/index.js';
+	import { Temporal } from 'temporal-polyfill';
+
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
 	import TextInputWithLabel from '#lib/components/form/text-input-with-label.svelte';
+	import HeaderCard from '#lib/components/header-card.svelte';
+	import { TabBar, type TabItem } from '#lib/components/tab-bar/index.js';
+	import * as Avatar from '#lib/components/ui/avatar/index.js';
+	import * as ImageCropper from '#lib/components/ui/image-cropper/index.js';
+	import * as Tabs from '#lib/components/ui/tabs/index.js';
+	import { useUrlTab } from '#lib/hooks/use-url-tab.svelte.js';
+	import { UserIcon, SettingsIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { userService } from '#lib/services/user-service.js';
-	import userStore from '#lib/stores/user-store.svelte.js';
 	import settingsStore from '#lib/stores/config-store.svelte.js';
-	import { getDefaultProfilePicture } from '#lib/utils/docker.js';
-	import { avatarUploadLimitBytes, prepareAvatarUploadFile } from '#lib/utils/avatar-upload.js';
-	import { formatDate, formatRelativeTime } from '#lib/utils/formatting.js';
+	import userStore from '#lib/stores/user-store.svelte.js';
 	import { GLOBAL_SCOPE } from '#lib/types/auth.js';
-	import { Temporal } from 'temporal-polyfill';
-	import { UserIcon, SettingsIcon } from '#lib/icons/index.js';
-	import AccountPreferencesPanel from './components/account-preferences-panel.svelte';
+	import { avatarUploadLimitBytes, prepareAvatarUploadFile } from '#lib/utils/avatar-upload.js';
+	import { getDefaultProfilePicture } from '#lib/utils/docker.js';
+	import { formatDate, formatRelativeTime } from '#lib/utils/formatting.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+
 	import AccountApiKeysPanel from './components/account-api-keys-panel.svelte';
+	import AccountPreferencesPanel from './components/account-preferences-panel.svelte';
 	import AccountSecurityPanel from './components/account-security-panel.svelte';
 
 	type AccountTab = 'account' | 'preferences';

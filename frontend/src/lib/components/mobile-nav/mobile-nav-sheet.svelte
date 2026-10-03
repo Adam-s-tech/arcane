@@ -1,19 +1,21 @@
 <script lang="ts">
+	import { page } from '$app/state';
+
+	import ActivityCenterTrigger from '#lib/components/activity/activity-center-trigger.svelte';
+	import UpdateAllDialog from '#lib/components/dialogs/update-all-dialog.svelte';
+	import UpdateAvailableBanner from '#lib/components/sidebar/update-available-banner.svelte';
+	import * as Drawer from '#lib/components/ui/drawer/index.js';
 	import { navigationItems, getManagementItems, filterByPermissions } from '#lib/config/navigation-config.js';
 	import type { NavigationItem } from '#lib/config/navigation-config.js';
-	import { cn } from '#lib/utils.js';
-	import { page } from '$app/state';
-	import userStore from '#lib/stores/user-store.svelte.js';
+	import { useUpgradeCheck } from '#lib/hooks/use-upgrade-check.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import MobileUserCard from './mobile-user-card.svelte';
-	import ActivityCenterTrigger from '#lib/components/activity/activity-center-trigger.svelte';
-	import * as Drawer from '#lib/components/ui/drawer/index.js';
-	import UpdateAllDialog from '#lib/components/dialogs/update-all-dialog.svelte';
-	import { useUpgradeCheck } from '#lib/hooks/use-upgrade-check.svelte.js';
-	import UpdateAvailableBanner from '#lib/components/sidebar/update-available-banner.svelte';
-	import type { AppVersionInformation } from '#lib/types/settings.js';
+	import userStore from '#lib/stores/user-store.svelte.js';
 	import type { PermissionsManifest, User } from '#lib/types/auth.js';
+	import type { AppVersionInformation } from '#lib/types/settings.js';
+	import { cn } from '#lib/utils.js';
+
+	import MobileUserCard from './mobile-user-card.svelte';
 
 	let {
 		open = $bindable(false),

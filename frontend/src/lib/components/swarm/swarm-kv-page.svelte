@@ -1,9 +1,12 @@
 <script lang="ts">
+	import { onMount, type Component } from 'svelte';
+	import { toast } from 'svelte-sonner';
+
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
 	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
 	import IfPermitted from '#lib/components/if-permitted.svelte';
-	import { CopyButton } from '#lib/components/ui/copy-button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
+	import { CopyButton } from '#lib/components/ui/copy-button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { useEnvironmentRefresh } from '#lib/hooks/use-environment-refresh.svelte.js';
@@ -11,10 +14,8 @@
 	import { ResourcePageLayout, type ActionButton, type StatCardConfig } from '#lib/layouts/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
-	import { tryCatch } from '#lib/utils/try-catch.js';
 	import { decodeBase64ToText, encodeTextToBase64, formatSwarmTimestamp, getSwarmSpecName } from '#lib/utils/swarm-kv.js';
-	import { onMount, type Component } from 'svelte';
-	import { toast } from 'svelte-sonner';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	export type SwarmKvItem = {
 		id: string;

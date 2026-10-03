@@ -1,22 +1,14 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
 	import { onMount } from 'svelte';
-	import { cn } from '#lib/utils.js';
-	import { m } from '#lib/paraglide/messages.js';
+
+	import type { ActionButton } from '#lib/components/action-button-group/types.js';
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
-	import * as Collapsible from '#lib/components/ui/collapsible/index.js';
+	import { TabBar, type TabItem } from '#lib/components/tab-bar/index.js';
 	import * as Alert from '#lib/components/ui/alert/index.js';
+	import * as Collapsible from '#lib/components/ui/collapsible/index.js';
 	import * as Table from '#lib/components/ui/table/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
-	import { TabBar, type TabItem } from '#lib/components/tab-bar/index.js';
-	import { SettingsPageLayout } from '#lib/layouts/index.js';
-	import type { SettingsStatCard } from '#lib/layouts/types.js';
-	import type { ActionButton } from '#lib/components/action-button-group/types.js';
 	import { useUrlTab } from '#lib/hooks/use-url-tab.svelte.js';
-	import { createDiagnosticsWebSocket, ReconnectingWebSocket } from '#lib/utils/ws.js';
-	import { diagnosticsService } from '#lib/services/diagnostics-service.js';
-	import type { Diagnostics, GoroutineLeakReport, PprofProfile } from '#lib/types/diagnostics.js';
 	import {
 		ActivityIcon,
 		AlertTriangleIcon,
@@ -27,9 +19,18 @@
 		DownloadIcon,
 		ArrowDownIcon
 	} from '#lib/icons/index.js';
-	import DiagnosticLogPanel from './components/diagnostic-log-panel.svelte';
-	import DiagnosticLeakPanel from './components/diagnostic-leak-panel.svelte';
+	import { SettingsPageLayout } from '#lib/layouts/index.js';
+	import type { SettingsStatCard } from '#lib/layouts/types.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { diagnosticsService } from '#lib/services/diagnostics-service.js';
+	import type { Diagnostics, GoroutineLeakReport, PprofProfile } from '#lib/types/diagnostics.js';
+	import { cn } from '#lib/utils.js';
 	import { formatTime } from '#lib/utils/formatting.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+	import { createDiagnosticsWebSocket, ReconnectingWebSocket } from '#lib/utils/ws.js';
+
+	import DiagnosticLeakPanel from './components/diagnostic-leak-panel.svelte';
+	import DiagnosticLogPanel from './components/diagnostic-log-panel.svelte';
 
 	type DiagnosticsTab = 'overview' | 'connections' | 'logs' | 'profiling';
 

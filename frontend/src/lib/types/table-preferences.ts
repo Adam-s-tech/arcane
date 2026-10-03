@@ -1,4 +1,5 @@
 import type { ColumnFiltersState } from '@tanstack/table-core';
+
 import type { FilterMap } from './shared';
 
 export type PersistedPreferencesSnapshot = {

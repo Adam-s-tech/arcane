@@ -9,16 +9,15 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/getarcaneapp/arcane/types/v2/base"
-	containertypes "github.com/getarcaneapp/arcane/types/v2/container"
-	dashboardtypes "github.com/getarcaneapp/arcane/types/v2/dashboard"
-	imagetypes "github.com/getarcaneapp/arcane/types/v2/image"
-	versiontypes "github.com/getarcaneapp/arcane/types/v2/version"
-	volumetypes "github.com/getarcaneapp/arcane/types/v2/volume"
+	"github.com/getarcaneapp/arcane/types/v2/container"
+	"github.com/getarcaneapp/arcane/types/v2/dashboard"
+	"github.com/getarcaneapp/arcane/types/v2/image"
+	"github.com/getarcaneapp/arcane/types/v2/version"
+	"github.com/getarcaneapp/arcane/types/v2/volume"
 	"go.getarcane.app/streams/agg"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/environment"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/remenv"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
@@ -30,7 +29,7 @@ type DashboardHandler struct {
 
 	// remoteStreamHub shares one poller per remote environment across every
 	// connected stream client instead of polling per client × environment.
-	remoteStreamHub *agg.Hub[dashboardtypes.StreamEvent]
+	remoteStreamHub *agg.Hub[dashboard.StreamEvent]
 }
 
 type GetDashboardInput struct {
@@ -54,25 +53,11 @@ func NewHandler(dashboardService *DashboardService, environmentService *environm
 	return &DashboardHandler{
 		dashboardService:   dashboardService,
 		environmentService: environmentService,
-		remoteStreamHub:    agg.NewHub[dashboardtypes.StreamEvent](),
+		remoteStreamHub:    agg.NewHub[dashboard.StreamEvent](),
 	}
 }
 
-func RegisterDashboard(api huma.API, dashboardService *DashboardService, environmentService *environment.EnvironmentService) {
-	h := NewHandler(dashboardService, environmentService)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "get-dashboard",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/dashboard",
-		Summary:     "Get dashboard snapshot",
-		Description: "Returns the dashboard first-paint snapshot in a single response",
-		Tags:        []string{"Dashboard"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermDashboardRead, h.GetDashboard)
-}
-
-func (h *DashboardHandler) GetDashboard(ctx context.Context, input *GetDashboardInput) (*handlerutil.Out[dashboardtypes.Snapshot], error) {
+func (h *DashboardHandler) GetDashboard(ctx context.Context, input *GetDashboardInput) (*handlerutil.Out[dashboard.Snapshot], error) {
 	// EnvironmentID is consumed by env proxy/auth middleware for routing/validation.
 	_ = input.EnvironmentID
 
@@ -87,8 +72,8 @@ func (h *DashboardHandler) GetDashboard(ctx context.Context, input *GetDashboard
 		return nil, huma.Error500InternalServerError("dashboard snapshot not available")
 	}
 
-	return &handlerutil.Out[dashboardtypes.Snapshot]{
-		Body: base.ApiResponse[dashboardtypes.Snapshot]{
+	return &handlerutil.Out[dashboard.Snapshot]{
+		Body: base.ApiResponse[dashboard.Snapshot]{
 			Success: true,
 			Data:    *snapshot,
 		},
@@ -100,7 +85,7 @@ func (h *DashboardHandler) GetDashboard(ctx context.Context, input *GetDashboard
 // and re-sending table rows for every environment on every poll would bloat
 // the stream. Only remote snapshots (decoded fresh per poll) pass through
 // here; the local producer gets a snapshot built without tables instead.
-func trimDashboardStreamSnapshotInternal(snapshot *dashboardtypes.Snapshot) *dashboardtypes.Snapshot {
+func trimDashboardStreamSnapshotInternal(snapshot *dashboard.Snapshot) *dashboard.Snapshot {
 	if snapshot == nil {
 		return nil
 	}
@@ -109,7 +94,7 @@ func trimDashboardStreamSnapshotInternal(snapshot *dashboardtypes.Snapshot) *das
 	return snapshot
 }
 
-func (h *DashboardHandler) RunLocalStreamProducer(ctx context.Context, debugAllGood bool, events chan<- dashboardtypes.StreamEvent) {
+func (h *DashboardHandler) RunLocalStreamProducer(ctx context.Context, debugAllGood bool, events chan<- dashboard.StreamEvent) {
 	lastError := ""
 
 	poll := func() {
@@ -127,7 +112,7 @@ func (h *DashboardHandler) RunLocalStreamProducer(ctx context.Context, debugAllG
 			// once per distinct message and keep polling.
 			if msg := err.Error(); msg != lastError {
 				lastError = msg
-				agg.Send(ctx, events, dashboardtypes.StreamEvent{
+				agg.Send(ctx, events, dashboard.StreamEvent{
 					Type:          "error",
 					EnvironmentID: "0",
 					Error:         msg,
@@ -139,7 +124,7 @@ func (h *DashboardHandler) RunLocalStreamProducer(ctx context.Context, debugAllG
 		lastError = ""
 		// Already built without tables; shared with other subscribers, so it
 		// must not be trimmed (mutated) here.
-		agg.Send(ctx, events, dashboardtypes.StreamEvent{
+		agg.Send(ctx, events, dashboard.StreamEvent{
 			Type:          "snapshot",
 			EnvironmentID: "0",
 			Snapshot:      snapshot,
@@ -165,7 +150,7 @@ func (h *DashboardHandler) RunLocalStreamProducer(ctx context.Context, debugAllG
 // RunRemoteStreamPollers keeps one poller goroutine per
 // enabled remote environment, re-listing periodically so environments added
 // or removed while the stream is open are picked up without a reconnect.
-func (h *DashboardHandler) RunRemoteStreamPollers(ctx context.Context, ps *authz.PermissionSet, debugAllGood bool, events chan<- dashboardtypes.StreamEvent) {
+func (h *DashboardHandler) RunRemoteStreamPollers(ctx context.Context, ps *authz.PermissionSet, debugAllGood bool, events chan<- dashboard.StreamEvent) {
 	agg.ReconcilePollersByKey(ctx,
 		func(ctx context.Context) ([]environment.Environment, error) {
 			environments, err := h.environmentService.ListActiveRemoteEnvironments(ctx)
@@ -195,10 +180,10 @@ func (h *DashboardHandler) RunRemoteStreamPollers(ctx context.Context, ps *authz
 				key += ":debugAllGood"
 			}
 			h.remoteStreamHub.Subscribe(pollCtx, key,
-				func(runCtx context.Context, publish func(dashboardtypes.StreamEvent)) {
+				func(runCtx context.Context, publish func(dashboard.StreamEvent)) {
 					h.runRemoteDashboardStreamPollerInternal(runCtx, environment, debugAllGood, publish)
 				},
-				func(event dashboardtypes.StreamEvent) bool {
+				func(event dashboard.StreamEvent) bool {
 					return agg.Send(pollCtx, events, event)
 				})
 		})
@@ -211,11 +196,11 @@ func dashboardStreamEnvironmentVersionInternal(localEnvironment environment.Envi
 	return localEnvironment.ID + ":" + localEnvironment.UpdatedAt.UTC().Format(time.RFC3339Nano)
 }
 
-func (h *DashboardHandler) runRemoteDashboardStreamPollerInternal(ctx context.Context, localEnvironment environment.Environment, debugAllGood bool, publish func(dashboardtypes.StreamEvent)) {
+func (h *DashboardHandler) runRemoteDashboardStreamPollerInternal(ctx context.Context, localEnvironment environment.Environment, debugAllGood bool, publish func(dashboard.StreamEvent)) {
 	environmentID := localEnvironment.ID
 	// Tell the client this environment is covered before the first poll
 	// completes so it can hold skeletons instead of assuming no data exists.
-	publish(dashboardtypes.StreamEvent{
+	publish(dashboard.StreamEvent{
 		Type:          "pending",
 		EnvironmentID: environmentID,
 		Timestamp:     time.Now(),
@@ -252,7 +237,7 @@ func (h *DashboardHandler) runRemoteDashboardStreamPollerInternal(ctx context.Co
 			message, code := classifyDashboardStreamErrorInternal(err)
 			if message != lastError {
 				lastError = message
-				publish(dashboardtypes.StreamEvent{
+				publish(dashboard.StreamEvent{
 					Type:          "error",
 					EnvironmentID: environmentID,
 					Error:         message,
@@ -263,7 +248,7 @@ func (h *DashboardHandler) runRemoteDashboardStreamPollerInternal(ctx context.Co
 			return
 		}
 		lastError = ""
-		publish(dashboardtypes.StreamEvent{
+		publish(dashboard.StreamEvent{
 			Type:          "snapshot",
 			EnvironmentID: environmentID,
 			Snapshot:      trimDashboardStreamSnapshotInternal(snapshot),
@@ -290,7 +275,7 @@ func (h *DashboardHandler) runRemoteDashboardStreamPollerInternal(ctx context.Co
 // endpoint directly through the environment service so the raw remenv error
 // survives for classification (proxyRemoteJSONInternal would translate it
 // into a huma error first).
-func (h *DashboardHandler) fetchRemoteDashboardSnapshotInternal(ctx context.Context, localEnvironment environment.Environment, debugAllGood bool) (*dashboardtypes.Snapshot, error) {
+func (h *DashboardHandler) fetchRemoteDashboardSnapshotInternal(ctx context.Context, localEnvironment environment.Environment, debugAllGood bool) (*dashboard.Snapshot, error) {
 	// The all-environments dashboard only reads the aggregate counters, so the
 	// agent is asked to leave the container/image tables out of the payload.
 	query := url.Values{"includeTables": {"false"}}
@@ -299,7 +284,7 @@ func (h *DashboardHandler) fetchRemoteDashboardSnapshotInternal(ctx context.Cont
 	}
 	path := "/api/environments/0/dashboard?" + query.Encode()
 
-	var out base.ApiResponse[dashboardtypes.Snapshot]
+	var out base.ApiResponse[dashboard.Snapshot]
 	if err := h.environmentService.ProxyJSONRequestForEnvironment(ctx, localEnvironment, http.MethodGet, path, nil, &out); err != nil {
 		return nil, err
 	}
@@ -314,30 +299,30 @@ func (h *DashboardHandler) fetchRemoteDashboardSnapshotInternal(ctx context.Cont
 // agents have exposed for far longer than the aggregate dashboard endpoint.
 // Each piece is fetched independently so a partially compatible agent still
 // yields partial data; only when every piece fails is an error returned.
-func (h *DashboardHandler) fetchLegacyDashboardSnapshotInternal(ctx context.Context, localEnvironment environment.Environment) (*dashboardtypes.Snapshot, error) {
-	snapshot := &dashboardtypes.Snapshot{
-		ActionItems: dashboardtypes.ActionItems{Items: []dashboardtypes.ActionItem{}},
+func (h *DashboardHandler) fetchLegacyDashboardSnapshotInternal(ctx context.Context, localEnvironment environment.Environment) (*dashboard.Snapshot, error) {
+	snapshot := &dashboard.Snapshot{
+		ActionItems: dashboard.ActionItems{Items: []dashboard.ActionItem{}},
 	}
 	var errs []error
 	attempted := 0
 
 	attempted++
-	var containerCounts base.ApiResponse[containertypes.StatusCounts]
+	var containerCounts base.ApiResponse[container.StatusCounts]
 	if err := h.environmentService.ProxyJSONRequestForEnvironment(ctx, localEnvironment, http.MethodGet, "/api/environments/0/containers/counts", nil, &containerCounts); err != nil {
 		errs = append(errs, err)
 	} else {
 		snapshot.Containers.Counts = containerCounts.Data
 		if stopped := containerCounts.Data.StoppedContainers; stopped > 0 {
-			snapshot.ActionItems.Items = append(snapshot.ActionItems.Items, dashboardtypes.ActionItem{
-				Kind:     dashboardtypes.ActionItemKindStoppedContainers,
+			snapshot.ActionItems.Items = append(snapshot.ActionItems.Items, dashboard.ActionItem{
+				Kind:     dashboard.ActionItemKindStoppedContainers,
 				Count:    stopped,
-				Severity: dashboardtypes.ActionItemSeverityWarning,
+				Severity: dashboard.ActionItemSeverityWarning,
 			})
 		}
 	}
 
 	attempted++
-	var imageCounts base.ApiResponse[imagetypes.UsageCounts]
+	var imageCounts base.ApiResponse[image.UsageCounts]
 	if err := h.environmentService.ProxyJSONRequestForEnvironment(ctx, localEnvironment, http.MethodGet, "/api/environments/0/images/counts", nil, &imageCounts); err != nil {
 		errs = append(errs, err)
 	} else {
@@ -345,7 +330,7 @@ func (h *DashboardHandler) fetchLegacyDashboardSnapshotInternal(ctx context.Cont
 	}
 
 	attempted++
-	var volumeCounts base.ApiResponse[volumetypes.UsageCounts]
+	var volumeCounts base.ApiResponse[volume.UsageCounts]
 	if err := h.environmentService.ProxyJSONRequestForEnvironment(ctx, localEnvironment, http.MethodGet, "/api/environments/0/volumes/counts", nil, &volumeCounts); err != nil {
 		errs = append(errs, err)
 	} else {
@@ -353,7 +338,7 @@ func (h *DashboardHandler) fetchLegacyDashboardSnapshotInternal(ctx context.Cont
 	}
 
 	attempted++
-	var versionInfo versiontypes.Info
+	var versionInfo version.Info
 	if err := h.environmentService.ProxyJSONRequestForEnvironment(ctx, localEnvironment, http.MethodGet, "/api/app-version", nil, &versionInfo); err != nil {
 		errs = append(errs, err)
 	} else {
@@ -383,10 +368,10 @@ func isDashboardEndpointMissingInternal(err error) bool {
 // both indicate a version mismatch between manager and agent.
 func classifyDashboardStreamErrorInternal(err error) (string, string) {
 	if isDashboardEndpointMissingInternal(err) {
-		return "Agent does not provide the dashboard endpoint — the agent is likely running an older Arcane version and should be upgraded", dashboardtypes.StreamErrorCodeAgentIncompatible
+		return "Agent does not provide the dashboard endpoint — the agent is likely running an older Arcane version and should be upgraded", dashboard.StreamErrorCodeAgentIncompatible
 	}
 	if transportErr, ok := errors.AsType[*remenv.TransportError](err); ok {
-		return transportErr.Error(), dashboardtypes.StreamErrorCodeUnreachable
+		return transportErr.Error(), dashboard.StreamErrorCodeUnreachable
 	}
 	return err.Error(), ""
 }

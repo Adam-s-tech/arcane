@@ -1,4 +1,9 @@
 import { z } from 'zod/v4';
+
+import type { KeyValueRow } from '#lib/components/form/key-value-editor.svelte';
+import type { NetworkAttachmentRow } from '#lib/components/form/network-attachment-editor.svelte';
+import type { PortMappingRow } from '#lib/components/form/port-mapping-editor.svelte';
+import type { VolumeMountRow } from '#lib/components/form/volume-mount-editor.svelte';
 import { m } from '#lib/paraglide/messages.js';
 import type {
 	ContainerCreateRequest,
@@ -11,10 +16,6 @@ import type {
 	MountDto,
 	PortBinding
 } from '#lib/types/docker.js';
-import type { KeyValueRow } from '#lib/components/form/key-value-editor.svelte';
-import type { PortMappingRow } from '#lib/components/form/port-mapping-editor.svelte';
-import type { VolumeMountRow } from '#lib/components/form/volume-mount-editor.svelte';
-import type { NetworkAttachmentRow } from '#lib/components/form/network-attachment-editor.svelte';
 
 // Common Linux capabilities offered by the cap add/drop selectors.
 export const LINUX_CAPABILITIES = [

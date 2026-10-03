@@ -9,18 +9,18 @@ import (
 	"testing"
 	"time"
 
-	backuptypes "github.com/getarcaneapp/arcane/types/v2/backup"
+	"github.com/getarcaneapp/arcane/types/v2/backup"
 	"github.com/libtnb/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/kit/pkg"
 	"go.getarcane.app/sys/crypto"
 	"gorm.io/gorm"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
-	s3config "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/s3"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/s3"
 )
 
 func setupS3DestinationServiceTestInternal(t *testing.T) (*S3DestinationService, *gorm.DB) {
@@ -47,7 +47,7 @@ func TestS3DestinationService_CRUD(t *testing.T) {
 	service, gormDB := setupS3DestinationServiceTestInternal(t)
 	ctx := t.Context()
 
-	created, err := service.CreateS3Destination(ctx, backuptypes.CreateS3Destination{
+	created, err := service.CreateS3Destination(ctx, backup.CreateS3Destination{
 		Name:            "  Cafe\u0301 offsite  ",
 		Endpoint:        "https://s3.example.com",
 		Bucket:          "arcane-backups",
@@ -76,7 +76,7 @@ func TestS3DestinationService_CRUD(t *testing.T) {
 	require.EqualValues(t, 1, page.TotalItems)
 	require.Len(t, listed, 1)
 
-	updated, err := service.UpdateS3Destination(ctx, created.ID, backuptypes.UpdateS3Destination{
+	updated, err := service.UpdateS3Destination(ctx, created.ID, backup.UpdateS3Destination{
 		Name:           "  Primary cafe\u0301 offsite  ",
 		Endpoint:       created.Endpoint,
 		Bucket:         created.Bucket,
@@ -101,7 +101,7 @@ func TestS3DestinationService_CRUD(t *testing.T) {
 func TestS3DestinationService_DeleteRejectsConfiguredDestination(t *testing.T) {
 	service, gormDB := setupS3DestinationServiceTestInternal(t)
 	ctx := t.Context()
-	destination, err := service.CreateS3Destination(ctx, backuptypes.CreateS3Destination{
+	destination, err := service.CreateS3Destination(ctx, backup.CreateS3Destination{
 		Name:            "In use",
 		Bucket:          "arcane-backups",
 		Region:          "us-east-1",
@@ -120,7 +120,7 @@ func TestS3DestinationService_SyncS3Destinations(t *testing.T) {
 	service, gormDB := setupS3DestinationServiceTestInternal(t)
 	ctx := t.Context()
 
-	legacy, err := service.CreateS3Destination(ctx, backuptypes.CreateS3Destination{
+	legacy, err := service.CreateS3Destination(ctx, backup.CreateS3Destination{
 		Name:            "Legacy",
 		Bucket:          "legacy-bucket",
 		Region:          "us-east-1",
@@ -131,7 +131,7 @@ func TestS3DestinationService_SyncS3Destinations(t *testing.T) {
 	require.NoError(t, err)
 
 	createdAt := time.Now().Add(-time.Hour).UTC().Truncate(time.Second)
-	require.NoError(t, service.SyncS3Destinations(ctx, []backuptypes.S3DestinationSync{
+	require.NoError(t, service.SyncS3Destinations(ctx, []backup.S3DestinationSync{
 		{
 			ID:              "destination-1",
 			Name:            "Remote primary",
@@ -159,7 +159,7 @@ func TestS3DestinationService_SyncS3Destinations(t *testing.T) {
 	_, err = service.GetS3Destination(ctx, legacy.ID)
 	require.ErrorIs(t, err, ErrS3DestinationNotFound)
 
-	require.NoError(t, service.SyncS3Destinations(ctx, []backuptypes.S3DestinationSync{
+	require.NoError(t, service.SyncS3Destinations(ctx, []backup.S3DestinationSync{
 		{
 			ID:              "destination-1",
 			Name:            "Remote primary updated",
@@ -214,7 +214,7 @@ func TestS3DestinationService_TestS3DestinationRoundTrip(t *testing.T) {
 	defer server.Close()
 
 	service, _ := setupS3DestinationServiceTestInternal(t)
-	require.NoError(t, service.TestS3DestinationConfiguration(t.Context(), backuptypes.CreateS3Destination{
+	require.NoError(t, service.TestS3DestinationConfiguration(t.Context(), backup.CreateS3Destination{
 		Name:            "Unsaved destination",
 		Endpoint:        server.URL,
 		Bucket:          "arcane-backups",
@@ -225,7 +225,7 @@ func TestS3DestinationService_TestS3DestinationRoundTrip(t *testing.T) {
 		UseSSL:          false,
 		ForcePathStyle:  true,
 	}))
-	destination, err := service.CreateS3Destination(t.Context(), backuptypes.CreateS3Destination{
+	destination, err := service.CreateS3Destination(t.Context(), backup.CreateS3Destination{
 		Name:            "Test destination",
 		Endpoint:        server.URL,
 		Bucket:          "arcane-backups",
@@ -244,7 +244,7 @@ func TestS3DestinationService_TestS3DestinationRoundTrip(t *testing.T) {
 	// before any outbound request: the stored secret must never sign requests
 	// against caller-modified connection settings.
 	requestsBeforeRejection := len(requestMethods)
-	err = service.TestS3Destination(t.Context(), destination.ID, &backuptypes.UpdateS3Destination{
+	err = service.TestS3Destination(t.Context(), destination.ID, &backup.UpdateS3Destination{
 		Name:           destination.Name,
 		Endpoint:       server.URL,
 		Bucket:         "edited-bucket",
@@ -258,7 +258,7 @@ func TestS3DestinationService_TestS3DestinationRoundTrip(t *testing.T) {
 	require.Len(t, requestMethods, requestsBeforeRejection)
 
 	expectedPathPrefix = "/edited-bucket/edited/.arcane-connection-test-"
-	require.NoError(t, service.TestS3Destination(t.Context(), destination.ID, &backuptypes.UpdateS3Destination{
+	require.NoError(t, service.TestS3Destination(t.Context(), destination.ID, &backup.UpdateS3Destination{
 		Name:            destination.Name,
 		Endpoint:        server.URL,
 		Bucket:          "edited-bucket",
@@ -324,12 +324,12 @@ func TestS3DestinationService_TestS3DestinationRoundTrip(t *testing.T) {
 				_, _ = io.WriteString(w, "x")
 			}))
 			defer metadataServer.Close()
-			configuration := s3config.Configuration{
+			configuration := s3.Configuration{
 				Name: "Metadata destination", Endpoint: metadataServer.URL, Bucket: "arcane-backups",
 				AccessKeyID: "test-access", SecretAccessKey: "test-secret", Prefix: "production", ForcePathStyle: true,
 			}
 			requestedID := kit.Ternary(scenario.configOnly, "", snapshotID)
-			observation, checkErr := s3config.CheckRepository(t.Context(), configuration, "repository", requestedID)
+			observation, checkErr := s3.CheckRepository(t.Context(), configuration, "repository", requestedID)
 			if scenario.wantError {
 				require.Error(t, checkErr)
 				require.Empty(t, observation.Reason)

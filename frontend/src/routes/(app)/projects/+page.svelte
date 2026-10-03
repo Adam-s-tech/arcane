@@ -1,23 +1,25 @@
 <script lang="ts">
-	import { useEnvironmentRefresh } from '#lib/hooks/use-environment-refresh.svelte.js';
-	import { BoxIcon, ProjectsIcon, StartIcon, StopIcon } from '#lib/icons/index.js';
-	import { toast } from 'svelte-sonner';
-	import ProjectsTable from './components/projects-table.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import { createMutation, createQuery, keepPreviousData } from '@tanstack/svelte-query';
+	import { untrack } from 'svelte';
+	import { toast } from 'svelte-sonner';
+
+	import { EmptyState } from '#lib/components/states/index.js';
+	import { useEnvironmentRefresh } from '#lib/hooks/use-environment-refresh.svelte.js';
+	import { BoxIcon, ProjectsIcon, StartIcon, StopIcon } from '#lib/icons/index.js';
+	import { ResourcePageLayout, type ActionButton, type StatCardConfig } from '#lib/layouts/index.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import { projectService } from '#lib/services/project-service.js';
-	import { imageService } from '#lib/services/image-service.js';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import { hasPermission } from '#lib/utils/auth.js';
 	import { queryKeys } from '#lib/query/query-keys.js';
+	import { imageService } from '#lib/services/image-service.js';
+	import { projectService } from '#lib/services/project-service.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
 	import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
 	import type { ProjectStatusCounts } from '#lib/types/swarm.js';
-	import { untrack } from 'svelte';
-	import { createMutation, createQuery, keepPreviousData } from '@tanstack/svelte-query';
-	import { EmptyState } from '#lib/components/states/index.js';
-	import { ResourcePageLayout, type ActionButton, type StatCardConfig } from '#lib/layouts/index.js';
 	import { activityToastOptions, extractActivityId } from '#lib/utils/activity-toast.js';
+	import { hasPermission } from '#lib/utils/auth.js';
+
+	import ProjectsTable from './components/projects-table.svelte';
 
 	let { data } = $props();
 

@@ -2,7 +2,13 @@
 // and the HTTP surface for customization search.
 package search
 
-import "github.com/danielgtaylor/huma/v2"
+import (
+	"net/http"
+
+	"github.com/danielgtaylor/huma/v2"
+
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
+)
 
 // Module owns the customization search index and mounts the customization search routes.
 type Module struct {
@@ -31,4 +37,31 @@ func (m *Module) RegisterRoutes(api huma.API) {
 		return
 	}
 	RegisterCustomize(api, m.customize)
+}
+
+// RegisterCustomize registers customization endpoints using Huma.
+func RegisterCustomize(api huma.API, customizeSearchService *CustomizeSearchService) {
+	h := &CustomizeHandler{
+		customizeSearchService: customizeSearchService,
+	}
+
+	huma.Register(api, huma.Operation{
+		OperationID: "search-customize",
+		Method:      http.MethodPost,
+		Path:        "/customize/search",
+		Summary:     "Search customization options",
+		Description: "Search customization categories and options by query",
+		Tags:        []string{"Customize"},
+		Security:    handlerutil.DefaultOperationSecurity(),
+	}, h.Search)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "get-customize-categories",
+		Method:      http.MethodGet,
+		Path:        "/customize/categories",
+		Summary:     "Get customization categories",
+		Description: "Get all available customization categories with metadata",
+		Tags:        []string{"Customize"},
+		Security:    handlerutil.DefaultOperationSecurity(),
+	}, h.GetCategories)
 }

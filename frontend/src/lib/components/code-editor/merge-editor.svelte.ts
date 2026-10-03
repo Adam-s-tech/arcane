@@ -1,8 +1,9 @@
-import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { MergeView } from '@codemirror/merge';
+import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { untrack } from 'svelte';
 import type { Attachment } from 'svelte/attachments';
+
 import type { CodeLanguage } from './analysis/types';
 
 export type MergeAttachmentParams = {

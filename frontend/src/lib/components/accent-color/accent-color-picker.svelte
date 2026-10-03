@@ -1,10 +1,12 @@
 <script lang="ts">
+	import { mode } from 'mode-watcher';
+
 	import { Label } from '#lib/components/ui/label/index.js';
 	import * as RadioGroup from '#lib/components/ui/radio-group/index.js';
-	import { applyAccentColor, resolveThemePrimary } from '#lib/utils/theme.svelte.js';
-	import { mode } from 'mode-watcher';
-	import CustomColorDialog from './custom-color.svelte';
 	import { CheckIcon, AddIcon } from '#lib/icons/index.js';
+	import { applyAccentColor, resolveThemePrimary } from '#lib/utils/theme.svelte.js';
+
+	import CustomColorDialog from './custom-color.svelte';
 
 	let {
 		selectedColor = $bindable(),

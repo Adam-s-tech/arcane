@@ -1,37 +1,37 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
+	import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { onMount } from 'svelte';
-	import { z } from 'zod/v4';
-	import * as Tabs from '#lib/components/ui/tabs/index.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import settingsStore from '#lib/stores/config-store.svelte.js';
-	import { createForm } from '#lib/utils/settings.svelte.js';
-
-	import { isDepotBuildAvailable } from '#lib/utils/build-provider.js';
 	import { toast } from 'svelte-sonner';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import { z } from 'zod/v4';
+
+	import ResizableSplit from '#lib/components/resizable-split.svelte';
+	import * as Card from '#lib/components/ui/card/index.js';
+	import * as Tabs from '#lib/components/ui/tabs/index.js';
+	import { useUrlTab } from '#lib/hooks/use-url-tab.svelte.js';
+	import { CodeIcon, TerminalIcon } from '#lib/icons/index.js';
 	import { ResourceDetailLayout } from '#lib/layouts/index.js';
 	import TabbedPageLayout from '#lib/layouts/tabbed-page-layout.svelte';
-	import { sanitizeLogText } from '#lib/utils/formatting.js';
-	import { CodeIcon, TerminalIcon } from '#lib/icons/index.js';
-	import * as Card from '#lib/components/ui/card/index.js';
-	import { extractErrorMessage } from '#lib/utils/docker.js';
-	import ResizableSplit from '#lib/components/resizable-split.svelte';
-	import BuildControls from './components/build-controls.svelte';
-	import BuildWorkspacePanel from './components/build-workspace-panel.svelte';
-	import BuildConfigPanel from './components/build-config-panel.svelte';
-	import BuildOutputPanel from './components/build-output-panel.svelte';
-	import ImageBuildHistoryPanel from './components/image-build-history-panel.svelte';
-	import type { BuildProviderOption, SelectOption } from './components/build-form.types';
+	import { m } from '#lib/paraglide/messages.js';
+	import { queryKeys } from '#lib/query/query-keys.js';
 	import { containerRegistryService } from '#lib/services/container-registry-service.js';
-	import { buildImageReference, getRegistryDisplayName } from '#lib/utils/registry.js';
-	import { parseList } from '#lib/utils/form-parsers.js';
+	import settingsStore from '#lib/stores/config-store.svelte.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
 	import type { ImageBuildRecord } from '#lib/types/docker.js';
 	import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
-	import { queryKeys } from '#lib/query/query-keys.js';
-	import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import { useUrlTab } from '#lib/hooks/use-url-tab.svelte.js';
+	import { isDepotBuildAvailable } from '#lib/utils/build-provider.js';
+	import { extractErrorMessage } from '#lib/utils/docker.js';
+	import { parseList } from '#lib/utils/form-parsers.js';
+	import { sanitizeLogText } from '#lib/utils/formatting.js';
+	import { buildImageReference, getRegistryDisplayName } from '#lib/utils/registry.js';
+	import { createForm } from '#lib/utils/settings.svelte.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+
+	import BuildConfigPanel from './components/build-config-panel.svelte';
+	import BuildControls from './components/build-controls.svelte';
+	import type { BuildProviderOption, SelectOption } from './components/build-form.types';
+	import BuildOutputPanel from './components/build-output-panel.svelte';
+	import BuildWorkspacePanel from './components/build-workspace-panel.svelte';
+	import ImageBuildHistoryPanel from './components/image-build-history-panel.svelte';
 	import {
 		formatBuildArgs,
 		formatKeyValueMap,

@@ -30,8 +30,13 @@
 
 <script lang="ts">
 	import type { HTMLAttributes } from 'svelte/elements';
+
+	import type { IconType } from '#lib/icons/index.js';
 	import type { WithElementRef } from '#lib/utils.js';
 	import { cn } from '#lib/utils.js';
+
+	import Description from './alert-description.svelte';
+	import Title from './alert-title.svelte';
 
 	let {
 		ref = $bindable(null),
@@ -39,13 +44,22 @@
 		variant = 'default',
 		size = 'default',
 		children,
+		icon: Icon,
+		heading,
+		description,
 		...restProps
 	}: WithElementRef<HTMLAttributes<HTMLDivElement>> & {
 		variant?: AlertVariant;
 		size?: AlertSize;
+		icon?: IconType;
+		heading?: string;
+		description?: string;
 	} = $props();
 </script>
 
 <div bind:this={ref} class={cn(alertVariants({ variant, size }), className)} data-size={size} {...restProps} role="alert">
+	{#if Icon}<Icon class="size-4" />{/if}
+	{#if heading}<Title>{heading}</Title>{/if}
+	{#if description}<Description>{description}</Description>{/if}
 	{@render children?.()}
 </div>

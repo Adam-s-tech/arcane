@@ -1,13 +1,14 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
+import type { Temporal } from 'temporal-polyfill';
+
 import { m } from '#lib/paraglide/messages.js';
 import type { ContainerStats, ContainerSummaryDto } from '#lib/types/docker.js';
 import type { Environment, EnvironmentStatus } from '#lib/types/environment.js';
+import type { VulnerabilityScanSummary } from '#lib/types/environment.js';
 import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
 import type { ProjectUpdateInfo } from '#lib/types/swarm.js';
 import type { SwarmServiceModeName, SwarmServiceModeSpec } from '#lib/types/swarm.js';
-import type { VulnerabilityScanSummary } from '#lib/types/environment.js';
 import { instantEpochMilliseconds } from '#lib/utils/formatting.js';
-import type { Temporal } from 'temporal-polyfill';
+import { tryCatch } from '#lib/utils/try-catch.js';
 
 // --- Compose / Swarm management labels ---
 

@@ -1,19 +1,21 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
 	import { dev } from '$app/env';
-	import { page } from '$app/state';
 	import { afterNavigate } from '$app/navigation';
+	import { page } from '$app/state';
+	import { toast } from 'svelte-sonner';
+
+	import UpdateAllDialog from '#lib/components/dialogs/update-all-dialog.svelte';
 	import NewEnvironmentSheet from '#lib/components/sheets/new-environment-sheet.svelte';
-	import EnvironmentTable from './components/environment-table.svelte';
+	import { DownloadIcon, UpdateIcon } from '#lib/icons/index.js';
+	import { ResourcePageLayout, type ActionButton } from '#lib/layouts/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { environmentManagementService } from '#lib/services/env-mgmt-service.js';
-	import { ResourcePageLayout, type ActionButton } from '#lib/layouts/index.js';
 	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
 	import { simpleRefresh } from '#lib/utils/api.js';
 	import { hasPermission } from '#lib/utils/auth.js';
-	import { DownloadIcon, UpdateIcon } from '#lib/icons/index.js';
-	import UpdateAllDialog from '#lib/components/dialogs/update-all-dialog.svelte';
 	import { bulkConfirmAndRun } from '#lib/utils/bulk-actions.js';
+
+	import EnvironmentTable from './components/environment-table.svelte';
 
 	let { data } = $props();
 

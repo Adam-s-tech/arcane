@@ -1,25 +1,26 @@
 <script lang="ts">
-	import type { NetworkSummaryDto, NetworkUsageCounts } from '#lib/types/docker.js';
-	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
-	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
-	import { tryCatch } from '#lib/utils/try-catch.js';
-	import { DEFAULT_NETWORK_NAMES } from '#lib/constants.js';
+
+	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
 	import InUseStatus from '#lib/components/arcane-table/cells/in-use-status.svelte';
-	import type { SearchPaginationSortRequest, Paginated } from '#lib/types/shared.js';
-	import { capitalizeFirstLetter } from '#lib/utils/formatting.js';
 	import type { ColumnSpec, BulkAction } from '#lib/components/arcane-table/index.js';
 	import { UniversalMobileCard } from '#lib/components/arcane-table/index.js';
+	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
+	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import { DEFAULT_NETWORK_NAMES } from '#lib/constants.js';
+	import { NetworksIcon, GlobeIcon, InspectIcon, TrashIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { networkService } from '#lib/services/network-service.js';
-	import { NetworksIcon, GlobeIcon, InspectIcon, TrashIcon } from '#lib/icons/index.js';
+	import type { NetworkSummaryDto, NetworkUsageCounts } from '#lib/types/docker.js';
+	import type { SearchPaginationSortRequest, Paginated } from '#lib/types/shared.js';
 	import { activityToastOptions, extractActivityId } from '#lib/utils/activity-toast.js';
+	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
 	import { bulkConfirmAndRun } from '#lib/utils/bulk-actions.js';
+	import { capitalizeFirstLetter } from '#lib/utils/formatting.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	type FieldVisibility = Record<string, boolean>;
 

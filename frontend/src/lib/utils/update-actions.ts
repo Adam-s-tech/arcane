@@ -1,13 +1,16 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
 import { toast } from 'svelte-sonner';
+
 import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
 import { m } from '#lib/paraglide/messages.js';
 import BaseAPIService from '#lib/services/api-service.js';
+import systemUpgradeService from '#lib/services/api/system-upgrade-service.js';
 import { imageService } from '#lib/services/image-service.js';
 import { userService } from '#lib/services/user-service.js';
 import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-import { activityToastOptions } from '#lib/utils/activity-toast.js';
 import type { AutoUpdateResourceType, AutoUpdateResult } from '#lib/types/automation.js';
+import { activityToastOptions } from '#lib/utils/activity-toast.js';
+import { toastUpgradeError } from '#lib/utils/api.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
 
 /**
  * Helpers around the updater run endpoint (`POST /environments/{id}/updater/run`),
@@ -50,11 +53,6 @@ export function throwOnUpdateFailure<T extends Pick<AutoUpdateResult, 'failed' |
 		}
 	}
 	return result;
-}
-
-/** {@link throwOnUpdateFailure} for a single-container update: a skipped container did not update. */
-export function throwOnContainerUpdateFailure<T extends Pick<AutoUpdateResult, 'failed' | 'items'>>(result: T): T {
-	return throwOnUpdateFailure(result, { rejectSkipped: true });
 }
 
 /** Emits a single toast describing an updater run's updated/failed/skipped tally. */
@@ -151,4 +149,28 @@ export function confirmAndApplyAllUpdates({ setLoading, onRefresh }: ConfirmAndA
 			}
 		}
 	});
+}
+
+export function summarizeUpdateCheckResult(result: { errorMessage?: string }) {
+	const firstError = result.errorMessage?.trim();
+	if (firstError) toast.error(firstError || m.containers_check_updates_failed());
+	else toast.success(m.images_update_check_completed());
+}
+
+export async function applyEnvironmentUpgrade(
+	environmentId: string,
+	failureMessage: () => string,
+	onRefresh?: () => Promise<unknown> | unknown,
+	useResponseMessage = false
+) {
+	try {
+		const result = await systemUpgradeService.triggerUpgrade(environmentId);
+		if (!result.success) throw new Error(result.error || (useResponseMessage && result.message) || failureMessage());
+		toast.success(m.upgrade_success());
+		await onRefresh?.();
+		return { upToDate: result.upToDate };
+	} catch (error) {
+		toastUpgradeError(error, m.upgrade_failed);
+		throw error;
+	}
 }

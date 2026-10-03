@@ -1,18 +1,18 @@
 <script lang="ts">
-	import * as ResponsiveDialog from '#lib/components/ui/responsive-dialog/index.js';
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import SheetFooterActions from '#lib/components/sheets/sheet-footer-actions.svelte';
+	import { z } from 'zod/v4';
+
 	import FormInput from '#lib/components/form/form-input.svelte';
 	import RoleAssignmentsEditor from '#lib/components/forms/role-assignments-editor.svelte';
+	import IfPermitted from '#lib/components/if-permitted.svelte';
+	import SheetFooterActions from '#lib/components/sheets/sheet-footer-actions.svelte';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import * as ResponsiveDialog from '#lib/components/ui/responsive-dialog/index.js';
+	import { m } from '#lib/paraglide/messages.js';
 	import type { User } from '#lib/types/auth.js';
 	import type { Role } from '#lib/types/auth.js';
 	import type { Environment } from '#lib/types/environment.js';
-	import { z } from 'zod/v4';
-	import { createForm, preventDefault } from '#lib/utils/settings.svelte.js';
-
 	import { isValidUserEmail } from '#lib/utils/formatting.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import IfPermitted from '#lib/components/if-permitted.svelte';
+	import { createForm, preventDefault } from '#lib/utils/settings.svelte.js';
 
 	type RoleAssignmentInput = { roleId: string; environmentId?: string };
 	type UserSubmission = Omit<Partial<User>, 'roleAssignments'> & {

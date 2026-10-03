@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { tick } from 'svelte';
+	import { toast } from 'svelte-sonner';
+
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
@@ -8,8 +11,6 @@
 	import { systemService } from '#lib/services/system-service.js';
 	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
 	import { tryCatch } from '#lib/utils/try-catch.js';
-	import { tick } from 'svelte';
-	import { toast } from 'svelte-sonner';
 
 	type ConvertedDockerRun = {
 		dockerCompose: string;

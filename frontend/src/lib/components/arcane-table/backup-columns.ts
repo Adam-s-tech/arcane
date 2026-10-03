@@ -1,6 +1,8 @@
-import type { ColumnSpec } from './arcane-table.types.svelte';
-import type { BackupRun } from '#lib/types/backup.js';
 import { m } from '#lib/paraglide/messages.js';
+import type { BackupRun } from '#lib/types/backup.js';
+import { backupManagementLabel } from '#lib/utils/backups.js';
+
+import type { ColumnSpec } from './arcane-table.types.svelte';
 
 export function backupRunColumns<T extends BackupRun>(cells: {
 	status: ColumnSpec<T>['cell'];
@@ -24,4 +26,8 @@ export function backupRunMobileFields() {
 		{ id: 'destination', label: m.backups_destination_label(), defaultVisible: true },
 		{ id: 'size', label: m.common_size(), defaultVisible: true }
 	];
+}
+
+export function backupManagementBadge(item: Pick<BackupRun, 'type'>) {
+	return { variant: 'purple' as const, text: backupManagementLabel(item.type) };
 }

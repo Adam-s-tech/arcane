@@ -1,4 +1,5 @@
 import { redirect } from '@sveltejs/kit';
+
 import type { PageLoad } from './$types';
 
 // Temporary redirect to handle OIDC callback uniformly

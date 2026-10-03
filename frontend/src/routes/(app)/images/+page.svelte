@@ -1,32 +1,33 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
+	import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
+	import { toast } from 'svelte-sonner';
 
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
-	import { Spinner } from '#lib/components/ui/spinner/index.js';
-	import { toast } from 'svelte-sonner';
-	import ImagePullSheet from '#lib/components/sheets/image-pull-sheet.svelte';
 	import ImageRegistrySearchDialog from '#lib/components/dialogs/image-registry-search-dialog.svelte';
-	import { bytes } from '#lib/utils/formatting.js';
-	import * as Dialog from '#lib/components/ui/dialog/index.js';
-	import { displaySize, FileDropZone, MEGABYTE, type FileDropZoneProps } from '#lib/components/ui/file-drop-zone/index.js';
-	import ImageTable from './components/image-table.svelte';
-	import { m } from '#lib/paraglide/messages.js';
-	import { Progress } from '#lib/components/ui/progress/index.js';
-	import { imageService } from '#lib/services/image-service.js';
-	import type { ChunkedUploadProgress } from '#lib/services/upload-service.js';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import { hasPermission } from '#lib/utils/auth.js';
-	import { queryKeys } from '#lib/query/query-keys.js';
-	import type { ImageUsageCounts } from '#lib/types/docker.js';
-	import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
-	import { useEnvironmentRefresh } from '#lib/hooks/use-environment-refresh.svelte.js';
-	import { ResourcePageLayout, type ActionButton, type StatCardConfig } from '#lib/layouts/index.js';
-	import { CloseIcon, VolumesIcon, LocalFolderComputerIcon, SearchIcon } from '#lib/icons/index.js';
-	import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import PruneModePicker from '#lib/components/prune/prune-mode-picker.svelte';
 	import SettingsRow from '#lib/components/settings/settings-row.svelte';
 	import SettingsSection from '#lib/components/settings/settings-section.svelte';
+	import ImagePullSheet from '#lib/components/sheets/image-pull-sheet.svelte';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { displaySize, FileDropZone, MEGABYTE, type FileDropZoneProps } from '#lib/components/ui/file-drop-zone/index.js';
+	import { Progress } from '#lib/components/ui/progress/index.js';
+	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import { useEnvironmentRefresh } from '#lib/hooks/use-environment-refresh.svelte.js';
+	import { CloseIcon, VolumesIcon, LocalFolderComputerIcon, SearchIcon } from '#lib/icons/index.js';
+	import { ResourcePageLayout, type ActionButton, type StatCardConfig } from '#lib/layouts/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { queryKeys } from '#lib/query/query-keys.js';
+	import { imageService } from '#lib/services/image-service.js';
+	import type { ChunkedUploadProgress } from '#lib/services/upload-service.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import type { ImageUsageCounts } from '#lib/types/docker.js';
+	import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
 	import { activityToastOptions, extractActivityId } from '#lib/utils/activity-toast.js';
+	import { hasPermission } from '#lib/utils/auth.js';
+	import { bytes } from '#lib/utils/formatting.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+
+	import ImageTable from './components/image-table.svelte';
 
 	let { data } = $props();
 	const queryClient = useQueryClient();

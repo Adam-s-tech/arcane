@@ -2,10 +2,10 @@
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { EditIcon } from '#lib/icons/index.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import type { BackupPolicy, BackupStatus } from '#lib/types/backup.js';
 	import { backupDestinationFromFlags, backupDestinationLabel, backupStatusLabel } from '#lib/utils/backups.js';
 	import { formatDateTimeShort } from '#lib/utils/formatting.js';
-	import * as m from '#lib/paraglide/messages.js';
 
 	type CardPolicy = BackupPolicy & {
 		s3DestinationName?: string;

@@ -1,4 +1,5 @@
 import { onMount } from 'svelte';
+
 import { environmentStore } from '#lib/stores/environment.store.svelte.js';
 
 // Refresh only when the selected environment ID changes after initial selection.

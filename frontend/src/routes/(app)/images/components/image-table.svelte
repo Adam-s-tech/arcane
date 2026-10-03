@@ -1,42 +1,23 @@
 <script lang="ts">
-	import { featureStore } from '#lib/stores/features.store.svelte.js';
-	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
-	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import { goto } from '$app/navigation';
-	import { onMount, onDestroy, tick } from 'svelte';
 	import { useQueryClient } from '@tanstack/svelte-query';
-	import { queryKeys } from '#lib/query/query-keys.js';
+	import { onMount, onDestroy, tick } from 'svelte';
 	import { toast } from 'svelte-sonner';
-	import { bytes, formatDateTimeShort, nowInstantString } from '#lib/utils/formatting.js';
-	import { inUseBadge } from '#lib/utils/mobile-card-badges.js';
-	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import { handleApiResultWithCallbacks, extractApiErrorMessage } from '#lib/utils/api.js';
-	import { tryCatch } from '#lib/utils/try-catch.js';
-	import ImageUpdateItem from '#lib/components/image-update-item.svelte';
-	import VulnerabilityScanItem from '#lib/components/vulnerability/vulnerability-scan-item.svelte';
-	import UniversalMobileCard from '#lib/components/arcane-table/cards/universal-mobile-card.svelte';
-	import ImageTagDialog from './image-tag-dialog.svelte';
-	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
-	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
-	import type { ImageSummaryDto, ImageUpdateInfoDto } from '#lib/types/docker.js';
-	import type { VulnerabilityScanSummary } from '#lib/types/environment.js';
-	import type { ColumnSpec, MobileFieldVisibility, BulkAction } from '#lib/components/arcane-table/index.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import { imageService } from '#lib/services/image-service.js';
-	import { vulnerabilityService } from '#lib/services/vulnerability-service.js';
-	import { isLikelyStaleFailedSummary, isVulnerabilityScanInProgress } from '#lib/utils/docker.js';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import { hasPermission } from '#lib/utils/auth.js';
-	import userStore from '#lib/stores/user-store.svelte.js';
-	import { activityToastOptions, extractActivityId } from '#lib/utils/activity-toast.js';
-	import { bulkConfirmAndRun } from '#lib/utils/bulk-actions.js';
-	import InUseStatus from '#lib/components/arcane-table/cells/in-use-status.svelte';
-	import UnixCreatedCell from '#lib/components/arcane-table/cells/unix-created-cell.svelte';
 	import { Temporal } from 'temporal-polyfill';
 
+	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
+	import UniversalMobileCard from '#lib/components/arcane-table/cards/universal-mobile-card.svelte';
+	import InUseStatus from '#lib/components/arcane-table/cells/in-use-status.svelte';
+	import UnixCreatedCell from '#lib/components/arcane-table/cells/unix-created-cell.svelte';
+	import type { ColumnSpec, MobileFieldVisibility, BulkAction } from '#lib/components/arcane-table/index.js';
+	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
+	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
+	import ImageUpdateItem from '#lib/components/image-update-item.svelte';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
+	import VulnerabilityScanItem from '#lib/components/vulnerability/vulnerability-scan-item.svelte';
 	import {
 		DownloadIcon,
 		TrashIcon,
@@ -50,6 +31,26 @@
 		ContainersIcon,
 		TagIcon
 	} from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { queryKeys } from '#lib/query/query-keys.js';
+	import { imageService } from '#lib/services/image-service.js';
+	import { vulnerabilityService } from '#lib/services/vulnerability-service.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import { featureStore } from '#lib/stores/features.store.svelte.js';
+	import userStore from '#lib/stores/user-store.svelte.js';
+	import type { ImageSummaryDto, ImageUpdateInfoDto } from '#lib/types/docker.js';
+	import type { VulnerabilityScanSummary } from '#lib/types/environment.js';
+	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
+	import { activityToastOptions, extractActivityId } from '#lib/utils/activity-toast.js';
+	import { handleApiResultWithCallbacks, extractApiErrorMessage } from '#lib/utils/api.js';
+	import { hasPermission } from '#lib/utils/auth.js';
+	import { bulkConfirmAndRun } from '#lib/utils/bulk-actions.js';
+	import { isLikelyStaleFailedSummary, isVulnerabilityScanInProgress } from '#lib/utils/docker.js';
+	import { bytes, formatDateTimeShort, nowInstantString } from '#lib/utils/formatting.js';
+	import { inUseBadge } from '#lib/utils/mobile-card-badges.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+
+	import ImageTagDialog from './image-tag-dialog.svelte';
 
 	let {
 		images = $bindable(),

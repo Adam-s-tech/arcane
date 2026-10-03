@@ -1,50 +1,35 @@
 <script lang="ts">
-	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
-	import { ArrowLeftIcon } from '#lib/icons/index.js';
 	import { goto, refreshAll } from '$app/navigation';
+	import { createQuery } from '@tanstack/svelte-query';
 	import { toast } from 'svelte-sonner';
-	import { preventDefault, createForm } from '#lib/utils/settings.svelte.js';
 
-	import TemplateSelectionDialog from '#lib/components/dialogs/template-selection-dialog.svelte';
-	import { m } from '#lib/paraglide/messages.js';
-	import { projectService } from '#lib/services/project-service.js';
+	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+	import CodePanel from '#lib/components/code-panel.svelte';
 	import ComposeCreateMenu from '#lib/components/compose-create-menu.svelte';
 	import ComposeFileEditorPanel from '#lib/components/compose-file-editor-panel.svelte';
-	import CodePanel from '#lib/components/code-panel.svelte';
-	import EditableName from '../components/EditableName.svelte';
-	import WorkspaceFileTreePanel from '#lib/components/workspace-file-tree-panel.svelte';
-	import EditorTabStrip from '#lib/components/editor-tab-strip.svelte';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import { hasPermission } from '#lib/utils/auth.js';
-	import { containerService } from '#lib/services/container-service.js';
-	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
-	import { extractApiErrorMessage } from '#lib/utils/api.js';
-	import { tryCatch } from '#lib/utils/try-catch.js';
-	import { ComposeEditorSplit } from '#lib/components/compose/index.js';
-	import ResizableSplit from '#lib/components/resizable-split.svelte';
-	import { Switch } from '#lib/components/ui/switch/index.js';
 	import DockerRunConverterDialog from '#lib/components/compose/docker-run-converter-dialog.svelte';
-	import { activityToastOptions, extractActivityId } from '#lib/utils/activity-toast.js';
-	import { globalVariablesToMap, type TemplateAuthoringResource } from '#lib/utils/template-load.js';
-	import * as Alert from '#lib/components/ui/alert/index.js';
-	import { AlertIcon } from '#lib/icons/index.js';
-	import type { ProjectTag } from '#lib/types/swarm.js';
+	import { ComposeEditorSplit } from '#lib/components/compose/index.js';
+	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
+	import TemplateSelectionDialog from '#lib/components/dialogs/template-selection-dialog.svelte';
+	import EditorTabStrip from '#lib/components/editor-tab-strip.svelte';
 	import ProjectTagEditor from '#lib/components/project-tag-editor.svelte';
-	import { createQuery } from '@tanstack/svelte-query';
-	import { queryKeys } from '#lib/query/query-keys.js';
-	import settingsStore from '#lib/stores/config-store.svelte.js';
-	import {
-		planProjectWorkspaceFileCreate,
-		planProjectWorkspaceFileRename,
-		validateProjectWorkspaceFileName
-	} from '../components/project-workspace-utils';
-	import {
-		planWorkspaceFileMove,
-		workspaceFileBasename,
-		workspaceFileLanguage,
-		workspaceReadOnlyMessage
-	} from '#lib/utils/workspace-files.js';
+	import ResizableSplit from '#lib/components/resizable-split.svelte';
+	import * as Alert from '#lib/components/ui/alert/index.js';
+	import { Switch } from '#lib/components/ui/switch/index.js';
 	import { WorkspaceDraftState } from '#lib/components/workspace-editor/workspace-draft-state.svelte.js';
+	import WorkspaceFileTreePanel from '#lib/components/workspace-file-tree-panel.svelte';
+	import { ArrowLeftIcon } from '#lib/icons/index.js';
+	import { AlertIcon } from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { queryKeys } from '#lib/query/query-keys.js';
+	import { containerService } from '#lib/services/container-service.js';
+	import { projectService } from '#lib/services/project-service.js';
+	import settingsStore from '#lib/stores/config-store.svelte.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import type { ProjectTag } from '#lib/types/swarm.js';
+	import { activityToastOptions, extractActivityId } from '#lib/utils/activity-toast.js';
+	import { extractApiErrorMessage } from '#lib/utils/api.js';
+	import { hasPermission } from '#lib/utils/auth.js';
 	import {
 		composeTreeSplitProps,
 		createComposeEditorSchema,
@@ -55,11 +40,27 @@
 		templateNameSlug,
 		type ProjectEditorLayoutMode
 	} from '#lib/utils/compose-flow.js';
+	import { preventDefault, createForm } from '#lib/utils/settings.svelte.js';
 	import {
 		getTemplateEditorValidationState,
 		hasTemplateEditorErrors,
 		validateTemplateEditorForm
 	} from '#lib/utils/template-editor.js';
+	import { globalVariablesToMap, type TemplateAuthoringResource } from '#lib/utils/template-load.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+	import {
+		planWorkspaceFileMove,
+		workspaceFileBasename,
+		workspaceFileLanguage,
+		workspaceReadOnlyMessage
+	} from '#lib/utils/workspace-files.js';
+
+	import EditableName from '../components/editable-name.svelte';
+	import {
+		planProjectWorkspaceFileCreate,
+		planProjectWorkspaceFileRename,
+		validateProjectWorkspaceFileName
+	} from '../components/project-workspace-utils';
 
 	let { data } = $props();
 

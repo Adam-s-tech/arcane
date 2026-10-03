@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { cn } from '#lib/utils.js';
+	import type { ComponentProps } from 'svelte';
+
 	import { LoadingSpinnerIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import type { ComponentProps } from 'svelte';
+	import { cn } from '#lib/utils.js';
 
 	type Props = ComponentProps<typeof LoadingSpinnerIcon> & {
 		/** Defaults to the surrounding text color. */

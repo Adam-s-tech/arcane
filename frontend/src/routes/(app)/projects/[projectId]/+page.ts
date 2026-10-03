@@ -1,11 +1,13 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
+import type { QueryClient } from '@tanstack/svelte-query';
+
+import { queryKeys } from '#lib/query/query-keys.js';
 import { projectService } from '#lib/services/project-service.js';
 import { projectWorkspaceService } from '#lib/services/project-workspace-service.js';
 import { variableService } from '#lib/services/variable-service.js';
 import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-import { queryKeys } from '#lib/query/query-keys.js';
 import { throwPageLoadError } from '#lib/utils/api.js';
-import type { QueryClient } from '@tanstack/svelte-query';
+import { tryCatch } from '#lib/utils/try-catch.js';
+
 import type { PageLoad } from './$types';
 
 async function loadGlobalVariables(queryClient: QueryClient) {

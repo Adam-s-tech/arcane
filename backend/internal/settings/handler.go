@@ -13,8 +13,8 @@ import (
 	"github.com/getarcaneapp/arcane/types/v2/base"
 	"github.com/getarcaneapp/arcane/types/v2/category"
 	searchtypes "github.com/getarcaneapp/arcane/types/v2/search"
-	settingstypes "github.com/getarcaneapp/arcane/types/v2/settings"
-	kit "go.getarcane.app/kit/pkg"
+	"github.com/getarcaneapp/arcane/types/v2/settings"
+	"go.getarcane.app/kit/pkg"
 	"go.getarcane.app/kit/pkg/mapping"
 	"go.yaml.in/yaml/v4"
 
@@ -26,7 +26,7 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/edge"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
-	workspacepkg "github.com/getarcaneapp/arcane/backend/v2/pkg/workspace"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/workspace"
 )
 
 const (
@@ -42,14 +42,12 @@ type SettingsHandler struct {
 	cfg                   *config.Config
 }
 
-// --- Huma Input/Output Wrappers ---
-
 type GetSettingsInput struct {
 	EnvironmentID string `path:"id" doc:"Environment ID"`
 }
 
 type GetSettingsOutput struct {
-	Body []settingstypes.PublicSetting
+	Body []settings.PublicSetting
 }
 
 type GetPublicSettingsInput struct {
@@ -57,12 +55,12 @@ type GetPublicSettingsInput struct {
 }
 
 type GetPublicSettingsOutput struct {
-	Body []settingstypes.PublicSetting
+	Body []settings.PublicSetting
 }
 
 type UpdateSettingsInput struct {
-	EnvironmentID string               `path:"id" doc:"Environment ID"`
-	Body          settingstypes.Update `doc:"Settings update data"`
+	EnvironmentID string          `path:"id" doc:"Environment ID"`
+	Body          settings.Update `doc:"Settings update data"`
 }
 
 type SearchSettingsInput struct {
@@ -117,68 +115,6 @@ func validateAbsoluteDirectoryPathInternal(path string) error {
 	}
 }
 
-// RegisterSettings registers settings management routes using Huma.
-func RegisterSettings(api huma.API, settingsService *SettingsService, settingsSearchService *SettingsSearchService, proxyRemoteJSON handlerutil.RemoteJSONProxy, cfg *config.Config) {
-	h := &SettingsHandler{
-		settingsService:       settingsService,
-		settingsSearchService: settingsSearchService,
-		proxyRemoteJSON:       proxyRemoteJSON,
-		cfg:                   cfg,
-	}
-
-	// Environment-scoped settings endpoints
-	huma.Register(api, huma.Operation{
-		OperationID: "get-public-settings",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/settings/public",
-		Summary:     "Get public settings",
-		Description: "Get all public settings for an environment",
-		Tags:        []string{"Settings"},
-		Security:    []map[string][]string{},
-	}, h.GetPublicSettings)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "get-settings",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/settings",
-		Summary:     "Get settings",
-		Description: "Get all settings for an environment",
-		Tags:        []string{"Settings"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermSettingsRead, h.GetSettings)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "update-settings",
-		Method:      http.MethodPut,
-		Path:        "/environments/{id}/settings",
-		Summary:     "Update settings",
-		Description: "Update settings for an environment",
-		Tags:        []string{"Settings"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermSettingsWrite, h.UpdateSettings)
-
-	// Top-level settings endpoints (not environment-scoped)
-	huma.Register(api, huma.Operation{
-		OperationID: "search-settings",
-		Method:      http.MethodPost,
-		Path:        "/settings/search",
-		Summary:     "Search settings",
-		Description: "Search settings categories and individual settings by query",
-		Tags:        []string{"Settings"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, h.Search)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-settings-categories",
-		Method:      http.MethodGet,
-		Path:        "/settings/categories",
-		Summary:     "Get settings categories",
-		Description: "Get all available settings categories with metadata",
-		Tags:        []string{"Settings"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, h.GetCategories)
-}
-
 func filterSettingsCategoriesInternal(ps *authz.PermissionSet, categories []category.Category) []category.Category {
 	if ps == nil {
 		return []category.Category{}
@@ -207,7 +143,7 @@ func canAccessSettingsCategoryAtAnyScopeInternal(ps *authz.PermissionSet, catego
 	return false
 }
 
-func (h *SettingsHandler) appendRuntimeSettingsInternal(settingsDto []settingstypes.PublicSetting, includeAuthenticatedOnly bool) []settingstypes.PublicSetting {
+func (h *SettingsHandler) appendRuntimeSettingsInternal(settingsDto []settings.PublicSetting, includeAuthenticatedOnly bool) []settings.PublicSetting {
 	if !includeAuthenticatedOnly {
 		return settingsDto
 	}
@@ -216,7 +152,7 @@ func (h *SettingsHandler) appendRuntimeSettingsInternal(settingsDto []settingsty
 	if h.cfg != nil {
 		uiConfigDisabled = h.cfg.UIConfigurationDisabled
 	}
-	settingsDto = append(settingsDto, settingstypes.PublicSetting{
+	settingsDto = append(settingsDto, settings.PublicSetting{
 		Key:   "uiConfigDisabled",
 		Value: strconv.FormatBool(uiConfigDisabled),
 		Type:  "boolean",
@@ -225,19 +161,19 @@ func (h *SettingsHandler) appendRuntimeSettingsInternal(settingsDto []settingsty
 	projectWorkspaceMaxFileSizeMB := 10
 	volumeWorkspaceMaxFileSizeMB := 10
 	if h.cfg != nil {
-		projectWorkspaceMaxFileSizeMB = workspacepkg.EffectiveMaxFileSizeMB(h.cfg.ProjectWorkspaceMaxFileSizeMB)
-		volumeWorkspaceMaxFileSizeMB = workspacepkg.EffectiveMaxFileSizeMB(h.cfg.VolumeWorkspaceMaxFileSizeMB)
+		projectWorkspaceMaxFileSizeMB = workspace.EffectiveMaxFileSizeMB(h.cfg.ProjectWorkspaceMaxFileSizeMB)
+		volumeWorkspaceMaxFileSizeMB = workspace.EffectiveMaxFileSizeMB(h.cfg.VolumeWorkspaceMaxFileSizeMB)
 	}
 	settingsDto = append(settingsDto,
-		settingstypes.PublicSetting{Key: projectWorkspaceMaxFileSizeSettingKey, Value: strconv.Itoa(projectWorkspaceMaxFileSizeMB), Type: "number"},
-		settingstypes.PublicSetting{Key: volumeWorkspaceMaxFileSizeSettingKey, Value: strconv.Itoa(volumeWorkspaceMaxFileSizeMB), Type: "number"},
+		settings.PublicSetting{Key: projectWorkspaceMaxFileSizeSettingKey, Value: strconv.Itoa(projectWorkspaceMaxFileSizeMB), Type: "number"},
+		settings.PublicSetting{Key: volumeWorkspaceMaxFileSizeSettingKey, Value: strconv.Itoa(volumeWorkspaceMaxFileSizeMB), Type: "number"},
 	)
 
 	backupVolumeName := "arcane-backups"
 	if h.cfg != nil && strings.TrimSpace(h.cfg.BackupVolumeName) != "" {
 		backupVolumeName = h.cfg.BackupVolumeName
 	}
-	settingsDto = append(settingsDto, settingstypes.PublicSetting{
+	settingsDto = append(settingsDto, settings.PublicSetting{
 		Key:   "backupVolumeName",
 		Value: backupVolumeName,
 		Type:  "string",
@@ -252,7 +188,7 @@ func (h *SettingsHandler) appendRuntimeSettingsInternal(settingsDto []settingsty
 		}
 	}
 	_, edgeMTLSCAErr := edge.AvailableManagerMTLSCAPath(edgeCfg)
-	settingsDto = append(settingsDto, settingstypes.PublicSetting{
+	settingsDto = append(settingsDto, settings.PublicSetting{
 		Key:   "edgeMTLSManagerCAAvailable",
 		Value: strconv.FormatBool(edgeMTLSCAErr == nil),
 		Type:  "boolean",
@@ -261,7 +197,7 @@ func (h *SettingsHandler) appendRuntimeSettingsInternal(settingsDto []settingsty
 	if h.settingsService != nil {
 		cfg := h.settingsService.GetSettingsConfig()
 		depotConfigured := strings.TrimSpace(cfg.DepotProjectId.Value) != "" && strings.TrimSpace(cfg.DepotToken.Value) != ""
-		settingsDto = append(settingsDto, settingstypes.PublicSetting{
+		settingsDto = append(settingsDto, settings.PublicSetting{
 			Key:   "depotConfigured",
 			Value: strconv.FormatBool(depotConfigured),
 			Type:  "boolean",
@@ -274,7 +210,7 @@ func (h *SettingsHandler) appendRuntimeSettingsInternal(settingsDto []settingsty
 // GetPublicSettings returns public settings for an environment.
 func (h *SettingsHandler) GetPublicSettings(ctx context.Context, input *GetPublicSettingsInput) (*GetPublicSettingsOutput, error) {
 	if input.EnvironmentID != "0" {
-		settingsDto, err := h.proxyRemoteJSON.JSON[[]settingstypes.PublicSetting](ctx, input.EnvironmentID, http.MethodGet, "/api/environments/0/settings/public", nil)
+		settingsDto, err := h.proxyRemoteJSON.JSON[[]settings.PublicSetting](ctx, input.EnvironmentID, http.MethodGet, "/api/environments/0/settings/public", nil)
 		if err != nil {
 			return nil, err
 		}
@@ -283,7 +219,7 @@ func (h *SettingsHandler) GetPublicSettings(ctx context.Context, input *GetPubli
 
 	settingsList := h.settingsService.ListSettings(SettingVisibilityPublic)
 
-	settingsDto, err := mapping.MapSlice[SettingVariable, settingstypes.PublicSetting](settingsList)
+	settingsDto, err := mapping.MapSlice[SettingVariable, settings.PublicSetting](settingsList)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("Failed to map settings")
 	}
@@ -298,7 +234,7 @@ func (h *SettingsHandler) GetSettings(ctx context.Context, input *GetSettingsInp
 	visibility := kit.Ternary(isAdmin, SettingVisibilityAll, SettingVisibilityNonAdmin)
 
 	if input.EnvironmentID != "0" {
-		settingsDto, err := h.proxyRemoteJSON.JSON[[]settingstypes.PublicSetting](ctx, input.EnvironmentID, http.MethodGet, "/api/environments/0/settings", nil)
+		settingsDto, err := h.proxyRemoteJSON.JSON[[]settings.PublicSetting](ctx, input.EnvironmentID, http.MethodGet, "/api/environments/0/settings", nil)
 		if err != nil {
 			return nil, err
 		}
@@ -309,7 +245,7 @@ func (h *SettingsHandler) GetSettings(ctx context.Context, input *GetSettingsInp
 			}
 			allowedKeys[projectWorkspaceMaxFileSizeSettingKey] = struct{}{}
 			allowedKeys[volumeWorkspaceMaxFileSizeSettingKey] = struct{}{}
-			filtered := make([]settingstypes.PublicSetting, 0, len(*settingsDto))
+			filtered := make([]settings.PublicSetting, 0, len(*settingsDto))
 			for _, setting := range *settingsDto {
 				if _, ok := allowedKeys[setting.Key]; ok {
 					filtered = append(filtered, setting)
@@ -322,7 +258,7 @@ func (h *SettingsHandler) GetSettings(ctx context.Context, input *GetSettingsInp
 
 	settingsList := h.settingsService.ListSettings(visibility)
 
-	settingsDto, err := mapping.MapSlice[SettingVariable, settingstypes.PublicSetting](settingsList)
+	settingsDto, err := mapping.MapSlice[SettingVariable, settings.PublicSetting](settingsList)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("Failed to map settings")
 	}
@@ -331,7 +267,7 @@ func (h *SettingsHandler) GetSettings(ctx context.Context, input *GetSettingsInp
 }
 
 // UpdateSettings updates settings for an environment.
-func (h *SettingsHandler) UpdateSettings(ctx context.Context, input *UpdateSettingsInput) (*handlerutil.Out[[]settingstypes.SettingDto], error) {
+func (h *SettingsHandler) UpdateSettings(ctx context.Context, input *UpdateSettingsInput) (*handlerutil.Out[[]settings.SettingDto], error) {
 	if err := h.validateSettingsUpdateInput(input.Body); err != nil {
 		return nil, err
 	}
@@ -343,7 +279,7 @@ func (h *SettingsHandler) UpdateSettings(ctx context.Context, input *UpdateSetti
 	return h.updateSettingsForLocalEnvironment(ctx, input.Body)
 }
 
-func (h *SettingsHandler) validateSettingsUpdateInput(input settingstypes.Update) error {
+func (h *SettingsHandler) validateSettingsUpdateInput(input settings.Update) error {
 	// Validate projects directory if provided and changed from current value.
 	// Skip validation when the value matches the current (possibly env-overridden) setting
 	// so that saving unrelated settings doesn't fail due to env-provided directory formats.
@@ -385,21 +321,21 @@ func (h *SettingsHandler) validateSettingsUpdateInput(input settingstypes.Update
 	return nil
 }
 
-func (h *SettingsHandler) updateSettingsForRemoteEnvironment(ctx context.Context, input *UpdateSettingsInput) (*handlerutil.Out[[]settingstypes.SettingDto], error) {
+func (h *SettingsHandler) updateSettingsForRemoteEnvironment(ctx context.Context, input *UpdateSettingsInput) (*handlerutil.Out[[]settings.SettingDto], error) {
 	// Check if trying to update auth settings on non-local environment.
 	if hasAuthSettingsUpdateInternal(input.Body) {
 		return nil, huma.Error403Forbidden("Authentication settings can only be updated from the main environment")
 	}
 
-	apiResp, err := h.proxyRemoteJSON.JSON[base.ApiResponse[[]settingstypes.SettingDto]](ctx, input.EnvironmentID, http.MethodPut, "/api/environments/0/settings", input.Body)
+	apiResp, err := h.proxyRemoteJSON.JSON[base.ApiResponse[[]settings.SettingDto]](ctx, input.EnvironmentID, http.MethodPut, "/api/environments/0/settings", input.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	return &handlerutil.Out[[]settingstypes.SettingDto]{Body: *apiResp}, nil
+	return &handlerutil.Out[[]settings.SettingDto]{Body: *apiResp}, nil
 }
 
-func (h *SettingsHandler) updateSettingsForLocalEnvironment(ctx context.Context, input settingstypes.Update) (*handlerutil.Out[[]settingstypes.SettingDto], error) {
+func (h *SettingsHandler) updateSettingsForLocalEnvironment(ctx context.Context, input settings.Update) (*handlerutil.Out[[]settings.SettingDto], error) {
 	if input.ProjectsDirectory != nil && *input.ProjectsDirectory != "" {
 		currentDir := h.settingsService.GetSettingsConfig().ProjectsDirectory.Value
 		if *input.ProjectsDirectory != currentDir {
@@ -428,24 +364,24 @@ func (h *SettingsHandler) updateSettingsForLocalEnvironment(ctx context.Context,
 		return nil, huma.NewError(apiErr.HTTPStatus(), apiErr.Message)
 	}
 
-	settingDtos := make([]settingstypes.SettingDto, 0, len(updatedSettings))
+	settingDtos := make([]settings.SettingDto, 0, len(updatedSettings))
 	for _, setting := range updatedSettings {
-		settingDtos = append(settingDtos, settingstypes.SettingDto{
+		settingDtos = append(settingDtos, settings.SettingDto{
 			Key:   setting.Key,
 			Type:  "string",
 			Value: setting.Value,
 		})
 	}
 
-	return &handlerutil.Out[[]settingstypes.SettingDto]{
-		Body: base.ApiResponse[[]settingstypes.SettingDto]{
+	return &handlerutil.Out[[]settings.SettingDto]{
+		Body: base.ApiResponse[[]settings.SettingDto]{
 			Success: true,
 			Data:    settingDtos,
 		},
 	}, nil
 }
 
-func hasAuthSettingsUpdateInternal(req settingstypes.Update) bool {
+func hasAuthSettingsUpdateInternal(req settings.Update) bool {
 	return req.AuthLocalEnabled != nil || req.OidcEnabled != nil ||
 		req.AuthSessionTimeout != nil || req.AuthPasswordPolicy != nil ||
 		req.OidcClientId != nil ||

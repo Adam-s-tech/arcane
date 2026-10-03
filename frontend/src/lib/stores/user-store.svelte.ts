@@ -1,6 +1,9 @@
+import { setMode } from 'mode-watcher';
+import { untrack } from 'svelte';
+
+import { timeFormatStore } from '#lib/stores/time-format.store.svelte.js';
 import type { User } from '#lib/types/auth.js';
 import { GLOBAL_SCOPE, SUDO_PERMISSION } from '#lib/types/auth.js';
-import { untrack } from 'svelte';
 import { setLocale } from '#lib/utils/formatting.js';
 import {
 	applyAccentColor,
@@ -11,8 +14,6 @@ import {
 	applyOledMode,
 	FONT_SIZE_DEFAULT
 } from '#lib/utils/theme.svelte.js';
-import { setMode } from 'mode-watcher';
-import { timeFormatStore } from '#lib/stores/time-format.store.svelte.js';
 
 let current = $state.raw<User | null>(null);
 const listeners = new Set<(user: User | null) => void>();

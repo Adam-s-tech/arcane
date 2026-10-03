@@ -5,11 +5,14 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"crypto/x509"
 	"encoding/json/v2"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"log/slog"
 	"maps"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -21,9 +24,10 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/getarcaneapp/arcane/types/v2/base"
 	"github.com/getarcaneapp/arcane/types/v2/environment"
+	usertypes "github.com/getarcaneapp/arcane/types/v2/user"
 	"github.com/getarcaneapp/arcane/types/v2/version"
 	"github.com/samber/mo"
-	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/kit/pkg"
 	"go.getarcane.app/kit/pkg/mapping"
 	"go.getarcane.app/streams/agg"
 
@@ -35,11 +39,12 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
-	activitylib "github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/activity"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/edge"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/userctx"
 )
 
 const (
@@ -62,13 +67,9 @@ type EnvironmentHandler struct {
 	eventService       *event.EventService
 	cfg                *config.Config
 	streamHub          *agg.Hub[[]environment.Environment]
-	activityService    activitylib.Service
+	activityService    activity.Service
 	appCtx             context.Context
 }
-
-// ============================================================================
-// Input/Output Types
-// ============================================================================
 
 type ListEnvironmentsInput struct {
 	Search string `query:"search" doc:"Search query for filtering by name or API URL"`
@@ -149,10 +150,6 @@ type DownloadEnvironmentMTLSFileInput struct {
 	FileName string `path:"fileName" doc:"mTLS asset filename"`
 }
 
-// ============================================================================
-// Registration
-// ============================================================================
-
 // NewHandler builds the environment HTTP handler and its stream producer.
 func NewHandler(
 	environmentService *EnvironmentService,
@@ -160,7 +157,7 @@ func NewHandler(
 	apiKeyService *apikey.ApiKeyService,
 	eventService *event.EventService,
 	cfg *config.Config,
-	activityService activitylib.Service,
+	activityService activity.Service,
 ) *EnvironmentHandler {
 	return &EnvironmentHandler{
 		environmentService: environmentService,
@@ -172,173 +169,6 @@ func NewHandler(
 		activityService:    activityService,
 	}
 }
-
-// RegisterEnvironments registers all environment management endpoints.
-func RegisterEnvironments(api huma.API, h *EnvironmentHandler) {
-	huma.Register(api, huma.Operation{
-		OperationID: "listEnvironments",
-		Method:      "GET",
-		Path:        "/environments",
-		Summary:     "List environments",
-		Description: "Get a paginated list of Docker environments",
-		Tags:        []string{"Environments"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		// No global PermEnvironmentsList gate: this endpoint also backs the
-		// environment switcher, so any authenticated caller may list. The handler
-		// filters the result to the environments the caller can actually access.
-		// Management mutations (create/update/delete) remain global-gated below.
-	}, h.ListEnvironments)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "createEnvironment",
-		Method:      "POST",
-		Path:        "/environments",
-		Summary:     "Create an environment",
-		Description: "Create a new Docker environment",
-		Tags:        []string{"Environments"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequirePermission(api, authz.PermEnvironmentsCreate),
-	}, h.CreateEnvironment)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "getEnvironment",
-		Method:      "GET",
-		Path:        "/environments/{id}",
-		Summary:     "Get an environment",
-		Description: "Get a Docker environment by ID",
-		Tags:        []string{"Environments"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequirePermission(api, authz.PermEnvironmentsRead),
-	}, h.GetEnvironment)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "updateEnvironment",
-		Method:      "PUT",
-		Path:        "/environments/{id}",
-		Summary:     "Update an environment",
-		Description: "Update a Docker environment",
-		Tags:        []string{"Environments"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequirePermission(api, authz.PermEnvironmentsUpdate),
-	}, h.UpdateEnvironment)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "deleteEnvironment",
-		Method:      "DELETE",
-		Path:        "/environments/{id}",
-		Summary:     "Delete an environment",
-		Description: "Delete a Arcane environment",
-		Tags:        []string{"Environments"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequirePermission(api, authz.PermEnvironmentsDelete),
-	}, h.DeleteEnvironment)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "testConnection",
-		Method:      "POST",
-		Path:        "/environments/{id}/test",
-		Summary:     "Test environment connection",
-		Description: "Test connectivity to a Arcane environment",
-		Tags:        []string{"Environments"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermEnvironmentsRead, h.TestConnection)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "updateHeartbeat",
-		Method:      "POST",
-		Path:        "/environments/{id}/heartbeat",
-		Summary:     "Update environment heartbeat",
-		Description: "Update the heartbeat timestamp for an environment",
-		Tags:        []string{"Environments"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermEnvironmentsSync, h.UpdateHeartbeat)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "pairAgent",
-		Method:      "POST",
-		Path:        "/environments/{id}/agent/pair",
-		Summary:     "Pair with local agent",
-		Description: "Generate or rotate the local agent pairing token",
-		Tags:        []string{"Environments"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermEnvironmentsPair, h.PairAgent)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "syncEnvironment",
-		Method:      "POST",
-		Path:        "/environments/{id}/sync",
-		Summary:     "Sync environment",
-		Description: "Sync container registries, S3 destinations, and git repositories to a remote environment. Returns an error if any resource group fails; other groups may still sync successfully.",
-		Tags:        []string{"Environments"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermEnvironmentsSync, h.SyncEnvironment)
-
-	huma.Register(api, huma.Operation{
-		OperationID:  "pairEnvironment",
-		Method:       "POST",
-		Path:         "/environments/pair",
-		Summary:      "Pair agent with manager",
-		Description:  "Agent sends API key to complete environment pairing",
-		Tags:         []string{"Environments"},
-		MaxBodyBytes: 1024,
-		Security:     []map[string][]string{},
-	}, h.PairEnvironment)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "getDeploymentSnippets",
-		Method:      "GET",
-		Path:        "/environments/{id}/deployment",
-		Summary:     "Get deployment snippets",
-		Description: "Get Docker run and compose snippets for environment deployment",
-		Tags:        []string{"Environments"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermEnvironmentsPair, h.GetDeploymentSnippets)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "downloadEnvironmentMTLSBundle",
-		Method:      "GET",
-		Path:        "/environments/{id}/deployment/mtls/bundle",
-		Summary:     "Download environment mTLS bundle",
-		Description: "Download the generated mTLS client certificate bundle for an edge environment",
-		Tags:        []string{"Environments"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermEnvironmentsPair, h.DownloadEnvironmentMTLSBundle)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "downloadEnvironmentMTLSFile",
-		Method:      "GET",
-		Path:        "/environments/{id}/deployment/mtls/{fileName}",
-		Summary:     "Download environment mTLS asset",
-		Description: "Download an individual generated mTLS client certificate asset for an edge environment",
-		Tags:        []string{"Environments"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermEnvironmentsPair, h.DownloadEnvironmentMTLSFile)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "getEnvironmentVersion",
-		Method:      "GET",
-		Path:        "/environments/{id}/version",
-		Summary:     "Get environment version",
-		Description: "Get the version of a remote environment",
-		Tags:        []string{"Environments"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermEnvironmentsRead, h.GetEnvironmentVersion)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "downloadEdgeMTLSCA",
-		Method:      "GET",
-		Path:        "/edge-mtls/ca",
-		Summary:     "Download Arcane-generated edge mTLS CA",
-		Description: "Download the Arcane-managed certificate authority used for generated edge mTLS client certificates",
-		Tags:        []string{"Environments"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequirePermission(api, authz.PermEnvironmentsPair),
-	}, h.DownloadEdgeMTLSCA)
-}
-
-// ============================================================================
-// Handler Methods
-// ============================================================================
 
 // ListEnvironments returns a paginated list of environments.
 func (h *EnvironmentHandler) ListEnvironments(ctx context.Context, input *ListEnvironmentsInput) (*handlerutil.Page[environment.Environment], error) {
@@ -533,7 +363,7 @@ func (h *EnvironmentHandler) CreateEnvironment(ctx context.Context, input *Creat
 	return h.createEnvironmentLegacyInternal(ctx, env, user, input.Body)
 }
 
-func (h *EnvironmentHandler) createEnvironmentWithApiKeyInternal(ctx context.Context, env *Environment, user *common.User) (*handlerutil.Out[EnvironmentWithApiKey], error) {
+func (h *EnvironmentHandler) createEnvironmentWithApiKeyInternal(ctx context.Context, env *Environment, user *usertypes.Actor) (*handlerutil.Out[EnvironmentWithApiKey], error) {
 	// New API key-based pairing flow
 	env.Status = string(EnvironmentStatusPending)
 
@@ -589,7 +419,7 @@ func (h *EnvironmentHandler) createEnvironmentWithApiKeyInternal(ctx context.Con
 	}, nil
 }
 
-func (h *EnvironmentHandler) createEnvironmentLegacyInternal(ctx context.Context, env *Environment, user *common.User, body environment.Create) (*handlerutil.Out[EnvironmentWithApiKey], error) {
+func (h *EnvironmentHandler) createEnvironmentLegacyInternal(ctx context.Context, env *Environment, user *usertypes.Actor, body environment.Create) (*handlerutil.Out[EnvironmentWithApiKey], error) {
 	if body.AccessToken != nil && *body.AccessToken != "" {
 		env.AccessToken = body.AccessToken
 	}
@@ -653,7 +483,7 @@ func (h *EnvironmentHandler) UpdateEnvironment(ctx context.Context, input *Updat
 
 	h.handleEnvironmentPairingInternal(ctx, input.ID, &input.Body, updates, isLocalEnv)
 
-	user, _ := common.CurrentUserFromContext(ctx)
+	user, _ := userctx.CurrentUserFromContext(ctx)
 	var userID, username *string
 	if user != nil {
 		userID = new(user.ID)
@@ -684,38 +514,10 @@ func (h *EnvironmentHandler) UpdateEnvironment(ctx context.Context, input *Updat
 			return nil, err
 		}
 
-		oldApiKeyID := updated.ApiKeyID
-
-		// Generate new API key
-		apiKeyDto, err := h.apiKeyService.CreateEnvironmentApiKey(ctx, input.ID)
+		apiKey, err := h.environmentService.RegenerateEnvironmentApiKey(ctx, updated, localUser.ID, localUser.Username)
 		if err != nil {
-			slog.ErrorContext(ctx, "Failed to create new environment API key", "environmentID", input.ID, "error", err.Error())
-			return nil, huma.Error500InternalServerError("Failed to regenerate API key")
-		}
-
-		// Use service method to update environment and create event
-		apiKey := apiKeyDto.Key
-		err = h.environmentService.RegenerateEnvironmentApiKey(ctx, input.ID, apiKeyDto.ID, apiKey, localUser.ID, localUser.Username, updated.Name)
-		if err != nil {
-			// The new key was never linked; remove it so a failed rotation does
-			// not leave an orphaned valid credential behind.
-			if delErr := h.apiKeyService.DeleteApiKey(ctx, apiKeyDto.ID); delErr != nil && !errors.Is(delErr, apikey.ErrApiKeyNotFound) {
-				slog.ErrorContext(ctx, "Failed to clean up unlinked environment API key", "environmentID", input.ID, "error", delErr.Error())
-			}
 			slog.ErrorContext(ctx, "Failed to regenerate API key", "environmentID", input.ID, "error", err.Error())
 			return nil, huma.Error500InternalServerError("Failed to regenerate API key")
-		}
-
-		// Delete the previous key only after the environment points at the new
-		// one — while still referenced it is protected and the delete would be
-		// rejected, which is how stale bootstrap keys used to accumulate. A
-		// failed delete leaves the old key as a still-valid credential, so log
-		// it as an error; the key stays visible and deletable on the API Keys
-		// page.
-		if oldApiKeyID != nil && *oldApiKeyID != apiKeyDto.ID {
-			if deleteApiKeyErr := h.apiKeyService.DeleteApiKey(ctx, *oldApiKeyID); deleteApiKeyErr != nil && !errors.Is(deleteApiKeyErr, apikey.ErrApiKeyNotFound) {
-				slog.ErrorContext(ctx, "Failed to delete previous environment API key; the old key remains valid until deleted manually", "environmentID", input.ID, "error", deleteApiKeyErr.Error())
-			}
 		}
 
 		// Fetch updated environment
@@ -732,7 +534,7 @@ func (h *EnvironmentHandler) UpdateEnvironment(ctx context.Context, input *Updat
 		}
 		h.applyEdgeRuntimeStateInternal(&out)
 
-		newApiKey = new(apiKeyDto.Key)
+		newApiKey = new(apiKey)
 	}
 
 	// Set the API key on the response if regenerated
@@ -756,7 +558,7 @@ func (h *EnvironmentHandler) DeleteEnvironment(ctx context.Context, input *Delet
 		return nil, huma.Error400BadRequest("Cannot delete local environment")
 	}
 
-	user, _ := common.CurrentUserFromContext(ctx)
+	user, _ := userctx.CurrentUserFromContext(ctx)
 	var userID, username *string
 	if user != nil {
 		userID = new(user.ID)
@@ -878,10 +680,6 @@ func (h *EnvironmentHandler) SyncEnvironment(ctx context.Context, input *SyncEnv
 		},
 	}, nil
 }
-
-// ============================================================================
-// Helper Methods
-// ============================================================================
 
 func (h *EnvironmentHandler) buildUpdateMapInternal(req *environment.Update, isLocalEnv bool) map[string]any {
 	updates := map[string]any{}
@@ -1451,7 +1249,7 @@ func (h *EnvironmentHandler) logMTLSAuditEventInternal(ctx context.Context, env 
 		return
 	}
 
-	user, _ := common.CurrentUserFromContext(ctx)
+	user, _ := userctx.CurrentUserFromContext(ctx)
 	var userID, username *string
 	if user != nil {
 		userID = new(user.ID)
@@ -1485,4 +1283,79 @@ func (h *EnvironmentHandler) logMTLSAuditEventInternal(ctx context.Context, env 
 	if _, err := h.eventService.CreateEvent(ctx, req); err != nil {
 		slog.WarnContext(ctx, "Failed to record mTLS audit event", "type", string(eventType), "error", err)
 	}
+}
+
+const edgeMTLSCertificateExpiryWarningWindow = 30 * 24 * time.Hour
+
+func generatedEdgeMTLSClientCertPathInternal(cfg *config.Config, envID string) (string, error) {
+	if cfg == nil {
+		return "", errors.New("config not available")
+	}
+	if edge.NormalizeEdgeMTLSMode(cfg.EdgeMTLSMode) == edge.EdgeMTLSModeDisabled {
+		return "", errors.New("edge mTLS is disabled")
+	}
+
+	edgeCfg := &edge.Config{
+		EdgeMTLSAssetsDir: cfg.EdgeMTLSAssetsDir,
+	}
+
+	certPath, err := edge.GeneratedManagerClientMTLSCertPath(edgeCfg, envID)
+	if err != nil {
+		return "", fmt.Errorf("resolve generated edge mTLS client certificate path: %w", err)
+	}
+	// os.* rather than acfs: the assets dir may be user-configured to anywhere
+	// on the host, so no confinement root exists for this path.
+	if _, statErr := os.Stat(certPath); statErr != nil {
+		return "", fmt.Errorf("stat generated edge mTLS client certificate: %w", statErr)
+	}
+
+	return certPath, nil
+}
+
+func readGeneratedEdgeMTLSCertificateInfoInternal(cfg *config.Config, envID string) (*environment.EdgeMTLSCertificate, error) {
+	certPath, err := generatedEdgeMTLSClientCertPathInternal(cfg, envID)
+	if err != nil {
+		return nil, err
+	}
+
+	// os.* rather than acfs: the assets dir may be user-configured to anywhere
+	// on the host, so no confinement root exists for this path.
+	certPEM, err := os.ReadFile(certPath)
+	if err != nil {
+		return nil, fmt.Errorf("read generated edge mTLS client certificate: %w", err)
+	}
+
+	block, _ := pem.Decode(certPEM)
+	if block == nil {
+		return nil, errors.New("decode generated edge mTLS client certificate PEM")
+	}
+
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("parse generated edge mTLS client certificate: %w", err)
+	}
+
+	expiresAt := cert.NotAfter.UTC()
+	now := time.Now().UTC()
+	remaining := expiresAt.Sub(now)
+	info := &environment.EdgeMTLSCertificate{
+		ExpiresAt:     &expiresAt,
+		DaysRemaining: new(edgeMTLSCertificateDaysRemainingInternal(now, expiresAt)),
+		Expired:       now.After(expiresAt),
+		ExpiringSoon:  now.Before(expiresAt) && remaining <= edgeMTLSCertificateExpiryWarningWindow,
+	}
+
+	if commonName := strings.TrimSpace(cert.Subject.CommonName); commonName != "" {
+		info.CommonName = &commonName
+	}
+
+	return info, nil
+}
+
+func edgeMTLSCertificateDaysRemainingInternal(now, expiresAt time.Time) int {
+	remaining := expiresAt.Sub(now)
+	if remaining <= 0 {
+		return 0
+	}
+	return int(math.Ceil(remaining.Hours() / 24))
 }

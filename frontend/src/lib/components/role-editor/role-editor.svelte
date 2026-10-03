@@ -1,17 +1,18 @@
 <script lang="ts">
+	import { z } from 'zod/v4';
+
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
 	import SettingsRow from '#lib/components/settings/settings-row.svelte';
 	import SettingsSection from '#lib/components/settings/settings-section.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
-	import PermissionPicker from './permission-picker.svelte';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { CopyIcon } from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
 	import type { Role, PermissionsManifest } from '#lib/types/auth.js';
 	import { normalizePermissionSelection } from '#lib/utils/permissions.js';
-	import { CopyIcon } from '#lib/icons/index.js';
-	import { z } from 'zod/v4';
 	import { createForm, preventDefault } from '#lib/utils/settings.svelte.js';
 
-	import { m } from '#lib/paraglide/messages.js';
+	import PermissionPicker from './permission-picker.svelte';
 
 	type Props = {
 		role: Role | null;

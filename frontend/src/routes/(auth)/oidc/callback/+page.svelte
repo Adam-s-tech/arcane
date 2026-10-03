@@ -1,22 +1,22 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
-	import { onMount } from 'svelte';
 	import { goto, refreshAll } from '$app/navigation';
 	import { page } from '$app/state';
+	import { createMutation, useQueryClient } from '@tanstack/svelte-query';
+	import { onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
-	import type { AuthenticationResponse, MFAChallenge as MFAChallengeData, User } from '#lib/types/auth.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import settingsStore from '#lib/stores/config-store.svelte.js';
-	import { settingsService } from '#lib/services/settings-service.js';
-	import { queryKeys } from '#lib/query/query-keys.js';
-	import { authService } from '#lib/services/auth-service.js';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import { getAuthRedirectPath, normalizeAuthenticationError } from '#lib/utils/auth.js';
-	import { getEffectiveLandingPage } from '#lib/utils/navigation.js';
+
 	import MFAChallenge from '#lib/components/auth/mfa-challenge.svelte';
 	import OidcStatusPanel from '#lib/components/oidc-status-panel.svelte';
-	import { createMutation, useQueryClient } from '@tanstack/svelte-query';
+	import { m } from '#lib/paraglide/messages.js';
+	import { queryKeys } from '#lib/query/query-keys.js';
+	import { authService } from '#lib/services/auth-service.js';
+	import { settingsService } from '#lib/services/settings-service.js';
+	import settingsStore from '#lib/stores/config-store.svelte.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import type { AuthenticationResponse, MFAChallenge as MFAChallengeData, User } from '#lib/types/auth.js';
+	import { getAuthRedirectPath, normalizeAuthenticationError } from '#lib/utils/auth.js';
+	import { getEffectiveLandingPage } from '#lib/utils/navigation.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	let error = $state('');
 	let mfaChallenge = $state<MFAChallengeData | null>(null);

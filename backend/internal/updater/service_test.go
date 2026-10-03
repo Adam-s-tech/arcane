@@ -18,21 +18,21 @@ import (
 	"testing"
 	"time"
 
-	composetypes "github.com/compose-spec/compose-go/v2/types"
+	"github.com/compose-spec/compose-go/v2/types"
 	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
 	projecttypes "github.com/getarcaneapp/arcane/types/v2/project"
-	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
+	"github.com/getarcaneapp/arcane/types/v2/scheduler"
 	arcaneupdater "github.com/getarcaneapp/arcane/types/v2/updater"
-	"github.com/italypaleale/francis/actor"
+	usertypes "github.com/getarcaneapp/arcane/types/v2/user"
 	"github.com/libtnb/sqlite"
-	dockerauthconfig "github.com/moby/moby/api/pkg/authconfig"
+	"github.com/moby/moby/api/pkg/authconfig"
 	"github.com/moby/moby/api/types/container"
 	dockertypesimage "github.com/moby/moby/api/types/image"
 	dockerregistry "github.com/moby/moby/api/types/registry"
 	"github.com/moby/moby/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/kit/pkg"
 	"go.getarcane.app/sys/crypto"
 	"go.getarcane.app/updater"
 	"go.getarcane.app/updater/labels"
@@ -41,7 +41,6 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/docker"
@@ -54,9 +53,11 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/project"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/registry"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/updater/children/execution"
 	activitylib "github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/activity"
-	projectspkg "github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/jobcontext"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/runs"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	francistest "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/francis/testing"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/notifications"
@@ -226,11 +227,11 @@ func newUpdaterApplyPendingDockerServerInternal(
 type mockSystemUpgradeServiceInternal struct {
 	triggerCalled  bool
 	triggerError   error
-	capturedUser   *common.User
+	capturedUser   *usertypes.Actor
 	capturedTarget *updater.SelfUpdateTarget
 }
 
-func (m *mockSystemUpgradeServiceInternal) TriggerUpgradeViaCLI(_ context.Context, user common.User, target updater.SelfUpdateTarget) (string, error) {
+func (m *mockSystemUpgradeServiceInternal) TriggerUpgradeViaCLI(_ context.Context, user usertypes.Actor, target updater.SelfUpdateTarget) (string, error) {
 	m.triggerCalled = true
 	m.capturedUser = &user
 	m.capturedTarget = &target
@@ -243,12 +244,12 @@ func TestUpdaterService_ApplyPendingNoRecordsInternal(t *testing.T) {
 	svc, svcErr := NewUpdaterService(db, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	require.NoError(t, svcErr)
 
-	var checkpoints []schedulertypes.TargetOutcome
-	ctx = jobcontext.WithExecution(ctx, schedulertypes.Run{AttemptCount: 1}, func(target schedulertypes.TargetOutcome) error { checkpoints = append(checkpoints, target); return nil })
+	var checkpoints []scheduler.TargetOutcome
+	ctx = jobcontext.WithExecution(ctx, scheduler.Run{AttemptCount: 1}, func(target scheduler.TargetOutcome) error { checkpoints = append(checkpoints, target); return nil })
 	result, err := svc.ApplyPending(ctx, arcaneupdater.Options{DryRun: true})
 	require.Len(t, checkpoints, 2)
-	assert.Equal(t, schedulertypes.Running, checkpoints[0].Status)
-	assert.Equal(t, schedulertypes.Succeeded, checkpoints[1].Status)
+	assert.Equal(t, scheduler.Running, checkpoints[0].Status)
+	assert.Equal(t, scheduler.Succeeded, checkpoints[1].Status)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -257,17 +258,17 @@ func TestUpdaterService_ApplyPendingNoRecordsInternal(t *testing.T) {
 	assert.Zero(t, result.Skipped)
 	assert.Zero(t, result.Failed)
 	assert.Empty(t, result.Items)
-	ctx = jobcontext.WithExecution(t.Context(), schedulertypes.Run{AttemptCount: 1}, func(schedulertypes.TargetOutcome) error { return errors.New("checkpoint unavailable") })
+	ctx = jobcontext.WithExecution(t.Context(), scheduler.Run{AttemptCount: 1}, func(scheduler.TargetOutcome) error { return errors.New("checkpoint unavailable") })
 	_, err = svc.ApplyPending(ctx, arcaneupdater.Options{DryRun: true})
 	require.ErrorContains(t, err, "checkpoint unavailable")
-	var outcomeErr *schedulertypes.OutcomeError
+	var outcomeErr *scheduler.OutcomeError
 	require.ErrorAs(t, err, &outcomeErr)
-	assert.Equal(t, schedulertypes.NeedsAttention, outcomeErr.Outcome.Status)
+	assert.Equal(t, scheduler.NeedsAttention, outcomeErr.Outcome.Status)
 	checkpoints = nil
 	ctx = jobcontext.WithExecution(
 		t.Context(),
-		schedulertypes.Run{AttemptCount: 1},
-		func(target schedulertypes.TargetOutcome) error {
+		scheduler.Run{AttemptCount: 1},
+		func(target scheduler.TargetOutcome) error {
 			checkpoints = append(
 				checkpoints,
 				target,
@@ -278,7 +279,7 @@ func TestUpdaterService_ApplyPendingNoRecordsInternal(t *testing.T) {
 	svc.engine = nil
 	require.Panics(t, func() { _, _ = svc.ApplyPending(ctx, arcaneupdater.Options{}) })
 	require.NotEmpty(t, checkpoints)
-	assert.Equal(t, schedulertypes.NeedsAttention, checkpoints[len(checkpoints)-1].Status)
+	assert.Equal(t, scheduler.NeedsAttention, checkpoints[len(checkpoints)-1].Status)
 }
 
 // Type and ResourceIds are Arcane-side scoping the engine never acted on;
@@ -336,8 +337,8 @@ func TestUpdaterService_TriggerSelfUpdateViaCLIInternal(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, mockUpgrade.triggerCalled)
 		require.NotNil(t, mockUpgrade.capturedUser)
-		assert.Equal(t, common.SystemUser.ID, mockUpgrade.capturedUser.ID)
-		assert.Equal(t, common.SystemUser.Username, mockUpgrade.capturedUser.Username)
+		assert.Equal(t, usertypes.SystemUser.ID, mockUpgrade.capturedUser.ID)
+		assert.Equal(t, usertypes.SystemUser.Username, mockUpgrade.capturedUser.Username)
 		require.NotNil(t, mockUpgrade.capturedTarget)
 		assert.Equal(t, "container-1", mockUpgrade.capturedTarget.ContainerID)
 		assert.Equal(t, "arcane", mockUpgrade.capturedTarget.ContainerName)
@@ -475,7 +476,7 @@ func TestUpdaterService_PullImageAdapterInternal(t *testing.T) {
 		db := setupProjectTestDBInternal(t)
 		server := newImagePullServerWithObserverInternal(t, nil, nil)
 		dockerSvc := docker.NewDockerClientService(t.Context(), nil, nil, nil).WithClient(newTestDockerClientInternal(t, server))
-		imageSvc := image.NewImageService(db, dockerSvc, nil, nil, nil, event.NewEventService(db, nil, nil))
+		imageSvc := image.NewImageService(db, dockerSvc, nil, nil, nil, event.NewEventService(db, nil, nil), nil, nil)
 		svc, svcErr := NewUpdaterService(db, nil, dockerSvc, nil, nil, nil, nil, imageSvc, nil, nil, nil, nil, nil, nil, nil)
 		require.NoError(t, svcErr)
 		var progress bytes.Buffer
@@ -504,7 +505,7 @@ func TestUpdaterService_PullImageAdapterInternal(t *testing.T) {
 		})
 		dockerSvc := docker.NewDockerClientService(t.Context(), nil, nil, nil).WithClient(newTestDockerClientInternal(t, server))
 		registrySvc := registry.NewContainerRegistryService(db, nil, kv.NewKVService(db), nil)
-		imageSvc := image.NewImageService(db, dockerSvc, registrySvc, nil, nil, event.NewEventService(db, nil, nil))
+		imageSvc := image.NewImageService(db, dockerSvc, registrySvc, nil, nil, event.NewEventService(db, nil, nil), nil, nil)
 		envSvc := environment.NewEnvironmentService(db, nil, nil, nil, nil, nil)
 		projectSvc := project.NewProjectService(db, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 		projectSvc.RegistryCredentialsProvider = envSvc.GetEnabledRegistryCredentials
@@ -720,8 +721,8 @@ func TestUpdaterService_RecordUpdateRunAdapterInternal(t *testing.T) {
 	assert.Equal(t, "test", record.Details["source"])
 	progress := &updateProgressInternal{}
 	ctx = context.WithValue(ctx, updateProgressKeyInternal{}, progress)
-	ctx = jobcontext.WithExecution(ctx, schedulertypes.Run{AttemptCount: 1}, func(target schedulertypes.TargetOutcome) error {
-		assert.Equal(t, schedulertypes.Failed, target.Status)
+	ctx = jobcontext.WithExecution(ctx, scheduler.Run{AttemptCount: 1}, func(target scheduler.TargetOutcome) error {
+		assert.Equal(t, scheduler.Failed, target.Status)
 		return errors.New("progress unavailable")
 	})
 	err = svc.RecordUpdateRun(ctx, updater.ResourceResult{ResourceID: "failed-container", ResourceType: updater.ResourceTypeContainer, Status: updater.StatusFailed})
@@ -811,23 +812,22 @@ func TestUpdaterService_AcceptSingleContainerUpdateUsesQueuedActivityInternal(t 
 			require.NoError(t, err)
 			sqlDB.SetMaxOpenConns(1)
 			activityService := activity.NewActivityService(db, nil)
-			svc, err := NewUpdaterService(db, nil, nil, nil, nil, nil, nil, nil, nil, nil, activityService, nil, nil, nil, nil)
-			require.NoError(t, err)
-
 			runtime := francistest.New(t)
-			svc.singleUpdates = runtime.Service()
-			release := make(chan struct{})
-			started := make(chan struct{})
-			var releaseOnce sync.Once
-			defer releaseOnce.Do(func() { close(release) })
-			require.NoError(t, runtime.RegisterActor(singleUpdateTypeInternal, func(_ string, _ *actor.Service) actor.Actor {
-				return &blockingSingleUpdateActorInternal{service: svc, started: started, release: release}
-			}))
+			admission := runs.NewAdmission(runtime.Service(), t.Name())
+			require.NoError(t, admission.Register(runtime))
+			svc, err := NewUpdaterService(db, nil, nil, nil, nil, nil, nil, nil, nil, nil, activityService, nil, nil, admission, nil)
+			require.NoError(t, err)
+			require.NoError(t, svc.RegisterActors(runtime))
 			francistest.Start(t, runtime)
-			go func() {
-				_, _ = runtime.Service().Invoke(t.Context(), singleUpdateTypeInternal, "single-container", "hold", nil)
-			}()
-			<-started
+
+			// Holding the update admission makes the executor decline the
+			// dispatched job until the lease is released.
+			held, admitted, err := admission.TryAcquire(t.Context(), scheduler.AdmissionKey{Scope: "updater"})
+			require.NoError(t, err)
+			require.True(t, admitted)
+			var releaseOnce sync.Once
+			release := func() { releaseOnce.Do(func() { held.Release(t.Context()) }) }
+			defer release()
 
 			requestCtx, cancelRequest := context.WithCancel(t.Context())
 			workCtx := utils.ActivityRuntimeContext(requestCtx, t.Context())
@@ -854,7 +854,7 @@ func TestUpdaterService_AcceptSingleContainerUpdateUsesQueuedActivityInternal(t 
 				_, err = activityService.CancelActivity(t.Context(), "0", item.ID, "test")
 				require.NoError(t, err)
 			}
-			releaseOnce.Do(func() { close(release) })
+			release()
 
 			wantStatus := kit.Ternary(cancelActivity, activitytypes.StatusCancelled, activitytypes.StatusFailed)
 			require.Eventually(t, func() bool {
@@ -1248,16 +1248,15 @@ func TestUpdaterService_ApplyPending_RoutesLegacyArcaneServerThroughSelfUpgradeI
 	})
 	svc.engine = engine
 
-	ctx = context.WithValue(
-		ctx,
-		frozenPendingKeyInternal{},
-		&frozenUpdatePlanInternal{Targets: []arcaneupdater.FrozenUpdateTarget{{
-			ContainerID:     "arcane-container",
-			DesiredImageRef: newRef,
-			DesiredDigest:   "sha256:desired",
-		}}},
-	)
-	ctx = jobcontext.WithExecution(ctx, schedulertypes.Run{AttemptCount: 1}, nil)
+	frozenPlan, planErr := json.Marshal(struct {
+		Targets []arcaneupdater.FrozenUpdateTarget
+	}{Targets: []arcaneupdater.FrozenUpdateTarget{{
+		ContainerID:     "arcane-container",
+		DesiredImageRef: newRef,
+		DesiredDigest:   "sha256:desired",
+	}}})
+	require.NoError(t, planErr)
+	ctx = jobcontext.WithExecution(ctx, scheduler.Run{AttemptCount: 1, Outcome: scheduler.Outcome{Targets: []scheduler.TargetOutcome{{ID: "auto-update", RecoveryData: frozenPlan}}}}, nil)
 	result, err := svc.ApplyPending(ctx, arcaneupdater.Options{})
 	require.ErrorContains(t, err, "self-update was triggered")
 	require.NotNil(t, result)
@@ -1309,8 +1308,6 @@ func TestPullableImageRefInternal(t *testing.T) {
 	}
 }
 
-// Test fixtures shared by this package's tests.
-
 // createTestPullRegistryInternal inserts an enabled generic registry with an encrypted token.
 func createTestPullRegistryInternal(t *testing.T, db *database.DB, localUrl, username, token string) {
 	t.Helper()
@@ -1332,7 +1329,7 @@ func createTestPullRegistryInternal(t *testing.T, db *database.DB, localUrl, use
 func decodeRegistryAuthInternal(t *testing.T, encoded string) dockerregistry.AuthConfig {
 	t.Helper()
 
-	cfg, err := dockerauthconfig.Decode(encoded)
+	cfg, err := authconfig.Decode(encoded)
 	require.NoError(t, err)
 	return *cfg
 }
@@ -1571,9 +1568,9 @@ func TestUpdaterProjectChecksWithoutContainersInternal(t *testing.T) {
 			{"second", "=3.20.2", "3.20.2", true},
 			{"control", "=3.20.0", "3.20.0", false},
 		} {
-			localConfig := composetypes.ServiceConfig{Name: tt.name, Image: "alpine:3.20.0", Labels: map[string]string{labels.LabelUpdateConstraint: tt.constraint}}
+			localConfig := types.ServiceConfig{Name: tt.name, Image: "alpine:3.20.0", Labels: map[string]string{labels.LabelUpdateConstraint: tt.constraint}}
 			if metadata {
-				model, loadErr := projectspkg.LoadComposeProjectFromContent(
+				model, loadErr := projects.LoadComposeProjectFromContent(
 					t.Context(),
 					projecttypes.ComposeContentOptions{
 						ProjectName: "metadata",
@@ -1600,18 +1597,86 @@ func TestUpdaterProjectChecksWithoutContainersInternal(t *testing.T) {
 	require.Empty(t, puller.pulled)
 }
 
-type blockingSingleUpdateActorInternal struct {
-	singleUpdateActorInternal
-	started chan struct{}
-	release chan struct{}
-}
-
-func (a *blockingSingleUpdateActorInternal) Invoke(ctx context.Context, _ string, _ actor.Envelope) (any, error) {
-	close(a.started)
-	select {
-	case <-a.release:
-		return nil, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
+func TestSingleUpdatePersistsSuccessfulActivity(t *testing.T) {
+	db := setupProjectTestDBInternal(t)
+	require.NoError(t, db.AutoMigrate(&activity.Activity{}, &activity.ActivityMessage{}, &AutoUpdateRecord{}))
+	pool, err := db.DB.DB()
+	require.NoError(t, err)
+	pool.SetMaxOpenConns(1)
+	immutableRef := "registry.example.com/app@sha256:" + strings.Repeat("a", 64)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/containers/json"):
+			if !assert.NoError(t, json.MarshalWrite(w, []container.Summary{{ID: "app", Names: []string{"/app"}, Image: immutableRef, State: "running"}})) {
+				return
+			}
+		case strings.HasSuffix(r.URL.Path, "/containers/app/json"):
+			if !assert.NoError(
+				t,
+				json.MarshalWrite(
+					w,
+					container.InspectResponse{
+						ID:     "app",
+						Name:   "/app",
+						Image:  "sha256:baseline",
+						Config: &container.Config{Image: immutableRef},
+						State: &container.State{
+							StartedAt: "baseline",
+							Running:   true,
+						},
+					},
+				),
+			) {
+				return
+			}
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	activityService := activity.NewActivityService(db, nil)
+	svc, err := NewUpdaterService(
+		db,
+		nil,
+		(&docker.DockerClientService{}).WithClient(newTestDockerClientInternal(
+			t,
+			server,
+		)),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		activityService,
+		nil,
+		nil,
+		nil,
+		nil,
+	)
+	require.NoError(t, err)
+	runtime := francistest.New(t)
+	require.NoError(t, svc.RegisterActors(runtime))
+	francistest.Start(t, runtime)
+	require.NoError(t, svc.Start(t.Context()))
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Second)
+		defer cancel()
+		require.NoError(t, svc.Stop(ctx))
+	})
+	accepted, err := svc.AcceptSingleContainerUpdate(t.Context(), "app")
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		var state arcaneupdater.SingleUpdateState
+		if runtime.Service().GetState(t.Context(), execution.StateType, accepted.ID, &state) != nil || state.Status != "completed" {
+			return false
+		}
+		detail, getActivityDetailErr := activityService.GetActivityDetail(t.Context(), "0", accepted.ID, 1)
+		return getActivityDetailErr == nil && detail.Activity.Status == activitytypes.StatusSuccess
+	}, 3*time.Second, 10*time.Millisecond)
+	detail, err := activityService.GetActivityDetail(t.Context(), "0", accepted.ID, 1)
+	require.NoError(t, err)
+	require.Equal(t, activitytypes.StatusSuccess, detail.Activity.Status)
 }

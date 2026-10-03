@@ -1,7 +1,5 @@
-import BaseAPIService, { type APIRequestConfig } from './api-service';
 import { environmentStore } from '#lib/stores/environment.store.svelte.js';
 import type { SearchPaginationSortRequest, Paginated } from '#lib/types/shared.js';
-import { transformPaginationParams } from '#lib/utils/tables.js';
 import type {
 	SwarmServiceSummary,
 	SwarmNodeSummary,
@@ -43,6 +41,9 @@ import type {
 	SwarmJoinEnvironmentsRequest,
 	SwarmJoinEnvironmentsResponse
 } from '#lib/types/swarm.js';
+import { transformPaginationParams } from '#lib/utils/tables.js';
+
+import BaseAPIService, { type APIRequestConfig } from './api-service';
 
 export type SwarmServicesPaginatedResponse = Paginated<SwarmServiceSummary>;
 export type SwarmNodesPaginatedResponse = Paginated<SwarmNodeSummary>;

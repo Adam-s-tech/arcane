@@ -1,12 +1,11 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
-	import { m } from '#lib/paraglide/messages.js';
-
 	// Dozzle reference: the compact structured-log summary and expandable details pattern
 	// here were informed by amir20/dozzle's ComplexLogItem.vue and LogDetails.vue.
 	import * as Collapsible from '#lib/components/ui/collapsible/index.js';
 	import { ArrowDownIcon, ArrowRightIcon, CheckIcon, CopyIcon } from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	interface Props {
 		data: Record<string, unknown>;

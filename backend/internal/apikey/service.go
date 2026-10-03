@@ -184,7 +184,7 @@ func (s *ApiKeyService) backfillPermsForKeyInternal(ctx context.Context, tx *gor
 		return authz.AllPermissions(), nil
 	}
 	// Otherwise inherit the owner's current effective permissions.
-	var owner common.User
+	var owner user.User
 	if err := tx.WithContext(ctx).Where("id = ?", *key.UserID).First(&owner).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -379,7 +379,7 @@ func (s *ApiKeyService) validateGrantsAgainstOwnerInternal(ctx context.Context, 
 	if err != nil {
 		return fmt.Errorf("load owner for permission validation: %w", err)
 	}
-	ps, err := s.roleService.ResolvePermissions(ctx, localUser)
+	ps, err := s.roleService.ResolvePermissions(ctx, localUser.ID)
 	if err != nil {
 		return fmt.Errorf("resolve owner permissions: %w", err)
 	}
@@ -557,7 +557,7 @@ func (s *ApiKeyService) CreateDefaultAdminAPIKey(ctx context.Context, userID, ra
 	}, new(managedByAdminBootstrap), nil, ApiKeyKindScoped)
 }
 
-func (s *ApiKeyService) getDefaultAdminUser(ctx context.Context) (*common.User, error) {
+func (s *ApiKeyService) getDefaultAdminUser(ctx context.Context) (*user.User, error) {
 	adminUser, err := s.userService.GetUserByUsername(ctx, defaultAdminUsername)
 	if err != nil {
 		if errors.Is(err, common.ErrUserNotFound) {
@@ -570,7 +570,7 @@ func (s *ApiKeyService) getDefaultAdminUser(ctx context.Context) (*common.User, 
 	// The username is mutable and not proof of provenance — never mint the
 	// managed full-permission key onto an account that isn't a global admin.
 	if s.roleService != nil {
-		perms, resolvePermissionsErr := s.roleService.ResolvePermissions(ctx, adminUser)
+		perms, resolvePermissionsErr := s.roleService.ResolvePermissions(ctx, adminUser.ID)
 		if resolvePermissionsErr != nil {
 			return nil, fmt.Errorf("failed to resolve default admin permissions: %w", resolvePermissionsErr)
 		}
@@ -990,14 +990,14 @@ func (s *ApiKeyService) DeleteApiKey(ctx context.Context, id string) error {
 	return nil
 }
 
-func (s *ApiKeyService) ValidateApiKey(ctx context.Context, rawKey string) (*common.User, error) {
+func (s *ApiKeyService) ValidateApiKey(ctx context.Context, rawKey string) (*user.User, error) {
 	localUser, _, err := s.ValidateApiKeyWithID(ctx, rawKey)
 	return localUser, err
 }
 
 // ValidateApiKeyWithID is like ValidateApiKey but additionally returns the
 // API key record so callers can resolve permissions according to its kind.
-func (s *ApiKeyService) ValidateApiKeyWithID(ctx context.Context, rawKey string) (*common.User, *ApiKey, error) {
+func (s *ApiKeyService) ValidateApiKeyWithID(ctx context.Context, rawKey string) (*user.User, *ApiKey, error) {
 	apiKey, err := s.validateRawAPIKeyInternal(ctx, rawKey)
 	if err != nil {
 		return nil, nil, err

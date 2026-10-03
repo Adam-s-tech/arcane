@@ -1,150 +1,190 @@
 version: 2
 updates:
-  - package-ecosystem: "npm"
-    directories:
-      - "/"
-    patterns: ["*"]
+  - package-ecosystem: 'npm'
+    directory: '/'
     ignore:
-      - dependency-name: "typescript"
+      - dependency-name: 'typescript'
         versions:
-          - ">=7.0.0 <7.1.0"
+          - '>=7.0.0 <7.1.0'
     cooldown:
       default-days: 2
     schedule:
-      interval: "weekly"
-      day: "wednesday"
-      time: "17:00"
-      timezone: "America/Chicago"
+      interval: 'weekly'
+      day: 'wednesday'
+      time: '17:00'
+      timezone: 'America/Chicago'
     labels:
-      - "dependencies"
-    open-pull-requests-limit: 99
+      - 'dependencies'
+    open-pull-requests-limit: 1
     pull-request-branch-name:
-      separator: "-"
+      separator: '-'
     commit-message:
-      prefix: "chore"
-      include: "scope"
+      prefix: 'chore'
+      include: 'scope'
     groups:
-      tanstack-table:
+      javascript:
         applies-to: version-updates
         patterns:
-          - "@tanstack/svelte-table"
-          - "@tanstack/table-core"
-      codemirror:
-        applies-to: version-updates
+          - '*'
+      javascript-security:
+        applies-to: security-updates
         patterns:
-          - "@codemirror/*"
+          - '*'
 
-  - package-ecosystem: "gomod"
-    directory: "/backend"
-    patterns: ["*"]
+  - package-ecosystem: 'gomod'
+    directory: '/backend'
     schedule:
-      interval: "weekly"
-      day: "wednesday"
-      time: "17:00"
-      timezone: "America/Chicago"
+      interval: 'weekly'
+      day: 'wednesday'
+      time: '17:00'
+      timezone: 'America/Chicago'
     labels:
-      - "dependencies"
-    open-pull-requests-limit: 99
+      - 'dependencies'
+    open-pull-requests-limit: 1
     pull-request-branch-name:
-      separator: "-"
+      separator: '-'
     commit-message:
-      prefix: "chore"
-      include: "scope"
+      prefix: 'chore'
+      include: 'scope'
     groups:
-      aws-sdk-go-v2:
+      backend:
         applies-to: version-updates
         patterns:
-          - "github.com/aws/aws-sdk-go-v2*"
+          - '*'
+      backend-security:
+        applies-to: security-updates
+        patterns:
+          - '*'
 
-  - package-ecosystem: "gomod"
-    directory: "/cli"
-    patterns: ["*"]
+  - package-ecosystem: 'gomod'
+    directory: '/cli'
     schedule:
-      interval: "weekly"
-      day: "wednesday"
-      time: "17:00"
-      timezone: "America/Chicago"
+      interval: 'weekly'
+      day: 'wednesday'
+      time: '17:00'
+      timezone: 'America/Chicago'
     labels:
-      - "dependencies"
-    open-pull-requests-limit: 99
+      - 'dependencies'
+    open-pull-requests-limit: 1
     pull-request-branch-name:
-      separator: "-"
+      separator: '-'
     commit-message:
-      prefix: "chore"
-      include: "scope"
+      prefix: 'chore'
+      include: 'scope'
+    groups:
+      cli:
+        applies-to: version-updates
+        patterns:
+          - '*'
+      cli-security:
+        applies-to: security-updates
+        patterns:
+          - '*'
 
-  - package-ecosystem: "gomod"
-    directory: "/types"
-    patterns: ["*"]
+  - package-ecosystem: 'gomod'
+    directory: '/types'
     schedule:
-      interval: "weekly"
-      day: "wednesday"
-      time: "17:00"
-      timezone: "America/Chicago"
+      interval: 'weekly'
+      day: 'wednesday'
+      time: '17:00'
+      timezone: 'America/Chicago'
     labels:
-      - "dependencies"
-    open-pull-requests-limit: 99
+      - 'dependencies'
+    open-pull-requests-limit: 1
     pull-request-branch-name:
-      separator: "-"
+      separator: '-'
     commit-message:
-      prefix: "chore"
-      include: "scope"
+      prefix: 'chore'
+      include: 'scope'
+    groups:
+      types:
+        applies-to: version-updates
+        patterns:
+          - '*'
+      types-security:
+        applies-to: security-updates
+        patterns:
+          - '*'
 
   # Dependabot only scans .github/workflows plus listed composite-action dirs;
   # .depot/workflows/*.yml must be bumped by hand.
-  - package-ecosystem: "github-actions"
-    directories: ["/", "/.depot/actions/publish-images"]
-    patterns: ["*"]
+  - package-ecosystem: 'github-actions'
+    directories: ['/', '/.depot/actions/publish-images']
     cooldown:
       default-days: 2
     schedule:
-      interval: "weekly"
-      day: "wednesday"
-      time: "17:00"
-      timezone: "America/Chicago"
+      interval: 'weekly'
+      day: 'wednesday'
+      time: '17:00'
+      timezone: 'America/Chicago'
     labels:
-      - "dependencies"
-    open-pull-requests-limit: 99
+      - 'dependencies'
+    open-pull-requests-limit: 1
     pull-request-branch-name:
-      separator: "-"
+      separator: '-'
     commit-message:
-      prefix: "chore"
-      include: "scope"
+      prefix: 'chore'
+      include: 'scope'
+    groups:
+      github-actions:
+        applies-to: version-updates
+        patterns:
+          - '*'
+      github-actions-security:
+        applies-to: security-updates
+        patterns:
+          - '*'
 
-  - package-ecosystem: "docker"
-    directory: "/docker"
-    patterns: ["*"]
+  - package-ecosystem: 'docker'
+    directory: '/docker'
     cooldown:
       default-days: 2
     schedule:
-      interval: "weekly"
-      day: "wednesday"
-      time: "17:00"
-      timezone: "America/Chicago"
+      interval: 'weekly'
+      day: 'wednesday'
+      time: '17:00'
+      timezone: 'America/Chicago'
     labels:
-      - "dependencies"
-    open-pull-requests-limit: 99
+      - 'dependencies'
+    open-pull-requests-limit: 1
     pull-request-branch-name:
-      separator: "-"
+      separator: '-'
     commit-message:
-      prefix: "chore"
-      include: "scope"
+      prefix: 'chore'
+      include: 'scope'
+    groups:
+      docker:
+        applies-to: version-updates
+        patterns:
+          - '*'
+      docker-security:
+        applies-to: security-updates
+        patterns:
+          - '*'
 
-  - package-ecosystem: "devcontainers"
-    directory: "/"
-    patterns: ["*"]
+  - package-ecosystem: 'devcontainers'
+    directory: '/'
     cooldown:
       default-days: 2
     schedule:
-      interval: "weekly"
-      day: "wednesday"
-      time: "17:00"
-      timezone: "America/Chicago"
+      interval: 'weekly'
+      day: 'wednesday'
+      time: '17:00'
+      timezone: 'America/Chicago'
     labels:
-      - "dependencies"
-    open-pull-requests-limit: 99
+      - 'dependencies'
+    open-pull-requests-limit: 1
     pull-request-branch-name:
-      separator: "-"
+      separator: '-'
     commit-message:
-      prefix: "chore"
-      include: "scope"
+      prefix: 'chore'
+      include: 'scope'
+    groups:
+      devcontainers:
+        applies-to: version-updates
+        patterns:
+          - '*'
+      devcontainers-security:
+        applies-to: security-updates
+        patterns:
+          - '*'

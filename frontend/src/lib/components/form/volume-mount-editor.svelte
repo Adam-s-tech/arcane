@@ -13,13 +13,13 @@
 
 <script lang="ts">
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
-	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
-	import { Label } from '#lib/components/ui/label/index.js';
-	import { Badge } from '#lib/components/ui/badge/index.js';
 	import SearchableSelect from '#lib/components/form/searchable-select.svelte';
-	import { m } from '#lib/paraglide/messages.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
 	import { AddIcon, CloseIcon } from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
 
 	let {
 		rows = $bindable([]),

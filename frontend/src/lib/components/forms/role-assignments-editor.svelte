@@ -1,8 +1,10 @@
 <script lang="ts">
-	import * as Select from '#lib/components/ui/select/index.js';
-	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
+	import * as Select from '#lib/components/ui/select/index.js';
+	import { CloseIcon } from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
 	import {
 		type Role,
 		BUILT_IN_ROLE_ADMIN,
@@ -11,8 +13,6 @@
 		BUILT_IN_ROLE_VIEWER
 	} from '#lib/types/auth.js';
 	import type { Environment } from '#lib/types/environment.js';
-	import { CloseIcon } from '#lib/icons/index.js';
-	import { m } from '#lib/paraglide/messages.js';
 	import {
 		buildGlobalEnvironmentOptions,
 		createRoleEnvironmentLabelers,

@@ -1,7 +1,7 @@
-import Root from './field-set.svelte';
 import Content from './field-set-content.svelte';
 import Footer from './field-set-footer.svelte';
 import Title from './field-set-title.svelte';
+import Root from './field-set.svelte';
 import type { FieldSetRootProps, FieldSetTitleProps, FieldSetContentProps, FieldSetFooterProps } from './types';
 export { fieldSetVariants, type Variant } from './variants';
 

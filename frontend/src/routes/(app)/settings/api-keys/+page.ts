@@ -1,8 +1,9 @@
+import { queryKeys } from '#lib/query/query-keys.js';
 import { apiKeyService } from '#lib/services/api-key-service.js';
 import { roleService } from '#lib/services/role-service.js';
-import { queryKeys } from '#lib/query/query-keys.js';
 import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
 import { resolveInitialTableRequest } from '#lib/utils/tables.js';
+
 import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ parent }) => {

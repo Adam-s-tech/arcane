@@ -1,6 +1,8 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
 import { redirect } from '@sveltejs/kit';
+
 import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
+
 import type { PageLoad } from './$types';
 
 // Job schedules are configured per environment; this route exists so the

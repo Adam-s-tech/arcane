@@ -1,7 +1,9 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
 import { redirect } from '@sveltejs/kit';
-import type { PageLoad } from './$types';
+
 import { authService } from '#lib/services/auth-service.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
+
+import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ fetch, parent }) => {
 	const { queryClient } = await parent();

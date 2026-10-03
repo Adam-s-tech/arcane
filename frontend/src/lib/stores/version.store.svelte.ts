@@ -1,4 +1,5 @@
 import { browser } from '$app/env';
+
 import { STREAM_CHANNEL_VERSION } from '#lib/services/stream-service.js';
 import { toAppVersionInformation } from '#lib/services/version-service.js';
 import { clientStream } from '#lib/stores/client-stream.svelte.js';

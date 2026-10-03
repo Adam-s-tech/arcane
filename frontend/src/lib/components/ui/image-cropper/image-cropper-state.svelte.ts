@@ -1,7 +1,9 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
-import type { ReadableBoxedValues, WritableBoxedValues } from 'svelte-toolbelt';
 import { Context } from 'runed';
 import type { CropArea, DispatchEvents } from 'svelte-easy-crop';
+import type { ReadableBoxedValues, WritableBoxedValues } from 'svelte-toolbelt';
+
+import { tryCatch } from '#lib/utils/try-catch.js';
+
 import { getCroppedImg } from './utils';
 
 const VALID_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];

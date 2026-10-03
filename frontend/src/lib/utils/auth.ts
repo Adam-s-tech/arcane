@@ -1,15 +1,15 @@
-import userStore from '#lib/stores/user-store.svelte.js';
-import { environmentStore } from '#lib/stores/environment.store.svelte.js';
 import { m } from '#lib/paraglide/messages.js';
 import { APIError } from '#lib/services/api-service.js';
+import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+import userStore from '#lib/stores/user-store.svelte.js';
+import { GLOBAL_SCOPE, SUDO_PERMISSION } from '#lib/types/auth.js';
+import type { PermissionsManifest, User } from '#lib/types/auth.js';
 import {
 	canReachAccessSurface,
 	getFallbackAccessSurfaces,
 	getRouteAccessSurfaces,
 	pathMatchesAccessSurface
 } from '#lib/utils/access-policy.js';
-import { GLOBAL_SCOPE, SUDO_PERMISSION } from '#lib/types/auth.js';
-import type { PermissionsManifest, User } from '#lib/types/auth.js';
 
 export function normalizeAuthenticationError(error: unknown, fallback: string): { kind: 'proxy' | 'other'; message: string } {
 	if (error instanceof APIError) {

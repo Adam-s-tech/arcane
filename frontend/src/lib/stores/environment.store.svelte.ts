@@ -1,6 +1,7 @@
-import { PersistedState } from 'runed';
 import { goto, refreshAll } from '$app/navigation';
 import { page } from '$app/state';
+import { PersistedState } from 'runed';
+
 import type { Environment } from '#lib/types/environment.js';
 import { isEnvironmentOnline } from '#lib/utils/docker.js';
 

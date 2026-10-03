@@ -1,10 +1,12 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
-import { templateService } from '#lib/services/template-service.js';
-import { variableService } from '#lib/services/variable-service.js';
-import { queryKeys } from '#lib/query/query-keys.js';
 import { error } from '@sveltejs/kit';
+
+import { queryKeys } from '#lib/query/query-keys.js';
+import { templateService } from '#lib/services/template-service.js';
 import type { Template, TemplateContentData } from '#lib/types/swarm.js';
 import type { GlobalVariable } from '#lib/types/variable.js';
+import { loadGlobalVariablesOrEmpty } from '#lib/utils/template-load.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
+
 import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({
@@ -28,12 +30,7 @@ export const load: PageLoad = async ({
 					queryKey: queryKeys.templates.allTemplates(),
 					queryFn: () => templateService.getAllTemplates()
 				}),
-				tryCatch(
-					queryClient.query({
-						queryKey: queryKeys.variables.list(),
-						queryFn: () => variableService.list()
-					})
-				).then((result) => (result.error ? ([] as GlobalVariable[]) : result.data))
+				loadGlobalVariablesOrEmpty(queryClient)
 			]);
 
 			return {

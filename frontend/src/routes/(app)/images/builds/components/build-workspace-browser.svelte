@@ -1,29 +1,29 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
-	import FileList from '#lib/components/file-browser/FileList.svelte';
-	import FileBreadcrumb from '#lib/components/file-browser/FileBreadcrumb.svelte';
-	import CreateFolderDialog from '#lib/components/file-browser/CreateFolderDialog.svelte';
-	import FileUploadDialog from '#lib/components/file-browser/FileUploadDialog.svelte';
-	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
-	import { UploadIcon, MoveToFolderIcon, EllipsisIcon, CopyIcon, AlertTriangleIcon } from '#lib/icons/index.js';
-	import { EmptyState } from '#lib/components/states/index.js';
-	import { extractApiErrorMessage } from '#lib/utils/api.js';
-	import { Spinner } from '#lib/components/ui/spinner/index.js';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import * as Dialog from '#lib/components/ui/dialog/index.js';
-	import { Textarea } from '#lib/components/ui/textarea/index.js';
-	import { Label } from '#lib/components/ui/label/index.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import { toast } from 'svelte-sonner';
-	import { UseClipboard } from '#lib/hooks/use-clipboard.svelte.js';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import { hasPermission } from '#lib/utils/auth.js';
-	import { queryKeys } from '#lib/query/query-keys.js';
-	import type { FileEntry } from '#lib/types/shared.js';
-	import { sortFileEntries, type FileProvider } from '#lib/components/file-browser/index.js';
-	import type { UploadProgressCallback } from '#lib/services/upload-service.js';
 	import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
+	import { toast } from 'svelte-sonner';
+
+	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+	import CreateFolderDialog from '#lib/components/file-browser/create-folder-dialog.svelte';
+	import FileBreadcrumb from '#lib/components/file-browser/file-breadcrumb.svelte';
+	import FileList from '#lib/components/file-browser/file-list.svelte';
+	import FileUploadDialog from '#lib/components/file-browser/file-upload-dialog.svelte';
+	import { sortFileEntries, type FileProvider } from '#lib/components/file-browser/index.js';
+	import { EmptyState } from '#lib/components/states/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import { Textarea } from '#lib/components/ui/textarea/index.js';
+	import { UseClipboard } from '#lib/hooks/use-clipboard.svelte.js';
+	import { UploadIcon, MoveToFolderIcon, EllipsisIcon, CopyIcon, AlertTriangleIcon } from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { queryKeys } from '#lib/query/query-keys.js';
+	import type { UploadProgressCallback } from '#lib/services/upload-service.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import type { FileEntry } from '#lib/types/shared.js';
+	import { extractApiErrorMessage } from '#lib/utils/api.js';
+	import { hasPermission } from '#lib/utils/auth.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	let {
 		provider,

@@ -3,7 +3,7 @@ services:
     image: ghcr.io/getarcaneapp/agent:latest
     container_name: arcane-agent
     ports:
-      - "3553:3553"
+      - '3553:3553'
     environment:
       - AGENT_MODE=true
       - AGENT_TOKEN=arc_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX

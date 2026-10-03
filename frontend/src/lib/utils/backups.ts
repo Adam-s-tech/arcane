@@ -1,8 +1,8 @@
 import { toast } from 'svelte-sonner';
+
 import { m } from '#lib/paraglide/messages.js';
 import { systemBackupService } from '#lib/services/system-backup-service.js';
 import { volumeBackupService } from '#lib/services/volume-backup-service.js';
-import { tryCatch } from '#lib/utils/try-catch.js';
 import type {
 	BackupDestination,
 	BackupManagementType,
@@ -13,6 +13,7 @@ import type {
 	BackupTrigger
 } from '#lib/types/backup.js';
 import type { S3Destination } from '#lib/types/s3-destination.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
 
 export function backupStatusLabel(status: BackupStatus): string {
 	if (status === 'succeeded') return m.volume_backup_status_succeeded();

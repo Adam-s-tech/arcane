@@ -1,5 +1,5 @@
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/browser';
-import BaseAPIService from './api-service';
+
 import type {
 	AuthenticationResponse,
 	MFAChallenge,
@@ -12,6 +12,8 @@ import type {
 	RecoveryCodesResponse,
 	StepUpGrant
 } from '#lib/types/auth.js';
+
+import BaseAPIService from './api-service';
 
 class PasskeyService extends BaseAPIService {
 	async getLoginAvailability(): Promise<PasskeyLoginAvailability> {

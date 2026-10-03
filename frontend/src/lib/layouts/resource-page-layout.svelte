@@ -18,9 +18,10 @@
 </script>
 
 <script lang="ts">
+	import type { Snippet } from 'svelte';
+
 	import { ActionButtonGroup } from '#lib/components/action-button-group/index.js';
 	import StatCard from '#lib/components/stat-card.svelte';
-	import type { Snippet } from 'svelte';
 	import type { IconType } from '#lib/icons/index.js';
 	import { cn } from '#lib/utils.js';
 

@@ -1,14 +1,16 @@
 <script lang="ts">
-	import { getSettingsFormContext, hasSettingsFormContext } from '#lib/hooks/settings-form-context.js';
 	import type { Snippet } from 'svelte';
-	import { UiConfigDisabledTag } from '#lib/components/badges/index.js';
-	import StatCard from '#lib/components/stat-card.svelte';
-	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+
 	import ActionButtonGroup from '#lib/components/action-button-group/action-button-group.svelte';
 	import type { ActionButton } from '#lib/components/action-button-group/types.js';
-	import { m } from '#lib/paraglide/messages.js';
+	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+	import { UiConfigDisabledTag } from '#lib/components/badges/index.js';
+	import StatCard from '#lib/components/stat-card.svelte';
+	import { getSettingsFormContext, hasSettingsFormContext } from '#lib/hooks/settings-form-context.js';
 	import { ResetIcon, type IconType } from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
 	import { cn } from '#lib/utils.js';
+
 	import type { SettingsPageType, SettingsStatCard } from './types.js';
 
 	interface Props {

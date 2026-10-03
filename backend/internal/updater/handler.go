@@ -4,17 +4,13 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"reflect"
 
 	"github.com/danielgtaylor/huma/v2"
-	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
 	"github.com/getarcaneapp/arcane/types/v2/base"
-	projecttypes "github.com/getarcaneapp/arcane/types/v2/project"
+	"github.com/getarcaneapp/arcane/types/v2/project"
 	"github.com/getarcaneapp/arcane/types/v2/updater"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
 )
@@ -24,8 +20,6 @@ type UpdaterHandler struct {
 	updaterService *UpdaterService
 	appCtx         context.Context
 }
-
-// --- Huma Input/Output Wrappers ---
 
 type RunUpdaterInput struct {
 	EnvironmentID string           `path:"id" doc:"Environment ID"`
@@ -50,65 +44,6 @@ type GetUpdaterStatusInput struct {
 type GetUpdaterHistoryInput struct {
 	EnvironmentID string `path:"id" doc:"Environment ID"`
 	Limit         int    `query:"limit" default:"50" doc:"Number of history entries to return"`
-}
-
-// RegisterUpdater registers updater management routes using Huma.
-func RegisterUpdater(api huma.API, updaterService *UpdaterService, appCtx handlerutil.ActivityAppContext) {
-	h := &UpdaterHandler{
-		updaterService: updaterService,
-		appCtx:         appCtx.Context(),
-	}
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "check-project-updates", Method: http.MethodPost,
-		Path:    "/environments/{id}/updater/projects/{projectId}/check",
-		Summary: "Check project service updates", Tags: []string{"Updater"}, Security: handlerutil.DefaultOperationSecurity(),
-	}, authz.PermImageUpdatesCheck, h.CheckProjectUpdates)
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "run-updater",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/updater/run",
-		Summary:     "Run updater",
-		Description: "Apply pending container updates",
-		Tags:        []string{"Updater"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermImageUpdatesCheck, h.RunUpdater)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "get-updater-status",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/updater/status",
-		Summary:     "Get updater status",
-		Description: "Get the current status of the updater",
-		Tags:        []string{"Updater"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermImageUpdatesRead, h.GetUpdaterStatus)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "get-updater-history",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/updater/history",
-		Summary:     "Get updater history",
-		Description: "Get the history of update operations",
-		Tags:        []string{"Updater"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermImageUpdatesRead, h.GetUpdaterHistory)
-
-	acceptedSchema := huma.SchemaFromType(api.OpenAPI().Components.Schemas, reflect.TypeFor[base.ApiResponse[activitytypes.Activity]]())
-	completedSchema := huma.SchemaFromType(api.OpenAPI().Components.Schemas, reflect.TypeFor[base.ApiResponse[*updater.Result]]())
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "update-container",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/containers/{containerId}/update",
-		Summary:     "Update a single container",
-		Description: "Pull the latest image and apply the appropriate update strategy for a specific container",
-		Tags:        []string{"Updater", "Containers"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Responses: map[string]*huma.Response{
-			"200": {Description: "Container update completed", Content: map[string]*huma.MediaType{"application/json": {Schema: completedSchema}}},
-			"202": {Description: "Container update accepted", Content: map[string]*huma.MediaType{"application/json": {Schema: acceptedSchema}}},
-		},
-	}, authz.PermImageUpdatesCheck, h.updateContainerInternal)
 }
 
 // RunUpdater applies pending container updates.
@@ -170,13 +105,13 @@ func (h *UpdaterHandler) GetUpdaterHistory(ctx context.Context, input *GetUpdate
 func (h *UpdaterHandler) updateContainerInternal(ctx context.Context, input *UpdateContainerInput) (*updateContainerOutput, error) {
 	runtimeCtx := utils.ActivityRuntimeContext(ctx, h.appCtx)
 	if input.Async {
-		activity, err := h.updaterService.AcceptSingleContainerUpdate(runtimeCtx, input.ContainerID)
+		acceptedActivity, err := h.updaterService.AcceptSingleContainerUpdate(runtimeCtx, input.ContainerID)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("Failed to accept container update: " + err.Error())
 		}
 		return &updateContainerOutput{
 			Status: http.StatusAccepted,
-			Body:   base.ApiResponse[any]{Success: true, Data: activity},
+			Body:   base.ApiResponse[any]{Success: true, Data: acceptedActivity},
 		}, nil
 	}
 	out, err := h.updaterService.UpdateSingleContainer(runtimeCtx, input.ContainerID)
@@ -194,10 +129,10 @@ func (h *UpdaterHandler) updateContainerInternal(ctx context.Context, input *Upd
 }
 
 // CheckProjectUpdates checks Compose policies through the updater service.
-func (h *UpdaterHandler) CheckProjectUpdates(ctx context.Context, input *updater.CheckProjectInput) (*handlerutil.Out[*projecttypes.UpdateInfo], error) {
+func (h *UpdaterHandler) CheckProjectUpdates(ctx context.Context, input *updater.CheckProjectInput) (*handlerutil.Out[*project.UpdateInfo], error) {
 	result, err := h.updaterService.CheckProjectUpdates(ctx, input.ProjectID)
 	if err != nil {
 		return nil, err
 	}
-	return &handlerutil.Out[*projecttypes.UpdateInfo]{Body: base.ApiResponse[*projecttypes.UpdateInfo]{Success: true, Data: result}}, nil
+	return &handlerutil.Out[*project.UpdateInfo]{Body: base.ApiResponse[*project.UpdateInfo]{Success: true, Data: result}}, nil
 }

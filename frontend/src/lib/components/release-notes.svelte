@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { marked } from 'marked';
 	import DOMPurify from 'isomorphic-dompurify';
+	import { marked } from 'marked';
 
 	let { markdown }: { markdown: string } = $props();
 

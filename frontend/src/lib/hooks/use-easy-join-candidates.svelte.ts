@@ -1,11 +1,11 @@
 import { createQuery } from '@tanstack/svelte-query';
 
 import { queryKeys } from '#lib/query/query-keys.js';
-import { userHasPermission } from '#lib/utils/auth.js';
 import { swarmService } from '#lib/services/swarm-service.js';
 import { environmentStore } from '#lib/stores/environment.store.svelte.js';
 import userStore from '#lib/stores/user-store.svelte.js';
 import type { SwarmJoinCandidate } from '#lib/types/swarm.js';
+import { userHasPermission } from '#lib/utils/auth.js';
 
 export function useEasyJoinCandidates() {
 	const user = userStore;

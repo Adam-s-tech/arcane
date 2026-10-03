@@ -1,6 +1,13 @@
 <script lang="ts">
-	import type { PageProps } from './$types';
-	import type { NetworkInspectDto, IPAMSubnetDto } from '#lib/types/docker.js';
+	import { goto } from '$app/navigation';
+	import { toast } from 'svelte-sonner';
+
+	import type { ActionButton } from '#lib/components/action-button-group/types.js';
+	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
+	import { DetailMetaStrip, DetailSection, KeyValueCard, KeyValueGrid } from '#lib/components/resource-detail/index.js';
+	import * as Alert from '#lib/components/ui/alert/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
 	import {
 		AlertIcon,
 		VolumesIcon,
@@ -15,21 +22,16 @@
 		ArrowDownIcon,
 		type IconType
 	} from '#lib/icons/index.js';
-	import * as Alert from '#lib/components/ui/alert/index.js';
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import { formatDateTimeShort } from '#lib/utils/formatting.js';
-	import { toast } from 'svelte-sonner';
-	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
-	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
-	import { goto } from '$app/navigation';
-	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
-	import { tryCatch } from '#lib/utils/try-catch.js';
+	import { ResourceDetailLayout } from '#lib/layouts/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { networkService } from '#lib/services/network-service.js';
-	import { ResourceDetailLayout } from '#lib/layouts/index.js';
-	import type { ActionButton } from '#lib/components/action-button-group/types.js';
+	import type { NetworkInspectDto, IPAMSubnetDto } from '#lib/types/docker.js';
 	import { activityToastOptions, extractActivityId } from '#lib/utils/activity-toast.js';
-	import { DetailMetaStrip, DetailSection, KeyValueCard, KeyValueGrid } from '#lib/components/resource-detail/index.js';
+	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
+	import { formatDateTimeShort } from '#lib/utils/formatting.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+
+	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	let errorMessage = $state('');

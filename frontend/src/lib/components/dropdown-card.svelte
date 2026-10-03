@@ -1,10 +1,12 @@
 <script lang="ts">
-	import { cn } from '#lib/utils.js';
 	import { onMount, type Snippet } from 'svelte';
 	import { slide } from 'svelte/transition';
-	import * as Card from './ui/card';
-	import { ArrowDownIcon } from '#lib/icons/index.js';
+
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+	import { ArrowDownIcon } from '#lib/icons/index.js';
+	import { cn } from '#lib/utils.js';
+
+	import * as Card from './ui/card';
 
 	let {
 		id,

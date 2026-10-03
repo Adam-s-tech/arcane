@@ -1,14 +1,15 @@
+import { toast } from 'svelte-sonner';
+
 import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
 import { m } from '#lib/paraglide/messages.js';
 import { containerService } from '#lib/services/container-service.js';
-import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
-import { tryCatch } from '#lib/utils/try-catch.js';
-import { activityToastOptions, extractActivityId } from '#lib/utils/activity-toast.js';
-import type { Activity } from '#lib/types/activity.type.js';
-import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-import { hasPermission } from '#lib/utils/auth.js';
 import { activityStore } from '#lib/stores/activity.store.svelte.js';
-import { toast } from 'svelte-sonner';
+import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+import type { Activity } from '#lib/types/activity.type.js';
+import { activityToastOptions, extractActivityId } from '#lib/utils/activity-toast.js';
+import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
+import { hasPermission } from '#lib/utils/auth.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
 
 type ContainerLifecycleAction = 'start' | 'stop' | 'restart' | 'pause' | 'unpause';
 type ContainerLifecycleStatus = 'starting' | 'stopping' | 'restarting' | 'pausing' | 'unpausing' | '';

@@ -1,30 +1,17 @@
 <script lang="ts">
-	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
-	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { goto } from '$app/navigation';
-	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
-	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
-	import { tryCatch } from '#lib/utils/try-catch.js';
 	import { toast } from 'svelte-sonner';
-	import { toastUpgradeError } from '#lib/utils/api.js';
-	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
-	import type { ColumnSpec, MobileFieldVisibility, BulkAction } from '#lib/components/arcane-table/index.js';
+
+	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
 	import type { FilterOption } from '#lib/components/arcane-table/arcane-table.types.svelte.js';
+	import type { ColumnSpec, MobileFieldVisibility, BulkAction } from '#lib/components/arcane-table/index.js';
 	import { UniversalMobileCard } from '#lib/components/arcane-table/index.js';
-	import type { Environment } from '#lib/types/environment.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import { environmentManagementService } from '#lib/services/env-mgmt-service.js';
-	import systemUpgradeService from '#lib/services/api/system-upgrade-service.js';
+	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
+	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
 	import UpdateCenterDialog from '#lib/components/dialogs/update-center-dialog.svelte';
-	import EnvironmentUpgradeMenuItem from './environment-upgrade-menu-item.svelte';
-	import EnvironmentVersionCell from './environment-version-cell.svelte';
-	import type { AppVersionInformation } from '#lib/types/settings.js';
-	import { hasPermission } from '#lib/utils/auth.js';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import { capitalizeFirstLetter } from '#lib/utils/formatting.js';
-	import { getEnvironmentStatusVariant, isEnvironmentOnline, resolveEnvironmentStatus } from '#lib/utils/docker.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import { useEasyJoinCandidates } from '#lib/hooks/use-easy-join-candidates.svelte.js';
 	import {
 		EyeOnIcon,
 		TrashIcon,
@@ -35,8 +22,22 @@
 		TestIcon,
 		ConnectionIcon
 	} from '#lib/icons/index.js';
-	import { useEasyJoinCandidates } from '#lib/hooks/use-easy-join-candidates.svelte.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { environmentManagementService } from '#lib/services/env-mgmt-service.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import type { Environment } from '#lib/types/environment.js';
+	import type { AppVersionInformation } from '#lib/types/settings.js';
+	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
+	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
+	import { hasPermission } from '#lib/utils/auth.js';
+	import { getEnvironmentStatusVariant, isEnvironmentOnline, resolveEnvironmentStatus } from '#lib/utils/docker.js';
+	import { capitalizeFirstLetter } from '#lib/utils/formatting.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+	import { applyEnvironmentUpgrade } from '#lib/utils/update-actions.js';
+
 	import EasyJoinDialog from '../../swarm/cluster/components/easy-join-dialog.svelte';
+	import EnvironmentUpgradeMenuItem from './environment-upgrade-menu-item.svelte';
+	import EnvironmentVersionCell from './environment-version-cell.svelte';
 
 	let {
 		environments = $bindable(),
@@ -152,24 +153,7 @@
 		const envId = selectedEnvironmentForUpgrade.id;
 		upgradingEnvironmentId = envId;
 
-		const operationResult = await tryCatch(
-			(async () => {
-				const result = await systemUpgradeService.triggerUpgrade(envId);
-				if (!result.success) {
-					throw new Error(result.error || m.upgrade_failed({ error: m.common_unknown() }));
-				}
-				toast.success(m.upgrade_success());
-				return { upToDate: result.upToDate };
-			})()
-		);
-		if (operationResult.error !== null) {
-			const error = operationResult.error;
-
-			toastUpgradeError(error, m.upgrade_failed);
-			throw error;
-		} else {
-			return operationResult.data;
-		}
+		return applyEnvironmentUpgrade(envId, () => m.upgrade_failed({ error: m.common_unknown() }));
 	}
 
 	async function handleToggleEnabled(environment: Environment) {

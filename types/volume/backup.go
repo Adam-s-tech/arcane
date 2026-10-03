@@ -1,6 +1,10 @@
 package volume
 
-import "github.com/getarcaneapp/arcane/types/v2/backup"
+import (
+	"time"
+
+	"github.com/getarcaneapp/arcane/types/v2/backup"
+)
 
 type BackupDestination string
 
@@ -33,6 +37,29 @@ type DiscoverBackupsResponse struct {
 }
 
 type BackupFormat string
+
+// Backup is one volume backup run.
+type Backup struct {
+	ID                string                `json:"id"`
+	UpdatedAt         *time.Time            `json:"updatedAt,omitempty"`
+	VolumeName        string                `json:"volumeName"`
+	Size              int64                 `json:"size"`
+	CreatedAt         time.Time             `json:"createdAt"`
+	Status            string                `json:"status"`
+	Trigger           string                `json:"trigger"`
+	Destination       BackupDestination     `json:"destination"`
+	Format            BackupFormat          `json:"format"`
+	LocalSnapshotID   string                `json:"localSnapshotId,omitempty"`
+	RemoteSnapshotID  string                `json:"remoteSnapshotId,omitempty"`
+	S3DestinationID   string                `json:"s3DestinationId,omitempty"`
+	RemoteInstanceID  string                `json:"remoteInstanceId,omitempty"`
+	S3DestinationName string                `json:"s3DestinationName,omitempty"`
+	PolicyID          string                `json:"policyId,omitempty"`
+	Error             string                `json:"error,omitempty"`
+	ActivityID        *string               `json:"activityId,omitempty"`
+	Type              backup.ManagementType `json:"type"`
+	RemoteAvailable   *bool                 `json:"remoteAvailable,omitempty"`
+}
 
 type BackupEntry struct {
 	RemoteAvailable   *bool                 `json:"remoteAvailable,omitempty"`

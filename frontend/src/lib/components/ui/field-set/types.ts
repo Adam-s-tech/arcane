@@ -1,6 +1,7 @@
 import type { WithChildren, WithoutChildren } from 'bits-ui';
-import type { Variant } from '.';
 import type { HTMLAttributes } from 'svelte/elements';
+
+import type { Variant } from '.';
 
 export type FieldSetRootPropsWithoutHTML = WithChildren<{
 	ref?: HTMLDivElement | null;

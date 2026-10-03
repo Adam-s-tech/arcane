@@ -1,36 +1,19 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
 	import { goto, refreshAll } from '$app/navigation';
-	import settingsStore from '#lib/stores/config-store.svelte.js';
-	import ActionButtons from '#lib/components/action-buttons.svelte';
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import { bytes } from '#lib/utils/formatting.js';
-	import { onMount, tick } from 'svelte';
 	import { page } from '$app/state';
-	import type { ContainerDetailsDto, ContainerNetworkSettings, ContainerStats as ContainerStatsType } from '#lib/types/docker.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import TabbedPageLayout from '#lib/layouts/tabbed-page-layout.svelte';
-	import { type TabItem } from '#lib/components/tab-bar/index.js';
-	import * as Tabs from '#lib/components/ui/tabs/index.js';
-	import ContainerOverview from '../components/ContainerOverview.svelte';
-	import ContainerStats from '../components/ContainerStats.svelte';
-	import ContainerConfiguration from '../components/ContainerConfiguration.svelte';
-	import { getContainerStatusLabel } from '../container-table.helpers';
-	import ContainerNetwork from '../components/ContainerNetwork.svelte';
-	import ContainerStorage from '../components/ContainerStorage.svelte';
-	import ContainerLogsPanel from '../components/ContainerLogsPanel.svelte';
-	import ContainerShell from '../components/ContainerShell.svelte';
-	import ContainerComposePanel from '../components/ContainerComposePanel.svelte';
-	import ContainerInspect from '../components/ContainerInspect.svelte';
-	import ContainerProcesses from '../components/ContainerProcesses.svelte';
-	import ContainerDetailStatsSync from '../components/container-detail-stats-sync.svelte';
-	import ContainerHealthcheck from '../components/ContainerHealthcheck.svelte';
-	import ContainerCommitDialog from '../components/container-commit-dialog.svelte';
+	import { useQueryClient } from '@tanstack/svelte-query';
+	import { mode } from 'mode-watcher';
+	import { onMount, tick } from 'svelte';
+	import { toast } from 'svelte-sonner';
+	import { parse as parseYaml } from 'yaml';
+
+	import type { ActionButton } from '#lib/components/action-button-group/types.js';
+	import ActionButtons from '#lib/components/action-buttons.svelte';
 	import IconImage from '#lib/components/icon-image.svelte';
 	import ResourceNotFound from '#lib/components/resource-not-found.svelte';
-	import { calculateMemoryUsage, getThemedIconUrl } from '#lib/utils/docker.js';
-	import { mode } from 'mode-watcher';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import * as Tabs from '#lib/components/ui/tabs/index.js';
+	import { useUrlTab } from '#lib/hooks/use-url-tab.svelte.js';
 	import {
 		VolumesIcon,
 		FileTextIcon,
@@ -44,25 +27,42 @@
 		HealthIcon,
 		LayoutListIcon
 	} from '#lib/icons/index.js';
-	import { parse as parseYaml } from 'yaml';
-	import type { IncludeFile } from '#lib/types/swarm.js';
-	import { projectWorkspaceService } from '#lib/services/project-workspace-service.js';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import { hasPermission } from '#lib/utils/auth.js';
-	import type { ActionButton } from '#lib/components/action-button-group/types.js';
 	import { EditIcon, ProjectsIcon } from '#lib/icons/index.js';
-	import { runContainerLifecycleAction, confirmAndUpdateContainer } from '#lib/utils/container-actions.js';
-	import { useQueryClient } from '@tanstack/svelte-query';
+	import TabbedPageLayout from '#lib/layouts/tabbed-page-layout.svelte';
+	import { m } from '#lib/paraglide/messages.js';
 	import { queryKeys } from '#lib/query/query-keys.js';
-	import { activityStore } from '#lib/stores/activity.store.svelte.js';
-	import { createContainerUpdateActivityTracker } from '#lib/utils/container-update-activities.js';
 	import { APIError } from '#lib/services/api-service.js';
 	import { containerService } from '#lib/services/container-service.js';
+	import { projectWorkspaceService } from '#lib/services/project-workspace-service.js';
+	import { activityStore } from '#lib/stores/activity.store.svelte.js';
+	import settingsStore from '#lib/stores/config-store.svelte.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import type { ContainerDetailsDto, ContainerNetworkSettings, ContainerStats as ContainerStatsType } from '#lib/types/docker.js';
+	import type { IncludeFile } from '#lib/types/swarm.js';
 	import { extractApiErrorMessage } from '#lib/utils/api.js';
-	import { toast } from 'svelte-sonner';
+	import { hasPermission } from '#lib/utils/auth.js';
+	import { runContainerLifecycleAction, confirmAndUpdateContainer } from '#lib/utils/container-actions.js';
 	import { isAutoUpdateLabelDisabled } from '#lib/utils/container-auto-update.js';
+	import { createContainerUpdateActivityTracker } from '#lib/utils/container-update-activities.js';
+	import { calculateMemoryUsage, getThemedIconUrl } from '#lib/utils/docker.js';
+	import { bytes } from '#lib/utils/formatting.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+
+	import ContainerCommitDialog from '../components/container-commit-dialog.svelte';
+	import ContainerComposePanel from '../components/container-compose-panel.svelte';
+	import ContainerConfiguration from '../components/container-configuration.svelte';
+	import ContainerDetailStatsSync from '../components/container-detail-stats-sync.svelte';
+	import ContainerHealthcheck from '../components/container-healthcheck.svelte';
+	import ContainerInspect from '../components/container-inspect.svelte';
+	import ContainerLogsPanel from '../components/container-logs-panel.svelte';
+	import ContainerNetwork from '../components/container-network.svelte';
+	import ContainerOverview from '../components/container-overview.svelte';
+	import ContainerProcesses from '../components/container-processes.svelte';
+	import ContainerShell from '../components/container-shell.svelte';
+	import ContainerStats from '../components/container-stats.svelte';
+	import ContainerStorage from '../components/container-storage.svelte';
 	import KillContainerDialog from '../components/kill-container-dialog.svelte';
-	import { useUrlTab } from '#lib/hooks/use-url-tab.svelte.js';
+	import { getContainerStatusLabel } from '../container-table.helpers';
 	let { data } = $props();
 	const queryClient = useQueryClient();
 	let container = $derived(data?.container as ContainerDetailsDto);
@@ -330,22 +330,20 @@
 
 	const showComposeTab = $derived(!!composeInfo && !!project);
 
-	const tabItems = $derived<TabItem[]>([
-		{ value: 'overview', label: m.common_overview(), icon: ContainersIcon },
-		...(showStats ? [{ value: 'stats', label: m.containers_nav_metrics(), icon: StatsIcon }] : []),
-		{ value: 'processes', label: m.containers_processes_title(), icon: LayoutListIcon },
-		...(canViewLogs ? [{ value: 'logs', label: m.common_logs(), icon: FileTextIcon }] : []),
-		...(showShell ? [{ value: 'shell', label: m.common_shell(), icon: TerminalIcon }] : []),
-		...(hasHealthcheck ? [{ value: 'healthcheck', label: m.containers_nav_healthcheck(), icon: HealthIcon }] : []),
-		...(showConfiguration ? [{ value: 'config', label: m.common_configuration(), icon: SettingsIcon }] : []),
-		...(showNetworkTab ? [{ value: 'network', label: m.resource_networks_cap(), icon: NetworksIcon }] : []),
-		...(hasMounts ? [{ value: 'storage', label: m.storage(), icon: VolumesIcon }] : []),
-		...(showComposeTab ? [{ value: 'compose', label: m.compose(), icon: CodeIcon }] : []),
-		{ value: 'inspect', label: m.common_inspect(), icon: InspectIcon }
-	]);
-
 	const urlTab = useUrlTab({
-		validTabs: () => tabItems.map((tab) => tab.value),
+		tabs: () => [
+			{ value: 'overview', label: m.common_overview(), icon: ContainersIcon },
+			{ value: 'stats', label: m.containers_nav_metrics(), icon: StatsIcon, visible: showStats },
+			{ value: 'processes', label: m.containers_processes_title(), icon: LayoutListIcon },
+			{ value: 'logs', label: m.common_logs(), icon: FileTextIcon, visible: canViewLogs },
+			{ value: 'shell', label: m.common_shell(), icon: TerminalIcon, visible: showShell },
+			{ value: 'healthcheck', label: m.containers_nav_healthcheck(), icon: HealthIcon, visible: hasHealthcheck },
+			{ value: 'config', label: m.common_configuration(), icon: SettingsIcon, visible: showConfiguration },
+			{ value: 'network', label: m.resource_networks_cap(), icon: NetworksIcon, visible: showNetworkTab },
+			{ value: 'storage', label: m.storage(), icon: VolumesIcon, visible: hasMounts },
+			{ value: 'compose', label: m.compose(), icon: CodeIcon, visible: showComposeTab },
+			{ value: 'inspect', label: m.common_inspect(), icon: InspectIcon }
+		],
 		defaultTab: () => 'overview'
 	});
 	const activeTab = $derived(urlTab.value);
@@ -596,7 +594,7 @@
 		/>
 	{/key}
 
-	<TabbedPageLayout {backUrl} backLabel={m.common_back()} {tabItems} selectedTab={activeTab} {onTabChange}>
+	<TabbedPageLayout {backUrl} backLabel={m.common_back()} tabItems={urlTab.items} selectedTab={activeTab} {onTabChange}>
 		{#snippet headerInfo()}
 			{@render containerHeader(container)}
 		{/snippet}

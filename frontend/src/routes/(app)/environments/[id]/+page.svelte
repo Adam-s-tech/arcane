@@ -1,56 +1,28 @@
 <script lang="ts">
-	import type { Settings } from '#lib/types/settings.js';
-	import SettingsRow from '#lib/components/settings/settings-row.svelte';
-	import SettingsSection from '#lib/components/settings/settings-section.svelte';
-	import { EmptyState } from '#lib/components/states/index.js';
-	import TextInputWithLabel from '#lib/components/form/text-input-with-label.svelte';
-	import { featureStore } from '#lib/stores/features.store.svelte.js';
-	import { featureDefinitions } from '#lib/config/features.js';
-	import type { FeatureID } from '#lib/types/features.js';
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
+	import { beforeNavigate, goto, refreshAll } from '$app/navigation';
+	import { createQuery } from '@tanstack/svelte-query';
 	import { onMount } from 'svelte';
-	import * as Tabs from '#lib/components/ui/tabs/index.js';
-	import TabbedPageLayout from '#lib/layouts/tabbed-page-layout.svelte';
-	import { TabBar, type TabItem } from '#lib/components/tab-bar/index.js';
+	import { toast } from 'svelte-sonner';
+
 	import { ActionButtonGroup, type ActionButton } from '#lib/components/action-button-group/index.js';
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
-	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import * as ArcaneTooltip from '#lib/components/arcane-tooltip/index.js';
-	import { Switch } from '#lib/components/ui/switch/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
-	import { CopyButton } from '#lib/components/ui/copy-button/index.js';
-	import { cn } from '#lib/utils.js';
-	import { beforeNavigate, goto, refreshAll } from '$app/navigation';
-	import { toast } from 'svelte-sonner';
-	import { m } from '#lib/paraglide/messages.js';
-	import { environmentManagementService } from '#lib/services/env-mgmt-service.js';
-	import { settingsService } from '#lib/services/settings-service.js';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import { createQuery } from '@tanstack/svelte-query';
-	import { queryKeys } from '#lib/query/query-keys.js';
-	import type { Environment, EnvironmentStatus } from '#lib/types/environment.js';
-	import { hasPermission } from '#lib/utils/auth.js';
-	import { extractApiErrorMessage } from '#lib/utils/api.js';
-	import { isEnvironmentOnline, resolveEnvironmentStatus } from '#lib/utils/docker.js';
-	import { createSettingsForm } from '#lib/utils/settings-form.js';
-	import { useUrlTab } from '#lib/hooks/use-url-tab.svelte.js';
-	import EnvironmentStatusSummary from './components/EnvironmentStatusSummary.svelte';
-	import EditableName from '../../projects/components/EditableName.svelte';
-	import ConnectionEdgeTab from './components/ConnectionEdgeTab.svelte';
-	import StorageTab from './components/StorageTab.svelte';
-	import DockerTab from './components/DockerTab.svelte';
-	import JobsTab from './components/JobsTab.svelte';
-	import {
-		environmentFormSchema,
-		environmentUpdateSchema,
-		type EnvironmentFormValues
-	} from './components/environment-form-schema';
-	import TrivySecuritySettings from '#lib/components/settings/trivy-security-settings.svelte';
+	import TextInputWithLabel from '#lib/components/form/text-input-with-label.svelte';
 	import ImagePatchSettings from '#lib/components/settings/image-patch-settings.svelte';
 	import LifecycleSecuritySettings from '#lib/components/settings/lifecycle-security-settings.svelte';
+	import SettingsRow from '#lib/components/settings/settings-row.svelte';
+	import SettingsSection from '#lib/components/settings/settings-section.svelte';
+	import TrivySecuritySettings from '#lib/components/settings/trivy-security-settings.svelte';
+	import { EmptyState } from '#lib/components/states/index.js';
+	import { TabBar, type TabItem } from '#lib/components/tab-bar/index.js';
+	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
+	import { CopyButton } from '#lib/components/ui/copy-button/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Switch } from '#lib/components/ui/switch/index.js';
+	import * as Tabs from '#lib/components/ui/tabs/index.js';
+	import { featureDefinitions } from '#lib/config/features.js';
 	import { useEasyJoinCandidates } from '#lib/hooks/use-easy-join-candidates.svelte.js';
-	import EasyJoinDialog from '../../swarm/cluster/components/easy-join-dialog.svelte';
+	import { useUrlTab } from '#lib/hooks/use-url-tab.svelte.js';
 	import {
 		AlertIcon,
 		DockerBrandIcon,
@@ -65,6 +37,35 @@
 		CodeIcon,
 		SettingsIcon
 	} from '#lib/icons/index.js';
+	import TabbedPageLayout from '#lib/layouts/tabbed-page-layout.svelte';
+	import { m } from '#lib/paraglide/messages.js';
+	import { queryKeys } from '#lib/query/query-keys.js';
+	import { environmentManagementService } from '#lib/services/env-mgmt-service.js';
+	import { settingsService } from '#lib/services/settings-service.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import { featureStore } from '#lib/stores/features.store.svelte.js';
+	import type { Environment, EnvironmentStatus } from '#lib/types/environment.js';
+	import type { FeatureID } from '#lib/types/features.js';
+	import type { Settings } from '#lib/types/settings.js';
+	import { cn } from '#lib/utils.js';
+	import { extractApiErrorMessage } from '#lib/utils/api.js';
+	import { hasPermission } from '#lib/utils/auth.js';
+	import { isEnvironmentOnline, resolveEnvironmentStatus } from '#lib/utils/docker.js';
+	import { createSettingsForm } from '#lib/utils/settings-form.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+
+	import EditableName from '../../projects/components/editable-name.svelte';
+	import EasyJoinDialog from '../../swarm/cluster/components/easy-join-dialog.svelte';
+	import ConnectionEdgeTab from './components/connection-edge-tab.svelte';
+	import DockerTab from './components/docker-tab.svelte';
+	import {
+		environmentFormSchema,
+		environmentUpdateSchema,
+		type EnvironmentFormValues
+	} from './components/environment-form-schema';
+	import EnvironmentStatusSummary from './components/environment-status-summary.svelte';
+	import JobsTab from './components/jobs-tab.svelte';
+	import StorageTab from './components/storage-tab.svelte';
 
 	let { data } = $props();
 	let { settings, versionInformation } = $derived(data);

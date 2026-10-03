@@ -1,8 +1,8 @@
-import Breadcrumb from './FileBreadcrumb.svelte';
-import List from './FileList.svelte';
-import Preview from './FilePreview.svelte';
-import UploadDialog from './FileUploadDialog.svelte';
-import CreateFolderDialog from './CreateFolderDialog.svelte';
+import CreateFolderDialog from './create-folder-dialog.svelte';
+import Breadcrumb from './file-breadcrumb.svelte';
+import List from './file-list.svelte';
+import Preview from './file-preview.svelte';
+import UploadDialog from './file-upload-dialog.svelte';
 
 export type { FileProvider } from './file-provider';
 export { sortFileEntries } from './file-provider';

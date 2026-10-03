@@ -1,5 +1,6 @@
-import BaseAPIService from './api-service';
 import type { Diagnostics, GoroutineLeakReport, LogEntry, PprofProfile } from '#lib/types/diagnostics.js';
+
+import BaseAPIService from './api-service';
 
 class DiagnosticsAPIService extends BaseAPIService {
 	/** One-shot runtime/memory/GC + WebSocket snapshot (used for initial paint). */

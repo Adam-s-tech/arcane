@@ -1,4 +1,5 @@
 import { browser } from '$app/env';
+
 import { STREAM_CHANNEL_ENVIRONMENTS } from '#lib/services/stream-service.js';
 import { clientStream } from '#lib/stores/client-stream.svelte.js';
 import { environmentStore } from '#lib/stores/environment.store.svelte.js';

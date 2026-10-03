@@ -10,10 +10,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/session"
+	userdomain "github.com/getarcaneapp/arcane/backend/v2/internal/user"
 )
 
 func newPasskeyServiceTestDB(t *testing.T) *database.DB {
@@ -21,7 +21,7 @@ func newPasskeyServiceTestDB(t *testing.T) *database.DB {
 	gormDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, gormDB.AutoMigrate(
-		&common.User{},
+		&userdomain.User{},
 		&session.UserSession{},
 		&Passkey{},
 		&PasskeyCeremony{},
@@ -41,9 +41,9 @@ func newPasskeyServiceForTest(t *testing.T, db *database.DB) *PasskeyService {
 	return NewPasskeyService(db, &config.Config{AppUrl: "https://arcane.example.test"})
 }
 
-func createPasskeyTestUser(t *testing.T, db *database.DB, id string) *common.User {
+func createPasskeyTestUser(t *testing.T, db *database.DB, id string) *userdomain.User {
 	t.Helper()
-	user := &common.User{
+	user := &userdomain.User{
 		ID:           id,
 		Username:     id,
 		PasswordHash: "stored-password-hash",
@@ -260,7 +260,7 @@ func TestPasskeyService_EnableAndDisableMFAManagesCodesAndSessions(t *testing.T)
 	require.NoError(t, err)
 	require.Len(t, codes, recoveryCodeCount)
 
-	var enabledUser common.User
+	var enabledUser userdomain.User
 	require.NoError(t, db.Where("id = ?", user.ID).First(&enabledUser).Error)
 	require.True(t, enabledUser.PasskeyMFAEnabled)
 	var recoveryCodeCountInDB int64
@@ -271,7 +271,7 @@ func TestPasskeyService_EnableAndDisableMFAManagesCodesAndSessions(t *testing.T)
 	require.NoError(t, err)
 	require.NoError(t, service.DisableMFA(ctx, user.ID, currentSession.ID, disableGrant.Token))
 
-	var disabledUser common.User
+	var disabledUser userdomain.User
 	require.NoError(t, db.Where("id = ?", user.ID).First(&disabledUser).Error)
 	require.False(t, disabledUser.PasskeyMFAEnabled)
 	require.NoError(t, db.Model(&PasskeyRecoveryCode{}).Where("user_id = ?", user.ID).Count(&recoveryCodeCountInDB).Error)
@@ -317,7 +317,7 @@ func TestPasskeyService_ResetMFARevokesSessionsAndPreservesPasskeys(t *testing.T
 
 	require.NoError(t, service.ResetMFAForUser(ctx, user.ID))
 
-	var resetUser common.User
+	var resetUser userdomain.User
 	require.NoError(t, db.Where("id = ?", user.ID).First(&resetUser).Error)
 	require.False(t, resetUser.PasskeyMFAEnabled)
 	var remaining int64

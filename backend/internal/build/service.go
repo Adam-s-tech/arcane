@@ -13,16 +13,17 @@ import (
 	"strings"
 	"time"
 
-	imagetypes "github.com/getarcaneapp/arcane/types/v2/image"
-	buildapi "go.getarcane.app/builds/api"
+	"github.com/getarcaneapp/arcane/types/v2/image"
+	usertypes "github.com/getarcaneapp/arcane/types/v2/user"
+	"go.getarcane.app/builds/api"
 	"go.getarcane.app/builds/pkg/contextsource"
-	buildtypes "go.getarcane.app/builds/types"
-	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/builds/types"
+	"go.getarcane.app/kit/pkg"
 	"go.getarcane.app/kit/pkg/capture"
 	gitkit "go.getarcane.app/kit/pkg/git"
 	"gorm.io/gorm"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/build/children/workspace"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/docker"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/event"
@@ -30,7 +31,7 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/registry"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 	dockerutils "github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
-	buildgit "github.com/getarcaneapp/arcane/backend/v2/pkg/gitutil"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/gitutil"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
 )
 
@@ -41,9 +42,10 @@ type BuildService struct {
 	registryService *registry.ContainerRegistryService
 	gitRepository   *gitrepo.GitRepositoryService
 	eventService    *event.EventService
-	builder         buildtypes.Builder
-	gitProbeFn      func(context.Context, string, buildgit.AuthConfig) error
-	gitCloneFn      func(context.Context, string, string, buildgit.AuthConfig) (string, error)
+	workspace       *workspace.Service
+	builder         types.Builder
+	gitProbeFn      func(context.Context, string, git.AuthConfig) error
+	gitCloneFn      func(context.Context, string, string, git.AuthConfig) (string, error)
 	gitCleanupFn    func(string) error
 }
 
@@ -65,14 +67,19 @@ func NewBuildService(
 		gitRepository:   gitRepository,
 		eventService:    eventService,
 	}
-	var registryAuthProvider buildtypes.RegistryAuthProvider
+	var buildsDirectory func() string
+	if localSettings != nil {
+		buildsDirectory = func() string { return localSettings.GetSettingsConfig().BuildsDirectory.Value }
+	}
+	svc.workspace = workspace.NewService(buildsDirectory)
+	var registryAuthProvider types.RegistryAuthProvider
 	if registryService != nil {
 		registryAuthProvider = registryService
 	}
 
 	// registry.ContainerRegistryService already implements buildtypes.RegistryAuthProvider,
 	// so the builder consumes it directly instead of through forwarding methods on BuildService.
-	svc.builder = buildapi.NewService(buildapi.Config{
+	svc.builder = api.NewService(api.Config{
 		SettingsProvider:     svc,
 		DockerClientProvider: dockerService,
 		RegistryAuthProvider: registryAuthProvider,
@@ -81,12 +88,12 @@ func NewBuildService(
 	return svc
 }
 
-func (s *BuildService) BuildSettings() buildtypes.BuildSettings {
+func (s *BuildService) BuildSettings() types.BuildSettings {
 	if s.settings == nil {
-		return buildtypes.BuildSettings{}
+		return types.BuildSettings{}
 	}
 	localSettings := s.settings.GetSettingsConfig()
-	return buildtypes.BuildSettings{
+	return types.BuildSettings{
 		DepotProjectID:   localSettings.DepotProjectId.Value,
 		DepotToken:       localSettings.DepotToken.Value,
 		BuildProvider:    localSettings.BuildProvider.Value,
@@ -99,12 +106,12 @@ func (
 ) BuildImage(
 	ctx context.Context,
 	environmentID string,
-	req buildtypes.BuildRequest,
+	req types.BuildRequest,
 	progressWriter io.Writer,
 	serviceName string,
-	user *common.User,
+	user *usertypes.Actor,
 ) (
-	*buildtypes.BuildResult,
+	*types.BuildResult,
 	error,
 ) {
 	if s.builder == nil {
@@ -138,7 +145,7 @@ func (
 		}
 	}()
 	var (
-		result *buildtypes.BuildResult
+		result *types.BuildResult
 		err    error
 	)
 
@@ -206,7 +213,7 @@ func (
 	return result, err
 }
 
-func (s *BuildService) logBuildFailureEventInternal(ctx context.Context, environmentID string, req buildtypes.BuildRequest, serviceName, buildRecordID string, err error, user *common.User) {
+func (s *BuildService) logBuildFailureEventInternal(ctx context.Context, environmentID string, req types.BuildRequest, serviceName, buildRecordID string, err error, user *usertypes.Actor) {
 	if s.eventService == nil || err == nil {
 		return
 	}
@@ -279,17 +286,17 @@ func (s *BuildService) effectiveBuildProviderInternal(provider string) string {
 
 func (s *BuildService) resolveBuildRequestInternal(
 	ctx context.Context,
-	req buildtypes.BuildRequest,
+	req types.BuildRequest,
 	progressWriter io.Writer,
 	serviceName string,
-) (buildtypes.BuildRequest, func() error, error) {
+) (types.BuildRequest, func() error, error) {
 	source, ok, err := contextsource.ParseGitBuildContextSource(req.ContextDir)
 	if err != nil {
-		return buildtypes.BuildRequest{}, func() error { return nil }, err
+		return types.BuildRequest{}, func() error { return nil }, err
 	}
 	if !ok || source == nil {
 		if contextsource.IsPotentialRemoteBuildContextSource(req.ContextDir) {
-			return buildtypes.BuildRequest{}, func() error { return nil }, fmt.Errorf("unsupported remote build context source %q: only git repository URLs are supported", req.ContextDir)
+			return types.BuildRequest{}, func() error { return nil }, fmt.Errorf("unsupported remote build context source %q: only git repository URLs are supported", req.ContextDir)
 		}
 		return req, func() error { return nil }, nil
 	}
@@ -298,7 +305,7 @@ func (s *BuildService) resolveBuildRequestInternal(
 
 	authConfig, matchedRepository, err := s.resolveGitBuildAuthInternal(ctx, source.RepositoryURL)
 	if err != nil {
-		return buildtypes.BuildRequest{}, func() error { return nil }, err
+		return types.BuildRequest{}, func() error { return nil }, err
 	}
 	if matchedRepository {
 		writeBuildProgressStatusInternal(progressWriter, serviceName, "using saved git credentials for "+source.RepositoryURL)
@@ -306,20 +313,20 @@ func (s *BuildService) resolveBuildRequestInternal(
 	if gitkit.RequiresRemoteProbe(source.RepositoryURL) {
 		writeBuildProgressStatusInternal(progressWriter, serviceName, "verifying remote git repository "+source.RepositoryURL)
 		if probeGitContextErr := s.probeGitContextInternal(ctx, source.RepositoryURL, authConfig); probeGitContextErr != nil {
-			return buildtypes.BuildRequest{}, func() error { return nil }, fmt.Errorf("failed to verify remote git repository %q: %w", source.RepositoryURL, probeGitContextErr)
+			return types.BuildRequest{}, func() error { return nil }, fmt.Errorf("failed to verify remote git repository %q: %w", source.RepositoryURL, probeGitContextErr)
 		}
 	}
 
 	repoPath, err := s.cloneGitContextInternal(ctx, source.RepositoryURL, source.Ref, authConfig)
 	if err != nil {
-		return buildtypes.BuildRequest{}, func() error { return nil }, err
+		return types.BuildRequest{}, func() error { return nil }, err
 	}
 
 	contextDir := repoPath
 	if source.Subdir != "" {
-		if validatePathErr := buildgit.ValidatePath(repoPath, filepath.FromSlash(source.Subdir)); validatePathErr != nil {
+		if validatePathErr := git.ValidatePath(repoPath, filepath.FromSlash(source.Subdir)); validatePathErr != nil {
 			_ = s.cleanupGitContextInternal(repoPath)
-			return buildtypes.BuildRequest{}, func() error { return nil }, fmt.Errorf("invalid git build context subdir: %w", validatePathErr)
+			return types.BuildRequest{}, func() error { return nil }, fmt.Errorf("invalid git build context subdir: %w", validatePathErr)
 		}
 		contextDir = filepath.Join(repoPath, filepath.FromSlash(source.Subdir))
 	}
@@ -329,11 +336,11 @@ func (s *BuildService) resolveBuildRequestInternal(
 	info, err := os.Stat(contextDir)
 	if err != nil {
 		_ = s.cleanupGitContextInternal(repoPath)
-		return buildtypes.BuildRequest{}, func() error { return nil }, fmt.Errorf("failed to stat resolved git build context: %w", err)
+		return types.BuildRequest{}, func() error { return nil }, fmt.Errorf("failed to stat resolved git build context: %w", err)
 	}
 	if !info.IsDir() {
 		_ = s.cleanupGitContextInternal(repoPath)
-		return buildtypes.BuildRequest{}, func() error { return nil }, errors.New("resolved git build context is not a directory")
+		return types.BuildRequest{}, func() error { return nil }, errors.New("resolved git build context is not a directory")
 	}
 
 	writeBuildProgressStatusInternal(progressWriter, serviceName, "using remote build context "+source.Raw)
@@ -344,28 +351,28 @@ func (s *BuildService) resolveBuildRequestInternal(
 	return resolvedReq, func() error { return s.cleanupGitContextInternal(repoPath) }, nil
 }
 
-func (s *BuildService) resolveGitBuildAuthInternal(ctx context.Context, rawURL string) (buildgit.AuthConfig, bool, error) {
+func (s *BuildService) resolveGitBuildAuthInternal(ctx context.Context, rawURL string) (git.AuthConfig, bool, error) {
 	if s.gitRepository == nil {
-		return buildgit.AuthConfig{}, false, nil
+		return git.AuthConfig{}, false, nil
 	}
 
 	repository, err := s.gitRepository.FindEnabledRepositoryByURL(ctx, rawURL)
 	if err != nil {
-		return buildgit.AuthConfig{}, false, fmt.Errorf("failed to resolve git repository credentials: %w", err)
+		return git.AuthConfig{}, false, fmt.Errorf("failed to resolve git repository credentials: %w", err)
 	}
 	if repository == nil {
-		return buildgit.AuthConfig{}, false, nil
+		return git.AuthConfig{}, false, nil
 	}
 
 	authConfig, err := s.gitRepository.GetAuthConfig(ctx, repository)
 	if err != nil {
-		return buildgit.AuthConfig{}, true, fmt.Errorf("failed to load git repository credentials: %w", err)
+		return git.AuthConfig{}, true, fmt.Errorf("failed to load git repository credentials: %w", err)
 	}
 
 	return authConfig, true, nil
 }
 
-func (s *BuildService) probeGitContextInternal(ctx context.Context, repositoryURL string, authConfig buildgit.AuthConfig) error {
+func (s *BuildService) probeGitContextInternal(ctx context.Context, repositoryURL string, authConfig git.AuthConfig) error {
 	if s.gitProbeFn != nil {
 		return s.gitProbeFn(ctx, repositoryURL, authConfig)
 	}
@@ -377,7 +384,7 @@ func (s *BuildService) probeGitContextInternal(ctx context.Context, repositoryUR
 	return errors.New("git repository service not available")
 }
 
-func (s *BuildService) cloneGitContextInternal(ctx context.Context, repositoryURL, ref string, authConfig buildgit.AuthConfig) (string, error) {
+func (s *BuildService) cloneGitContextInternal(ctx context.Context, repositoryURL, ref string, authConfig git.AuthConfig) (string, error) {
 	if s.gitCloneFn != nil {
 		return s.gitCloneFn(ctx, repositoryURL, ref, authConfig)
 	}
@@ -416,7 +423,7 @@ func writeBuildProgressStatusInternal(progressWriter io.Writer, serviceName, sta
 	}
 }
 
-func (s *BuildService) ListImageBuildsByEnvironmentPaginated(ctx context.Context, environmentID string, params pagination.QueryParams) ([]imagetypes.BuildRecord, pagination.Response, error) {
+func (s *BuildService) ListImageBuildsByEnvironmentPaginated(ctx context.Context, environmentID string, params pagination.QueryParams) ([]image.BuildRecord, pagination.Response, error) {
 	if s.db == nil {
 		return nil, pagination.Response{}, errors.New("build history not available")
 	}
@@ -444,7 +451,7 @@ func (s *BuildService) ListImageBuildsByEnvironmentPaginated(ctx context.Context
 		return nil, pagination.Response{}, fmt.Errorf("failed to paginate builds: %w", err)
 	}
 
-	records := make([]imagetypes.BuildRecord, 0, len(builds))
+	records := make([]image.BuildRecord, 0, len(builds))
 	for _, build := range builds {
 		records = append(records, buildToRecord(build, false))
 	}
@@ -452,7 +459,7 @@ func (s *BuildService) ListImageBuildsByEnvironmentPaginated(ctx context.Context
 	return records, paginationResp, nil
 }
 
-func (s *BuildService) GetImageBuildByID(ctx context.Context, environmentID, buildID string) (*imagetypes.BuildRecord, error) {
+func (s *BuildService) GetImageBuildByID(ctx context.Context, environmentID, buildID string) (*image.BuildRecord, error) {
 	if s.db == nil {
 		return nil, errors.New("build history not available")
 	}
@@ -465,7 +472,7 @@ func (s *BuildService) GetImageBuildByID(ctx context.Context, environmentID, bui
 	return new(buildToRecord(build, true)), nil
 }
 
-func (s *BuildService) createBuildRecord(ctx context.Context, environmentID string, req buildtypes.BuildRequest, user *common.User) (*ImageBuild, error) {
+func (s *BuildService) createBuildRecord(ctx context.Context, environmentID string, req types.BuildRequest, user *usertypes.Actor) (*ImageBuild, error) {
 	buildArgs := mapToJSON(req.BuildArgs)
 	labels := mapToJSON(req.Labels)
 	ulimits := mapToJSON(req.Ulimits)
@@ -550,7 +557,7 @@ func (s *BuildService) completeBuildRecord(
 	})
 }
 
-func buildToRecord(build ImageBuild, includeOutput bool) imagetypes.BuildRecord {
+func buildToRecord(build ImageBuild, includeOutput bool) image.BuildRecord {
 	buildArgs := jsonToStringMap(build.BuildArgs)
 	labels := jsonToStringMap(build.Labels)
 	ulimits := jsonToStringMap(build.Ulimits)
@@ -560,7 +567,7 @@ func buildToRecord(build ImageBuild, includeOutput bool) imagetypes.BuildRecord 
 		output = build.Output
 	}
 
-	return imagetypes.BuildRecord{
+	return image.BuildRecord{
 		ID:              build.ID,
 		EnvironmentID:   build.EnvironmentID,
 		UserID:          build.UserID,

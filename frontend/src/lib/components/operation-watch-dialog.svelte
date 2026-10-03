@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { ResponsiveDialog } from '#lib/components/ui/responsive-dialog/index.js';
 	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
+	import PinnedScrollRegion from '#lib/components/pinned-scroll-region.svelte';
+	import { ResponsiveDialog } from '#lib/components/ui/responsive-dialog/index.js';
+	import { m } from '#lib/paraglide/messages.js';
 	import { operationWatchStore } from '#lib/stores/operation-watch.store.svelte.js';
 	import { ansiToHtml } from '#lib/utils/formatting.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import PinnedScrollRegion from '#lib/components/pinned-scroll-region.svelte';
 
 	// Dismissing an attached session stops the project (the Ctrl-C of a
 	// non-detached compose up), so every close attempt confirms first.

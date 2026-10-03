@@ -1,9 +1,32 @@
 <script lang="ts">
-	import type { IncludeFile, Project, ProjectTagColor, ProjectTagOption } from '#lib/types/swarm.js';
-	import type { ProjectWorkspaceFileChange, ProjectWorkspaceFileContent } from '#lib/types/project-workspace.js';
-	import * as Tabs from '#lib/components/ui/tabs/index.js';
-	import * as Alert from '#lib/components/ui/alert/index.js';
+	import { afterNavigate } from '$app/navigation';
+	import { page } from '$app/state';
+	import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
+	import { mode } from 'mode-watcher';
+	import { PersistedState } from 'runed';
+	import { onMount, tick, untrack } from 'svelte';
+	import { toast } from 'svelte-sonner';
+	import { z } from 'zod/v4';
+
+	import type { ActionButton } from '#lib/components/action-button-group/types.js';
+	import ActionButtons from '#lib/components/action-buttons.svelte';
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+	import * as ArcaneTooltip from '#lib/components/arcane-tooltip/index.js';
+	import CodePanel from '#lib/components/code-panel.svelte';
+	import ComposeFileEditorPanel from '#lib/components/compose-file-editor-panel.svelte';
+	import EditorTabStrip from '#lib/components/editor-tab-strip.svelte';
+	import ProjectGitBackupSummary from '#lib/components/gitops/project-git-backup-summary.svelte';
+	import IconImage from '#lib/components/icon-image.svelte';
+	import ProjectTagEditor from '#lib/components/project-tag-editor.svelte';
+	import ProjectUpdateItem from '#lib/components/project-update-item.svelte';
+	import ResizableSplit from '#lib/components/resizable-split.svelte';
+	import { type TabItem } from '#lib/components/tab-bar/index.js';
+	import * as Alert from '#lib/components/ui/alert/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Switch } from '#lib/components/ui/switch/index.js';
+	import * as Tabs from '#lib/components/ui/tabs/index.js';
+	import WorkspaceFileTreePanel from '#lib/components/workspace-file-tree-panel.svelte';
+	import { useUrlTab } from '#lib/hooks/use-url-tab.svelte.js';
 	import {
 		ArrowLeftIcon,
 		ArrowDownIcon,
@@ -23,59 +46,37 @@
 		ResetIcon,
 		GitBranchIcon
 	} from '#lib/icons/index.js';
-	import { type TabItem } from '#lib/components/tab-bar/index.js';
+	import { RefreshIcon } from '#lib/icons/index.js';
 	import TabbedPageLayout from '#lib/layouts/tabbed-page-layout.svelte';
-	import ActionButtons from '#lib/components/action-buttons.svelte';
-	import type { ActionButton } from '#lib/components/action-button-group/types.js';
-	import ProjectGitBackupSummary from '#lib/components/gitops/project-git-backup-summary.svelte';
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import * as ArcaneTooltip from '#lib/components/arcane-tooltip/index.js';
-	import { getStatusVariant, getThemedIconUrl } from '#lib/utils/docker.js';
-	import { capitalizeFirstLetter } from '#lib/utils/formatting.js';
-	import { page } from '$app/state';
-	import { mode } from 'mode-watcher';
-	import { toast } from 'svelte-sonner';
-	import { tryCatch } from '#lib/utils/try-catch.js';
-	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
-	import { z } from 'zod/v4';
-	import { createForm } from '#lib/utils/settings.svelte.js';
-
 	import { m } from '#lib/paraglide/messages.js';
-	import { gitOpsComposeEditUrl, gitOpsFileEditUrl, gitOpsProjectUrl } from '#lib/utils/gitops.js';
-	import { toGitRouteUrl, toSafeHref } from '#lib/utils/navigation.js';
-	import { PersistedState } from 'runed';
-	import { useUrlTab } from '#lib/hooks/use-url-tab.svelte.js';
-	import ComposeFileEditorPanel from '#lib/components/compose-file-editor-panel.svelte';
-	import EditableName from '../components/EditableName.svelte';
-	import WorkspaceFileTreePanel from '#lib/components/workspace-file-tree-panel.svelte';
-	import EditorTabStrip from '#lib/components/editor-tab-strip.svelte';
-	import ProjectServicesPanel from '../components/ProjectServicesPanel.svelte';
-	import CodePanel from '#lib/components/code-panel.svelte';
-	import ProjectsLogsPanel from '../components/ProjectLogsPanel.svelte';
-	import ResizableSplit from '#lib/components/resizable-split.svelte';
-	import { Switch } from '#lib/components/ui/switch/index.js';
-	import { onMount, tick, untrack } from 'svelte';
-	import { afterNavigate } from '$app/navigation';
+	import { queryKeys } from '#lib/query/query-keys.js';
+	import { gitOpsSyncService } from '#lib/services/gitops-sync-service.js';
 	import { projectService } from '#lib/services/project-service.js';
 	import { projectWorkspaceService } from '#lib/services/project-workspace-service.js';
 	import settingsStore from '#lib/stores/config-store.svelte.js';
-	import { gitOpsSyncService } from '#lib/services/gitops-sync-service.js';
 	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import { hasPermission } from '#lib/utils/auth.js';
-	import { queryKeys } from '#lib/query/query-keys.js';
-	import { RefreshIcon } from '#lib/icons/index.js';
+	import type { ProjectEditorLayout } from '#lib/types/auth.js';
+	import type { ProjectWorkspaceFileChange, ProjectWorkspaceFileContent } from '#lib/types/project-workspace.js';
+	import type { IncludeFile, Project, ProjectTagColor, ProjectTagOption } from '#lib/types/swarm.js';
 	import { cn } from '#lib/utils.js';
-	import IconImage from '#lib/components/icon-image.svelte';
-	import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import ProjectUpdateItem from '#lib/components/project-update-item.svelte';
-	import ProjectTagEditor from '#lib/components/project-tag-editor.svelte';
 	import { activityToastOptions, extractActivityId } from '#lib/utils/activity-toast.js';
-	import { globalVariablesToMap } from '#lib/utils/template-load.js';
+	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
+	import { hasPermission } from '#lib/utils/auth.js';
 	import {
-		planProjectWorkspaceFileCreate,
-		planProjectWorkspaceFileRename,
-		validateProjectWorkspaceFileName
-	} from '../components/project-workspace-utils';
+		composeTreeSplitProps,
+		extractComposeYamlName,
+		projectEditorLayoutPreference,
+		resolveProjectEditorLayout,
+		type ProjectEditorLayoutMode
+	} from '#lib/utils/compose-flow.js';
+	import { getStatusVariant, getThemedIconUrl } from '#lib/utils/docker.js';
+	import { capitalizeFirstLetter } from '#lib/utils/formatting.js';
+	import { gitOpsComposeEditUrl, gitOpsFileEditUrl, gitOpsProjectUrl } from '#lib/utils/gitops.js';
+	import { toGitRouteUrl, toSafeHref } from '#lib/utils/navigation.js';
+	import { createForm } from '#lib/utils/settings.svelte.js';
+	import { globalVariablesToMap } from '#lib/utils/template-load.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+	import { summarizeUpdateCheckResult } from '#lib/utils/update-actions.js';
 	import {
 		applyWorkspaceFileChangesForDisplay,
 		buildWorkspaceMultipartUpdate,
@@ -90,14 +91,15 @@
 		workspaceReadOnlyMessage,
 		type WorkspaceDisplayEntry
 	} from '#lib/utils/workspace-files.js';
+
+	import EditableName from '../components/editable-name.svelte';
+	import ProjectsLogsPanel from '../components/project-logs-panel.svelte';
+	import ProjectServicesPanel from '../components/project-services-panel.svelte';
 	import {
-		composeTreeSplitProps,
-		extractComposeYamlName,
-		projectEditorLayoutPreference,
-		resolveProjectEditorLayout,
-		type ProjectEditorLayoutMode
-	} from '#lib/utils/compose-flow.js';
-	import type { ProjectEditorLayout } from '#lib/types/auth.js';
+		planProjectWorkspaceFileCreate,
+		planProjectWorkspaceFileRename,
+		validateProjectWorkspaceFileName
+	} from '../components/project-workspace-utils';
 
 	let { data } = $props();
 	let projectId = $derived(data.projectId);
@@ -652,13 +654,7 @@
 		mutationFn: () => projectService.checkUpdates(projectId),
 		onSuccess: async (result) => {
 			const currentEnvId = envId ?? (await environmentStore.getCurrentEnvironmentId());
-			const firstError = result.errorMessage?.trim();
-			const hasErrors = !!firstError;
-			if (hasErrors) {
-				toast.error(firstError || m.containers_check_updates_failed());
-			} else {
-				toast.success(m.images_update_check_completed());
-			}
+			summarizeUpdateCheckResult(result);
 			await Promise.all([
 				refreshProjectDetails(),
 				queryClient.invalidateQueries({ queryKey: ['projects', currentEnvId] }),
@@ -1098,11 +1094,14 @@
 		}
 	}
 
-	async function loadProjectWorkspaceFileDraft(relativePath: string) {
+	async function loadProjectWorkspaceFile(kind: 'workspace' | 'include' | 'directory', relativePath: string) {
 		const requestedProjectId = projectId;
 		const requestedEnvId = envId;
 		const pendingFiles = projectWorkspaceFilePromises;
-		if (!relativePath || projectWorkspaceContents[relativePath] !== undefined || projectWorkspaceLoading[relativePath]) {
+		if (
+			kind === 'workspace' &&
+			(!relativePath || projectWorkspaceContents[relativePath] !== undefined || projectWorkspaceLoading[relativePath])
+		) {
 			return;
 		}
 
@@ -1115,43 +1114,15 @@
 		try {
 			const operationResult = await tryCatch(
 				(async () => {
-					const file = await getProjectWorkspaceFileResource('workspace', relativePath);
-					if (requestedProjectId !== projectId || requestedEnvId !== envId || pendingFiles !== projectWorkspaceFilePromises)
-						return;
-					projectWorkspaceFileMetadata = { ...projectWorkspaceFileMetadata, [relativePath]: file };
-					if (file.editable) updateLoadedProjectWorkspaceFile(relativePath, file.content ?? '');
-				})()
-			);
-			if (operationResult.error !== null) {
-				if (requestedProjectId !== projectId || requestedEnvId !== envId || pendingFiles !== projectWorkspaceFilePromises) return;
-				const error = operationResult.error;
-
-				projectWorkspaceLoadErrors = {
-					...projectWorkspaceLoadErrors,
-					[relativePath]: error instanceof Error ? error.message : String(error)
-				};
-			}
-		} finally {
-			if (requestedProjectId === projectId && requestedEnvId === envId && pendingFiles === projectWorkspaceFilePromises) {
-				projectWorkspaceLoading = removeWorkspaceFileRecord(projectWorkspaceLoading, relativePath);
-			}
-		}
-	}
-
-	async function loadProjectSourceFile(kind: 'include' | 'directory', relativePath: string) {
-		const requestedProjectId = projectId;
-		const requestedEnvId = envId;
-		const pendingFiles = projectWorkspaceFilePromises;
-		projectWorkspaceLoading = {
-			...projectWorkspaceLoading,
-			[relativePath]: true
-		};
-		projectWorkspaceLoadErrors = removeWorkspaceFileRecord(projectWorkspaceLoadErrors, relativePath);
-
-		try {
-			const operationResult = await tryCatch(
-				(async () => {
-					await getProjectWorkspaceFileResource(kind, relativePath);
+					if (kind === 'workspace') {
+						const file = await getProjectWorkspaceFileResource(kind, relativePath);
+						if (requestedProjectId !== projectId || requestedEnvId !== envId || pendingFiles !== projectWorkspaceFilePromises)
+							return;
+						projectWorkspaceFileMetadata = { ...projectWorkspaceFileMetadata, [relativePath]: file };
+						if (file.editable) updateLoadedProjectWorkspaceFile(relativePath, file.content ?? '');
+					} else {
+						await getProjectWorkspaceFileResource(kind, relativePath);
+					}
 				})()
 			);
 			if (operationResult.error !== null) {
@@ -1181,14 +1152,14 @@
 			!projectWorkspaceLoading[relativePath] &&
 			projectWorkspaceLoadErrors[relativePath] === undefined
 		) {
-			void loadProjectWorkspaceFileDraft(relativePath);
+			void loadProjectWorkspaceFile('workspace', relativePath);
 		}
 		const sourcePath = selectedIncludeTab;
 		if (!sourcePath || projectWorkspaceLoading[sourcePath] || projectWorkspaceLoadErrors[sourcePath] !== undefined) return;
 		if (includeFilePaths.has(sourcePath)) {
-			if (includeFilesState[sourcePath] === undefined) void loadProjectSourceFile('include', sourcePath);
+			if (includeFilesState[sourcePath] === undefined) void loadProjectWorkspaceFile('include', sourcePath);
 		} else if (loadedDirectoryFileContents[sourcePath] === undefined) {
-			void loadProjectSourceFile('directory', sourcePath);
+			void loadProjectWorkspaceFile('directory', sourcePath);
 		}
 	}
 

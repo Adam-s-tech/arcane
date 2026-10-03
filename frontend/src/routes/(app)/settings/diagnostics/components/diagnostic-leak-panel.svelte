@@ -1,13 +1,12 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
-	import { m } from '#lib/paraglide/messages.js';
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
 	import { AlertTriangleIcon, DownloadIcon } from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
 	import { diagnosticsService } from '#lib/services/diagnostics-service.js';
 	import type { GoroutineLeakReport } from '#lib/types/diagnostics.js';
-	import { formatTime } from '#lib/utils/formatting.js';
 	import { cn } from '#lib/utils.js';
+	import { formatTime } from '#lib/utils/formatting.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	interface Props {
 		leakedGoroutines: number;

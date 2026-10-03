@@ -1,30 +1,30 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
 	import { mode } from 'mode-watcher';
-	import ThemeModeSelector from '#lib/components/theme-mode/theme-mode-selector.svelte';
-	import LocalePicker from '#lib/components/locale-picker.svelte';
-	import TimeFormatPicker from '#lib/components/time-format-picker.svelte';
-	import FontSizePicker from '#lib/components/font-size-picker.svelte';
-	import SettingsRow from '#lib/components/settings/settings-row.svelte';
-	import SettingsSection from '#lib/components/settings/settings-section.svelte';
-	import SelectWithLabel from '#lib/components/form/select-with-label.svelte';
+	import { toast } from 'svelte-sonner';
+
 	import AccentColorPicker from '#lib/components/accent-color/accent-color-picker.svelte';
 	import ApplicationThemePicker from '#lib/components/application-theme/application-theme-picker.svelte';
+	import FontSizePicker from '#lib/components/font-size-picker.svelte';
+	import SelectWithLabel from '#lib/components/form/select-with-label.svelte';
+	import LocalePicker from '#lib/components/locale-picker.svelte';
+	import SettingsRow from '#lib/components/settings/settings-row.svelte';
+	import SettingsSection from '#lib/components/settings/settings-section.svelte';
+	import ThemeModeSelector from '#lib/components/theme-mode/theme-mode-selector.svelte';
+	import TimeFormatPicker from '#lib/components/time-format-picker.svelte';
 	import { Switch } from '#lib/components/ui/switch/index.js';
 	import { DEFAULT_LANDING_PAGE, getLandingPageNavItems } from '#lib/config/navigation-config.js';
-	import { getMobileNavigation } from '#lib/utils/navigation.js';
-	import { applyGlassEffects, applyInterfaceAnimations, applyOledMode } from '#lib/utils/theme.svelte.js';
-	import { debounced } from '#lib/utils/ws.js';
+	import { DockIcon, MonitorSpeakerIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { userService } from '#lib/services/user-service.js';
-	import userStore from '#lib/stores/user-store.svelte.js';
 	import { getLayoutMode, layoutModeStore, type LayoutMode } from '#lib/stores/layout-mode.store.svelte.js';
+	import userStore from '#lib/stores/user-store.svelte.js';
 	import type { ProjectEditorLayout, UserPreferences } from '#lib/types/auth.js';
 	import type { ApplicationTheme, IconCatalog } from '#lib/types/settings.js';
-	import { DockIcon, MonitorSpeakerIcon } from '#lib/icons/index.js';
 	import { cn } from '#lib/utils.js';
-	import { toast } from 'svelte-sonner';
+	import { getMobileNavigation } from '#lib/utils/navigation.js';
+	import { applyGlassEffects, applyInterfaceAnimations, applyOledMode } from '#lib/utils/theme.svelte.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+	import { debounced } from '#lib/utils/ws.js';
 
 	const mobileNavigation = getMobileNavigation();
 	const currentUser = $derived(userStore.current);

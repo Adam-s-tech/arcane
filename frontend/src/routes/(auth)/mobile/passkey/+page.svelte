@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
 	import {
 		browserSupportsWebAuthn,
 		startAuthentication,
@@ -8,6 +7,7 @@
 		type PublicKeyCredentialRequestOptionsJSON
 	} from '@simplewebauthn/browser';
 	import { onMount, tick } from 'svelte';
+
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
 	import AuthAmbient from '#lib/components/auth/auth-ambient.svelte';
 	import * as Alert from '#lib/components/ui/alert/index.js';
@@ -16,6 +16,8 @@
 	import { m } from '#lib/paraglide/messages.js';
 	import { passkeyService } from '#lib/services/passkey-service.js';
 	import { getApplicationLogo } from '#lib/utils/docker.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+
 	import {
 		MobilePasskeyBridgeRequestError,
 		classifyMobilePasskeyError,

@@ -1,5 +1,5 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
 import { settingsService } from '#lib/services/settings-service.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
 
 export const load = async ({ parent }) => {
 	const operationResult = await tryCatch(

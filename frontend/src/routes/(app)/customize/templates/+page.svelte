@@ -1,21 +1,22 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
+
 	import AddTemplateRegistrySheet from '#lib/components/sheets/add-template-registry-sheet.svelte';
-	import { m } from '#lib/paraglide/messages.js';
-	import { templateService } from '#lib/services/template-service.js';
-	import { ResourcePageLayout, type ActionButton, type StatCardConfig } from '#lib/layouts/index.js';
 	import { TabBar, type TabItem } from '#lib/components/tab-bar/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
-	import TemplateGallery from './components/template-gallery.svelte';
-	import RegistryManager from './components/RegistryManager.svelte';
-	import type { TemplateRegistry } from '#lib/types/swarm.js';
-	import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
-	import { RegistryIcon, TemplateIcon, FolderOpenIcon } from '#lib/icons/index.js';
-	import { hasPermission } from '#lib/utils/auth.js';
 	import { useUrlTab } from '#lib/hooks/use-url-tab.svelte.js';
+	import { RegistryIcon, TemplateIcon, FolderOpenIcon } from '#lib/icons/index.js';
+	import { ResourcePageLayout, type ActionButton, type StatCardConfig } from '#lib/layouts/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { templateService } from '#lib/services/template-service.js';
+	import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
+	import type { TemplateRegistry } from '#lib/types/swarm.js';
+	import { hasPermission } from '#lib/utils/auth.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+
+	import RegistryManager from './components/registry-manager.svelte';
+	import TemplateGallery from './components/template-gallery.svelte';
 
 	let { data } = $props();
 

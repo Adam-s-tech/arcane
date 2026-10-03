@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { z } from 'zod/v4';
-	import settingsStore from '#lib/stores/config-store.svelte.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import { SettingsPageLayout } from '#lib/layouts/index.js';
-	import { ActivityIcon } from '#lib/icons/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
+
 	import SettingsRow from '#lib/components/settings/settings-row.svelte';
 	import SettingsSection from '#lib/components/settings/settings-section.svelte';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { ActivityIcon } from '#lib/icons/index.js';
+	import { SettingsPageLayout } from '#lib/layouts/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import settingsStore from '#lib/stores/config-store.svelte.js';
 	import { createSettingsForm } from '#lib/utils/settings-form.js';
 
 	let { data } = $props();

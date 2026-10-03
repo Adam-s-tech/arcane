@@ -1,26 +1,17 @@
 <script lang="ts">
-	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import { LifecycleIndicator } from '#lib/components/lifecycle-indicator/index.js';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
-	import RemoveMenuItem from '#lib/components/arcane-table/cells/remove-menu-item.svelte';
-	import BackupStateBadge from '#lib/components/gitops/backup-state-badge.svelte';
-	import BackupHistoryDialog from '#lib/components/gitops/backup-history-dialog.svelte';
-	import BackupResolveDialog from '#lib/components/gitops/backup-resolve-dialog.svelte';
 	import { toast } from 'svelte-sonner';
-	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
-	import { tryCatch } from '#lib/utils/try-catch.js';
-	import { hasPermission } from '#lib/utils/auth.js';
-	import type { FilterMap, Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
-	import type { GitOpsSync } from '#lib/types/automation.js';
+
+	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
+	import RemoveMenuItem from '#lib/components/arcane-table/cells/remove-menu-item.svelte';
 	import type { ColumnSpec, BulkAction, ArcaneRow } from '#lib/components/arcane-table/index.js';
 	import { UniversalMobileCard } from '#lib/components/arcane-table/index.js';
-	import { formatDateTimeShort } from '#lib/utils/formatting.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import { gitOpsSyncService } from '#lib/services/gitops-sync-service.js';
-	import { toGitRouteUrl } from '#lib/utils/navigation.js';
-	import { cn } from '#lib/utils.js';
+	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
+	import BackupHistoryDialog from '#lib/components/gitops/backup-history-dialog.svelte';
+	import BackupResolveDialog from '#lib/components/gitops/backup-resolve-dialog.svelte';
+	import BackupStateBadge from '#lib/components/gitops/backup-state-badge.svelte';
+	import { LifecycleIndicator } from '#lib/components/lifecycle-indicator/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import {
 		EditIcon as PencilIcon,
 		StartIcon as PlayIcon,
@@ -35,7 +26,17 @@
 		SettingsIcon,
 		AlertTriangleIcon
 	} from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { gitOpsSyncService } from '#lib/services/gitops-sync-service.js';
+	import type { GitOpsSync } from '#lib/types/automation.js';
+	import type { FilterMap, Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
+	import { cn } from '#lib/utils.js';
+	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
+	import { hasPermission } from '#lib/utils/auth.js';
 	import { bulkConfirmAndRun, confirmAndRun } from '#lib/utils/bulk-actions.js';
+	import { formatDateTimeShort } from '#lib/utils/formatting.js';
+	import { toGitRouteUrl } from '#lib/utils/navigation.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	type FieldVisibility = Record<string, boolean>;
 

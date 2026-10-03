@@ -1,16 +1,18 @@
 <script lang="ts">
-	import type { LayoutProps } from './$types';
-	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import { setSettingsFormContext } from '#lib/hooks/settings-form-context.js';
-	import type { SettingsFormContext, SettingsFormState } from '#lib/types/settings-form.js';
+	import { page } from '$app/state';
+
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+	import MobileFloatingFormActions from '#lib/components/form/mobile-floating-form-actions.svelte';
+	import { IsMobile } from '#lib/hooks/is-mobile.svelte.js';
+	import { setSettingsFormContext } from '#lib/hooks/settings-form-context.js';
 	import { SettingsIcon, ArrowRightIcon, ArrowLeftIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import settingsStore from '#lib/stores/config-store.svelte.js';
-	import { IsMobile } from '#lib/hooks/is-mobile.svelte.js';
+	import type { SettingsFormContext, SettingsFormState } from '#lib/types/settings-form.js';
 	import { cn } from '#lib/utils.js';
-	import MobileFloatingFormActions from '#lib/components/form/mobile-floating-form-actions.svelte';
+
+	import type { LayoutProps } from './$types';
 
 	let { children }: LayoutProps = $props();
 

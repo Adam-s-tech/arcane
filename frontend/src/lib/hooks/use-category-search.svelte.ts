@@ -1,5 +1,5 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
 import { extractApiErrorMessage } from '#lib/utils/api.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
 import { debounced } from '#lib/utils/ws.js';
 
 type CategorySearchResponse<T> = {

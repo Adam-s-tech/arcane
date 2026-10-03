@@ -1,8 +1,9 @@
 <script lang="ts" generics="T">
-	import * as Card from '#lib/components/ui/card/index.js';
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import { cn } from '#lib/utils.js';
 	import type { Snippet, Component } from 'svelte';
+
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import * as Card from '#lib/components/ui/card/index.js';
+	import { cn } from '#lib/utils.js';
 
 	type IconVariant = 'emerald' | 'red' | 'amber' | 'blue' | 'purple' | 'gray' | 'sky' | 'orange';
 	type BadgeVariant = 'green' | 'red' | 'amber' | 'blue' | 'purple' | 'gray' | 'orange';

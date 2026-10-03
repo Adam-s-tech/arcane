@@ -1,8 +1,9 @@
-import BaseAPIService from './api-service';
-import type { Settings, OidcStatusInfo } from '#lib/types/settings.js';
 import { environmentStore } from '#lib/stores/environment.store.svelte.js';
 import userStore from '#lib/stores/user-store.svelte.js';
+import type { Settings, OidcStatusInfo } from '#lib/types/settings.js';
 import { isLocalSetting, extractLocalSettings, extractEnvironmentSettings } from '#lib/utils/settings.svelte.js';
+
+import BaseAPIService from './api-service';
 
 type KeyValuePair = { key: string; value: string };
 

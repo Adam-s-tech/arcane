@@ -1,15 +1,16 @@
 <script lang="ts">
 	import { z } from 'zod/v4';
-	import settingsStore from '#lib/stores/config-store.svelte.js';
-	import { SettingsPageLayout } from '#lib/layouts/index.js';
-	import { CodeIcon } from '#lib/icons/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
+
+	import SelectWithLabel from '#lib/components/form/select-with-label.svelte';
 	import SettingsRow from '#lib/components/settings/settings-row.svelte';
 	import SettingsSection from '#lib/components/settings/settings-section.svelte';
-	import SelectWithLabel from '#lib/components/form/select-with-label.svelte';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { CodeIcon } from '#lib/icons/index.js';
+	import { SettingsPageLayout } from '#lib/layouts/index.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import { createSettingsForm } from '#lib/utils/settings-form.js';
 	import { settingsService } from '#lib/services/settings-service.js';
+	import settingsStore from '#lib/stores/config-store.svelte.js';
+	import { createSettingsForm } from '#lib/utils/settings-form.js';
 
 	let { data } = $props();
 

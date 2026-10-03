@@ -6,25 +6,37 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"sort"
+	"strings"
 	"sync"
 	"time"
+	"uuid"
 
+	"github.com/danielgtaylor/huma/v2"
+	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
 	"github.com/getarcaneapp/arcane/types/v2/jobschedule"
 	"github.com/getarcaneapp/arcane/types/v2/meta"
-	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
+	"github.com/getarcaneapp/arcane/types/v2/scheduler"
 	"github.com/robfig/cron/v3"
+	"go.getarcane.app/kit/pkg"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/environment"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/job/children/remote"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/job/children/runtime"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/kv"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/role"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/jobcontext"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/runs"
 	scheduleutil "github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/schedule"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 )
 
 // JobService manages configuration for background job schedules.
@@ -39,13 +51,13 @@ type JobService struct {
 	activity     *activity.ActivityService
 	activityMu   sync.Mutex
 	runs         *runs.Coordinator
-	store        *kv.KVService
+	remote       *remote.Service
 	environment  *environment.EnvironmentService
 	roles        *role.RoleService
 	db           *database.DB
 	settings     *settings.SettingsService
 	cfg          *config.Config
-	scheduler    schedulertypes.JobController
+	scheduler    scheduler.JobController
 	lifecycleCtx context.Context
 	location     *time.Location // Timezone for cron schedule calculations
 
@@ -70,7 +82,7 @@ func NewJobService(
 		roles:       roles,
 		environment: localEnvironment,
 		activity:    localActivity,
-		store:       kv.NewKVService(db),
+		remote:      remote.New(coordinator, kv.NewKVService(db), localEnvironment),
 		runs:        coordinator,
 		db:          db,
 		settings:    localSettings,
@@ -87,12 +99,12 @@ func NewJobService(
 	return service
 }
 
-func (s *JobService) SetScheduler(ctx context.Context, scheduler schedulertypes.JobController) { //nolint:contextcheck // scheduler jobs must capture the app lifecycle context, not request contexts
+func (s *JobService) SetScheduler(ctx context.Context, controller scheduler.JobController) { //nolint:contextcheck // scheduler jobs must capture the app lifecycle context, not request contexts
 	if ctx == nil {
 		ctx = context.Background() //nolint:forbidigo // A nil scheduler context uses an independent lifecycle root.
 	}
 	s.lifecycleCtx = ctx
-	s.scheduler = scheduler
+	s.scheduler = controller
 }
 
 func (s *JobService) GetJobSchedules(ctx context.Context) jobschedule.Config {
@@ -325,7 +337,7 @@ func (s *JobService) ListJobs(ctx context.Context) (*jobschedule.JobListResponse
 		jobs = append(jobs, jobStatus)
 	}
 
-	if err := s.addRuntimeStatusInternal(ctx, "0", &jobs); err != nil {
+	if err := runtime.ApplyStatuses(ctx, s.runs, s.scheduler, "0", &jobs); err != nil {
 		return nil, err
 	}
 
@@ -421,3 +433,454 @@ func (s *JobService) calculateNextRunInternal(schedule string) *time.Time {
 }
 
 func (s *JobService) Coordinator() *runs.Coordinator { return s.runs }
+
+// ActivityID assigns a summary identity before a visible run is persisted.
+func (s *JobService) ActivityID(run scheduler.Run) string {
+	// A remotely delivered run already has a summary on its accepting manager.
+	if run.Trigger == "remote" {
+		return ""
+	}
+	visible := run.Trigger == "manual"
+	switch run.JobID {
+	case "auto-update", "auto-patch", "auto-heal", "scheduled-prune", "vulnerability-scan":
+		visible = true
+	default:
+		visible = visible || strings.HasPrefix(run.JobID, "gitops-sync:") || strings.HasPrefix(run.JobID, "volume-backup:") || strings.HasPrefix(run.JobID, "system-backup:")
+	}
+	if !visible {
+		return ""
+	}
+	return uuid.New().String()
+}
+
+// SyncRunActivity projects the latest committed run without changing execution state.
+func (s *JobService) SyncRunActivity(ctx context.Context, run scheduler.Run) error {
+	if s.activity == nil {
+		return nil
+	}
+	s.activityMu.Lock()
+	defer s.activityMu.Unlock()
+	current, err := s.runs.Get(ctx, run.EnvironmentID, run.JobID, run.ID)
+	if errors.Is(err, runs.ErrRunNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if current.ActivityID == "" {
+		return nil
+	}
+	name := current.JobID
+	if metadata, found := meta.GetJobMetadata(current.JobID); found {
+		name = metadata.Name
+	}
+	return s.activity.SyncJobRun(ctx, runtime.ProjectRunOutcome(current), name)
+}
+
+func (s *JobService) ReconcileStartupActivities(ctx context.Context, extraProtectedIDs ...string) error {
+	if s.activity == nil {
+		return nil
+	}
+	records, err := s.runs.Records(ctx)
+	if err != nil {
+		return err
+	}
+	protected := append([]string(nil), extraProtectedIDs...)
+	for _, record := range records {
+		for _, run := range record.Runs {
+			if run.Status.Terminal() {
+				continue
+			}
+			if run.ActivityID != "" {
+				protected = append(protected, run.ActivityID)
+			}
+			if run.Outcome.ActivityID != "" {
+				protected = append(protected, run.Outcome.ActivityID)
+			}
+			for _, target := range run.Outcome.Targets {
+				if target.ActivityID != "" {
+					protected = append(protected, target.ActivityID)
+				}
+			}
+		}
+	}
+	if failInterruptedBackupsErr := s.activity.FailInterruptedBackups(ctx, protected...); failInterruptedBackupsErr != nil {
+		return failInterruptedBackupsErr
+	}
+	if _, failStaleImageUpdateChecksErr := s.activity.FailStaleImageUpdateChecks(ctx); failStaleImageUpdateChecksErr != nil {
+		return failStaleImageUpdateChecksErr
+	}
+	if _, resolveStaleAutoUpdateActivitiesErr := s.activity.ResolveStaleAutoUpdateActivities(ctx, protected...); resolveStaleAutoUpdateActivitiesErr != nil {
+		return resolveStaleAutoUpdateActivitiesErr
+	}
+	_, err = s.activity.ResolveOrphanedQueuedActivities(ctx, protected...)
+	return err
+}
+
+// Submit validates job eligibility and persists acceptance before execution.
+// Managers may accept requests for offline environments. Reusing a run ID
+// deduplicates admission within the same job and environment.
+func (s *JobService) Submit(ctx context.Context, request scheduler.Request) (scheduler.Run, error) {
+	request.EnvironmentID = cmp.Or(request.EnvironmentID, "0")
+	if request.EnvironmentID != "0" {
+		if s.cfg.AgentMode {
+			return scheduler.Run{}, errors.New("agents cannot queue work for another environment")
+		}
+		env, err := s.environment.GetEnvironmentByID(ctx, request.EnvironmentID)
+		if err != nil {
+			return scheduler.Run{}, err
+		}
+		if !env.Enabled {
+			return scheduler.Run{}, errors.New("environment is disabled")
+		}
+		metadata, ok := meta.GetJobMetadata(request.JobID)
+		dynamicRemote := strings.HasPrefix(request.JobID, "gitops-sync:") || strings.HasPrefix(request.JobID, "volume-backup:")
+		if !dynamicRemote && (!ok || metadata.ManagerOnly || !metadata.CanRunManually) {
+			return scheduler.Run{}, errors.New("job is not remotely runnable")
+		}
+	} else if err := s.validateLocalJobInternal(ctx, request.JobID); err != nil {
+		return scheduler.Run{}, err
+	}
+	if err := s.authorizeRunInternal(
+		ctx,
+		scheduler.Run{
+			Trigger:          request.Trigger,
+			RequestedBy:      request.RequestedBy,
+			RequestedWithKey: request.RequestedWithKey,
+			EnvironmentID:    request.EnvironmentID,
+		},
+	); err != nil {
+		return scheduler.Run{}, err
+	}
+	return s.runs.Submit(ctx, request)
+}
+
+func (s *JobService) validateLocalJobInternal(ctx context.Context, jobID string) error {
+	if metadata, ok := meta.GetJobMetadata(jobID); ok {
+		if !metadata.CanRunManually {
+			return errors.New("job cannot be run manually")
+		}
+		if s.cfg.AgentMode && metadata.ManagerOnly {
+			return errors.New("job is manager-only")
+		}
+		if !s.isJobEnabledInternal(ctx, metadata) {
+			return errors.New("job is disabled")
+		}
+		for _, prereq := range s.evaluatePrerequisitesInternal(ctx, metadata) {
+			if !prereq.IsMet {
+				return errors.New("job prerequisites are not met")
+			}
+		}
+		if metadata.IsContinuous || jobID == "environment-health" {
+			return nil
+		}
+	}
+	if s.scheduler == nil {
+		return errors.New("scheduler unavailable")
+	}
+	job, ok := s.scheduler.GetJob(jobID)
+	if !ok {
+		return errors.New("job is not registered")
+	}
+	if conditional, localOk := job.(scheduler.ConditionalJob); localOk && !conditional.ShouldSchedule(ctx) {
+		return errors.New("job is disabled")
+	}
+	return nil
+}
+
+func (s *JobService) authorizeRunInternal(ctx context.Context, run scheduler.Run) error {
+	if run.RequestedBy == "" {
+		if run.Trigger == "manual" && !s.cfg.AgentMode {
+			return errors.New("requesting user unavailable")
+		}
+		return nil
+	}
+	if s.roles == nil {
+		return errors.New("permission resolver unavailable")
+	}
+	permissions, err := s.roles.ResolveExecutionPermissions(ctx, run.RequestedBy, run.RequestedWithKey)
+	if err != nil {
+		return err
+	}
+	if !permissions.Allows(authz.PermJobsManage, run.EnvironmentID) {
+		return errors.New("requesting user no longer has permission to manage jobs")
+	}
+	return nil
+}
+
+func (s *JobService) executeRunInternal(ctx context.Context, run scheduler.Run) (scheduler.Outcome, error) {
+	if err := s.authorizeRunInternal(ctx, run); err != nil {
+		return scheduler.Outcome{Status: scheduler.Failed}, err
+	}
+	if run.EnvironmentID != "0" {
+		return s.remote.Deliver(ctx, run)
+	}
+	if requiresDockerInternal(run.JobID) && s.environment != nil {
+		status, err := s.environment.TestConnection(ctx, "0", nil)
+		if err != nil || status != "online" {
+			return scheduler.Outcome{Status: scheduler.Waiting, Message: "Waiting for Docker"}, err
+		}
+	}
+	ctx = s.runContextInternal(ctx, run)
+	if run.JobID == "environment-health" && s.RunEnvironmentHealthNow != nil {
+		err := s.RunEnvironmentHealthNow(ctx)
+		return classifyOutcomeInternal(run.JobID, scheduler.Outcome{}, err)
+	}
+	if metadata, ok := meta.GetJobMetadata(run.JobID); ok && metadata.IsContinuous {
+		if err := s.validateLocalJobInternal(ctx, run.JobID); err != nil {
+			return scheduler.Outcome{Status: scheduler.Canceled}, err
+		}
+		err := s.scheduler.RunBusWatcherNow(ctx, run.JobID)
+		return classifyOutcomeInternal(run.JobID, scheduler.Outcome{}, err)
+	}
+	unavailableStatus := kit.Ternary(run.JobID == "auto-update" && run.AttemptCount > 1, scheduler.Failed, scheduler.Canceled)
+	job, ok := s.scheduler.GetJob(run.JobID)
+	if !ok {
+		return scheduler.Outcome{Status: unavailableStatus, Message: "Job or target no longer exists"}, nil
+	}
+	if conditional, localOk := job.(scheduler.ConditionalJob); localOk && !conditional.ShouldSchedule(ctx) {
+		return scheduler.Outcome{Status: unavailableStatus, Message: "Job is disabled"}, nil
+	}
+	outcome, err := job.Run(ctx)
+	return classifyOutcomeInternal(run.JobID, outcome, err)
+}
+
+func classifyOutcomeInternal(jobID string, outcome scheduler.Outcome, err error) (scheduler.Outcome, error) {
+	if resultErr, ok := errors.AsType[*scheduler.OutcomeError](err); ok {
+		outcome = resultErr.Outcome
+	}
+	switch outcome.Status {
+	case scheduler.NeedsAttention:
+		outcome.Status = scheduler.Failed
+		return outcome, err
+	case scheduler.Waiting, scheduler.Retrying, scheduler.Failed, scheduler.Partial, scheduler.Canceled, scheduler.Skipped:
+		return outcome, err
+	case scheduler.Queued, scheduler.Running, scheduler.Succeeded:
+		// Classify these and unspecified outcomes below.
+	}
+
+	var networkErr net.Error
+	switch {
+	case err == nil:
+		outcome.Status = cmp.Or(outcome.Status, scheduler.Succeeded)
+	case safeJobInternal(jobID) && (errors.As(err, &networkErr) || errors.Is(err, context.DeadlineExceeded)):
+		outcome.Status = scheduler.Retrying
+	case outcome.Status == "" || outcome.Status == scheduler.Succeeded:
+		outcome.Status = scheduler.Failed
+	}
+
+	return outcome, err
+}
+
+func safeJobInternal(jobID string) bool {
+	switch jobID {
+	case "image-polling", "environment-health", "docker-client-refresh", "event-cleanup", "expired-sessions-cleanup", "activity-sweep", "upload-sessions-cleanup",
+		"git-clone-scratch-cleanup", "analytics-heartbeat", "apns-outbox", "vulnerability-scan":
+		return true
+	}
+	return strings.HasPrefix(jobID, "environment-health:")
+}
+
+func (s *JobService) reconcileRunInternal(ctx context.Context, run scheduler.Run) (scheduler.Outcome, error) {
+	if err := s.authorizeRunInternal(ctx, run); err != nil {
+		return scheduler.Outcome{Status: scheduler.Failed}, err
+	}
+	if run.EnvironmentID != "0" {
+		return s.executeRunInternal(ctx, run)
+	}
+	if safeJobInternal(run.JobID) {
+		return s.executeRunInternal(ctx, run)
+	}
+	if s.scheduler != nil {
+		if job, ok := s.scheduler.GetJob(run.JobID); ok {
+			if reconciler, localOk := job.(scheduler.Reconciler); localOk {
+				return reconciler.Reconcile(s.runContextInternal(ctx, run), run)
+			}
+		}
+	}
+	// A successful activity proves only that target, never the entire batch.
+	for index, target := range run.Outcome.Targets {
+		if run.JobID == "auto-update" {
+			break
+		}
+		if target.Status == scheduler.Succeeded || target.Status == scheduler.Skipped {
+			continue
+		}
+		if target.ActivityID == "" {
+			return scheduler.Outcome{Status: scheduler.Failed, Message: "Interrupted operation has no confirmed outcome", Targets: run.Outcome.Targets}, nil
+		}
+		var record activity.Activity
+		if err := s.db.WithContext(ctx).First(&record, "id = ?", target.ActivityID).Error; err != nil {
+			return scheduler.Outcome{Status: scheduler.Failed}, err
+		}
+		if record.Status != activitytypes.StatusSuccess {
+			return scheduler.Outcome{Status: scheduler.Failed, Message: "Interrupted operation has no confirmed completion", Targets: run.Outcome.Targets}, nil
+		}
+		run.Outcome.Targets[index].Status = scheduler.Succeeded
+	}
+	if job, ok := s.scheduler.GetJob(run.JobID); ok {
+		if reconciler, localOk2 := job.(scheduler.Reconciler); localOk2 {
+			outcome, err := reconciler.Reconcile(s.runContextInternal(ctx, run), run)
+			if err != nil {
+				slog.WarnContext(ctx, "Job reconciliation requires attention", "runId", run.ID, "error", err)
+			}
+			return outcome, err
+		}
+	}
+	return scheduler.Outcome{Status: scheduler.Failed, Message: "Interrupted operation has no confirmed completion", Targets: run.Outcome.Targets}, nil
+}
+
+func (s *JobService) runContextInternal(ctx context.Context, run scheduler.Run) context.Context {
+	ctx = utils.WithActivityBatchID(ctx, run.ID)
+	ctx = jobcontext.WithExecution(ctx, run, func(target scheduler.TargetOutcome) error {
+		return s.runs.UpdateRun(ctx, run, func(current *scheduler.Run) error {
+			if current.Status != scheduler.Running || current.Owner != run.Owner {
+				return runs.ErrRunConflict
+			}
+			for index := range current.Outcome.Targets {
+				if current.Outcome.Targets[index].ID == target.ID {
+					if len(target.RecoveryData) == 0 {
+						target.RecoveryData = current.Outcome.Targets[index].RecoveryData
+					}
+					current.Outcome.Targets[index] = target
+					return nil
+				}
+			}
+			current.Outcome.Targets = append(current.Outcome.Targets, target)
+			return nil
+		})
+	})
+	return ctx
+}
+
+func requiresDockerInternal(jobID string) bool {
+	switch jobID {
+	case "auto-update", "auto-patch", "auto-heal", "scheduled-prune", "vulnerability-scan", "image-polling":
+		return true
+	}
+	return strings.HasPrefix(jobID, "gitops-sync:") || strings.HasPrefix(jobID, "volume-backup:") || strings.HasPrefix(jobID, "system-backup:")
+}
+
+// ResolveRun authorizes the current operator independently of the original requester.
+// TODO(v3): remove this deprecated mixed-version compatibility contract.
+func (s *JobService) ResolveRun(ctx context.Context, environmentID, jobID, runID, actor string) (scheduler.Run, error) {
+	permissions, _ := middleware.PermissionsFromContext(ctx)
+	if !permissions.Allows(authz.PermJobsManage, environmentID) {
+		return scheduler.Run{}, huma.Error403Forbidden("permission denied: " + authz.PermJobsManage)
+	}
+	if actor == "" {
+		return scheduler.Run{}, errors.New("resolving operator identity is required")
+	}
+	if environmentID != "0" {
+		return s.remote.ResolveRun(ctx, environmentID, jobID, runID, actor)
+	}
+	return s.runs.Resolve(ctx, environmentID, jobID, runID, actor)
+}
+
+// RetryRun revalidates local job eligibility before requeuing the existing run.
+// Remote retries follow the delivery protocol and retain confirmed target progress.
+func (s *JobService) RetryRun(ctx context.Context, environmentID, jobID, runID string) (scheduler.Run, error) {
+	if environmentID != "0" {
+		return s.retryRemoteRunInternal(ctx, environmentID, jobID, runID)
+	}
+	if environmentID == "0" {
+		if err := s.validateLocalJobInternal(ctx, jobID); err != nil {
+			return scheduler.Run{}, err
+		}
+	}
+	run, err := s.runs.Get(ctx, environmentID, jobID, runID)
+	if err != nil {
+		return scheduler.Run{}, err
+	}
+	if s.scheduler != nil {
+		if job, ok := s.scheduler.GetJob(jobID); ok {
+			if validator, localOk := job.(scheduler.RetryValidator); localOk {
+				if validateRetryErr := validator.ValidateRetry(ctx, run); validateRetryErr != nil {
+					return run, validateRetryErr
+				}
+			}
+		}
+	}
+	return s.runs.Retry(ctx, environmentID, jobID, runID)
+}
+
+// ListRemoteJobs returns an agent's catalog with manager-side run status.
+func (s *JobService) ListRemoteJobs(ctx context.Context, environmentID string) (*jobschedule.JobListResponse, error) {
+	catalog, err := s.remote.Catalog(ctx, environmentID)
+	if err != nil {
+		return nil, err
+	}
+	if statusErr := runtime.ApplyStatuses(ctx, s.runs, s.scheduler, environmentID, &catalog.Jobs); statusErr != nil {
+		return nil, statusErr
+	}
+	sort.Slice(catalog.Jobs, func(i, j int) bool { return catalog.Jobs[i].ID < catalog.Jobs[j].ID })
+	return catalog, nil
+}
+
+// retryRemoteRunInternal queues one explicit retry while retaining the agent's target progress.
+func (s *JobService) retryRemoteRunInternal(ctx context.Context, environmentID, jobID, runID string) (scheduler.Run, error) {
+	run, err := s.runs.Get(ctx, environmentID, jobID, runID)
+	if errors.Is(err, runs.ErrRunNotFound) {
+		return s.remote.MutateAgentRun(ctx, environmentID, jobID, runID, "retry")
+	}
+	if err != nil {
+		return run, err
+	}
+	if authorizeRunErr := s.authorizeRunInternal(ctx, run); authorizeRunErr != nil {
+		return run, authorizeRunErr
+	}
+	return s.remote.RetryRun(ctx, run)
+}
+
+// ListRuns merges agent history with requests accepted by this manager.
+func (s *JobService) ListRuns(ctx context.Context, environmentID, jobID string, page, limit int) (scheduler.RunList, error) {
+	if environmentID == "0" {
+		return s.runs.List(ctx, environmentID, jobID, page, limit)
+	}
+	merged, err := s.remote.Runs(ctx, environmentID, jobID)
+	if err != nil {
+		return scheduler.RunList{}, err
+	}
+	localRuns := make([]scheduler.Run, 0, len(merged))
+	for _, run := range merged {
+		localRuns = append(localRuns, runtime.ProjectRunOutcome(run))
+	}
+	sort.Slice(localRuns, func(i, j int) bool {
+		if localRuns[i].CreatedAt.Equal(localRuns[j].CreatedAt) {
+			return localRuns[i].ID < localRuns[j].ID
+		}
+		return localRuns[i].CreatedAt.After(localRuns[j].CreatedAt)
+	})
+	page = max(page, 1)
+	limit = min(max(limit, 1), 100)
+	start := len(localRuns)
+	if page-1 <= len(localRuns)/limit {
+		start = min((page-1)*limit, len(localRuns))
+	}
+	return scheduler.RunList{Runs: localRuns[start:min(start+limit, len(localRuns))], Total: len(localRuns), Page: page, Limit: limit}, nil
+}
+
+// GetRun prefers the manager's durable delivery record, then queries agent-owned history.
+func (s *JobService) GetRun(ctx context.Context, environmentID, jobID, runID string) (scheduler.Run, error) {
+	run, err := s.runs.Get(ctx, environmentID, jobID, runID)
+	if environmentID == "0" || !errors.Is(err, runs.ErrRunNotFound) {
+		return runtime.ProjectRunOutcome(run), err
+	}
+	run, err = s.remote.AgentRun(ctx, environmentID, jobID, runID)
+	if err != nil {
+		return scheduler.Run{}, err
+	}
+	return runtime.ProjectRunOutcome(run), nil
+}
+
+// CancelRun cancels manager admission or explicitly forwards an agent-owned cancellation.
+func (s *JobService) CancelRun(ctx context.Context, environmentID, jobID, runID string) (scheduler.Run, error) {
+	_, err := s.runs.Get(ctx, environmentID, jobID, runID)
+	if environmentID != "0" && errors.Is(err, runs.ErrRunNotFound) {
+		return s.remote.MutateAgentRun(ctx, environmentID, jobID, runID, "cancel")
+	}
+	if err != nil {
+		return scheduler.Run{}, err
+	}
+	return s.runs.Cancel(ctx, environmentID, jobID, runID)
+}

@@ -28,7 +28,7 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/systembackup"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/system"
 	dockerutil "github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
 	rusticruntime "github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/rustic"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/francis"
@@ -184,13 +184,13 @@ func finalizeRestoredBackupInternal(ctx context.Context, databaseURL, manifestBa
 // the fields the snapshot's database copy did not already carry. Updates use
 // explicit column maps because the restored schema may predate the binary's.
 func finalizeRestoredRunInternal(db *gorm.DB, manifestBackupID string, request recoverytypes.RestoreRequest) error {
-	var run systembackup.SystemBackupRun
+	var run system.SystemBackupRun
 	found := false
 	for _, backupID := range []string{manifestBackupID, request.BackupID} {
 		if strings.TrimSpace(backupID) == "" {
 			continue
 		}
-		err := db.Where("id = ? AND status = ?", backupID, systembackup.SystemBackupStatusRunning).First(&run).Error
+		err := db.Where("id = ? AND status = ?", backupID, system.SystemBackupStatusRunning).First(&run).Error
 		if err == nil {
 			found = true
 			break
@@ -200,7 +200,7 @@ func finalizeRestoredRunInternal(db *gorm.DB, manifestBackupID string, request r
 		}
 	}
 	if !found {
-		err := db.Where("status = ?", systembackup.SystemBackupStatusRunning).Order("created_at DESC").First(&run).Error
+		err := db.Where("status = ?", system.SystemBackupStatusRunning).Order("created_at DESC").First(&run).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil
 		}
@@ -208,7 +208,7 @@ func finalizeRestoredRunInternal(db *gorm.DB, manifestBackupID string, request r
 			return err
 		}
 	}
-	values := map[string]any{"status": systembackup.SystemBackupStatusSucceeded, "error": ""}
+	values := map[string]any{"status": system.SystemBackupStatusSucceeded, "error": ""}
 	if run.Size == 0 {
 		values["size"] = request.Size
 	}
@@ -221,7 +221,7 @@ func finalizeRestoredRunInternal(db *gorm.DB, manifestBackupID string, request r
 	if run.S3DestinationID == "" {
 		values["s3_destination_id"] = request.S3DestinationID
 	}
-	return db.Model(&systembackup.SystemBackupRun{}).Where("id = ?", run.ID).Updates(values).Error
+	return db.Model(&system.SystemBackupRun{}).Where("id = ?", run.ID).Updates(values).Error
 }
 
 func preserveSafetyBackupInternal(db *gorm.DB, backup *recoverytypes.SafetyBackup) error {
@@ -229,16 +229,16 @@ func preserveSafetyBackupInternal(db *gorm.DB, backup *recoverytypes.SafetyBacku
 		return nil
 	}
 	onConflict := map[string]any{
-		"size": backup.Size, "updated_at": time.Now().UTC(), "status": systembackup.SystemBackupStatusSucceeded,
-		"trigger": systembackup.SystemBackupTriggerSafety, "destination": backuptypes.SystemBackupDestinationLocal,
+		"size": backup.Size, "updated_at": time.Now().UTC(), "status": system.SystemBackupStatusSucceeded,
+		"trigger": system.SystemBackupTriggerSafety, "destination": backuptypes.SystemBackupDestinationLocal,
 		"local_snapshot_id": backup.LocalSnapshotID, "error": "",
 	}
-	return db.Model(&systembackup.SystemBackupRun{}).
+	return db.Model(&system.SystemBackupRun{}).
 		Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "id"}}, DoUpdates: clause.Assignments(onConflict)}).
 		Create(map[string]any{
 			"id": backup.ID, "size": backup.Size, "created_at": backup.CreatedAt, "updated_at": time.Now().UTC(),
-			"status":            systembackup.SystemBackupStatusSucceeded,
-			"trigger":           systembackup.SystemBackupTriggerSafety,
+			"status":            system.SystemBackupStatusSucceeded,
+			"trigger":           system.SystemBackupTriggerSafety,
 			"destination":       backuptypes.SystemBackupDestinationLocal,
 			"local_snapshot_id": backup.LocalSnapshotID, "remote_snapshot_id": "", "s3_destination_id": "",
 			"policy_id": "", "error": "",

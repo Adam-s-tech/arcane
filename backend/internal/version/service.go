@@ -10,14 +10,14 @@ import (
 	"strings"
 	"time"
 
-	ref "github.com/distribution/reference"
+	"github.com/distribution/reference"
 	"github.com/getarcaneapp/arcane/types/v2/version"
 	containertypes "github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
 	"github.com/samber/hot"
 	"github.com/samber/mo"
 	"go.getarcane.app/docker/compat"
-	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/kit/pkg"
 	"go.getarcane.app/streams/agg"
 	"go.getarcane.app/sys/cgroup"
 	"golang.org/x/mod/semver"
@@ -291,13 +291,13 @@ func (s *VersionService) updateCheckImageRefInternal(currentImageRef string) str
 		return currentImageRef
 	}
 
-	named, err := ref.ParseNormalizedNamed(strings.TrimSpace(currentImageRef))
-	if err != nil || !strings.HasPrefix(ref.Path(named), "getarcaneapp/") {
+	named, err := reference.ParseNormalizedNamed(strings.TrimSpace(currentImageRef))
+	if err != nil || !strings.HasPrefix(reference.Path(named), "getarcaneapp/") {
 		return currentImageRef
 	}
 
 	host := libarcane.ArcaneImageRegistryHost(target)
-	repoPath := ref.Path(named)
+	repoPath := reference.Path(named)
 	// Docker Hub and ECR Public publish the images under the manager and agent names only
 	if host == libarcane.DockerHubRegistryHost || host == libarcane.ECRPublicRegistryHost {
 		switch repoPath {
@@ -307,7 +307,7 @@ func (s *VersionService) updateCheckImageRefInternal(currentImageRef string) str
 			repoPath = "getarcaneapp/agent"
 		}
 	}
-	return kit.Ternary(host == ref.Domain(named) && repoPath == ref.Path(named), currentImageRef, host+"/"+repoPath)
+	return kit.Ternary(host == reference.Domain(named) && repoPath == reference.Path(named), currentImageRef, host+"/"+repoPath)
 }
 
 // GetAppVersionInfo returns application version information including display version
@@ -470,11 +470,11 @@ func (s *VersionService) extractImageDetails(ctx context.Context, dockerClient *
 
 	// Extract digest and repository from first RepoDigest using reference library
 	for _, repoDigest := range imageInspect.RepoDigests {
-		named, parseNormalizedNamedErr := ref.ParseNormalizedNamed(repoDigest)
+		named, parseNormalizedNamedErr := reference.ParseNormalizedNamed(repoDigest)
 		if parseNormalizedNamedErr != nil {
 			continue
 		}
-		if digested, ok := named.(ref.Digested); ok {
+		if digested, ok := named.(reference.Digested); ok {
 			return named.Name(), string(digested.Digest())
 		}
 	}
@@ -484,7 +484,7 @@ func (s *VersionService) extractImageDetails(ctx context.Context, dockerClient *
 
 // normalizeImageRef extracts just the repository name from an image reference
 func (s *VersionService) normalizeImageRef(configImage string) string {
-	if named, err := ref.ParseNormalizedNamed(configImage); err == nil {
+	if named, err := reference.ParseNormalizedNamed(configImage); err == nil {
 		return named.Name()
 	}
 	return configImage
@@ -497,12 +497,12 @@ func (s *VersionService) getCurrentContainerID() (string, error) {
 
 // extractTagFromImageRef extracts the tag from an image reference using distribution/reference
 func (s *VersionService) extractTagFromImageRef(imageRef string) string {
-	named, err := ref.ParseNormalizedNamed(imageRef)
+	named, err := reference.ParseNormalizedNamed(imageRef)
 	if err != nil {
 		return "latest"
 	}
 
-	tagged, ok := named.(ref.Tagged)
+	tagged, ok := named.(reference.Tagged)
 	if ok {
 		return tagged.Tag()
 	}

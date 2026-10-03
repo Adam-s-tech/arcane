@@ -1,5 +1,6 @@
-import BaseAPIService from './api-service';
 import type { OidcRoleMapping, CreateOidcRoleMapping, UpdateOidcRoleMapping } from '#lib/types/auth.js';
+
+import BaseAPIService from './api-service';
 
 class OidcMappingAPIService extends BaseAPIService {
 	async list(): Promise<OidcRoleMapping[]> {

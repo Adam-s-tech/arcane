@@ -1,18 +1,19 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
 	import { toast } from 'svelte-sonner';
-	import settingsStore from '#lib/stores/config-store.svelte.js';
-	import { SettingsPageLayout } from '#lib/layouts/index.js';
+
 	import type { ActionButton } from '#lib/components/action-button-group/types.js';
-	import { CloudStorageIcon, RemoteEnvironmentIcon } from '#lib/icons/index.js';
-	import { EmptyState } from '#lib/components/states/index.js';
 	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
+	import { EmptyState } from '#lib/components/states/index.js';
+	import { CloudStorageIcon, RemoteEnvironmentIcon } from '#lib/icons/index.js';
+	import { SettingsPageLayout } from '#lib/layouts/index.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import { s3DestinationService } from '#lib/services/s3-destination-service.js';
-	import { discoverDestinationBackups } from '#lib/utils/backups.js';
+	import settingsStore from '#lib/stores/config-store.svelte.js';
 	import type { CreateS3Destination, S3Destination } from '#lib/types/s3-destination.js';
 	import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
-	import * as m from '#lib/paraglide/messages.js';
+	import { discoverDestinationBackups } from '#lib/utils/backups.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+
 	import S3DestinationDialog from './components/s3-destination-dialog.svelte';
 	import S3DestinationTable from './components/s3-destination-table.svelte';
 

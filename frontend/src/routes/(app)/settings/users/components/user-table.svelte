@@ -1,20 +1,21 @@
 <script lang="ts">
-	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
 	import { toast } from 'svelte-sonner';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+
+	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
+	import type { ColumnSpec, MobileFieldVisibility, BulkAction } from '#lib/components/arcane-table/index.js';
+	import { UniversalMobileCard } from '#lib/components/arcane-table/index.js';
 	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
-	import { Badge } from '#lib/components/ui/badge/index.js';
 	import * as ArcaneTooltip from '#lib/components/arcane-tooltip/index.js';
-	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
+	import IfPermitted from '#lib/components/if-permitted.svelte';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import { UserIcon, TrashIcon, EditIcon } from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { userService } from '#lib/services/user-service.js';
 	import type { User } from '#lib/types/auth.js';
 	import type { Role } from '#lib/types/auth.js';
 	import { BUILT_IN_ROLE_ADMIN, BUILT_IN_ROLE_EDITOR, BUILT_IN_ROLE_DEPLOYER, BUILT_IN_ROLE_VIEWER } from '#lib/types/auth.js';
-	import type { ColumnSpec, MobileFieldVisibility, BulkAction } from '#lib/components/arcane-table/index.js';
-	import { UniversalMobileCard } from '#lib/components/arcane-table/index.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import { userService } from '#lib/services/user-service.js';
-	import { UserIcon, TrashIcon, EditIcon } from '#lib/icons/index.js';
-	import IfPermitted from '#lib/components/if-permitted.svelte';
+	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
 	import { bulkConfirmAndRun, confirmAndRun } from '#lib/utils/bulk-actions.js';
 
 	let {

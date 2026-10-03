@@ -1,10 +1,17 @@
 package project
 
 import (
+	"encoding/json/v2"
+	"errors"
+	"fmt"
 	"time"
 
-	gitopstypes "github.com/getarcaneapp/arcane/types/v2/gitops"
+	"github.com/getarcaneapp/arcane/types/v2/gitops"
+	projecttypes "github.com/getarcaneapp/arcane/types/v2/project"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
+	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/environment"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/gitrepo"
@@ -13,13 +20,13 @@ import (
 type ProjectStatus string
 
 const (
-	ProjectStatusRunning          ProjectStatus = "running"
-	ProjectStatusStopped          ProjectStatus = "stopped"
-	ProjectStatusPartiallyRunning ProjectStatus = "partially running"
-	ProjectStatusUnknown          ProjectStatus = "unknown"
-	ProjectStatusDeploying        ProjectStatus = "deploying"
-	ProjectStatusStopping         ProjectStatus = "stopping"
-	ProjectStatusRestarting       ProjectStatus = "restarting"
+	ProjectStatusRunning          ProjectStatus = projecttypes.StatusRunning
+	ProjectStatusStopped          ProjectStatus = projecttypes.StatusStopped
+	ProjectStatusPartiallyRunning ProjectStatus = projecttypes.StatusPartiallyRunning
+	ProjectStatusUnknown          ProjectStatus = projecttypes.StatusUnknown
+	ProjectStatusDeploying        ProjectStatus = projecttypes.StatusDeploying
+	ProjectStatusStopping         ProjectStatus = projecttypes.StatusStopping
+	ProjectStatusRestarting       ProjectStatus = projecttypes.StatusRestarting
 )
 
 type Project struct {
@@ -120,7 +127,7 @@ type GitOpsSync struct {
 
 // BackupState derives the persisted backup lifecycle state.
 func (s GitOpsSync) BackupState() string {
-	if s.Mode != gitopstypes.SyncModeBackup {
+	if s.Mode != gitops.SyncModeBackup {
 		return ""
 	}
 	status := ""
@@ -129,22 +136,70 @@ func (s GitOpsSync) BackupState() string {
 	}
 	switch {
 	case status == "running":
-		return gitopstypes.BackupStateBackingUp
+		return gitops.BackupStateBackingUp
 	case s.BackupConflict:
-		return gitopstypes.BackupStateNeedsAttention
+		return gitops.BackupStateNeedsAttention
 	case status == "failed":
-		return gitopstypes.BackupStateFailed
+		return gitops.BackupStateFailed
 	case !s.AutoSync:
-		return gitopstypes.BackupStatePaused
+		return gitops.BackupStatePaused
 	case s.BackupPending:
-		return gitopstypes.BackupStatePending
+		return gitops.BackupStatePending
 	case s.LastBackupAt != nil:
-		return gitopstypes.BackupStateBackedUp
+		return gitops.BackupStateBackedUp
 	default:
-		return gitopstypes.BackupStateNever
+		return gitops.BackupStateNever
 	}
 }
 
 func (GitOpsSync) TableName() string {
 	return "gitops_syncs"
+}
+
+// SyncedFileList decodes the tracked synced-file paths.
+func (s GitOpsSync) SyncedFileList() []string {
+	if s.SyncedFiles == nil || *s.SyncedFiles == "" {
+		return nil
+	}
+	var files []string
+	if err := json.Unmarshal([]byte(*s.SyncedFiles), &files); err != nil {
+		return nil
+	}
+	return files
+}
+
+// BackupSnapshot decodes the file hashes recorded by the last backup push.
+func (s GitOpsSync) BackupSnapshot() map[string]string {
+	if s.LastBackupSnapshot == nil || *s.LastBackupSnapshot == "" {
+		return nil
+	}
+	var hashes map[string]string
+	if err := json.Unmarshal([]byte(*s.LastBackupSnapshot), &hashes); err != nil {
+		return nil
+	}
+	return hashes
+}
+
+// EncodeSyncedFiles converts tracked synced-file paths to their stored JSON form.
+func EncodeSyncedFiles(files []string) *string {
+	if len(files) == 0 {
+		return nil
+	}
+	data, err := json.Marshal(files)
+	if err != nil {
+		return nil
+	}
+	return new(string(data))
+}
+
+// LockProjectForSync row-locks the project so the one-Git-relationship check and the insert are atomic.
+func LockProjectForSync(tx *gorm.DB, projectID string) (*Project, error) {
+	var project Project
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", projectID).First(&project).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, common.ErrProjectNotFound
+		}
+		return nil, fmt.Errorf("failed to get project %s: %w", projectID, err)
+	}
+	return &project, nil
 }

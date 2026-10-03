@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/kit/pkg"
 )
 
 const (

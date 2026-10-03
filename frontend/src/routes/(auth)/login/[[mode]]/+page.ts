@@ -1,8 +1,10 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
-import { error as httpError, redirect } from '@sveltejs/kit';
 import { browser } from '$app/env';
-import { getEffectiveLandingPage } from '#lib/utils/navigation.js';
+import { error as httpError, redirect } from '@sveltejs/kit';
+
 import { passkeyService } from '#lib/services/passkey-service.js';
+import { getEffectiveLandingPage } from '#lib/utils/navigation.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
+
 import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ parent, url, params }) => {

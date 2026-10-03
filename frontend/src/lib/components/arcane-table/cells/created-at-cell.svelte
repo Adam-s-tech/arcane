@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { formatDateTimeShort } from '#lib/utils/formatting.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { formatDateTimeShort } from '#lib/utils/formatting.js';
 
 	let { value }: { value: unknown } = $props();
 </script>

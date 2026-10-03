@@ -1,12 +1,13 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
-import { onMount } from 'svelte';
 import { createQuery, useQueryClient } from '@tanstack/svelte-query';
+import { onMount } from 'svelte';
+
 import { queryKeys } from '#lib/query/query-keys.js';
 import { activityService } from '#lib/services/activity-service.js';
-import { clientStream } from '#lib/stores/client-stream.svelte.js';
 import { STREAM_CHANNEL_ACTIVITIES } from '#lib/services/stream-service.js';
+import { clientStream } from '#lib/stores/client-stream.svelte.js';
 import { environmentStore } from '#lib/stores/environment.store.svelte.js';
 import type { Activity, ActivityStreamEvent } from '#lib/types/activity.type.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
 
 export function useBackupActivity(
 	getEnvironmentId: () => string,

@@ -1,5 +1,6 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
 import { browser } from '$app/env';
+
+import { tryCatch } from '#lib/utils/try-catch.js';
 
 const MAX_RECONNECT_DELAY = 15_000;
 const MAX_RECONNECT_ATTEMPTS = 20;

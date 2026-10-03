@@ -12,10 +12,10 @@ import (
 	"uuid"
 
 	st "github.com/getarcaneapp/arcane/types/v2/scheduler"
+	"github.com/getarcaneapp/arcane/types/v2/user"
 	"github.com/italypaleale/francis/actor"
-	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/kit/pkg"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/kv"
 )
 
@@ -397,7 +397,7 @@ func normalizeRunTimesInternal(run *st.Run) {
 }
 
 func normalizeLegacyRunInternal(run *st.Run) bool {
-	automaticResolution := run.Status == st.Canceled && run.Resolution != nil && run.Resolution.ResolvedBy == common.SystemUser.Username
+	automaticResolution := run.Status == st.Canceled && run.Resolution != nil && run.Resolution.ResolvedBy == user.SystemUser.Username
 	if run.Status != st.NeedsAttention && !automaticResolution {
 		return false
 	}

@@ -1,13 +1,14 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
+import { toast } from 'svelte-sonner';
+
 import type { CodeLanguage } from '#lib/components/code-editor/analysis/types.js';
 import { m } from '#lib/paraglide/messages.js';
-import { toast } from 'svelte-sonner';
 import type {
 	WorkspaceFileChange as WorkspaceFileChangeDto,
 	WorkspaceFileChangeOperation,
 	WorkspaceFileEntry as WorkspaceFileDto,
 	WorkspaceReadOnlyReason
 } from '#lib/types/workspace.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
 
 export interface WorkspaceDisplayEntry extends Omit<WorkspaceFileDto, 'editable' | 'isSymlink' | 'readOnlyReason'> {
 	editable?: boolean;
@@ -377,4 +378,11 @@ export function applyWorkspaceFileChangesForDisplay(
 	}
 
 	return [...entries.values()].sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+}
+
+export function createWorkspaceFormData(manifest: object, files: File[]): FormData {
+	const form = new FormData();
+	form.append('manifest', JSON.stringify(manifest));
+	for (const file of files) form.append('files', file, file.name);
+	return form;
 }

@@ -2,8 +2,8 @@ import * as m from '#lib/paraglide/messages.js';
 import { LOCAL_DOCKER_ENVIRONMENT_ID } from '#lib/stores/environment.store.svelte.js';
 import type { Environment } from '#lib/types/environment.js';
 import type { DashboardEnvironmentOverview, DashboardOverviewSummary, SystemStats } from '#lib/types/shared.js';
-import { bytes, formatDateTime, formatRelativeTime, parseInstant } from '#lib/utils/formatting.js';
 import { isEnvironmentOnline, resolveEnvironmentStatus } from '#lib/utils/docker.js';
+import { bytes, formatDateTime, formatRelativeTime, parseInstant } from '#lib/utils/formatting.js';
 
 export function shouldLoadEnvironment(environment: Environment): boolean {
 	return environment.enabled && isEnvironmentOnline(environment);

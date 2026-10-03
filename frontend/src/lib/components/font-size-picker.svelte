@@ -1,16 +1,15 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
-
-	import * as Slider from '#lib/components/ui/slider/index.js';
-	import userStore from '#lib/stores/user-store.svelte.js';
-	import { userService } from '#lib/services/user-service.js';
-	import { applyFontSize, FONT_SIZE_MIN, FONT_SIZE_MAX, FONT_SIZE_DEFAULT } from '#lib/utils/theme.svelte.js';
-	import { debounced } from '#lib/utils/ws.js';
-	import { queryKeys } from '#lib/query/query-keys.js';
 	import { useQueryClient } from '@tanstack/svelte-query';
 
+	import * as Slider from '#lib/components/ui/slider/index.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { queryKeys } from '#lib/query/query-keys.js';
+	import { userService } from '#lib/services/user-service.js';
+	import userStore from '#lib/stores/user-store.svelte.js';
+	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
+	import { applyFontSize, FONT_SIZE_MIN, FONT_SIZE_MAX, FONT_SIZE_DEFAULT } from '#lib/utils/theme.svelte.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+	import { debounced } from '#lib/utils/ws.js';
 
 	let { id = 'fontSizePicker', class: className = '' }: { id?: string; class?: string } = $props();
 

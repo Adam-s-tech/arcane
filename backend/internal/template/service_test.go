@@ -23,7 +23,7 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
-	httputils "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
 )
 
 func setupTemplateServiceTestDB(t *testing.T) *database.DB {
@@ -48,7 +48,7 @@ func setTestWorkingDir(t *testing.T, dir string) {
 	})
 }
 
-func makePublicTestClient(t *testing.T, server *httptest.Server) (*http.Client, httputils.LookupIPFunc, string) {
+func makePublicTestClient(t *testing.T, server *httptest.Server) (*http.Client, httpx.LookupIPFunc, string) {
 	t.Helper()
 
 	parsedURL, err := url.Parse(server.URL)
@@ -303,7 +303,7 @@ func templateIDsInternal(templates []tmpl.Template) []string {
 func TestFetchRaw_BlocksUnsafeRemoteURL(t *testing.T) {
 	service := &TemplateService{
 		httpClient:        http.DefaultClient,
-		lookupIP:          httputils.DefaultLookupIP,
+		lookupIP:          httpx.DefaultLookupIP,
 		registryFetchMeta: make(map[string]*registryFetchMeta),
 	}
 

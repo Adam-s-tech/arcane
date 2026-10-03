@@ -207,8 +207,8 @@ export interface SettingsSearchResponse {
 // --- Dashboard ---
 
 import type { ContainerStatusCounts, ContainerSummaryDto, ImageSummaryDto, ImageUsageCounts, VolumeUsageCounts } from './docker';
-import type { AppVersionInformation } from './settings';
 import type { Environment } from './environment';
+import type { AppVersionInformation } from './settings';
 
 export type DashboardActionItemKind = 'stopped_containers' | 'image_updates' | 'actionable_vulnerabilities' | 'expiring_keys';
 

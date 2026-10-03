@@ -177,8 +177,8 @@ const readOnlyJsonCommands: JsonReadOnlyCommand[] = [
 		}
 	},
 	{
-		name: 'jobs get',
-		args: ['jobs', 'get', '--json'],
+		name: 'jobs schedules get',
+		args: ['jobs', 'schedules', 'get', '--json'],
 		expectation: (value) => {
 			expect(value).toEqual(
 				expect.objectContaining({ environmentHealthInterval: expect.any(String) })
@@ -286,23 +286,23 @@ const readOnlyJsonCommands: JsonReadOnlyCommand[] = [
 		expectation: expectJsonValue
 	},
 	{
-		name: 'auth keys list',
-		args: ['auth', 'keys', 'list', '--json'],
+		name: 'auth api-keys list',
+		args: ['auth', 'api-keys', 'list', '--json'],
 		expectation: expectJsonValue
 	},
 	{
-		name: 'backups list',
-		args: ['backups', 'list', '--json'],
+		name: 'admin backups list',
+		args: ['admin', 'backups', 'list', '--json'],
 		expectation: expectJsonValue
 	},
 	{
-		name: 'backups policies',
-		args: ['backups', 'policies', '--json'],
+		name: 'admin backups policies',
+		args: ['admin', 'backups', 'policies', '--json'],
 		expectation: expectJsonValue
 	},
 	{
-		name: 'backups s3 list',
-		args: ['backups', 's3', 'list', '--json'],
+		name: 'admin backups s3 list',
+		args: ['admin', 'backups', 's3', 'list', '--json'],
 		expectation: expectJsonValue
 	},
 	{
@@ -316,13 +316,13 @@ const readOnlyJsonCommands: JsonReadOnlyCommand[] = [
 		expectation: expectJsonValue
 	},
 	{
-		name: 'vulnerabilities status',
-		args: ['vulnerabilities', 'status', '--json'],
+		name: 'images vulnerabilities status',
+		args: ['images', 'vulnerabilities', 'status', '--json'],
 		expectation: expectJsonValue
 	},
 	{
-		name: 'vulnerabilities ignored',
-		args: ['vulnerabilities', 'ignored', '--json'],
+		name: 'images vulnerabilities ignored',
+		args: ['images', 'vulnerabilities', 'ignored', '--json'],
 		expectation: expectJsonValue
 	}
 ];
@@ -356,9 +356,10 @@ test.describe('arcane-cli e2e', () => {
 			]);
 
 			const show = await runCLI(config.configPath, ['config', 'show']);
-			expect(show.stdout).toContain(`Server URL:          ${baseURL}`);
-			expect(show.stdout).toContain('API Key:             arc_');
-			expect(show.stdout).toContain('Default Environment: 0');
+			const showOutput = show.stdout.replace(/[ \t]+/g, ' ');
+			expect(showOutput).toContain(`Server URL ${baseURL}`);
+			expect(showOutput).toContain('API key arc_');
+			expect(showOutput).toContain('Environment 0');
 		} finally {
 			await config.cleanup();
 		}
@@ -369,8 +370,9 @@ test.describe('arcane-cli e2e', () => {
 		const config = await createCLIConfig(serverURL, `arc_test:'#{value}`);
 		try {
 			const show = await runCLI(config.configPath, ['config', 'show']);
-			expect(show.stdout).toContain(`Server URL:          ${serverURL}`);
-			expect(show.stdout).toContain('Default Environment: 0');
+			const showOutput = show.stdout.replace(/[ \t]+/g, ' ');
+			expect(showOutput).toContain(`Server URL ${serverURL}`);
+			expect(showOutput).toContain('Environment 0');
 		} finally {
 			await config.cleanup();
 		}

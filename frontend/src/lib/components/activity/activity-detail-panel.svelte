@@ -1,13 +1,14 @@
 <script lang="ts">
+	import IfPermitted from '#lib/components/if-permitted.svelte';
 	import JobRunHistory from '#lib/components/job-card/job-run-history.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import * as Dialog from '#lib/components/ui/dialog/index.js';
-	import IfPermitted from '#lib/components/if-permitted.svelte';
 	import { CopyButton } from '#lib/components/ui/copy-button/index.js';
-	import { activityStore } from '#lib/stores/activity.store.svelte.js';
-	import type { Activity } from '#lib/types/activity.type.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { ActivityIcon, TerminalIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { activityStore } from '#lib/stores/activity.store.svelte.js';
+	import type { Activity } from '#lib/types/activity.type.js';
+
 	import ActivityOutput from './activity-output.svelte';
 
 	let { activity }: { activity: Activity } = $props();

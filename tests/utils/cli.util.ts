@@ -1,9 +1,9 @@
 import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { reportDirectory } from './report';
 
 const execFileAsync = promisify(execFile);
 
@@ -11,7 +11,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..', '..');
 const cliDir = path.join(repoRoot, 'cli');
-const cliBinDir = path.join(repoRoot, 'tests', '.bin');
+const cliBinDir = path.join(reportDirectory, 'bin');
 const cliBinName = process.platform === 'win32' ? 'arcane-cli.exe' : 'arcane-cli';
 const cliBinPath = path.join(cliBinDir, cliBinName);
 
@@ -59,7 +59,9 @@ export async function createCLIConfig(
 	apiKey: string,
 	environment = '0'
 ): Promise<CLIConfig> {
-	const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'arcane-cli-e2e-'));
+	const configDir = path.join(reportDirectory, 'cli');
+	await fs.mkdir(configDir, { recursive: true });
+	const dir = await fs.mkdtemp(path.join(configDir, 'config-'));
 	const configPath = path.join(dir, 'arcanecli.yml');
 	const content = [
 		`server_url: ${quoteYAMLString(serverURL)}`,

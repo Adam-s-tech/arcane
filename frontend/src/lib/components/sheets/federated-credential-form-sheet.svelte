@@ -1,21 +1,21 @@
 <script lang="ts">
+	import { Temporal } from 'temporal-polyfill';
+	import { z } from 'zod/v4';
+
+	import FormInput from '#lib/components/form/form-input.svelte';
+	import RoleScopeSelects from '#lib/components/sheets/role-scope-selects.svelte';
+	import SheetFooterActions from '#lib/components/sheets/sheet-footer-actions.svelte';
+	import * as Alert from '#lib/components/ui/alert/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
 	import * as ResponsiveDialog from '#lib/components/ui/responsive-dialog/index.js';
 	import * as Select from '#lib/components/ui/select/index.js';
-	import * as Alert from '#lib/components/ui/alert/index.js';
-	import SheetFooterActions from '#lib/components/sheets/sheet-footer-actions.svelte';
-	import RoleScopeSelects from '#lib/components/sheets/role-scope-selects.svelte';
-	import FormInput from '#lib/components/form/form-input.svelte';
-	import { Label } from '#lib/components/ui/label/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
+	import { InfoIcon } from '#lib/icons/index.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import type { CreateFederatedCredential, FederatedCredential, FederatedCredentialMatchType, Role } from '#lib/types/auth.js';
 	import type { Environment } from '#lib/types/environment.js';
-	import { z } from 'zod/v4';
-	import { createForm, preventDefault } from '#lib/utils/settings.svelte.js';
-
 	import { plainDateFromInstant, plainDateToInstantString } from '#lib/utils/formatting.js';
-	import * as m from '#lib/paraglide/messages.js';
-	import { InfoIcon } from '#lib/icons/index.js';
-	import { Temporal } from 'temporal-polyfill';
+	import { createForm, preventDefault } from '#lib/utils/settings.svelte.js';
 
 	type Props = {
 		open: boolean;

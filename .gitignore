@@ -41,10 +41,7 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
 #tests data
-tests/test-results/*
-tests/.report/*
-tests/.auth/
-tests/.bin/
+tests/.report/
 tests/setup/projects/*
 !tests/setup/projects/test-project-static/
 !tests/setup/projects/test-project-static/**

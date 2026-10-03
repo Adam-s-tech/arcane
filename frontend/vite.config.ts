@@ -1,10 +1,10 @@
 import { paraglideVitePlugin } from '@inlang/paraglide-js';
 import adapter from '@sveltejs/adapter-static';
-import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
-import { defineConfig, searchForWorkspaceRoot, lazyPlugins } from 'vite-plus';
+import tailwindcss from '@tailwindcss/vite';
 import Icons from 'unplugin-icons/vite';
+import { defineConfig, searchForWorkspaceRoot, lazyPlugins } from 'vite-plus';
 
 const devBackendURL = process.env['DEV_BACKEND_URL'] || 'http://localhost:3552';
 const parsedDevBackendURL = new URL(devBackendURL);

@@ -1,4 +1,4 @@
-package user
+package user_test
 
 import (
 	"context"
@@ -15,6 +15,7 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/role"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/session"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
+	userdomain "github.com/getarcaneapp/arcane/backend/v2/internal/user"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
 )
@@ -25,7 +26,7 @@ func setupAuthServiceTestDBInternal(t *testing.T) *database.DB {
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(
 		&settings.SettingVariable{},
-		&common.User{},
+		&userdomain.User{},
 		&session.UserSession{},
 		&role.Role{},
 		&role.UserRoleAssignment{},
@@ -55,18 +56,18 @@ func setupAuthServiceTestDBInternal(t *testing.T) *database.DB {
 
 // setupUserAndRoleServices wires both services together the way bootstrap
 // does, so the legacy-admin-guard tests exercise the real RBAC path.
-func setupUserAndRoleServices(t *testing.T) (*UserService, *role.RoleService) {
+func setupUserAndRoleServices(t *testing.T) (*userdomain.UserService, *role.RoleService) {
 	t.Helper()
 	db := setupAuthServiceTestDBInternal(t)
 	localRole := role.NewRoleService(db)
 	require.NoError(t, localRole.EnsureBuiltInRoles(t.Context()))
-	userRecord := NewUserService(db, localRole)
+	userRecord := userdomain.NewUserService(db, localRole, session.RevokeAllUserSessionsExceptInDB)
 	return userRecord, localRole
 }
 
-func createTestUser(t *testing.T, svc *UserService, id, username string) *common.User {
+func createTestUser(t *testing.T, svc *userdomain.UserService, id, username string) *userdomain.User {
 	t.Helper()
-	created, err := svc.CreateUser(t.Context(), &common.User{
+	created, err := svc.CreateUser(t.Context(), &userdomain.User{
 		ID:       id,
 		Username: username,
 	})
@@ -90,7 +91,7 @@ func TestDeleteUserRejectsDeletingOnlyAdmin(t *testing.T) {
 	grantGlobalAdmin(t, roleSvc, admin.ID)
 
 	err := userSvc.DeleteUser(ctx, admin.ID, nil)
-	require.ErrorIs(t, err, ErrCannotRemoveLastAdmin)
+	require.ErrorIs(t, err, userdomain.ErrCannotRemoveLastAdmin)
 
 	stillThere, err := userSvc.GetUserByID(ctx, admin.ID)
 	require.NoError(t, err)
@@ -103,7 +104,7 @@ func TestSetPasswordUpdatesHashAndClearsPasswordChangeRequirement(t *testing.T) 
 
 	oldHash, err := userSvc.HashPassword("old-password")
 	require.NoError(t, err)
-	localUser, err := userSvc.CreateUser(ctx, &common.User{
+	localUser, err := userSvc.CreateUser(ctx, &userdomain.User{
 		ID:                     "password-user",
 		Username:               "password-user",
 		PasswordHash:           oldHash,
@@ -202,7 +203,7 @@ func TestDeleteUserRejectsDeletingOnlyCustomAllPermissionsAdmin(t *testing.T) {
 	}))
 
 	err = userSvc.DeleteUser(ctx, customAdmin.ID, nil)
-	require.ErrorIs(t, err, ErrCannotRemoveLastAdmin)
+	require.ErrorIs(t, err, userdomain.ErrCannotRemoveLastAdmin)
 
 	users, _, err := userSvc.ListUsersPaginated(ctx, pagination.QueryParams{
 		Start: 0, Limit: 20,
@@ -226,11 +227,11 @@ func TestUserProfileValidationAndPersistence(t *testing.T) {
 	require.Equal(t, "fontuser", u.Username)
 	require.Nil(t, u.FontSize, "new users default to no explicit font size")
 
-	_, err := userSvc.CreateUser(ctx, &common.User{ID: "blank-user", Username: "   "})
-	require.ErrorIs(t, err, ErrUsernameRequired)
+	_, err := userSvc.CreateUser(ctx, &userdomain.User{ID: "blank-user", Username: "   "})
+	require.ErrorIs(t, err, userdomain.ErrUsernameRequired)
 
-	_, err = userSvc.CreateUser(ctx, &common.User{ID: "duplicate-user", Username: "fontuser"})
-	require.ErrorIs(t, err, ErrUsernameTaken)
+	_, err = userSvc.CreateUser(ctx, &userdomain.User{ID: "duplicate-user", Username: "fontuser"})
+	require.ErrorIs(t, err, userdomain.ErrUsernameTaken)
 
 	u.FontSize = new(16)
 	_, err = userSvc.UpdateUser(ctx, u, nil)
@@ -249,7 +250,7 @@ func TestUserProfileValidationAndPersistence(t *testing.T) {
 	conflictingUser := createTestUser(t, userSvc, "user-2", "another-user")
 	conflictingUser.Username = u.Username
 	_, err = userSvc.UpdateUser(ctx, conflictingUser, nil)
-	require.ErrorIs(t, err, ErrUsernameTaken)
+	require.ErrorIs(t, err, userdomain.ErrUsernameTaken)
 }
 
 func TestUserDtoExposesLastLogin(t *testing.T) {
@@ -315,12 +316,12 @@ func TestUpdateUserRejectsNonAdminActorEditingAdmin(t *testing.T) {
 	require.NoError(t, roleSvc.SetUserAssignments(ctx, manager.ID, []role.UserRoleAssignment{
 		{RoleID: managerRole.ID, EnvironmentID: nil},
 	}))
-	managerPerms, err := roleSvc.ResolvePermissions(ctx, manager)
+	managerPerms, err := roleSvc.ResolvePermissions(ctx, manager.ID)
 	require.NoError(t, err)
 
 	admin.PasswordHash = "attacker-controlled-hash"
 	_, err = userSvc.UpdateUser(ctx, admin, managerPerms)
-	require.ErrorIs(t, err, ErrInsufficientPrivilege)
+	require.ErrorIs(t, err, userdomain.ErrInsufficientPrivilege)
 
 	reloaded, err := userSvc.GetUserByID(ctx, admin.ID)
 	require.NoError(t, err)
@@ -335,11 +336,11 @@ func TestUpdateUserAllowsGlobalAdminActorEditingAdmin(t *testing.T) {
 	grantGlobalAdmin(t, roleSvc, admin.ID)
 	other := createTestUser(t, userSvc, "admin-2", "backup")
 	grantGlobalAdmin(t, roleSvc, other.ID)
-	otherPerms, err := roleSvc.ResolvePermissions(ctx, other)
+	otherPerms, err := roleSvc.ResolvePermissions(ctx, other.ID)
 	require.NoError(t, err)
 
 	admin.DisplayName = new("Renamed Admin")
-	actorCtx := context.WithValue(ctx, common.CurrentUserContextKey{}, other)
+	actorCtx := context.WithValue(ctx, user.CurrentUserContextKey{}, other)
 	_, err = userSvc.UpdateUser(actorCtx, admin, otherPerms)
 	require.NoError(t, err)
 }
@@ -356,7 +357,7 @@ func TestUpdateUserAllowsNonAdminActorEditingNonAdmin(t *testing.T) {
 	require.NoError(t, roleSvc.SetUserAssignments(ctx, manager.ID, []role.UserRoleAssignment{
 		{RoleID: managerRole.ID, EnvironmentID: nil},
 	}))
-	managerPerms, err := roleSvc.ResolvePermissions(ctx, manager)
+	managerPerms, err := roleSvc.ResolvePermissions(ctx, manager.ID)
 	require.NoError(t, err)
 
 	target := createTestUser(t, userSvc, "user-1", "plain-user")
@@ -371,11 +372,11 @@ func TestUpdateUserAllowsSelfEditByNonAdmin(t *testing.T) {
 
 	admin := createTestUser(t, userSvc, "admin-1", "arcane")
 	grantGlobalAdmin(t, roleSvc, admin.ID)
-	adminPerms, err := roleSvc.ResolvePermissions(ctx, admin)
+	adminPerms, err := roleSvc.ResolvePermissions(ctx, admin.ID)
 	require.NoError(t, err)
 
 	admin.DisplayName = new("Self Rename")
-	actorCtx := context.WithValue(ctx, common.CurrentUserContextKey{}, admin)
+	actorCtx := context.WithValue(ctx, user.CurrentUserContextKey{}, admin)
 	_, err = userSvc.UpdateUser(actorCtx, admin, adminPerms)
 	require.NoError(t, err)
 }
@@ -394,13 +395,13 @@ func TestDeleteUserRejectsNonAdminActorDeletingAdmin(t *testing.T) {
 	require.NoError(t, roleSvc.SetUserAssignments(ctx, manager.ID, []role.UserRoleAssignment{
 		{RoleID: managerRole.ID, EnvironmentID: nil},
 	}))
-	managerPerms, err := roleSvc.ResolvePermissions(ctx, manager)
+	managerPerms, err := roleSvc.ResolvePermissions(ctx, manager.ID)
 	require.NoError(t, err)
 
 	// Two admins exist, so the last-admin guard would not fire — the
 	// actor-vs-target privilege check is what must block this delete.
 	err = userSvc.DeleteUser(ctx, admin.ID, managerPerms)
-	require.ErrorIs(t, err, ErrInsufficientPrivilege)
+	require.ErrorIs(t, err, userdomain.ErrInsufficientPrivilege)
 
 	stillThere, err := userSvc.GetUserByID(ctx, admin.ID)
 	require.NoError(t, err)
@@ -415,10 +416,10 @@ func TestDeleteUserAllowsGlobalAdminActorDeletingAdmin(t *testing.T) {
 	grantGlobalAdmin(t, roleSvc, admin.ID)
 	other := createTestUser(t, userSvc, "admin-2", "backup")
 	grantGlobalAdmin(t, roleSvc, other.ID)
-	otherPerms, err := roleSvc.ResolvePermissions(ctx, other)
+	otherPerms, err := roleSvc.ResolvePermissions(ctx, other.ID)
 	require.NoError(t, err)
 
-	actorCtx := context.WithValue(ctx, common.CurrentUserContextKey{}, other)
+	actorCtx := context.WithValue(ctx, user.CurrentUserContextKey{}, other)
 	require.NoError(t, userSvc.DeleteUser(actorCtx, admin.ID, otherPerms))
 }
 
@@ -453,9 +454,9 @@ func TestCreateDefaultAdminRecoversArcaneUserWhenNoGlobalAdminExists(t *testing.
 }
 
 func TestUserDisplayNameNormalization(t *testing.T) {
-	svc := NewUserService(setupAuthServiceTestDBInternal(t), nil)
+	svc := userdomain.NewUserService(setupAuthServiceTestDBInternal(t), nil, session.RevokeAllUserSessionsExceptInDB)
 	ctx := t.Context()
-	created, err := svc.CreateUser(ctx, &common.User{ID: "normalized", Username: " Jose\u0301 ", Email: new(" Jose\u0301@example.com "), DisplayName: new(" Jose\u0301 ")})
+	created, err := svc.CreateUser(ctx, &userdomain.User{ID: "normalized", Username: " Jose\u0301 ", Email: new(" Jose\u0301@example.com "), DisplayName: new(" Jose\u0301 ")})
 	require.NoError(t, err)
 	require.Equal(t, "Jose\u0301", created.Username)
 	require.Equal(t, " Jose\u0301@example.com ", *created.Email)
@@ -478,6 +479,6 @@ func TestUserDisplayNameNormalization(t *testing.T) {
 	require.Equal(t, " Jose\u0301@example.com ", *reloaded.Email)
 	_, err = svc.GetUserByUsername(ctx, " Andre\u0301 ")
 	require.NoError(t, err)
-	_, err = svc.CreateUser(ctx, &common.User{ID: "empty", Username: " \t "})
-	require.ErrorIs(t, err, ErrUsernameRequired)
+	_, err = svc.CreateUser(ctx, &userdomain.User{ID: "empty", Username: " \t "})
+	require.ErrorIs(t, err, userdomain.ErrUsernameRequired)
 }

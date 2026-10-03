@@ -1,25 +1,25 @@
 <script lang="ts">
 	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
-	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import CheckedAtCell from '#lib/components/arcane-table/cells/checked-at-cell.svelte';
+	import DigestCell from '#lib/components/arcane-table/cells/digest-cell.svelte';
 	import {
 		UniversalMobileCard,
 		type BulkAction,
 		type ColumnSpec,
 		type MobileFieldVisibility
 	} from '#lib/components/arcane-table/index.js';
-	import DigestCell from '#lib/components/arcane-table/cells/digest-cell.svelte';
-	import CheckedAtCell from '#lib/components/arcane-table/cells/checked-at-cell.svelte';
+	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
 	import IfPermitted from '#lib/components/if-permitted.svelte';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import { ProjectsIcon, ImagesIcon, UpdateIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
 	import type { Project } from '#lib/types/swarm.js';
-	import { ProjectsIcon, ImagesIcon, UpdateIcon } from '#lib/icons/index.js';
 	import { hasPermission } from '#lib/utils/auth.js';
 	import { bulkConfirmAndRun, confirmAndRun } from '#lib/utils/bulk-actions.js';
-	import { applyScopedUpdate, summarizeUpdateResult, throwOnUpdateFailure } from '#lib/utils/update-actions.js';
 	import { formatImageUpdateCheckedAt, formatImageUpdateValue } from '#lib/utils/image-updates.js';
+	import { applyScopedUpdate, summarizeUpdateResult, throwOnUpdateFailure } from '#lib/utils/update-actions.js';
 
 	type ProjectUpdateRow = {
 		id: string;

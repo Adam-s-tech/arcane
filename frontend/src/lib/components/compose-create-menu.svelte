@@ -8,15 +8,16 @@
 	no business logic — it purely renders the shared chrome.
 -->
 <script lang="ts">
+	import { mergeProps } from 'bits-ui';
+
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
-	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import * as ArcaneTooltip from '#lib/components/arcane-tooltip/index.js';
+	import IfPermitted from '#lib/components/if-permitted.svelte';
 	import * as ButtonGroup from '#lib/components/ui/button-group/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import IfPermitted from '#lib/components/if-permitted.svelte';
+	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import { TerminalIcon, TemplateIcon, AddIcon, ArrowDownIcon as ChevronDown, GitBranchIcon } from '#lib/icons/index.js';
 	import { templateBtnClass } from '#lib/utils/compose-flow.js';
-	import { mergeProps } from 'bits-ui';
 
 	interface Props {
 		// Tooltip shows when the tooltipOpen prop is truthy-undefined (bits-ui

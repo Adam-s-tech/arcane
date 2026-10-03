@@ -1,6 +1,7 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
-import { apiClient } from '../api-service';
 import type { AppVersionInformation } from '#lib/types/settings.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
+
+import { apiClient } from '../api-service';
 
 export interface UpgradeCheckResponse {
 	canUpgrade: boolean;

@@ -1,8 +1,10 @@
 <script lang="ts" module>
 	import type { WithChildren, WithoutChildren } from 'bits-ui';
 	import type { HTMLAnchorAttributes, HTMLButtonAttributes } from 'svelte/elements';
-	import type { ArcaneButtonSize, Action, ArcaneButtonHoverEffect, ActionConfig, ArcaneButtonTone } from './variants';
+
 	import type { IconType } from '#lib/icons/index.js';
+
+	import type { ArcaneButtonSize, Action, ArcaneButtonHoverEffect, ActionConfig, ArcaneButtonTone } from './variants';
 
 	export type ArcaneButtonPropsWithoutHTML = WithChildren<{
 		ref?: HTMLElement | null;
@@ -40,10 +42,11 @@
 </script>
 
 <script lang="ts">
-	import { cn } from '#lib/utils.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
-	import { arcaneButtonVariants, actionConfigs } from './variants';
 	import { m } from '#lib/paraglide/messages.js';
+	import { cn } from '#lib/utils.js';
+
+	import { arcaneButtonVariants, actionConfigs } from './variants';
 
 	void arcaneButtonVariants;
 

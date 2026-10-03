@@ -1,9 +1,10 @@
 <script lang="ts">
 	import type { WithElementRef, WithoutChildren } from 'bits-ui';
 	import type { HTMLAttributes } from 'svelte/elements';
-	import { cn } from '#lib/utils.js';
+
 	import { EllipsisIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { cn } from '#lib/utils.js';
 
 	let {
 		ref = $bindable(null),

@@ -1,8 +1,10 @@
 import { parse } from 'yaml';
+
 import { containerService } from '#lib/services/container-service.js';
 import { throwPageLoadError } from '#lib/utils/api.js';
-import { tryCatch } from '#lib/utils/try-catch.js';
 import { loadTemplateAuthoringData, loadTemplateContent } from '#lib/utils/template-load.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
+
 import type { PageLoad } from './$types';
 
 async function generateFromContainers(ids: string[], environmentId?: string) {

@@ -1,7 +1,11 @@
 // Package apns owns mobile push device pairing, the relay outbox, and its HTTP routes.
 package apns
 
-import "github.com/danielgtaylor/huma/v2"
+import (
+	"net/http"
+
+	"github.com/danielgtaylor/huma/v2"
+)
 
 type Module struct {
 	service *ApnsService
@@ -24,4 +28,35 @@ func (m *Module) RegisterRoutes(api huma.API) {
 		return
 	}
 	RegisterApns(api, m.service)
+}
+
+func RegisterApns(api huma.API, service *ApnsService) {
+	h := &ApnsHandler{service: service}
+
+	huma.Register(
+		api,
+		securedApnsOperationInternal(
+			"get-apns-status",
+			http.MethodGet,
+			"/apns/status",
+			"Get mobile push status",
+			"Whether mobile push is enabled and the caller's registered devices",
+		),
+		h.Status,
+	)
+	huma.Register(
+		api,
+		securedApnsOperationInternal(
+			"create-apns-pairing-token",
+			http.MethodPost,
+			"/apns/pairing-token",
+			"Issue a pairing token",
+			"Issue a short-lived signed token the mobile app presents to the push relay",
+		),
+		h.PairingToken,
+	)
+	huma.Register(api, securedApnsOperationInternal("register-apns-device", http.MethodPost, "/apns/devices", "Register a mobile device", ""), h.RegisterDevice)
+	huma.Register(api, securedApnsOperationInternal("update-apns-device", http.MethodPatch, "/apns/devices/{id}", "Update a mobile device", ""), h.UpdateDevice)
+	huma.Register(api, securedApnsOperationInternal("delete-apns-device", http.MethodDelete, "/apns/devices/{id}", "Remove a mobile device", ""), h.DeleteDevice)
+	huma.Register(api, securedApnsOperationInternal("test-apns-device", http.MethodPost, "/apns/devices/{id}/test", "Send a test push", ""), h.TestDevice)
 }

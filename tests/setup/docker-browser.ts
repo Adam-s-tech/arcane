@@ -3,6 +3,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import { reportDirectory } from '../utils/report';
 
 export default async function dockerBrowserSetup(config: FullConfig) {
 	if (
@@ -20,7 +21,7 @@ export default async function dockerBrowserSetup(config: FullConfig) {
 	const cleanup = () => {
 		delete process.env.ARCANE_PLAYWRIGHT_WS_ENDPOINT;
 		if (created) {
-			const directory = path.join(config.rootDir, 'test-results', 'browser');
+			const directory = path.join(reportDirectory, 'browser');
 			try {
 				mkdirSync(directory, { recursive: true });
 				const logs = spawnSync('docker', ['logs', name], {

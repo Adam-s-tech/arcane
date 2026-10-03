@@ -1,19 +1,19 @@
 <script lang="ts">
-	import RemoveMenuItem from '#lib/components/arcane-table/cells/remove-menu-item.svelte';
 	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
+	import CreatedAtCell from '#lib/components/arcane-table/cells/created-at-cell.svelte';
+	import RemoveMenuItem from '#lib/components/arcane-table/cells/remove-menu-item.svelte';
 	import { UniversalMobileCard } from '#lib/components/arcane-table/index.js';
 	import type { ColumnSpec, MobileFieldVisibility } from '#lib/components/arcane-table/index.js';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
-	import CreatedAtCell from '#lib/components/arcane-table/cells/created-at-cell.svelte';
+	import IfPermitted from '#lib/components/if-permitted.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { CopyButton } from '#lib/components/ui/copy-button/index.js';
-	import IfPermitted from '#lib/components/if-permitted.svelte';
-	import type { GlobalVariable } from '#lib/types/variable.js';
-	import type { Environment } from '#lib/types/environment.js';
-	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import { VariableIcon, LockIcon, EditIcon, ClockIcon, GlobeIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import type { Environment } from '#lib/types/environment.js';
+	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
+	import type { GlobalVariable } from '#lib/types/variable.js';
 	import { formatDateTime, instantEpochMilliseconds } from '#lib/utils/formatting.js';
 
 	let {

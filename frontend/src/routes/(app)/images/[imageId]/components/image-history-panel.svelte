@@ -1,17 +1,17 @@
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
+	import { Temporal } from 'temporal-polyfill';
+
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import * as Card from '#lib/components/ui/card/index.js';
+	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import { m } from '#lib/paraglide/messages.js';
 	import { queryKeys } from '#lib/query/query-keys.js';
+	import { imageService } from '#lib/services/image-service.js';
 	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
 	import userStore from '#lib/stores/user-store.svelte.js';
 	import { hasPermission } from '#lib/utils/auth.js';
-
-	import * as Card from '#lib/components/ui/card/index.js';
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import { bytes, formatDateTimeShort } from '#lib/utils/formatting.js';
-	import { imageService } from '#lib/services/image-service.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import { Temporal } from 'temporal-polyfill';
 
 	let { imageId }: { imageId: string } = $props();
 

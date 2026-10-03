@@ -2,8 +2,6 @@
 	import type { ActionButton } from '#lib/components/action-button-group/index.js';
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
 	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
-	import EnvironmentUpgradeAction from './environment-upgrade-action.svelte';
-	import MetricTile from './metric-tile.svelte';
 	import * as ArcaneTooltip from '#lib/components/arcane-tooltip/index.js';
 	import { Badge, badgeVariants } from '#lib/components/ui/badge/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
@@ -15,6 +13,7 @@
 	import type { DashboardEnvironmentOverview, DashboardLiveStatsStatus, SystemStats } from '#lib/types/shared.js';
 	import { cn } from '#lib/utils.js';
 	import { isEnvironmentOnline } from '#lib/utils/docker.js';
+
 	import {
 		formatPercent,
 		getActivityMeta,
@@ -28,6 +27,8 @@
 		getRoleBadge,
 		shouldLoadEnvironment
 	} from '../overview.helpers';
+	import EnvironmentUpgradeAction from './environment-upgrade-action.svelte';
+	import MetricTile from './metric-tile.svelte';
 
 	// These bindings target record entries that start undefined; Svelte rejects a bindable fallback here.
 	let {

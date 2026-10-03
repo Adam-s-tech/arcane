@@ -1,11 +1,13 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
 	import { goto } from '$app/navigation';
-	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
-	import { tryCatch } from '#lib/utils/try-catch.js';
-	import type { UpdateRole, CreateRole } from '#lib/types/auth.js';
+	import { toast } from 'svelte-sonner';
+
 	import { m } from '#lib/paraglide/messages.js';
 	import { roleService } from '#lib/services/role-service.js';
+	import type { UpdateRole, CreateRole } from '#lib/types/auth.js';
+	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+
 	import RoleEditorPage from '../components/role-editor-page.svelte';
 
 	let { data } = $props();

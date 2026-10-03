@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/getarcaneapp/arcane/types/v2/imageupdate"
-	notificationdto "github.com/getarcaneapp/arcane/types/v2/notification"
+	"github.com/getarcaneapp/arcane/types/v2/notification"
 	"github.com/getarcaneapp/arcane/types/v2/system"
 	"github.com/libtnb/sqlite"
 	"github.com/stretchr/testify/assert"
@@ -139,9 +139,9 @@ func TestNotificationService_DispatchNotification_InvalidAccessTokenReturnsUnaut
 	ctx := t.Context()
 	_, svc := setupNotificationTestServiceInternal(t)
 
-	_, err := svc.DispatchNotification(ctx, "missing-token", notificationdto.DispatchRequest{
-		Kind: notificationdto.DispatchKindImageUpdate,
-		ImageUpdate: &notificationdto.DispatchImageUpdate{
+	_, err := svc.DispatchNotification(ctx, "missing-token", notification.DispatchRequest{
+		Kind: notification.DispatchKindImageUpdate,
+		ImageUpdate: &notification.DispatchImageUpdate{
 			ImageRef:   "nginx:latest",
 			UpdateInfo: *newNotificationTestUpdateInfoInternal(),
 		},
@@ -166,7 +166,7 @@ func TestNotificationService_DispatchNotification_UnsupportedKindReturnsSentinel
 		AccessToken: &token,
 	}).Error)
 
-	_, err := svc.DispatchNotification(ctx, token, notificationdto.DispatchRequest{
+	_, err := svc.DispatchNotification(ctx, token, notification.DispatchRequest{
 		Kind: "bogus_kind",
 	})
 
@@ -193,9 +193,9 @@ func TestNotificationService_DispatchNotification_LogsManagerDispatchForAgent(t 
 		AccessToken: &token,
 	}).Error)
 
-	dispatchResponse, err := svc.DispatchNotification(ctx, token, notificationdto.DispatchRequest{
-		Kind: notificationdto.DispatchKindImageUpdate,
-		ImageUpdate: &notificationdto.DispatchImageUpdate{
+	dispatchResponse, err := svc.DispatchNotification(ctx, token, notification.DispatchRequest{
+		Kind: notification.DispatchKindImageUpdate,
+		ImageUpdate: &notification.DispatchImageUpdate{
 			ImageRef:   "nginx:latest",
 			UpdateInfo: *newNotificationTestUpdateInfoInternal(),
 		},
@@ -217,7 +217,7 @@ func TestNotificationService_SendImageUpdateNotification_AgentModeDispatchesToMa
 	envSvc := environment.NewEnvironmentService(db, nil, nil, nil, nil, nil)
 
 	var calls atomic.Int32
-	var dispatched notificationdto.DispatchRequest
+	var dispatched notification.DispatchRequest
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !assert.Equal(t, http.MethodPost, r.Method) {
 			return
@@ -234,7 +234,7 @@ func TestNotificationService_SendImageUpdateNotification_AgentModeDispatchesToMa
 		calls.Add(1)
 		if !assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"success": true,
-			"data": notificationdto.DispatchResponse{
+			"data": notification.DispatchResponse{
 				Message:   "Notification dispatched successfully",
 				Delivered: 2,
 			},
@@ -255,7 +255,7 @@ func TestNotificationService_SendImageUpdateNotification_AgentModeDispatchesToMa
 	require.NoError(t, err)
 	require.Equal(t, 2, delivered)
 	require.EqualValues(t, 1, calls.Load())
-	require.Equal(t, notificationdto.DispatchKindImageUpdate, dispatched.Kind)
+	require.Equal(t, notification.DispatchKindImageUpdate, dispatched.Kind)
 	require.NotNil(t, dispatched.ImageUpdate)
 	require.Equal(t, "nginx:latest", dispatched.ImageUpdate.ImageRef)
 }
@@ -265,7 +265,7 @@ func TestNotificationService_SendBatchImageUpdateNotification_AgentModeUsesManag
 	db := setupNotificationTestDB(t)
 	envSvc := environment.NewEnvironmentService(db, nil, nil, nil, nil, nil)
 
-	var dispatched notificationdto.DispatchRequest
+	var dispatched notification.DispatchRequest
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !assert.Equal(t, http.MethodPost, r.Method) {
 			return
@@ -281,7 +281,7 @@ func TestNotificationService_SendBatchImageUpdateNotification_AgentModeUsesManag
 		}
 		if !assert.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"success": true,
-			"data": notificationdto.DispatchResponse{
+			"data": notification.DispatchResponse{
 				Message:   "Notification dispatched successfully",
 				Delivered: 0,
 			},
@@ -303,7 +303,7 @@ func TestNotificationService_SendBatchImageUpdateNotification_AgentModeUsesManag
 	})
 	require.NoError(t, err)
 	require.Equal(t, 0, delivered)
-	require.Equal(t, notificationdto.DispatchKindBatchImageUpdate, dispatched.Kind)
+	require.Equal(t, notification.DispatchKindBatchImageUpdate, dispatched.Kind)
 	require.NotNil(t, dispatched.BatchImageUpdate)
 	require.Contains(t, dispatched.BatchImageUpdate.Updates, "nginx:latest")
 }
@@ -362,83 +362,6 @@ func TestNotificationService_SendBatchImageUpdateNotification_AgentModeSkipsNoOp
 		require.Equal(t, 0, delivered)
 		require.EqualValues(t, 0, calls.Load())
 	})
-}
-
-func TestNotificationService_RenderEmailTemplate_IncludesEnvironment(t *testing.T) {
-	_, svc := setupNotificationTestServiceInternal(t)
-
-	htmlBody, textBody, err := svc.renderEmailTemplateInternal("Homelab Prod", "nginx:latest", newNotificationTestUpdateInfoInternal())
-	require.NoError(t, err)
-	require.Contains(t, htmlBody, "Homelab Prod")
-	require.Contains(t, textBody, "Homelab Prod")
-
-	subject := notifications.BuildEmailSubject("Homelab Prod", "Container Update Available: nginx:latest")
-	require.Equal(t, "[Homelab Prod] Container Update Available: nginx:latest", subject)
-}
-
-func TestNotificationService_RenderContainerUpdateEmailTemplate_IncludesEnvironment(t *testing.T) {
-	_, svc := setupNotificationTestServiceInternal(t)
-
-	htmlBody, textBody, err := svc.renderContainerUpdateEmailTemplateInternal("Lab Remote", "nginx", "nginx:latest", "sha256:old", "sha256:new")
-	require.NoError(t, err)
-	require.Contains(t, htmlBody, "Lab Remote")
-	require.Contains(t, textBody, "Lab Remote")
-
-	subject := notifications.BuildEmailSubject("Lab Remote", "Container Updated: nginx")
-	require.Equal(t, "[Lab Remote] Container Updated: nginx", subject)
-}
-
-func TestNotificationService_RenderBatchEmailTemplate_IncludesEnvironment(t *testing.T) {
-	_, svc := setupNotificationTestServiceInternal(t)
-
-	updates := map[string]*imageupdate.Response{
-		"nginx:latest": newNotificationTestUpdateInfoInternal(),
-		"redis:latest": {
-			HasUpdate:     true,
-			UpdateType:    "minor",
-			CurrentDigest: "sha256:redis-current",
-			LatestDigest:  "sha256:redis-latest",
-			CheckTime:     time.Date(2026, time.January, 9, 15, 4, 5, 0, time.UTC),
-		},
-	}
-
-	htmlBody, textBody, err := svc.renderBatchEmailTemplateInternal("Edge Cluster A", updates)
-	require.NoError(t, err)
-	require.Contains(t, htmlBody, "Edge Cluster A")
-	require.Contains(t, textBody, "Edge Cluster A")
-
-	subject := notifications.BuildEmailSubject("Edge Cluster A", "2 Container Image Updates Available")
-	require.Equal(t, "[Edge Cluster A] 2 Container Image Updates Available", subject)
-}
-
-func TestNotificationService_RenderVulnerabilitySummaryEmailTemplate_IncludesEnvironment(t *testing.T) {
-	_, svc := setupNotificationTestServiceInternal(t)
-
-	htmlBody, textBody, err := svc.renderVulnerabilitySummaryEmailTemplateInternal("Remote Alpha", VulnerabilityNotificationPayload{
-		CVEID:        "Daily Summary - 2026-01-09",
-		ImageName:    "5 image(s) scanned, 2 with fixable vulnerabilities",
-		FixedVersion: "7 fixable vulnerability record(s)",
-		Severity:     "Critical:1 High:3 Medium:2 Low:1 Unknown:0",
-		PkgName:      "CVE-2025-1234",
-	})
-	require.NoError(t, err)
-	require.Contains(t, htmlBody, "Remote Alpha")
-	require.Contains(t, textBody, "Remote Alpha")
-}
-
-func TestNotificationService_RenderPruneReportEmailTemplate_IncludesEnvironment(t *testing.T) {
-	_, svc := setupNotificationTestServiceInternal(t)
-
-	htmlBody, textBody, err := svc.renderPruneReportEmailTemplateInternal("Cluster West", &system.PruneAllResult{
-		SpaceReclaimed:           3825205248,
-		ContainerSpaceReclaimed:  503316480,
-		ImageSpaceReclaimed:      2449473536,
-		VolumeSpaceReclaimed:     641728512,
-		BuildCacheSpaceReclaimed: 230162432,
-	})
-	require.NoError(t, err)
-	require.Contains(t, htmlBody, "Cluster West")
-	require.Contains(t, textBody, "Cluster West")
 }
 
 func TestBuildImageUpdateNotificationMessageInternal_IncludesEnvironment(t *testing.T) {
@@ -843,9 +766,9 @@ func TestNotificationService_DispatchNotificationForEnvironment_ResolvesTunnelSe
 	}).Error)
 
 	// No access token involved: the environment comes from the tunnel session (#3002).
-	resp, err := svc.DispatchNotificationForEnvironment(ctx, "env-edge", notificationdto.DispatchRequest{
-		Kind: notificationdto.DispatchKindImageUpdate,
-		ImageUpdate: &notificationdto.DispatchImageUpdate{
+	resp, err := svc.DispatchNotificationForEnvironment(ctx, "env-edge", notification.DispatchRequest{
+		Kind: notification.DispatchKindImageUpdate,
+		ImageUpdate: &notification.DispatchImageUpdate{
 			ImageRef:   "nginx:latest",
 			UpdateInfo: *newNotificationTestUpdateInfoInternal(),
 		},
@@ -853,7 +776,7 @@ func TestNotificationService_DispatchNotificationForEnvironment_ResolvesTunnelSe
 	require.NoError(t, err)
 	require.Equal(t, "Notification dispatched successfully", resp.Message)
 
-	_, err = svc.DispatchNotificationForEnvironment(ctx, "env-edge", notificationdto.DispatchRequest{Kind: "bogus"})
+	_, err = svc.DispatchNotificationForEnvironment(ctx, "env-edge", notification.DispatchRequest{Kind: "bogus"})
 	require.ErrorIs(t, err, ErrUnsupportedDispatchKind)
 }
 
@@ -864,9 +787,9 @@ func TestNotificationService_AgentDispatchWithoutHTTPConfigFallsBackToTunnel(t *
 
 	// No MANAGER_API_URL/AGENT_TOKEN and no active tunnel: the error must point
 	// at both options instead of only the HTTP env vars (#3002).
-	_, err := svc.dispatchNotificationToManagerInternal(ctx, notificationdto.DispatchRequest{
-		Kind: notificationdto.DispatchKindImageUpdate,
-		ImageUpdate: &notificationdto.DispatchImageUpdate{
+	_, err := svc.dispatchNotificationToManagerInternal(ctx, notification.DispatchRequest{
+		Kind: notification.DispatchKindImageUpdate,
+		ImageUpdate: &notification.DispatchImageUpdate{
 			ImageRef:   "nginx:latest",
 			UpdateInfo: *newNotificationTestUpdateInfoInternal(),
 		},
@@ -883,9 +806,9 @@ func TestNotificationService_AgentDispatchHTTPFailureFallsBackToTunnel(t *testin
 
 	// HTTP dispatch fails and no tunnel is connected either: the fallback must
 	// not mask the HTTP transport error.
-	_, err := svc.dispatchNotificationToManagerInternal(ctx, notificationdto.DispatchRequest{
-		Kind: notificationdto.DispatchKindImageUpdate,
-		ImageUpdate: &notificationdto.DispatchImageUpdate{
+	_, err := svc.dispatchNotificationToManagerInternal(ctx, notification.DispatchRequest{
+		Kind: notification.DispatchKindImageUpdate,
+		ImageUpdate: &notification.DispatchImageUpdate{
 			ImageRef:   "nginx:latest",
 			UpdateInfo: *newNotificationTestUpdateInfoInternal(),
 		},

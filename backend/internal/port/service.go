@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	containertypes "github.com/getarcaneapp/arcane/types/v2/container"
+	"github.com/getarcaneapp/arcane/types/v2/container"
 	porttypes "github.com/getarcaneapp/arcane/types/v2/port"
-	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/kit/pkg"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/docker"
 	dockerutil "github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
@@ -31,7 +31,7 @@ func (s *PortService) ListPortsPaginated(ctx context.Context, params pagination.
 
 	items := make([]porttypes.PortMapping, 0)
 	for _, rawContainer := range containers {
-		summary := containertypes.NewSummary(rawContainer)
+		summary := container.NewSummary(rawContainer)
 		containerName := primaryContainerNameInternal(summary.Names, summary.ID)
 		for _, port := range summary.Ports {
 			items = append(items, porttypes.PortMapping{
@@ -136,7 +136,7 @@ func primaryContainerNameInternal(names []string, id string) string {
 	return id
 }
 
-func buildPortMappingIDInternal(containerID string, port containertypes.Port) string {
+func buildPortMappingIDInternal(containerID string, port container.Port) string {
 	return fmt.Sprintf("%s:%s:%d:%d:%s", containerID, port.IP, port.PublicPort, port.PrivatePort, port.Type)
 }
 

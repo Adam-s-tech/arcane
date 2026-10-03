@@ -12,9 +12,9 @@ import (
 
 	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
 	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
+	usertypes "github.com/getarcaneapp/arcane/types/v2/user"
 	"github.com/samber/mo"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/jobcontext"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
@@ -55,7 +55,7 @@ type HandlerOptions struct {
 	ResourceType   string
 	ResourceID     string
 	ResourceName   string
-	User           *common.User
+	User           *usertypes.Actor
 	Step           string
 	Message        string
 	SuccessMessage string
@@ -106,7 +106,7 @@ func StartHandlerActivity(
 	resourceType string,
 	resourceID string,
 	resourceName string,
-	user *common.User,
+	user *usertypes.Actor,
 	step string,
 	message string,
 	metadata database.JSON,

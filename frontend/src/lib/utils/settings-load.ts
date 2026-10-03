@@ -1,7 +1,7 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
 import { queryKeys } from '#lib/query/query-keys.js';
 import { settingsService } from '#lib/services/settings-service.js';
 import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
 
 type ParentWithQueryClient = () => Promise<{
 	queryClient: unknown;

@@ -1,17 +1,18 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
 import { browser } from '$app/env';
+
 import { dashboardService } from '#lib/services/dashboard-service.js';
 import { STREAM_CHANNEL_DASHBOARD } from '#lib/services/stream-service.js';
 import { clientStream } from '#lib/stores/client-stream.svelte.js';
-import { LOCAL_DOCKER_ENVIRONMENT_ID } from '#lib/stores/environment.store.svelte.js';
 import {
 	createEnvironmentStreamStore,
 	environmentDisplayName,
 	type StreamEnvStateBase
 } from '#lib/stores/environment-stream.svelte.js';
-import type { DashboardSnapshot, DashboardStreamErrorCode, DashboardStreamEvent } from '#lib/types/shared.js';
-import type { Environment } from '#lib/types/environment.js';
+import { LOCAL_DOCKER_ENVIRONMENT_ID } from '#lib/stores/environment.store.svelte.js';
 import userStore from '#lib/stores/user-store.svelte.js';
+import type { Environment } from '#lib/types/environment.js';
+import type { DashboardSnapshot, DashboardStreamErrorCode, DashboardStreamEvent } from '#lib/types/shared.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
 
 type DashboardEnvironmentState = StreamEnvStateBase & {
 	snapshot: DashboardSnapshot | null;

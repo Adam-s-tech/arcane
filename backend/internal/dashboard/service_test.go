@@ -11,13 +11,13 @@ import (
 	"testing"
 	"time"
 
-	dashboardtypes "github.com/getarcaneapp/arcane/types/v2/dashboard"
-	usertypes "github.com/getarcaneapp/arcane/types/v2/user"
+	"github.com/getarcaneapp/arcane/types/v2/dashboard"
+	"github.com/getarcaneapp/arcane/types/v2/user"
 	volumetypes "github.com/getarcaneapp/arcane/types/v2/volume"
 	"github.com/libtnb/sqlite"
 	dockercontainer "github.com/moby/moby/api/types/container"
 	dockerimage "github.com/moby/moby/api/types/image"
-	dockermount "github.com/moby/moby/api/types/mount"
+	"github.com/moby/moby/api/types/mount"
 	dockervolume "github.com/moby/moby/api/types/volume"
 	"github.com/moby/moby/client"
 	"github.com/stretchr/testify/assert"
@@ -26,7 +26,6 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/apikey"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/container"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
@@ -121,7 +120,7 @@ func TestDashboardService_GetSnapshot_ReturnsDashboardSnapshot(t *testing.T) {
 			Status:  "Up 2 hours",
 			Labels:  map[string]string{},
 			Mounts: []dockercontainer.MountPoint{
-				{Type: dockermount.TypeVolume, Name: "app-data"},
+				{Type: mount.TypeVolume, Name: "app-data"},
 			},
 		},
 		{
@@ -196,7 +195,7 @@ func TestDashboardService_GetSnapshot_ReturnsDashboardSnapshot(t *testing.T) {
 		Path:    projectPath,
 		Status:  project.ProjectStatusStopped,
 	}).Error)
-	imageSvc := image.NewImageService(db, nil, nil, nil, nil, nil)
+	imageSvc := image.NewImageService(db, nil, nil, nil, nil, nil, nil, nil)
 	projectSvc := project.NewProjectService(db, settingsSvc, nil, imageSvc, nil, nil, nil, nil, config.Load(), nil, nil)
 	svc := NewDashboardService(db, dockerSvc, nil, projectSvc, imageSvc, settingsSvc, nil, nil, nil, volume.NewVolumeService(db, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil))
 
@@ -219,15 +218,15 @@ func TestDashboardService_GetSnapshot_ReturnsDashboardSnapshot(t *testing.T) {
 	require.Equal(t, 1, snapshot.ImageUsageCounts.Unused)
 	require.Equal(t, 3, snapshot.ImageUsageCounts.Total)
 	require.EqualValues(t, 525, snapshot.ImageUsageCounts.TotalSize)
-	require.Equal(t, dashboardtypes.SnapshotSettings{}, snapshot.Settings)
+	require.Equal(t, dashboard.SnapshotSettings{}, snapshot.Settings)
 
 	require.NotNil(t, snapshot.VolumeUsageCounts)
 	require.Equal(t, volumetypes.UsageCounts{Inuse: 1, Unused: 1, Total: 2}, *snapshot.VolumeUsageCounts)
 
-	require.ElementsMatch(t, []dashboardtypes.ActionItem{
-		{Kind: dashboardtypes.ActionItemKindStoppedContainers, Count: 1, Severity: dashboardtypes.ActionItemSeverityWarning},
-		{Kind: dashboardtypes.ActionItemKindImageUpdates, Count: 3, Severity: dashboardtypes.ActionItemSeverityWarning},
-		{Kind: dashboardtypes.ActionItemKindExpiringKeys, Count: 1, Severity: dashboardtypes.ActionItemSeverityWarning},
+	require.ElementsMatch(t, []dashboard.ActionItem{
+		{Kind: dashboard.ActionItemKindStoppedContainers, Count: 1, Severity: dashboard.ActionItemSeverityWarning},
+		{Kind: dashboard.ActionItemKindImageUpdates, Count: 3, Severity: dashboard.ActionItemSeverityWarning},
+		{Kind: dashboard.ActionItemKindExpiringKeys, Count: 1, Severity: dashboard.ActionItemSeverityWarning},
 	}, snapshot.ActionItems.Items, "the excluded stopped container, the moving-tag container, and the project each count once")
 }
 
@@ -306,8 +305,6 @@ func TestDashboardService_GetSnapshot_EnrichesPinnedReferencesInternal(t *testin
 	assert.Equal(t, "<none>", snapshot.Images.Data[0].Tag)
 	assert.Equal(t, []string{pinnedRef}, snapshot.Images.Data[0].PinnedReferences)
 }
-
-// Test fixtures shared by this package's tests.
 
 // createComposeProjectDirInternal writes a minimal single-service compose project under
 // root and returns its path.
@@ -424,8 +421,8 @@ func TestDashboardService_GetSnapshot_CachesFullSnapshotsPerIconCatalog(t *testi
 
 	// A user preferring another catalog must not be served the default-catalog
 	// snapshot from the cache.
-	dashboardIconsUser := &common.User{Preferences: usertypes.Preferences{IconCatalog: new("dashboard-icons")}}
-	userCtx := context.WithValue(t.Context(), common.CurrentUserContextKey{}, dashboardIconsUser)
+	dashboardIconsUser := &user.Actor{Preferences: user.Preferences{IconCatalog: new("dashboard-icons")}}
+	userCtx := context.WithValue(t.Context(), user.CurrentUserContextKey{}, dashboardIconsUser)
 	userSnapshot, err := svc.GetSnapshot(userCtx, DashboardActionItemsOptions{}, true)
 	require.NoError(t, err)
 	require.NotSame(t, defaultSnapshot, userSnapshot)
@@ -461,7 +458,7 @@ func TestPendingContainerCountUsesScopedTagRecords(t *testing.T) {
 		},
 	}
 	require.NoError(t, db.Create(&records).Error)
-	service := &DashboardService{db: db, imageService: image.NewImageService(db, nil, nil, nil, nil, nil)}
+	service := &DashboardService{db: db, imageService: image.NewImageService(db, nil, nil, nil, nil, nil, nil, nil)}
 	containers := []dockercontainer.Summary{
 		{ID: "first", Image: "app:1.2.3", ImageID: "shared", Labels: map[string]string{labels.LabelUpdateStrategy: "auto"}},
 		{ID: "unchecked", Image: "app:1.2.3", ImageID: "shared", Labels: map[string]string{labels.LabelUpdateStrategy: "auto"}},

@@ -1,23 +1,25 @@
 <script lang="ts">
+	import { isEqualMonth, type DateValue } from '@internationalized/date';
 	import { Calendar as CalendarPrimitive } from 'bits-ui';
+	import type { Snippet } from 'svelte';
+
+	import { cn, type WithoutChildrenOrChild } from '#lib/utils.js';
+
+	import type { ButtonVariant } from '../button/button.svelte';
+	import Caption from './calendar-caption.svelte';
 	import Cell from './calendar-cell.svelte';
 	import Day from './calendar-day.svelte';
-	import Grid from './calendar-grid.svelte';
-	import Header from './calendar-header.svelte';
-	import Months from './calendar-months.svelte';
-	import GridRow from './calendar-grid-row.svelte';
 	import GridBody from './calendar-grid-body.svelte';
 	import GridHead from './calendar-grid-head.svelte';
+	import GridRow from './calendar-grid-row.svelte';
+	import Grid from './calendar-grid.svelte';
 	import HeadCell from './calendar-head-cell.svelte';
+	import Header from './calendar-header.svelte';
+	import Month from './calendar-month.svelte';
+	import Months from './calendar-months.svelte';
+	import Nav from './calendar-nav.svelte';
 	import NextButton from './calendar-next-button.svelte';
 	import PrevButton from './calendar-prev-button.svelte';
-	import Month from './calendar-month.svelte';
-	import Nav from './calendar-nav.svelte';
-	import Caption from './calendar-caption.svelte';
-	import { cn, type WithoutChildrenOrChild } from '#lib/utils.js';
-	import type { ButtonVariant } from '../button/button.svelte';
-	import { isEqualMonth, type DateValue } from '@internationalized/date';
-	import type { Snippet } from 'svelte';
 
 	let {
 		ref = $bindable(null),

@@ -1,11 +1,10 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
 	import { toast } from 'svelte-sonner';
-	import { ResourcePageLayout, type ActionButton } from '#lib/layouts/index.js';
+
 	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
 	import VariableFormSheet from '#lib/components/sheets/variable-form-sheet.svelte';
-	import VariableTable from './components/variable-table.svelte';
+	import { ResourcePageLayout, type ActionButton } from '#lib/layouts/index.js';
+	import { m } from '#lib/paraglide/messages.js';
 	import { variableService } from '#lib/services/variable-service.js';
 	import type {
 		GlobalVariable,
@@ -13,8 +12,10 @@
 		GlobalVariableUpdateDto,
 		VariableEnvSyncResult
 	} from '#lib/types/variable.js';
-	import { m } from '#lib/paraglide/messages.js';
 	import { hasPermission } from '#lib/utils/auth.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+
+	import VariableTable from './components/variable-table.svelte';
 
 	type VariableFormPayload =
 		| { mode: 'create'; variable: GlobalVariableCreateDto }
@@ -94,7 +95,7 @@
 				// A bulk create can partially succeed before the failing entry, so
 				// refresh even on error to keep the table and duplicate-key
 				// validation in sync with what was actually persisted.
-				variables = await tryCatch(variableService.list()).then((result) => (result.error ? variables : result.data));
+				await refreshVariables();
 			}
 		} finally {
 			isSubmitting = false;
@@ -122,7 +123,7 @@
 
 						console.error('Error deleting variable:', error);
 						toast.error(m.common_delete_failed({ resource: m.variable() }));
-						variables = await tryCatch(variableService.list()).then((result) => (result.error ? variables : result.data));
+						await refreshVariables();
 					}
 				}
 			}
@@ -142,6 +143,10 @@
 				]
 			: []
 	);
+
+	async function refreshVariables() {
+		variables = await tryCatch(variableService.list()).then((result) => (result.error ? variables : result.data));
+	}
 </script>
 
 <ResourcePageLayout title={m.variables_title()} subtitle={m.variables_subtitle()} {actionButtons}>

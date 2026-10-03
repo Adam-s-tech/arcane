@@ -1,26 +1,28 @@
 <script lang="ts">
-	import * as Card from '#lib/components/ui/card/index.js';
+	import { createQuery } from '@tanstack/svelte-query';
+	import { toast } from 'svelte-sonner';
+
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
+	import * as Card from '#lib/components/ui/card/index.js';
+	import { CopyButton } from '#lib/components/ui/copy-button/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
 	import { ResponsiveDialog } from '#lib/components/ui/responsive-dialog/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
-	import { CopyButton } from '#lib/components/ui/copy-button/index.js';
 	import { useEnvironmentRefresh } from '#lib/hooks/use-environment-refresh.svelte.js';
 	import { EyeOffIcon, EyeOnIcon, LockIcon, SettingsIcon, UsersIcon } from '#lib/icons/index.js';
 	import { ResourcePageLayout, type ActionButton, type StatCardConfig } from '#lib/layouts/index.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import { createQuery } from '@tanstack/svelte-query';
 	import { queryKeys } from '#lib/query/query-keys.js';
-	import userStore from '#lib/stores/user-store.svelte.js';
 	import { swarmService } from '#lib/services/swarm-service.js';
-	import { hasPermission } from '#lib/utils/auth.js';
 	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import userStore from '#lib/stores/user-store.svelte.js';
 	import type { SwarmInitRequest, SwarmJoinRequest, SwarmUpdateRequest } from '#lib/types/swarm.js';
 	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
+	import { hasPermission } from '#lib/utils/auth.js';
 	import { tryCatch } from '#lib/utils/try-catch.js';
-	import { toast } from 'svelte-sonner';
+
 	import EasyJoinDialog from './components/easy-join-dialog.svelte';
 
 	const currentEnvId = $derived(environmentStore.selected?.id);

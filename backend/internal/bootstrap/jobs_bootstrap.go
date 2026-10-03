@@ -24,7 +24,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/job"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/system"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/systembackup"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/updater"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/volume"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane"
@@ -40,12 +39,11 @@ func newJobScheduler(
 	_ *runs.Admission,
 	imageUpdateWatcher *scheduler.ImageUpdateWatcher,
 	analytics *scheduler.AnalyticsJob,
-	systemUpgrade *system.SystemUpgradeService,
+	systemService *system.SystemService,
 	jobService *job.JobService,
 	backupEngine *backup.Engine,
 	updaterService *updater.UpdaterService,
 	volumes *volume.VolumeService,
-	systemBackups *systembackup.SystemBackupService,
 	gitopsSync *gitops.GitOpsSyncService,
 ) (
 	schedulertypes.JobScheduler,
@@ -72,7 +70,7 @@ func newJobScheduler(
 			if startErr := jobService.Coordinator().Start(ctx, schedulerCtx); startErr != nil {
 				return fmt.Errorf("initialize scheduler: %w", startErr)
 			}
-			if reconcileCoordinatorStartupErr := reconcileCoordinatorStartupInternal(ctx, jobService, backupEngine, updaterService, volumes, systemBackups, gitopsSync); reconcileCoordinatorStartupErr != nil {
+			if reconcileCoordinatorStartupErr := reconcileCoordinatorStartupInternal(ctx, jobService, backupEngine, updaterService, volumes, systemService, gitopsSync); reconcileCoordinatorStartupErr != nil {
 				return fmt.Errorf("reconcile scheduler startup: %w", reconcileCoordinatorStartupErr)
 			}
 			if gitopsSync != nil {
@@ -101,9 +99,9 @@ func newJobScheduler(
 					return fmt.Errorf("submit startup job %q: %w", analytics.Name(), submitErr)
 				}
 			}
-			if !cfg.AgentMode && systemUpgrade != nil {
+			if !cfg.AgentMode && systemService != nil {
 				resumeDone = make(chan struct{})
-				go func() { defer close(resumeDone); systemUpgrade.ResumeUpdateAllOnStartup(schedulerCtx) }()
+				go func() { defer close(resumeDone); systemService.ResumeUpdateAllOnStartup(schedulerCtx) }()
 			}
 			if startupCancellationErr := ctx.Err(); startupCancellationErr != nil {
 				return fmt.Errorf("complete scheduler startup: %w", startupCancellationErr)
@@ -144,7 +142,7 @@ func reconcileCoordinatorStartupInternal(
 	engine *backup.Engine,
 	updates *updater.UpdaterService,
 	volumes *volume.VolumeService,
-	systemBackups *systembackup.SystemBackupService,
+	systemService *system.SystemService,
 	syncService *gitops.GitOpsSyncService,
 ) error {
 	activities, backups, err := startupProtectionInternal(ctx, jobs, engine, updates)
@@ -156,8 +154,8 @@ func reconcileCoordinatorStartupInternal(
 			return reconcileInterruptedBackupsErr
 		}
 	}
-	if systemBackups != nil {
-		if reconcileSystemBackupsErr := systemBackups.ReconcileInterruptedBackups(ctx, backups...); reconcileSystemBackupsErr != nil {
+	if systemService != nil {
+		if reconcileSystemBackupsErr := systemService.ReconcileInterruptedBackups(ctx, backups...); reconcileSystemBackupsErr != nil {
 			return reconcileSystemBackupsErr
 		}
 	}
@@ -254,15 +252,15 @@ type registerJobsParams struct {
 	Config    *config.Config
 	Scheduler schedulertypes.JobScheduler
 
-	Activity     *activity.ActivityService
-	GitOpsSync   *gitops.GitOpsSyncService
-	Environment  *environment.EnvironmentService
-	JobSchedule  *job.JobService
-	Settings     *settings.SettingsService
-	Volume       *volume.VolumeService
-	SystemBackup *systembackup.SystemBackupService
-	Admission    *runs.Admission
-	Apns         *apns.ApnsService
+	Activity    *activity.ActivityService
+	GitOpsSync  *gitops.GitOpsSyncService
+	Environment *environment.EnvironmentService
+	JobSchedule *job.JobService
+	Settings    *settings.SettingsService
+	Volume      *volume.VolumeService
+	System      *system.SystemService
+	Admission   *runs.Admission
+	Apns        *apns.ApnsService
 
 	AutoUpdate             *scheduler.AutoUpdateJob
 	ImageUpdateWatcher     *scheduler.ImageUpdateWatcher
@@ -317,15 +315,15 @@ func registerJobs(params registerJobsParams) error {
 	// GitOps sync and environment health are no longer single global jobs; each
 	// entity registers its own dynamic job.
 	if err := registerDynamicJobs(dynamicJobsParams{
-		AppCtx:       params.AppCtx,
-		Config:       params.Config,
-		Scheduler:    params.Scheduler,
-		GitOpsSync:   params.GitOpsSync,
-		Environment:  params.Environment,
-		JobSchedule:  params.JobSchedule,
-		Volume:       params.Volume,
-		SystemBackup: params.SystemBackup,
-		Admission:    params.Admission,
+		AppCtx:      params.AppCtx,
+		Config:      params.Config,
+		Scheduler:   params.Scheduler,
+		GitOpsSync:  params.GitOpsSync,
+		Environment: params.Environment,
+		JobSchedule: params.JobSchedule,
+		Volume:      params.Volume,
+		System:      params.System,
+		Admission:   params.Admission,
 	}); err != nil {
 		return err
 	}
@@ -354,15 +352,15 @@ func registerJobs(params registerJobsParams) error {
 }
 
 type dynamicJobsParams struct {
-	AppCtx       context.Context
-	Config       *config.Config
-	Scheduler    schedulertypes.JobScheduler
-	GitOpsSync   *gitops.GitOpsSyncService
-	Environment  *environment.EnvironmentService
-	JobSchedule  *job.JobService
-	Volume       *volume.VolumeService
-	SystemBackup *systembackup.SystemBackupService
-	Admission    *runs.Admission
+	AppCtx      context.Context
+	Config      *config.Config
+	Scheduler   schedulertypes.JobScheduler
+	GitOpsSync  *gitops.GitOpsSyncService
+	Environment *environment.EnvironmentService
+	JobSchedule *job.JobService
+	Volume      *volume.VolumeService
+	System      *system.SystemService
+	Admission   *runs.Admission
 }
 
 // registerDynamicJobs injects the scheduler into the services that own per-entity
@@ -378,11 +376,11 @@ func registerDynamicJobs(params dynamicJobsParams) error {
 		}
 		params.Volume.RegisterBackupJobsOnStartup(params.AppCtx)
 	}
-	if !params.Config.AgentMode && params.SystemBackup != nil {
-		if err := params.SystemBackup.SetScheduler(params.AppCtx, params.Scheduler, params.Admission); err != nil {
+	if !params.Config.AgentMode && params.System != nil {
+		if err := params.System.SetBackupScheduler(params.AppCtx, params.Scheduler, params.Admission); err != nil {
 			return err
 		}
-		params.SystemBackup.RegisterBackupJobOnStartup(params.AppCtx)
+		params.System.RegisterBackupJobOnStartup(params.AppCtx)
 	}
 	// GitOps startup submissions wait for Francis in the scheduler start hook.
 	if params.GitOpsSync != nil {

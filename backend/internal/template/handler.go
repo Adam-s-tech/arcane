@@ -8,12 +8,10 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/getarcaneapp/arcane/types/v2/base"
-	templatetypes "github.com/getarcaneapp/arcane/types/v2/template"
+	"github.com/getarcaneapp/arcane/types/v2/template"
 	"go.getarcane.app/kit/pkg/mapping"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
 )
 
@@ -21,10 +19,6 @@ import (
 type TemplateHandler struct {
 	templateService *TemplateService
 }
-
-// ============================================================================
-// Input/Output Types
-// ============================================================================
 
 type ListTemplatesInput struct {
 	Search string `query:"search" doc:"Search query"`
@@ -46,12 +40,12 @@ type GetTemplateContentInput struct {
 }
 
 type CreateTemplateInput struct {
-	Body templatetypes.CreateRequest
+	Body template.CreateRequest
 }
 
 type UpdateTemplateInput struct {
 	ID   string `path:"id" doc:"Template ID"`
-	Body templatetypes.UpdateRequest
+	Body template.UpdateRequest
 }
 
 type DeleteTemplateInput struct {
@@ -65,18 +59,18 @@ type DownloadTemplateInput struct {
 type GetDefaultTemplatesInput struct{}
 
 type SaveDefaultTemplatesInput struct {
-	Body templatetypes.SaveDefaultTemplatesRequest
+	Body template.SaveDefaultTemplatesRequest
 }
 
 type GetTemplateRegistriesInput struct{}
 
 type CreateTemplateRegistryInput struct {
-	Body templatetypes.CreateRegistryRequest
+	Body template.CreateRegistryRequest
 }
 
 type UpdateTemplateRegistryInput struct {
 	ID   string `path:"id" doc:"Registry ID"`
-	Body templatetypes.UpdateRegistryRequest
+	Body template.UpdateRegistryRequest
 }
 
 type DeleteTemplateRegistryInput struct {
@@ -87,184 +81,8 @@ type FetchTemplateRegistryInput struct {
 	URL string `query:"url" required:"true" doc:"Registry URL"`
 }
 
-// ============================================================================
-// Registration
-// ============================================================================
-
-// RegisterTemplates registers all template management endpoints.
-func RegisterTemplates(api huma.API, templateService *TemplateService) {
-	h := &TemplateHandler{templateService: templateService}
-
-	// Template registry endpoint.
-	huma.Register(api, huma.Operation{
-		OperationID: "fetchTemplateRegistry",
-		Method:      "GET",
-		Path:        "/templates/fetch",
-		Summary:     "Fetch remote registry",
-		Description: "Fetch templates from a remote registry URL",
-		Tags:        []string{"Templates"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequirePermission(api, authz.PermTemplatesRead),
-	}, h.FetchRegistry)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "listTemplatesPaginated",
-		Method:      "GET",
-		Path:        "/templates",
-		Summary:     "List templates (paginated)",
-		Description: "Get a paginated list of compose templates",
-		Tags:        []string{"Templates"},
-		Middlewares: middleware.RequirePermission(api, authz.PermTemplatesList),
-	}, h.ListTemplates)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "getAllTemplates",
-		Method:      "GET",
-		Path:        "/templates/all",
-		Summary:     "List all templates",
-		Description: "Get all compose templates without pagination",
-		Tags:        []string{"Templates"},
-		Middlewares: middleware.RequirePermission(api, authz.PermTemplatesList),
-	}, h.GetAllTemplates)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "getTemplate",
-		Method:      "GET",
-		Path:        "/templates/{id}",
-		Summary:     "Get a template",
-		Description: "Get a compose template by ID",
-		Tags:        []string{"Templates"},
-		Middlewares: middleware.RequirePermission(api, authz.PermTemplatesRead),
-	}, h.GetTemplate)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "getTemplateContent",
-		Method:      "GET",
-		Path:        "/templates/{id}/content",
-		Summary:     "Get template content",
-		Description: "Get the compose content for a template with parsed data",
-		Tags:        []string{"Templates"},
-		Middlewares: middleware.RequirePermission(api, authz.PermTemplatesRead),
-	}, h.GetTemplateContent)
-
-	// Protected endpoints
-	huma.Register(api, huma.Operation{
-		OperationID: "createTemplate",
-		Method:      "POST",
-		Path:        "/templates",
-		Summary:     "Create a template",
-		Description: "Create a new compose template",
-		Tags:        []string{"Templates"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequirePermission(api, authz.PermTemplatesCreate),
-	}, h.CreateTemplate)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "updateTemplate",
-		Method:      "PUT",
-		Path:        "/templates/{id}",
-		Summary:     "Update a template",
-		Description: "Update an existing compose template",
-		Tags:        []string{"Templates"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequirePermission(api, authz.PermTemplatesUpdate),
-	}, h.UpdateTemplate)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "deleteTemplate",
-		Method:      "DELETE",
-		Path:        "/templates/{id}",
-		Summary:     "Delete a template",
-		Description: "Delete a compose template",
-		Tags:        []string{"Templates"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequirePermission(api, authz.PermTemplatesDelete),
-	}, h.DeleteTemplate)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "downloadTemplate",
-		Method:      "POST",
-		Path:        "/templates/{id}/download",
-		Summary:     "Download a template",
-		Description: "Download a remote template to local storage",
-		Tags:        []string{"Templates"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequirePermission(api, authz.PermTemplatesRead),
-	}, h.DownloadTemplate)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "getDefaultTemplates",
-		Method:      "GET",
-		Path:        "/templates/default",
-		Summary:     "Get default templates",
-		Description: "Get the default compose and env templates",
-		Tags:        []string{"Templates"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequirePermission(api, authz.PermTemplatesRead),
-	}, h.GetDefaultTemplates)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "saveDefaultTemplates",
-		Method:      "POST",
-		Path:        "/templates/default",
-		Summary:     "Save default templates",
-		Description: "Save the default compose and env templates",
-		Tags:        []string{"Templates"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequirePermission(api, authz.PermTemplatesUpdate),
-	}, h.SaveDefaultTemplates)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "getTemplateRegistries",
-		Method:      "GET",
-		Path:        "/templates/registries",
-		Summary:     "List template registries",
-		Description: "Get all template registries",
-		Tags:        []string{"Templates"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequirePermission(api, authz.PermTemplatesList),
-	}, h.GetRegistries)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "createTemplateRegistry",
-		Method:      "POST",
-		Path:        "/templates/registries",
-		Summary:     "Create a template registry",
-		Description: "Create a new template registry",
-		Tags:        []string{"Templates"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequirePermission(api, authz.PermTemplatesCreate),
-	}, h.CreateRegistry)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "updateTemplateRegistry",
-		Method:      "PUT",
-		Path:        "/templates/registries/{id}",
-		Summary:     "Update a template registry",
-		Description: "Update an existing template registry",
-		Tags:        []string{"Templates"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequirePermission(api, authz.PermTemplatesUpdate),
-	}, h.UpdateRegistry)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "deleteTemplateRegistry",
-		Method:      "DELETE",
-		Path:        "/templates/registries/{id}",
-		Summary:     "Delete a template registry",
-		Description: "Delete a template registry",
-		Tags:        []string{"Templates"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequirePermission(api, authz.PermTemplatesDelete),
-	}, h.DeleteRegistry)
-}
-
-// ============================================================================
-// Handler Methods
-// ============================================================================
-
 // ListTemplates returns a paginated list of templates.
-func (h *TemplateHandler) ListTemplates(ctx context.Context, input *ListTemplatesInput) (*handlerutil.Page[templatetypes.Template], error) {
+func (h *TemplateHandler) ListTemplates(ctx context.Context, input *ListTemplatesInput) (*handlerutil.Page[template.Template], error) {
 	params := handlerutil.PaginationParams(input.Start, input.Limit, input.Sort, input.Order, input.Search)
 	params.Limit = cmp.Or(params.Limit, 20)
 	if input.Type != "" {
@@ -276,8 +94,8 @@ func (h *TemplateHandler) ListTemplates(ctx context.Context, input *ListTemplate
 		return nil, huma.Error500InternalServerError("Failed to get templates: " + err.Error())
 	}
 
-	return &handlerutil.Page[templatetypes.Template]{
-		Body: base.Paginated[templatetypes.Template]{
+	return &handlerutil.Page[template.Template]{
+		Body: base.Paginated[template.Template]{
 			Success:    true,
 			Data:       templates,
 			Pagination: handlerutil.PaginationResponse(paginationResp),
@@ -286,19 +104,19 @@ func (h *TemplateHandler) ListTemplates(ctx context.Context, input *ListTemplate
 }
 
 // GetAllTemplates returns all templates without pagination.
-func (h *TemplateHandler) GetAllTemplates(ctx context.Context, _ *GetAllTemplatesInput) (*handlerutil.Out[[]templatetypes.Template], error) {
+func (h *TemplateHandler) GetAllTemplates(ctx context.Context, _ *GetAllTemplatesInput) (*handlerutil.Out[[]template.Template], error) {
 	templates, err := h.templateService.GetAllTemplates(ctx)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("Failed to get templates: " + err.Error())
 	}
 
-	out, mapErr := mapping.MapSlice[ComposeTemplate, templatetypes.Template](templates)
+	out, mapErr := mapping.MapSlice[ComposeTemplate, template.Template](templates)
 	if mapErr != nil {
 		return nil, huma.Error500InternalServerError("Failed to map templates: " + mapErr.Error())
 	}
 
-	return &handlerutil.Out[[]templatetypes.Template]{
-		Body: base.ApiResponse[[]templatetypes.Template]{
+	return &handlerutil.Out[[]template.Template]{
+		Body: base.ApiResponse[[]template.Template]{
 			Success: true,
 			Data:    out,
 		},
@@ -306,7 +124,7 @@ func (h *TemplateHandler) GetAllTemplates(ctx context.Context, _ *GetAllTemplate
 }
 
 // GetTemplate returns a template by ID.
-func (h *TemplateHandler) GetTemplate(ctx context.Context, input *GetTemplateInput) (*handlerutil.Out[templatetypes.Template], error) {
+func (h *TemplateHandler) GetTemplate(ctx context.Context, input *GetTemplateInput) (*handlerutil.Out[template.Template], error) {
 	if input.ID == "" {
 		return nil, huma.Error400BadRequest("Template ID is required")
 	}
@@ -319,13 +137,13 @@ func (h *TemplateHandler) GetTemplate(ctx context.Context, input *GetTemplateInp
 		return nil, huma.Error500InternalServerError("Failed to get template: " + err.Error())
 	}
 
-	var out templatetypes.Template
+	var out template.Template
 	if mapErr := mapping.MapStruct(tmpl, &out); mapErr != nil {
 		return nil, huma.Error500InternalServerError("Failed to map templates: " + mapErr.Error())
 	}
 
-	return &handlerutil.Out[templatetypes.Template]{
-		Body: base.ApiResponse[templatetypes.Template]{
+	return &handlerutil.Out[template.Template]{
+		Body: base.ApiResponse[template.Template]{
 			Success: true,
 			Data:    out,
 		},
@@ -333,7 +151,7 @@ func (h *TemplateHandler) GetTemplate(ctx context.Context, input *GetTemplateInp
 }
 
 // GetTemplateContent returns template content with parsed data.
-func (h *TemplateHandler) GetTemplateContent(ctx context.Context, input *GetTemplateContentInput) (*handlerutil.Out[templatetypes.TemplateContent], error) {
+func (h *TemplateHandler) GetTemplateContent(ctx context.Context, input *GetTemplateContentInput) (*handlerutil.Out[template.TemplateContent], error) {
 	if input.ID == "" {
 		return nil, huma.Error400BadRequest("Template ID is required")
 	}
@@ -346,8 +164,8 @@ func (h *TemplateHandler) GetTemplateContent(ctx context.Context, input *GetTemp
 		return nil, huma.Error500InternalServerError("Failed to get template content: " + err.Error())
 	}
 
-	return &handlerutil.Out[templatetypes.TemplateContent]{
-		Body: base.ApiResponse[templatetypes.TemplateContent]{
+	return &handlerutil.Out[template.TemplateContent]{
+		Body: base.ApiResponse[template.TemplateContent]{
 			Success: true,
 			Data:    *contentData,
 		},
@@ -355,7 +173,7 @@ func (h *TemplateHandler) GetTemplateContent(ctx context.Context, input *GetTemp
 }
 
 // CreateTemplate creates a new templatetypes.
-func (h *TemplateHandler) CreateTemplate(ctx context.Context, input *CreateTemplateInput) (*handlerutil.Out[templatetypes.Template], error) {
+func (h *TemplateHandler) CreateTemplate(ctx context.Context, input *CreateTemplateInput) (*handlerutil.Out[template.Template], error) {
 	tmpl := &ComposeTemplate{
 		Name:        input.Body.Name,
 		Description: input.Body.Description,
@@ -371,13 +189,13 @@ func (h *TemplateHandler) CreateTemplate(ctx context.Context, input *CreateTempl
 		return nil, huma.Error500InternalServerError("Failed to create template: " + err.Error())
 	}
 
-	var out templatetypes.Template
+	var out template.Template
 	if mapErr := mapping.MapStruct(tmpl, &out); mapErr != nil {
 		return nil, huma.Error500InternalServerError("Failed to map templates: " + mapErr.Error())
 	}
 
-	return &handlerutil.Out[templatetypes.Template]{
-		Body: base.ApiResponse[templatetypes.Template]{
+	return &handlerutil.Out[template.Template]{
+		Body: base.ApiResponse[template.Template]{
 			Success: true,
 			Data:    out,
 		},
@@ -385,7 +203,7 @@ func (h *TemplateHandler) CreateTemplate(ctx context.Context, input *CreateTempl
 }
 
 // UpdateTemplate updates a templatetypes.
-func (h *TemplateHandler) UpdateTemplate(ctx context.Context, input *UpdateTemplateInput) (*handlerutil.Out[templatetypes.Template], error) {
+func (h *TemplateHandler) UpdateTemplate(ctx context.Context, input *UpdateTemplateInput) (*handlerutil.Out[template.Template], error) {
 	if input.ID == "" {
 		return nil, huma.Error400BadRequest("Template ID is required")
 	}
@@ -413,13 +231,13 @@ func (h *TemplateHandler) UpdateTemplate(ctx context.Context, input *UpdateTempl
 		return nil, huma.Error500InternalServerError("Failed to get template: " + err.Error())
 	}
 
-	var out templatetypes.Template
+	var out template.Template
 	if mapErr := mapping.MapStruct(updated, &out); mapErr != nil {
 		return nil, huma.Error500InternalServerError("Failed to map templates: " + mapErr.Error())
 	}
 
-	return &handlerutil.Out[templatetypes.Template]{
-		Body: base.ApiResponse[templatetypes.Template]{
+	return &handlerutil.Out[template.Template]{
+		Body: base.ApiResponse[template.Template]{
 			Success: true,
 			Data:    out,
 		},
@@ -450,7 +268,7 @@ func (h *TemplateHandler) DeleteTemplate(ctx context.Context, input *DeleteTempl
 }
 
 // DownloadTemplate downloads a remote template to local storage.
-func (h *TemplateHandler) DownloadTemplate(ctx context.Context, input *DownloadTemplateInput) (*handlerutil.Out[templatetypes.Template], error) {
+func (h *TemplateHandler) DownloadTemplate(ctx context.Context, input *DownloadTemplateInput) (*handlerutil.Out[template.Template], error) {
 	if input.ID == "" {
 		return nil, huma.Error400BadRequest("Template ID is required")
 	}
@@ -471,13 +289,13 @@ func (h *TemplateHandler) DownloadTemplate(ctx context.Context, input *DownloadT
 		return nil, huma.Error500InternalServerError("Failed to download template: " + err.Error())
 	}
 
-	var out templatetypes.Template
+	var out template.Template
 	if mapErr := mapping.MapStruct(localTemplate, &out); mapErr != nil {
 		return nil, huma.Error500InternalServerError("Failed to map templates: " + mapErr.Error())
 	}
 
-	return &handlerutil.Out[templatetypes.Template]{
-		Body: base.ApiResponse[templatetypes.Template]{
+	return &handlerutil.Out[template.Template]{
+		Body: base.ApiResponse[template.Template]{
 			Success: true,
 			Data:    out,
 		},
@@ -485,16 +303,16 @@ func (h *TemplateHandler) DownloadTemplate(ctx context.Context, input *DownloadT
 }
 
 // GetDefaultTemplates returns the default compose and env templates.
-func (h *TemplateHandler) GetDefaultTemplates(ctx context.Context, _ *GetDefaultTemplatesInput) (*handlerutil.Out[templatetypes.DefaultTemplatesResponse], error) {
+func (h *TemplateHandler) GetDefaultTemplates(ctx context.Context, _ *GetDefaultTemplatesInput) (*handlerutil.Out[template.DefaultTemplatesResponse], error) {
 	composeTemplate := h.templateService.GetComposeTemplate(ctx)
 	swarmStackTemplate := h.templateService.GetSwarmStackTemplate(ctx)
 	swarmStackEnvTemplate := h.templateService.GetSwarmStackEnvTemplate(ctx)
 	envTemplate := h.templateService.GetEnvTemplate(ctx)
 
-	return &handlerutil.Out[templatetypes.DefaultTemplatesResponse]{
-		Body: base.ApiResponse[templatetypes.DefaultTemplatesResponse]{
+	return &handlerutil.Out[template.DefaultTemplatesResponse]{
+		Body: base.ApiResponse[template.DefaultTemplatesResponse]{
 			Success: true,
-			Data: templatetypes.DefaultTemplatesResponse{
+			Data: template.DefaultTemplatesResponse{
 				ComposeTemplate:       composeTemplate,
 				SwarmStackTemplate:    swarmStackTemplate,
 				SwarmStackEnvTemplate: swarmStackEnvTemplate,
@@ -525,13 +343,13 @@ func (h *TemplateHandler) SaveDefaultTemplates(ctx context.Context, input *SaveD
 }
 
 // GetRegistries returns all template registries.
-func (h *TemplateHandler) GetRegistries(ctx context.Context, _ *GetTemplateRegistriesInput) (*handlerutil.Out[[]templatetypes.TemplateRegistry], error) {
+func (h *TemplateHandler) GetRegistries(ctx context.Context, _ *GetTemplateRegistriesInput) (*handlerutil.Out[[]template.TemplateRegistry], error) {
 	registries, err := h.templateService.GetRegistries(ctx)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("Failed to fetch registry")
 	}
 
-	out, mapErr := mapping.MapSlice[TemplateRegistry, templatetypes.TemplateRegistry](registries)
+	out, mapErr := mapping.MapSlice[TemplateRegistry, template.TemplateRegistry](registries)
 	if mapErr != nil {
 		return nil, huma.Error500InternalServerError("Failed to fetch registry")
 	}
@@ -546,8 +364,8 @@ func (h *TemplateHandler) GetRegistries(ctx context.Context, _ *GetTemplateRegis
 		}
 	}
 
-	return &handlerutil.Out[[]templatetypes.TemplateRegistry]{
-		Body: base.ApiResponse[[]templatetypes.TemplateRegistry]{
+	return &handlerutil.Out[[]template.TemplateRegistry]{
+		Body: base.ApiResponse[[]template.TemplateRegistry]{
 			Success: true,
 			Data:    out,
 		},
@@ -555,7 +373,7 @@ func (h *TemplateHandler) GetRegistries(ctx context.Context, _ *GetTemplateRegis
 }
 
 // CreateRegistry creates a new template registry.
-func (h *TemplateHandler) CreateRegistry(ctx context.Context, input *CreateTemplateRegistryInput) (*handlerutil.Out[templatetypes.TemplateRegistry], error) {
+func (h *TemplateHandler) CreateRegistry(ctx context.Context, input *CreateTemplateRegistryInput) (*handlerutil.Out[template.TemplateRegistry], error) {
 	registry := &TemplateRegistry{
 		Name:        input.Body.Name,
 		URL:         input.Body.URL,
@@ -566,13 +384,13 @@ func (h *TemplateHandler) CreateRegistry(ctx context.Context, input *CreateTempl
 		return nil, huma.Error500InternalServerError("Failed to create registry: " + err.Error())
 	}
 
-	var out templatetypes.TemplateRegistry
+	var out template.TemplateRegistry
 	if mapErr := mapping.MapStruct(registry, &out); mapErr != nil {
 		return nil, huma.Error500InternalServerError("Failed to map registry: " + mapErr.Error())
 	}
 
-	return &handlerutil.Out[templatetypes.TemplateRegistry]{
-		Body: base.ApiResponse[templatetypes.TemplateRegistry]{
+	return &handlerutil.Out[template.TemplateRegistry]{
+		Body: base.ApiResponse[template.TemplateRegistry]{
 			Success: true,
 			Data:    out,
 		},
@@ -632,7 +450,7 @@ func (h *TemplateHandler) DeleteRegistry(ctx context.Context, input *DeleteTempl
 }
 
 // FetchRegistry fetches templates from a remote registry URL.
-func (h *TemplateHandler) FetchRegistry(ctx context.Context, input *FetchTemplateRegistryInput) (*handlerutil.Out[templatetypes.RemoteRegistry], error) {
+func (h *TemplateHandler) FetchRegistry(ctx context.Context, input *FetchTemplateRegistryInput) (*handlerutil.Out[template.RemoteRegistry], error) {
 	if input.URL == "" {
 		return nil, huma.Error400BadRequest("Query parameter is required")
 	}
@@ -642,13 +460,13 @@ func (h *TemplateHandler) FetchRegistry(ctx context.Context, input *FetchTemplat
 		return nil, huma.Error502BadGateway("Failed to fetch registry")
 	}
 
-	var registry templatetypes.RemoteRegistry
+	var registry template.RemoteRegistry
 	if unmarshalErr := json.Unmarshal(body, &registry); unmarshalErr != nil {
 		return nil, huma.Error502BadGateway("Invalid JSON response")
 	}
 
-	return &handlerutil.Out[templatetypes.RemoteRegistry]{
-		Body: base.ApiResponse[templatetypes.RemoteRegistry]{
+	return &handlerutil.Out[template.RemoteRegistry]{
+		Body: base.ApiResponse[template.RemoteRegistry]{
 			Success: true,
 			Data:    registry,
 		},

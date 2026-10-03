@@ -1,6 +1,8 @@
 import { redirect } from '@sveltejs/kit';
+
 import { roleService } from '#lib/services/role-service.js';
 import { userIsGlobalAdmin } from '#lib/utils/auth.js';
+
 import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ parent }) => {

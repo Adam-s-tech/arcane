@@ -1,19 +1,21 @@
 <script lang="ts">
+	import { toast } from 'svelte-sonner';
+
+	import ServiceEditorDialog from '#lib/components/dialogs/service-editor-dialog.svelte';
+	import { useEnvironmentRefresh } from '#lib/hooks/use-environment-refresh.svelte.js';
 	import { DockIcon } from '#lib/icons/index.js';
+	import { ResourcePageLayout, type StatCardConfig } from '#lib/layouts/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { swarmService } from '#lib/services/swarm-service.js';
-	import { toast } from 'svelte-sonner';
-	import { tryCatch } from '#lib/utils/try-catch.js';
-	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
-	import { ResourcePageLayout, type StatCardConfig } from '#lib/layouts/index.js';
-	import { useEnvironmentRefresh } from '#lib/hooks/use-environment-refresh.svelte.js';
-	import { simpleRefresh } from '#lib/utils/api.js';
-	import { createRefreshActionButtons } from '#lib/utils/resource-actions.js';
-	import type { SwarmServiceCreateSpec } from '#lib/types/swarm.js';
-	import SwarmServicesTable from './components/services-table.svelte';
-	import ServiceEditorDialog from '#lib/components/dialogs/service-editor-dialog.svelte';
-	import { hasPermission } from '#lib/utils/auth.js';
 	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import type { SwarmServiceCreateSpec } from '#lib/types/swarm.js';
+	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
+	import { simpleRefresh } from '#lib/utils/api.js';
+	import { hasPermission } from '#lib/utils/auth.js';
+	import { createRefreshActionButtons } from '#lib/utils/resource-actions.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+
+	import SwarmServicesTable from './components/services-table.svelte';
 
 	let { data } = $props();
 

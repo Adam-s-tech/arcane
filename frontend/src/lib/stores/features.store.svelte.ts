@@ -1,4 +1,5 @@
 import type { QueryClient } from '@tanstack/svelte-query';
+
 import { settingsService } from '#lib/services/settings-service.js';
 import type { EnvironmentFeatures, FeatureID } from '#lib/types/features.js';
 import { isFeatureEnabled, isSwarmFeatureEnabled, isVulnerabilityQuery, resolveFeatures } from '#lib/utils/features.js';

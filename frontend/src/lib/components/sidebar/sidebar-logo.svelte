@@ -1,10 +1,11 @@
 <script lang="ts">
-	import { cn } from '#lib/utils.js';
+	import { mode } from 'mode-watcher';
+
 	import { m } from '#lib/paraglide/messages.js';
+	import userStore from '#lib/stores/user-store.svelte.js';
+	import { cn } from '#lib/utils.js';
 	import { getApplicationLogo } from '#lib/utils/docker.js';
 	import { resolveLogoColor } from '#lib/utils/theme.svelte.js';
-	import userStore from '#lib/stores/user-store.svelte.js';
-	import { mode } from 'mode-watcher';
 
 	let { isCollapsed }: { isCollapsed: boolean } = $props();
 

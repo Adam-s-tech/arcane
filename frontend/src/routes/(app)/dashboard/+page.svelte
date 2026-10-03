@@ -1,10 +1,11 @@
 <script lang="ts">
-	import type { PageProps } from './$types';
-
-	import AllEnvironmentsView from './components/all-environments-view.svelte';
-	import userStore from '#lib/stores/user-store.svelte.js';
-	import { m } from '#lib/paraglide/messages.js';
 	import { Temporal } from 'temporal-polyfill';
+
+	import { m } from '#lib/paraglide/messages.js';
+	import userStore from '#lib/stores/user-store.svelte.js';
+
+	import type { PageProps } from './$types';
+	import AllEnvironmentsView from './components/all-environments-view.svelte';
 
 	let { data }: PageProps = $props();
 

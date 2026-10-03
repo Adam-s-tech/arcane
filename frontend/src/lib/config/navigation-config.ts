@@ -29,11 +29,11 @@ import {
 	BackupIcon
 } from '#lib/icons/index.js';
 import { m } from '#lib/paraglide/messages.js';
-import type { ShortcutKey } from '#lib/utils/navigation.js';
-import type { PermissionsManifest, User } from '#lib/types/auth.js';
-import { canReachAccessSurface } from '#lib/utils/access-policy.js';
-import type { FeatureID } from '#lib/types/features.js';
 import { featureStore } from '#lib/stores/features.store.svelte.js';
+import type { PermissionsManifest, User } from '#lib/types/auth.js';
+import type { FeatureID } from '#lib/types/features.js';
+import { canReachAccessSurface } from '#lib/utils/access-policy.js';
+import type { ShortcutKey } from '#lib/utils/navigation.js';
 
 export type NavigationItem = {
 	title: string;

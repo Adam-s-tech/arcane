@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { cn } from '#lib/utils.js';
 	import type { Snippet } from 'svelte';
+
+	import { cn } from '#lib/utils.js';
 
 	// A titled group of settings. `list` frames the rows in one bordered, divided block;
 	// `plain` leaves the content unframed for tables and card grids.

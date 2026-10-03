@@ -14,8 +14,9 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
 	"github.com/getarcaneapp/arcane/types/v2/base"
-	projecttypes "github.com/getarcaneapp/arcane/types/v2/project"
-	volumetypes "github.com/getarcaneapp/arcane/types/v2/volume"
+	"github.com/getarcaneapp/arcane/types/v2/project"
+	usertypes "github.com/getarcaneapp/arcane/types/v2/user"
+	"github.com/getarcaneapp/arcane/types/v2/volume"
 	workspacetypes "github.com/getarcaneapp/arcane/types/v2/workspace"
 	"github.com/samber/mo"
 	"go.getarcane.app/kit/pkg/mapping"
@@ -24,14 +25,13 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
-	dockerutils "github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/project/children/tags"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
 	activitylib "github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
-	workspacepkg "github.com/getarcaneapp/arcane/backend/v2/pkg/workspace"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/workspace"
 )
 
 // ProjectHandler provides Huma-based project management endpoints.
@@ -40,8 +40,6 @@ type ProjectHandler struct {
 	activityService *activity.ActivityService
 	appCtx          context.Context
 }
-
-// --- Huma Input/Output Wrappers ---
 
 type ListProjectsInput struct {
 	EnvironmentID string `path:"id" doc:"Environment ID"`
@@ -70,13 +68,13 @@ type ListProjectTagsInput struct {
 type UpdateProjectTagInput struct {
 	EnvironmentID string `path:"id" doc:"Environment ID"`
 	ProjectID     string `path:"projectId" doc:"Project ID"`
-	Body          projecttypes.UpdateTag
+	Body          project.UpdateTag
 }
 
 type DeployProjectInput struct {
 	EnvironmentID string `path:"id" doc:"Environment ID"`
 	ProjectID     string `path:"projectId" doc:"Project ID"`
-	Body          *projecttypes.DeployOptions
+	Body          *project.DeployOptions
 }
 
 type DownProjectInput struct {
@@ -97,19 +95,19 @@ type GetProjectInput struct {
 type RedeployProjectInput struct {
 	EnvironmentID string `path:"id" doc:"Environment ID"`
 	ProjectID     string `path:"projectId" doc:"Project ID"`
-	Body          *projecttypes.DeployOptions
+	Body          *project.DeployOptions
 }
 
 type DestroyProjectInput struct {
 	EnvironmentID string `path:"id" doc:"Environment ID"`
 	ProjectID     string `path:"projectId" doc:"Project ID"`
-	Body          *projecttypes.Destroy
+	Body          *project.Destroy
 }
 
 type UpdateProjectInput struct {
 	EnvironmentID string `path:"id" doc:"Environment ID"`
 	ProjectID     string `path:"projectId" doc:"Project ID"`
-	Body          projecttypes.UpdateProject
+	Body          project.UpdateProject
 }
 
 type RestartProjectInput struct {
@@ -152,234 +150,8 @@ type BuildProjectInput struct {
 	}
 }
 
-// RegisterProjects registers project management routes using Huma.
-// WebSocket and streaming endpoints live in api/ws.
-func RegisterProjects(api huma.API, projectService *ProjectService, activityService *activity.ActivityService, appCtx handlerutil.ActivityAppContext) {
-	h := &ProjectHandler{
-		projectService:  projectService,
-		activityService: activityService,
-		appCtx:          appCtx.Context(),
-	}
-	registerProjectWorkspaceRoutesInternal(api, h)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "list-projects",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/projects",
-		Summary:     "List projects",
-		Description: "Get a paginated list of Docker Compose projects",
-		Tags:        []string{"Projects"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermProjectsList, h.ListProjects)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "get-project-status-counts",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/projects/counts",
-		Summary:     "Get project status counts",
-		Description: "Get counts of running, stopped, and total projects",
-		Tags:        []string{"Projects"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermProjectsList, h.GetProjectStatusCounts)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "list-project-tags",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/projects/tags",
-		Summary:     "List project tags",
-		Description: "Get sorted, distinct project tag names",
-		Tags:        []string{"Projects"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermProjectsList, h.ListProjectTags)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "update-project-tag",
-		Method:      http.MethodPatch,
-		Path:        "/environments/{id}/projects/{projectId}/tags",
-		Summary:     "Update a project tag",
-		Description: "Attach or detach a UI-managed project tag",
-		Tags:        []string{"Projects"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermProjectsUpdate, h.UpdateProjectTag)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "deploy-project",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/projects/{projectId}/up",
-		Summary:     "Deploy a project",
-		Description: "Deploy a Docker Compose project (docker-compose up)",
-		Tags:        []string{"Projects"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermProjectsDeploy, h.DeployProject)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "down-project",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/projects/{projectId}/down",
-		Summary:     "Bring down a project",
-		Description: "Bring down a Docker Compose project (docker-compose down)",
-		Tags:        []string{"Projects"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermProjectsDown, h.DownProject)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "create-project",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/projects",
-		Summary:     "Create a project",
-		Description: "Create a new Docker Compose project",
-		Tags:        []string{"Projects"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		RequestBody: &huma.RequestBody{
-			Content: map[string]*huma.MediaType{
-				"multipart/form-data": {
-					Schema: &huma.Schema{
-						Type: "object",
-						Properties: map[string]*huma.Schema{
-							"project":  {Type: "string", Description: "JSON encoded project configuration"},
-							"manifest": {Type: "string", Description: "JSON encoded initial project workspace manifest"},
-							"files":    {Type: "array", Items: &huma.Schema{Type: "string", Format: "binary"}},
-						},
-						Required: []string{"project", "manifest"},
-					},
-				},
-			},
-		},
-	}, authz.PermProjectsCreate, h.CreateProject)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "get-project",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/projects/{projectId}",
-		Summary:     "Get a project",
-		Description: "Get a Docker Compose project by ID",
-		Tags:        []string{"Projects"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermProjectsRead, h.GetProject)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "get-project-compose",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/projects/{projectId}/compose",
-		Summary:     "Get project compose details",
-		Description: "Get compose content, includes, and service configs for a project",
-		Tags:        []string{"Projects"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermProjectsRead, h.GetProjectCompose)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "get-project-runtime",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/projects/{projectId}/runtime",
-		Summary:     "Get project runtime",
-		Description: "Get runtime service state for a project",
-		Tags:        []string{"Projects"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermProjectsRead, h.GetProjectRuntime)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "get-project-updates",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/projects/{projectId}/updates",
-		Summary:     "Get project updates",
-		Description: "Get image update summary for a project",
-		Tags:        []string{"Projects"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermProjectsRead, h.GetProjectUpdates)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "redeploy-project",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/projects/{projectId}/redeploy",
-		Summary:     "Redeploy a project",
-		Description: "Redeploy a Docker Compose project (down + up)",
-		Tags:        []string{"Projects"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermProjectsDeploy, h.RedeployProject)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "destroy-project",
-		Method:      http.MethodDelete,
-		Path:        "/environments/{id}/projects/{projectId}/destroy",
-		Summary:     "Destroy a project",
-		Description: "Destroy a Docker Compose project and optionally remove files/volumes",
-		Tags:        []string{"Projects"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermProjectsDelete, h.DestroyProject)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "update-project",
-		Method:      http.MethodPut,
-		Path:        "/environments/{id}/projects/{projectId}",
-		Summary:     "Update a project",
-		Description: "Update a Docker Compose project configuration",
-		Tags:        []string{"Projects"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermProjectsUpdate, h.UpdateProject)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "restart-project",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/projects/{projectId}/restart",
-		Summary:     "Restart a project",
-		Description: "Restart all containers in a Docker Compose project",
-		Tags:        []string{"Projects"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermProjectsRestart, h.RestartProject)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "update-project-services",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/projects/{projectId}/update-services",
-		Summary:     "Update project services",
-		Description: "Pull latest images and recreate the given services (all services when none are specified)",
-		Tags:        []string{"Projects"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermProjectsUpdate, h.UpdateProjectServices)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "archive-project",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/projects/{projectId}/archive",
-		Summary:     "Archive a project",
-		Description: "Archive a stopped Docker Compose project",
-		Tags:        []string{"Projects"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermProjectsArchive, h.ArchiveProject)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "unarchive-project",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/projects/{projectId}/unarchive",
-		Summary:     "Unarchive a project",
-		Description: "Unarchive a Docker Compose project",
-		Tags:        []string{"Projects"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermProjectsArchive, h.UnarchiveProject)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "pull-project-images",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/projects/{projectId}/pull",
-		Summary:     "Pull project images",
-		Description: "Pull all images for a Docker Compose project with streaming progress output",
-		Tags:        []string{"Projects"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermProjectsDeploy, h.PullProjectImages)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "build-project-images",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/projects/{projectId}/build",
-		Summary:     "Build project images",
-		Description: "Build Docker Compose services with build directives using BuildKit",
-		Tags:        []string{"Projects"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermProjectsDeploy, h.BuildProjectImages)
-}
-
 // ListProjects returns a paginated list of projects.
-func (h *ProjectHandler) ListProjects(ctx context.Context, input *ListProjectsInput) (*handlerutil.Page[projecttypes.Details], error) {
+func (h *ProjectHandler) ListProjects(ctx context.Context, input *ListProjectsInput) (*handlerutil.Page[project.Details], error) {
 	params := handlerutil.PaginationParams(input.Start, input.Limit, input.Sort, input.Order, input.Search)
 	if input.Status != "" {
 		params.Filters["status"] = input.Status
@@ -406,11 +178,11 @@ func (h *ProjectHandler) ListProjects(ctx context.Context, input *ListProjectsIn
 	}
 
 	if projects == nil {
-		projects = []projecttypes.Details{}
+		projects = []project.Details{}
 	}
 
-	return &handlerutil.Page[projecttypes.Details]{
-		Body: base.Paginated[projecttypes.Details]{
+	return &handlerutil.Page[project.Details]{
+		Body: base.Paginated[project.Details]{
 			Success:    true,
 			Data:       projects,
 			Pagination: handlerutil.PaginationResponse(paginationResp),
@@ -419,14 +191,14 @@ func (h *ProjectHandler) ListProjects(ctx context.Context, input *ListProjectsIn
 }
 
 // GetProjectStatusCounts returns counts of projects by status.
-func (h *ProjectHandler) GetProjectStatusCounts(ctx context.Context, input *GetProjectStatusCountsInput) (*handlerutil.Out[projecttypes.StatusCounts], error) {
+func (h *ProjectHandler) GetProjectStatusCounts(ctx context.Context, input *GetProjectStatusCountsInput) (*handlerutil.Out[project.StatusCounts], error) {
 	counts, err := h.projectService.GetProjectStatusCounts(ctx)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("Failed to get project status counts: " + err.Error())
 	}
 
-	return &handlerutil.Out[projecttypes.StatusCounts]{
-		Body: base.ApiResponse[projecttypes.StatusCounts]{
+	return &handlerutil.Out[project.StatusCounts]{
+		Body: base.ApiResponse[project.StatusCounts]{
 			Success: true,
 			Data:    counts,
 		},
@@ -434,25 +206,25 @@ func (h *ProjectHandler) GetProjectStatusCounts(ctx context.Context, input *GetP
 }
 
 // ListProjectTags returns the reusable project tag catalog for an environment.
-func (h *ProjectHandler) ListProjectTags(ctx context.Context, _ *ListProjectTagsInput) (*handlerutil.Out[[]projecttypes.TagOption], error) {
+func (h *ProjectHandler) ListProjectTags(ctx context.Context, _ *ListProjectTagsInput) (*handlerutil.Out[[]project.TagOption], error) {
 	options, err := h.projectService.ListProjectTagOptions(ctx)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("Failed to list project tags: " + err.Error())
 	}
 	if options == nil {
-		options = []projecttypes.TagOption{}
+		options = []project.TagOption{}
 	}
-	return &handlerutil.Out[[]projecttypes.TagOption]{Body: base.ApiResponse[[]projecttypes.TagOption]{Success: true, Data: options}}, nil
+	return &handlerutil.Out[[]project.TagOption]{Body: base.ApiResponse[[]project.TagOption]{Success: true, Data: options}}, nil
 }
 
 // UpdateProjectTag applies one UI-managed project tag association change.
-func (h *ProjectHandler) UpdateProjectTag(ctx context.Context, input *UpdateProjectTagInput) (*handlerutil.Out[projecttypes.UpdateTagResponse], error) {
+func (h *ProjectHandler) UpdateProjectTag(ctx context.Context, input *UpdateProjectTagInput) (*handlerutil.Out[project.UpdateTagResponse], error) {
 	user, err := handlerutil.RequireUser(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var tags []projecttypes.Tag
+	var projectTags []project.Tag
 	runtimeCtx := utils.ActivityRuntimeContext(ctx, h.appCtx)
 	activityID, err := activitylib.RunHandlerActivity(runtimeCtx, h.activityService, activitylib.HandlerOptions{
 		EnvironmentID:  input.EnvironmentID,
@@ -467,12 +239,12 @@ func (h *ProjectHandler) UpdateProjectTag(ctx context.Context, input *UpdateProj
 		Metadata:       database.JSON{"action": "update_tags", "tag": input.Body.Name, "attached": input.Body.Attached},
 	}, func(runtimeCtx context.Context) error {
 		var updateErr error
-		tags, updateErr = h.projectService.UpdateProjectTag(runtimeCtx, input.ProjectID, input.Body.Name, input.Body.Color, input.Body.Attached, *user)
+		projectTags, updateErr = h.projectService.UpdateProjectTag(runtimeCtx, input.ProjectID, input.Body.Name, input.Body.Color, input.Body.Attached, *user)
 		return updateErr
 	})
 	if err != nil {
 		switch {
-		case errors.Is(err, errComposeTagReadOnly):
+		case errors.Is(err, tags.ErrComposeTagReadOnly):
 			return nil, huma.Error409Conflict(err.Error())
 		case errors.Is(err, gorm.ErrRecordNotFound):
 			return nil, huma.Error404NotFound("Project not found")
@@ -481,10 +253,10 @@ func (h *ProjectHandler) UpdateProjectTag(ctx context.Context, input *UpdateProj
 		}
 	}
 
-	return &handlerutil.Out[projecttypes.UpdateTagResponse]{Body: base.ApiResponse[projecttypes.UpdateTagResponse]{
+	return &handlerutil.Out[project.UpdateTagResponse]{Body: base.ApiResponse[project.UpdateTagResponse]{
 		Success: true,
-		Data: projecttypes.UpdateTagResponse{
-			Tags:       tags,
+		Data: project.UpdateTagResponse{
+			Tags:       projectTags,
 			ActivityID: mo.EmptyableToOption(strings.TrimSpace(activityID)).ToPointer(),
 		},
 	}}, nil
@@ -521,7 +293,7 @@ func (h *ProjectHandler) projectActivityNameInternal(ctx context.Context, projec
 // project endpoints: NDJSON headers, activity lifecycle (started frame, queue
 // slot, completion), the activity-teeing writer, and the terminal done/error
 // frames.
-func (h *ProjectHandler) streamProjectOperationInternal(environmentID, projectID string, user *common.User, cfg projectStreamOperationConfigInternal) *huma.StreamResponse {
+func (h *ProjectHandler) streamProjectOperationInternal(environmentID, projectID string, user *usertypes.Actor, cfg projectStreamOperationConfigInternal) *huma.StreamResponse {
 	return &huma.StreamResponse{
 		Body: func(humaCtx huma.Context) {
 			httpx.SetJSONStreamHeaders(humaCtx)
@@ -554,7 +326,7 @@ func (h *ProjectHandler) streamProjectOperationInternal(environmentID, projectID
 
 			writer := activitylib.NewWriter(runtimeCtx, h.activityService, activityID, rawWriter, cfg.WriterStep)
 
-			opCtx := context.WithValue(runtimeCtx, dockerutils.ProgressWriterKey{}, writer)
+			opCtx := context.WithValue(runtimeCtx, docker.ProgressWriterKey{}, writer)
 			if err := cfg.Action(opCtx, writer); err != nil {
 				activitylib.FlushWriter(writer)
 				activitylib.CompleteHandlerActivity(runtimeCtx, h.activityService, activityID, cfg.FailureMessage, err)
@@ -624,7 +396,7 @@ func (h *ProjectHandler) DownProject(ctx context.Context, input *DownProjectInpu
 		false,
 	)
 	activityWriter := activitylib.NewWriter(runtimeCtx, h.activityService, activityID, io.Discard, "Stopping project")
-	downCtx := context.WithValue(runtimeCtx, dockerutils.ProgressWriterKey{}, activityWriter)
+	downCtx := context.WithValue(runtimeCtx, docker.ProgressWriterKey{}, activityWriter)
 	if downProjectErr := h.projectService.DownProject(downCtx, input.ProjectID, *user); downProjectErr != nil {
 		activitylib.FlushWriter(activityWriter)
 		activitylib.CompleteHandlerActivity(runtimeCtx, h.activityService, activityID, "Project stopped", downProjectErr)
@@ -648,13 +420,13 @@ func (h *ProjectHandler) DownProject(ctx context.Context, input *DownProjectInpu
 }
 
 func projectUpdateHTTPErrorInternal(err error) error {
-	if conflictErr, ok := errors.AsType[*volumetypes.ProjectVolumeRenameConflictError](err); ok {
+	if conflictErr, ok := errors.AsType[*volume.ProjectVolumeRenameConflictError](err); ok {
 		return huma.Error409Conflict(conflictErr.Error())
 	}
-	if inUseErr, ok := errors.AsType[*volumetypes.ProjectVolumeRenameInUseError](err); ok {
+	if inUseErr, ok := errors.AsType[*volume.ProjectVolumeRenameInUseError](err); ok {
 		return huma.Error409Conflict(inUseErr.Error())
 	}
-	if spaceErr, ok := errors.AsType[*volumetypes.ProjectVolumeRenameInsufficientSpaceError](err); ok {
+	if spaceErr, ok := errors.AsType[*volume.ProjectVolumeRenameInsufficientSpaceError](err); ok {
 		return huma.NewError(http.StatusInsufficientStorage, spaceErr.Error())
 	}
 	return projectWorkspaceRequestHTTPErrorInternal(err)
@@ -676,20 +448,20 @@ func projectWorkspaceRequestHTTPErrorInternal(err error) error {
 }
 
 // CreateProject creates a new Docker Compose project.
-func (h *ProjectHandler) CreateProject(ctx context.Context, input *CreateProjectInput) (*handlerutil.Out[projecttypes.CreateReponse], error) {
-	projectInput, err := handlerutil.ParseMultipartJSONPart[projecttypes.CreateProject](input.RawBody, "project")
+func (h *ProjectHandler) CreateProject(ctx context.Context, input *CreateProjectInput) (*handlerutil.Out[project.CreateReponse], error) {
+	projectInput, err := handlerutil.ParseMultipartJSONPart[project.CreateProject](input.RawBody, "project")
 	if err != nil {
 		return nil, err
 	}
-	manifest, err := handlerutil.ParseMultipartJSONPart[projecttypes.CreateProjectWorkspaceManifest](input.RawBody, "manifest")
+	manifest, err := handlerutil.ParseMultipartJSONPart[project.CreateProjectWorkspaceManifest](input.RawBody, "manifest")
 	if err != nil {
 		return nil, err
 	}
-	maxFileSizeMB := workspacepkg.DefaultMaxFileSizeMB
+	maxFileSizeMB := workspace.DefaultMaxFileSizeMB
 	if h.projectService != nil && h.projectService.config != nil {
 		maxFileSizeMB = h.projectService.config.ProjectWorkspaceMaxFileSizeMB
 	}
-	uploads, err := handlerutil.ReadWorkspaceUploads(input.RawBody, workspacepkg.MaxFileSizeBytes(maxFileSizeMB))
+	uploads, err := handlerutil.ReadWorkspaceUploads(input.RawBody, workspace.MaxFileSizeBytes(maxFileSizeMB))
 	if err != nil {
 		return nil, err
 	}
@@ -733,7 +505,7 @@ func (h *ProjectHandler) CreateProject(ctx context.Context, input *CreateProject
 		return nil, huma.Error500InternalServerError("Failed to create project: " + err.Error())
 	}
 
-	var response projecttypes.CreateReponse
+	var response project.CreateReponse
 	if mapStructErr := mapping.MapStruct(proj, &response); mapStructErr != nil {
 		return nil, huma.Error500InternalServerError("failed to map response")
 	}
@@ -752,8 +524,8 @@ func (h *ProjectHandler) CreateProject(ctx context.Context, input *CreateProject
 		return nil, huma.Error500InternalServerError("Failed to load project tags: " + err.Error())
 	}
 
-	return &handlerutil.Out[projecttypes.CreateReponse]{
-		Body: base.ApiResponse[projecttypes.CreateReponse]{
+	return &handlerutil.Out[project.CreateReponse]{
+		Body: base.ApiResponse[project.CreateReponse]{
 			Success: true,
 			Data:    response,
 		},
@@ -761,25 +533,25 @@ func (h *ProjectHandler) CreateProject(ctx context.Context, input *CreateProject
 }
 
 // GetProject returns a project by ID.
-func (h *ProjectHandler) GetProject(ctx context.Context, input *GetProjectInput) (*handlerutil.Out[projecttypes.Details], error) {
+func (h *ProjectHandler) GetProject(ctx context.Context, input *GetProjectInput) (*handlerutil.Out[project.Details], error) {
 	if input.ProjectID == "" {
 		return nil, huma.Error400BadRequest("Project ID is required")
 	}
 
-	details, err := h.projectService.GetProjectDetails(ctx, input.ProjectID, projecttypes.DetailsOptions{})
+	details, err := h.projectService.GetProjectDetails(ctx, input.ProjectID, project.DetailsOptions{})
 	if err != nil {
 		return nil, huma.Error404NotFound("Failed to get project details: " + err.Error())
 	}
 
-	return &handlerutil.Out[projecttypes.Details]{
-		Body: base.ApiResponse[projecttypes.Details]{
+	return &handlerutil.Out[project.Details]{
+		Body: base.ApiResponse[project.Details]{
 			Success: true,
 			Data:    details,
 		},
 	}, nil
 }
 
-func (h *ProjectHandler) getProjectDetailsWithOptionsInternal(ctx context.Context, input *GetProjectInput, opts projecttypes.DetailsOptions) (*handlerutil.Out[projecttypes.Details], error) {
+func (h *ProjectHandler) getProjectDetailsWithOptionsInternal(ctx context.Context, input *GetProjectInput, opts project.DetailsOptions) (*handlerutil.Out[project.Details], error) {
 	if input.ProjectID == "" {
 		return nil, huma.Error400BadRequest("Project ID is required")
 	}
@@ -789,16 +561,16 @@ func (h *ProjectHandler) getProjectDetailsWithOptionsInternal(ctx context.Contex
 		return nil, huma.Error404NotFound("Failed to get project details: " + err.Error())
 	}
 
-	return &handlerutil.Out[projecttypes.Details]{
-		Body: base.ApiResponse[projecttypes.Details]{
+	return &handlerutil.Out[project.Details]{
+		Body: base.ApiResponse[project.Details]{
 			Success: true,
 			Data:    details,
 		},
 	}, nil
 }
 
-func (h *ProjectHandler) GetProjectCompose(ctx context.Context, input *GetProjectInput) (*handlerutil.Out[projecttypes.Details], error) {
-	return h.getProjectDetailsWithOptionsInternal(ctx, input, projecttypes.DetailsOptions{
+func (h *ProjectHandler) GetProjectCompose(ctx context.Context, input *GetProjectInput) (*handlerutil.Out[project.Details], error) {
+	return h.getProjectDetailsWithOptionsInternal(ctx, input, project.DetailsOptions{
 		IncludeComposeContent: true,
 		IncludeEnvState:       true,
 		IncludeIncludeFiles:   true,
@@ -806,14 +578,14 @@ func (h *ProjectHandler) GetProjectCompose(ctx context.Context, input *GetProjec
 	})
 }
 
-func (h *ProjectHandler) GetProjectRuntime(ctx context.Context, input *GetProjectInput) (*handlerutil.Out[projecttypes.Details], error) {
-	return h.getProjectDetailsWithOptionsInternal(ctx, input, projecttypes.DetailsOptions{
+func (h *ProjectHandler) GetProjectRuntime(ctx context.Context, input *GetProjectInput) (*handlerutil.Out[project.Details], error) {
+	return h.getProjectDetailsWithOptionsInternal(ctx, input, project.DetailsOptions{
 		IncludeRuntimeServices: true,
 	})
 }
 
-func (h *ProjectHandler) GetProjectUpdates(ctx context.Context, input *GetProjectInput) (*handlerutil.Out[projecttypes.Details], error) {
-	return h.getProjectDetailsWithOptionsInternal(ctx, input, projecttypes.DetailsOptions{
+func (h *ProjectHandler) GetProjectUpdates(ctx context.Context, input *GetProjectInput) (*handlerutil.Out[project.Details], error) {
+	return h.getProjectDetailsWithOptionsInternal(ctx, input, project.DetailsOptions{
 		IncludeServiceConfigs: true,
 		IncludeUpdateInfo:     true,
 	})
@@ -892,7 +664,7 @@ func (h *ProjectHandler) DestroyProject(ctx context.Context, input *DestroyProje
 		false,
 	)
 	activityWriter := activitylib.NewWriter(runtimeCtx, h.activityService, activityID, io.Discard, "Destroying project")
-	destroyCtx := context.WithValue(runtimeCtx, dockerutils.ProgressWriterKey{}, activityWriter)
+	destroyCtx := context.WithValue(runtimeCtx, docker.ProgressWriterKey{}, activityWriter)
 	if destroyProjectErr := h.projectService.DestroyProject(destroyCtx, input.ProjectID, removeFiles, removeVolumes, *user); destroyProjectErr != nil {
 		activitylib.FlushWriter(activityWriter)
 		activitylib.CompleteHandlerActivity(runtimeCtx, h.activityService, activityID, "Project destroyed", destroyProjectErr)
@@ -913,7 +685,7 @@ func (h *ProjectHandler) DestroyProject(ctx context.Context, input *DestroyProje
 }
 
 // UpdateProject updates a Docker Compose project.
-func (h *ProjectHandler) UpdateProject(ctx context.Context, input *UpdateProjectInput) (*handlerutil.Out[projecttypes.Details], error) {
+func (h *ProjectHandler) UpdateProject(ctx context.Context, input *UpdateProjectInput) (*handlerutil.Out[project.Details], error) {
 	if input.ProjectID == "" {
 		return nil, huma.Error400BadRequest("Project ID is required")
 	}
@@ -946,7 +718,7 @@ func (h *ProjectHandler) UpdateProject(ctx context.Context, input *UpdateProject
 		return nil, huma.Error400BadRequest("Failed to update project: " + err.Error())
 	}
 
-	details, err := h.projectService.GetProjectDetails(runtimeCtx, input.ProjectID, projecttypes.DetailsOptions{
+	details, err := h.projectService.GetProjectDetails(runtimeCtx, input.ProjectID, project.DetailsOptions{
 		IncludeComposeContent:  true,
 		IncludeEnvState:        true,
 		IncludeIncludeFiles:    true,
@@ -959,8 +731,8 @@ func (h *ProjectHandler) UpdateProject(ctx context.Context, input *UpdateProject
 	}
 	details.ActivityID = mo.EmptyableToOption(strings.TrimSpace(activityID)).ToPointer()
 
-	return &handlerutil.Out[projecttypes.Details]{
-		Body: base.ApiResponse[projecttypes.Details]{
+	return &handlerutil.Out[project.Details]{
+		Body: base.ApiResponse[project.Details]{
 			Success: true,
 			Data:    details,
 		},
@@ -1008,7 +780,7 @@ type projectActivityActionConfigInternal struct {
 	// Queue routes the activity through the per-environment concurrency
 	// limiter; set for long-running deploy-like actions, not quick restarts.
 	Queue  bool
-	Action func(context.Context, string, common.User) error
+	Action func(context.Context, string, usertypes.Actor) error
 	Error  func(error) error
 }
 
@@ -1022,7 +794,7 @@ func (h *ProjectHandler) updateProjectServicesActivityConfigInternal(services []
 		SuccessComplete: "Project services updated",
 		SuccessMessage:  "Project services updated successfully",
 		Queue:           true,
-		Action: func(runtimeCtx context.Context, projectID string, user common.User) error {
+		Action: func(runtimeCtx context.Context, projectID string, user usertypes.Actor) error {
 			return h.projectService.UpdateProjectServices(runtimeCtx, projectID, services, user, true)
 		},
 		Error: projectArchivedActionErrorInternal(func(err error) error {
@@ -1040,7 +812,7 @@ func (h *ProjectHandler) restartProjectActivityConfigInternal(services []string)
 		FailureMessage:  "Project restarted",
 		SuccessComplete: "Project restarted",
 		SuccessMessage:  "Project restarted successfully",
-		Action: func(runtimeCtx context.Context, projectID string, user common.User) error {
+		Action: func(runtimeCtx context.Context, projectID string, user usertypes.Actor) error {
 			return h.projectService.RestartProject(runtimeCtx, projectID, services, user)
 		},
 		Error: projectArchivedActionErrorInternal(func(err error) error {
@@ -1125,7 +897,7 @@ func (h *ProjectHandler) runProjectActivityActionInternal(ctx context.Context, e
 		)
 	}
 	activityWriter := activitylib.NewWriter(runtimeCtx, h.activityService, activityID, io.Discard, cfg.WriterStep)
-	actionCtx := context.WithValue(runtimeCtx, dockerutils.ProgressWriterKey{}, activityWriter)
+	actionCtx := context.WithValue(runtimeCtx, docker.ProgressWriterKey{}, activityWriter)
 	if actionErr := cfg.Action(actionCtx, projectID, *user); actionErr != nil {
 		activitylib.FlushWriter(activityWriter)
 		activitylib.CompleteHandlerActivity(runtimeCtx, h.activityService, activityID, cfg.FailureMessage, actionErr)
@@ -1223,7 +995,7 @@ func (h *ProjectHandler) BuildProjectImages(ctx context.Context, input *BuildPro
 		return nil, err
 	}
 
-	options := projecttypes.BuildOptions{}
+	options := project.BuildOptions{}
 	if input.Body != nil {
 		options.Services = input.Body.Services
 		options.Provider = input.Body.Provider
@@ -1261,41 +1033,6 @@ type UpdateProjectWorkspaceInput struct {
 	EnvironmentID string         `path:"id" doc:"Environment ID"`
 	ProjectID     string         `path:"projectId" doc:"Project ID"`
 	RawBody       multipart.Form `contentType:"multipart/form-data"`
-}
-
-func registerProjectWorkspaceRoutesInternal(api huma.API, h *ProjectHandler) {
-	basePath := "/environments/{id}/projects/{projectId}/workspace"
-	tag := "Project Workspace"
-	handlerutil.RegisterSecured(api, handlerutil.Operation("get-project-workspace", http.MethodGet, basePath, "Get project workspace", "", tag), authz.PermProjectsRead, h.GetProjectWorkspace)
-	handlerutil.RegisterSecured(
-		api,
-		handlerutil.Operation(
-			"get-project-workspace-file",
-			http.MethodGet,
-			basePath+"/file",
-			"Get project workspace file",
-			"",
-			tag,
-		),
-		authz.PermProjectsRead,
-		h.GetProjectWorkspaceFile,
-	)
-	handlerutil.RegisterSecured(
-		api,
-		handlerutil.Operation(
-			"download-project-workspace-file",
-			http.MethodGet,
-			basePath+"/file/download",
-			"Download project workspace file",
-			"",
-			tag,
-		),
-		authz.PermProjectsRead,
-		h.DownloadProjectWorkspaceFile,
-	)
-	updateOperation := handlerutil.Operation("update-project-workspace", http.MethodPut, basePath, "Update project workspace", "", tag)
-	updateOperation.RequestBody = handlerutil.WorkspaceMultipartRequestBody("JSON encoded project workspace manifest")
-	handlerutil.RegisterSecured(api, updateOperation, authz.PermProjectsUpdate, h.UpdateProjectWorkspace)
 }
 
 func projectWorkspaceHTTPErrorInternal(err error) error {
@@ -1340,15 +1077,15 @@ func (h *ProjectHandler) DownloadProjectWorkspaceFile(ctx context.Context, input
 }
 
 func (h *ProjectHandler) UpdateProjectWorkspace(ctx context.Context, input *UpdateProjectWorkspaceInput) (*handlerutil.Out[workspacetypes.Workspace], error) {
-	manifest, err := handlerutil.ParseMultipartJSONPart[projecttypes.WorkspaceUpdateManifest](input.RawBody, "manifest")
+	manifest, err := handlerutil.ParseMultipartJSONPart[project.WorkspaceUpdateManifest](input.RawBody, "manifest")
 	if err != nil {
 		return nil, err
 	}
-	maxFileSizeMB := workspacepkg.DefaultMaxFileSizeMB
+	maxFileSizeMB := workspace.DefaultMaxFileSizeMB
 	if h.projectService != nil && h.projectService.config != nil {
 		maxFileSizeMB = h.projectService.config.ProjectWorkspaceMaxFileSizeMB
 	}
-	uploads, err := handlerutil.ReadWorkspaceUploads(input.RawBody, workspacepkg.MaxFileSizeBytes(maxFileSizeMB))
+	uploads, err := handlerutil.ReadWorkspaceUploads(input.RawBody, workspace.MaxFileSizeBytes(maxFileSizeMB))
 	if err != nil {
 		return nil, err
 	}

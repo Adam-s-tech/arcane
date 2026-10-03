@@ -1,15 +1,14 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
-	import { Spinner } from '#lib/components/ui/spinner/index.js';
-	import { Badge, type BadgeVariant } from '#lib/components/ui/badge/index.js';
-	import { toast } from 'svelte-sonner';
-	import type { ImageUpdateData, ImageUpdateInfoDto } from '#lib/types/docker.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import { imageService } from '#lib/services/image-service.js';
-	import { queryKeys } from '#lib/query/query-keys.js';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import { createQuery } from '@tanstack/svelte-query';
+	import { mergeProps } from 'bits-ui';
 	import type { Component } from 'svelte';
+	import { toast } from 'svelte-sonner';
+
+	import { Badge, type BadgeVariant } from '#lib/components/ui/badge/index.js';
+	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import UncheckedRingIcon from '#lib/components/unchecked-ring-icon.svelte';
+	import UpdateStatusBanner from '#lib/components/update-status-banner.svelte';
+	import UpdateStatusPopover from '#lib/components/update-status-popover.svelte';
 	import {
 		ArrowRightIcon,
 		RefreshIcon,
@@ -20,13 +19,14 @@
 		BoxIcon,
 		DownloadIcon
 	} from '#lib/icons/index.js';
-	import { createQuery } from '@tanstack/svelte-query';
-	import UpdateStatusPopover from '#lib/components/update-status-popover.svelte';
-	import UpdateStatusBanner from '#lib/components/update-status-banner.svelte';
+	import { m } from '#lib/paraglide/messages.js';
+	import { queryKeys } from '#lib/query/query-keys.js';
+	import { imageService } from '#lib/services/image-service.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import type { ImageUpdateData, ImageUpdateInfoDto } from '#lib/types/docker.js';
 	import { activityToastOptions, extractActivityId } from '#lib/utils/activity-toast.js';
-	import UncheckedRingIcon from '#lib/components/unchecked-ring-icon.svelte';
-	import { mergeProps } from 'bits-ui';
 	import { instantEpochMilliseconds, nowInstantString } from '#lib/utils/formatting.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	interface Props {
 		updateInfo?: ImageUpdateData;

@@ -1,21 +1,22 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { toast } from 'svelte-sonner';
+
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { templateService } from '#lib/services/template-service.js';
 	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
 	import { createForm } from '#lib/utils/settings.svelte.js';
-
-	import { tryCatch } from '#lib/utils/try-catch.js';
-	import { toast } from 'svelte-sonner';
-	import TemplateEditorWorkspace from '../components/template-editor-workspace.svelte';
-	import { globalVariablesToMap } from '#lib/utils/template-load.js';
 	import {
 		createNamedTemplateSchema,
 		getTemplateEditorValidationState,
 		hasTemplateEditorErrors,
 		validateTemplateEditorForm
 	} from '#lib/utils/template-editor.js';
+	import { globalVariablesToMap } from '#lib/utils/template-load.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+
+	import TemplateEditorWorkspace from '../components/template-editor-workspace.svelte';
 
 	let { data } = $props();
 

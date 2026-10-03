@@ -1,4 +1,3 @@
-import BaseAPIService from './api-service';
 import type {
 	GitRepositoryCreateDto,
 	GitRepositoryUpdateDto,
@@ -9,6 +8,8 @@ import type {
 } from '#lib/types/automation.js';
 import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
 import { transformPaginationParams } from '#lib/utils/tables.js';
+
+import BaseAPIService from './api-service';
 
 class GitRepositoryService extends BaseAPIService {
 	async getRepositories(options?: SearchPaginationSortRequest): Promise<Paginated<GitRepository>> {

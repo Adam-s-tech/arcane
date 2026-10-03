@@ -3,10 +3,10 @@ package federated
 import (
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/environment"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/role"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/user"
 )
 
 const (
@@ -31,7 +31,7 @@ type FederatedCredential struct {
 	TokenTTLSeconds int                      `json:"tokenTtlSeconds" gorm:"column:token_ttl_seconds;not null;default:900"`
 	LastUsedAt      *time.Time               `json:"lastUsedAt,omitempty" gorm:"column:last_used_at" sortable:"true"`
 	ExpiresAt       *time.Time               `json:"expiresAt,omitempty" gorm:"column:expires_at" sortable:"true"`
-	IdentityUser    *common.User             `json:"identityUser,omitempty" gorm:"foreignKey:IdentityUserID;constraint:OnDelete:CASCADE"`
+	IdentityUser    *user.User               `json:"identityUser,omitempty" gorm:"foreignKey:IdentityUserID;constraint:OnDelete:CASCADE"`
 	Role            *role.Role               `json:"role,omitempty" gorm:"foreignKey:RoleID;constraint:OnDelete:RESTRICT"`
 	Environment     *environment.Environment `json:"environment,omitempty" gorm:"foreignKey:EnvironmentID;constraint:OnDelete:SET NULL"`
 }

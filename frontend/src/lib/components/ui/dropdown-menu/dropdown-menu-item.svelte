@@ -1,6 +1,8 @@
 <script lang="ts">
-	import { cn } from '#lib/utils.js';
 	import { DropdownMenu as DropdownMenuPrimitive } from 'bits-ui';
+
+	import { cn } from '#lib/utils.js';
+
 	import { getDropdownMenuContext, hasDropdownMenuContext } from './dropdown-menu-context';
 
 	let {

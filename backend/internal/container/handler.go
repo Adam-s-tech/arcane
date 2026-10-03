@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"maps"
-	"net/http"
 	"net/netip"
 	"strings"
 
@@ -14,14 +13,16 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
 	"github.com/getarcaneapp/arcane/types/v2/base"
-	containertypes "github.com/getarcaneapp/arcane/types/v2/container"
+	"github.com/getarcaneapp/arcane/types/v2/container"
+	usertypes "github.com/getarcaneapp/arcane/types/v2/user"
 	dockercontainer "github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/network"
 	"github.com/samber/mo"
-	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/kit/pkg"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/container/children/stats"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/docker"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
@@ -44,12 +45,12 @@ type ContainerHandler struct {
 
 // ContainerPaginatedResponse is the paginated list response for containers.
 type ContainerPaginatedResponse struct {
-	Success               bool                          `json:"success"`
-	Data                  []containertypes.Summary      `json:"data"`
-	Groups                []containertypes.SummaryGroup `json:"groups,omitempty"`
-	Counts                containertypes.StatusCounts   `json:"counts"`
-	Pagination            base.PaginationResponse       `json:"pagination"`
-	ResourceSortSupported bool                          `json:"resourceSortSupported"`
+	Success               bool                     `json:"success"`
+	Data                  []container.Summary      `json:"data"`
+	Groups                []container.SummaryGroup `json:"groups,omitempty"`
+	Counts                container.StatusCounts   `json:"counts"`
+	Pagination            base.PaginationResponse  `json:"pagination"`
+	ResourceSortSupported bool                     `json:"resourceSortSupported"`
 }
 
 type ListContainersInput struct {
@@ -79,7 +80,7 @@ type GetContainerStatusCountsInput struct {
 
 type CreateContainerInput struct {
 	EnvironmentID string `path:"id" doc:"Environment ID"`
-	Body          containertypes.Create
+	Body          container.Create
 }
 
 type GetContainerInput struct {
@@ -118,7 +119,7 @@ type KillContainerInput struct {
 type CommitContainerInput struct {
 	EnvironmentID string `path:"id" doc:"Environment ID"`
 	ContainerID   string `path:"containerId" doc:"Container ID"`
-	Body          containertypes.CommitRequest
+	Body          container.CommitRequest
 }
 
 type GetContainerEditConfigInput struct {
@@ -129,214 +130,16 @@ type GetContainerEditConfigInput struct {
 type EditContainerInput struct {
 	EnvironmentID string `path:"id" doc:"Environment ID"`
 	ContainerID   string `path:"containerId" doc:"Container ID"`
-	Body          containertypes.Edit
+	Body          container.Edit
 }
 
 type GenerateComposeInput struct {
 	EnvironmentID string `path:"id" doc:"Environment ID"`
-	Body          containertypes.GenerateComposeRequest
-}
-
-func RegisterContainers(
-	api huma.API,
-	containerSvc *ContainerService,
-	dockerSvc *docker.DockerClientService,
-	settingsSvc *settings.SettingsService,
-	activitySvc *activity.ActivityService,
-	appCtx handlerutil.ActivityAppContext,
-) {
-	h := &ContainerHandler{
-		containerService: containerSvc,
-		dockerService:    dockerSvc,
-		settingsService:  settingsSvc,
-		activityService:  activitySvc,
-		appCtx:           appCtx.Context(),
-	}
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "list-containers",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/containers",
-		Summary:     "List containers",
-		Description: "Paginated list of containers",
-		Tags:        []string{"Containers"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermContainersList, h.ListContainers)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "container-status-counts",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/containers/counts",
-		Summary:     "Container status counts",
-		Tags:        []string{"Containers"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermContainersList, h.GetContainerStatusCounts)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "create-container",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/containers",
-		Summary:     "Create container",
-		Tags:        []string{"Containers"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermContainersCreate, h.CreateContainer)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "get-container",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/containers/{containerId}",
-		Summary:     "Get container",
-		Tags:        []string{"Containers"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermContainersRead, h.GetContainer)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "get-container-processes",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/containers/{containerId}/processes",
-		Summary:     "Get container processes",
-		Description: "Snapshot of the processes running inside the container, as reported by Docker",
-		Tags:        []string{"Containers"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermContainersRead, h.GetContainerProcesses)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "start-container",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/containers/{containerId}/start",
-		Summary:     "Start container",
-		Tags:        []string{"Containers"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermContainersStart, h.StartContainer)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "stop-container",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/containers/{containerId}/stop",
-		Summary:     "Stop container",
-		Tags:        []string{"Containers"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermContainersStop, h.StopContainer)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "restart-container",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/containers/{containerId}/restart",
-		Summary:     "Restart container",
-		Tags:        []string{"Containers"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermContainersRestart, h.RestartContainer)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "kill-container",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/containers/{containerId}/kill",
-		Summary:     "Kill container",
-		Description: "Send a signal to the container's main process (default SIGKILL)",
-		Tags:        []string{"Containers"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermContainersKill, h.KillContainer)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "pause-container",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/containers/{containerId}/pause",
-		Summary:     "Pause container",
-		Tags:        []string{"Containers"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermContainersPause, h.PauseContainer)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "unpause-container",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/containers/{containerId}/unpause",
-		Summary:     "Unpause container",
-		Tags:        []string{"Containers"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermContainersPause, h.UnpauseContainer)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "commit-container",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/containers/{containerId}/commit",
-		Summary:     "Commit container",
-		Description: "Create an image from a container",
-		Tags:        []string{"Containers", "Images"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermImagesCommit, h.CommitContainer)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "redeploy-container",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/containers/{containerId}/redeploy",
-		Summary:     "Redeploy container",
-		Description: "Pull latest image and recreate container",
-		Tags:        []string{"Containers"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermContainersRedeploy, h.RedeployContainer)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "generate-compose",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/containers/generate-compose",
-		Summary:     "Generate compose file",
-		Description: "Generate a compose file from existing containers",
-		Tags:        []string{"Containers"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermContainersRead, h.GenerateCompose)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "get-container-edit-config",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/containers/{containerId}/edit-config",
-		Summary:     "Get container edit config",
-		Description: "Editable configuration snapshot backing the container edit form",
-		Tags:        []string{"Containers"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermContainersRead, h.GetContainerEditConfig)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "edit-container",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/containers/{containerId}/edit",
-		Summary:     "Edit container",
-		Description: "Apply configuration changes and recreate the container",
-		Tags:        []string{"Containers"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermContainersEdit, h.EditContainer)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "delete-container",
-		Method:      http.MethodDelete,
-		Path:        "/environments/{id}/containers/{containerId}",
-		Summary:     "Delete container",
-		Tags:        []string{"Containers"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermContainersDelete, h.DeleteContainer)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "download-container-logs",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/containers/{containerId}/logs/download",
-		Summary:     "Download container logs",
-		Description: "Download every log line Docker retains for the container as a text file",
-		Tags:        []string{"Containers"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermContainersLogs, h.DownloadContainerLogs)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "set-container-auto-update",
-		Method:      http.MethodPut,
-		Path:        "/environments/{id}/containers/{containerId}/auto-update",
-		Summary:     "Set container auto-update",
-		Description: "Enable or disable auto-update for a specific container",
-		Tags:        []string{"Containers", "Updater"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermContainersAutoUpdate, h.SetAutoUpdate)
+	Body          container.GenerateComposeRequest
 }
 
 func (h *ContainerHandler) ListContainers(ctx context.Context, input *ListContainersInput) (*ListContainersOutput, error) {
-	if ps, _ := middleware.PermissionsFromContext(ctx); containerResourceSortPermissionDeniedInternal(ps, input.EnvironmentID, input.Sort) {
+	if ps, _ := middleware.PermissionsFromContext(ctx); stats.ContainerResourceSortPermissionDenied(ps, input.EnvironmentID, input.Sort) {
 		return nil, huma.Error403Forbidden("permission denied: " + authz.PermContainersRead)
 	}
 
@@ -368,7 +171,7 @@ func (h *ContainerHandler) ListContainers(ctx context.Context, input *ListContai
 	}, nil
 }
 
-func (h *ContainerHandler) GetContainerStatusCounts(ctx context.Context, input *GetContainerStatusCountsInput) (*handlerutil.Out[containertypes.StatusCounts], error) {
+func (h *ContainerHandler) GetContainerStatusCounts(ctx context.Context, input *GetContainerStatusCountsInput) (*handlerutil.Out[container.StatusCounts], error) {
 	containers, _, _, _, err := h.dockerService.GetAllContainers(ctx)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("Failed to get container counts: " + err.Error())
@@ -386,10 +189,10 @@ func (h *ContainerHandler) GetContainerStatusCounts(ctx context.Context, input *
 	}
 	total := len(containers)
 
-	return &handlerutil.Out[containertypes.StatusCounts]{
-		Body: base.ApiResponse[containertypes.StatusCounts]{
+	return &handlerutil.Out[container.StatusCounts]{
+		Body: base.ApiResponse[container.StatusCounts]{
 			Success: true,
-			Data: containertypes.StatusCounts{
+			Data: container.StatusCounts{
 				RunningContainers: running,
 				StoppedContainers: stopped,
 				TotalContainers:   total,
@@ -406,7 +209,7 @@ func parsePortSpec(spec string) (network.Port, error) {
 	return network.ParsePort(spec + "/tcp")
 }
 
-func buildCreateLabels(body containertypes.Create) map[string]string {
+func buildCreateLabels(body container.Create) map[string]string {
 	labels := map[string]string{
 		"com.arcane.created": "true",
 	}
@@ -415,7 +218,7 @@ func buildCreateLabels(body containertypes.Create) map[string]string {
 	return labels
 }
 
-func buildContainerConfig(body containertypes.Create) *dockercontainer.Config {
+func buildContainerConfig(body container.Create) *dockercontainer.Config {
 	return &dockercontainer.Config{
 		Image:           body.Image,
 		Cmd:             kit.Ternary(len(body.Command) > 0, body.Command, body.Cmd),
@@ -438,7 +241,7 @@ func buildContainerConfig(body containertypes.Create) *dockercontainer.Config {
 	}
 }
 
-func applyLegacyPortBindings(body containertypes.Create, config *dockercontainer.Config, portBindings network.PortMap) error {
+func applyLegacyPortBindings(body container.Create, config *dockercontainer.Config, portBindings network.PortMap) error {
 	for containerPort, hostPort := range body.Ports {
 		port, err := network.ParsePort(containerPort + "/tcp")
 		if err != nil {
@@ -463,7 +266,7 @@ func applyExposedPorts(exposedPorts map[string]struct{}, config *dockercontainer
 	return nil
 }
 
-func buildHostConfigBase(body containertypes.Create, portBindings network.PortMap) *dockercontainer.HostConfig {
+func buildHostConfigBase(body container.Create, portBindings network.PortMap) *dockercontainer.HostConfig {
 	return &dockercontainer.HostConfig{
 		Binds:         body.Volumes,
 		PortBindings:  portBindings,
@@ -473,7 +276,7 @@ func buildHostConfigBase(body containertypes.Create, portBindings network.PortMa
 	}
 }
 
-func applyHostConfigPortBindings(config *dockercontainer.Config, portBindings network.PortMap, bindings map[string][]containertypes.PortBindingCreate) error {
+func applyHostConfigPortBindings(config *dockercontainer.Config, portBindings network.PortMap, bindings map[string][]container.PortBindingCreate) error {
 	for portSpec, bindingList := range bindings {
 		port, err := parsePortSpec(portSpec)
 		if err != nil {
@@ -496,7 +299,7 @@ func applyHostConfigPortBindings(config *dockercontainer.Config, portBindings ne
 	return nil
 }
 
-func applyHostConfigSettings(hostConfig *dockercontainer.HostConfig, input *containertypes.HostConfigCreate) {
+func applyHostConfigSettings(hostConfig *dockercontainer.HostConfig, input *container.HostConfigCreate) {
 	if input == nil {
 		return
 	}
@@ -545,7 +348,7 @@ func applyHostConfigSettings(hostConfig *dockercontainer.HostConfig, input *cont
 	}
 }
 
-func applyHostConfigOverrides(body containertypes.Create, config *dockercontainer.Config, hostConfig *dockercontainer.HostConfig, portBindings network.PortMap) error {
+func applyHostConfigOverrides(body container.Create, config *dockercontainer.Config, hostConfig *dockercontainer.HostConfig, portBindings network.PortMap) error {
 	if body.HostConfig == nil {
 		return nil
 	}
@@ -564,7 +367,7 @@ func applyHostConfigOverrides(body containertypes.Create, config *dockercontaine
 	return nil
 }
 
-func applyLegacyResourceLimits(body containertypes.Create, hostConfig *dockercontainer.HostConfig) {
+func applyLegacyResourceLimits(body container.Create, hostConfig *dockercontainer.HostConfig) {
 	if body.Memory > 0 {
 		hostConfig.Memory = body.Memory
 	}
@@ -573,7 +376,7 @@ func applyLegacyResourceLimits(body containertypes.Create, hostConfig *dockercon
 	}
 }
 
-func buildNetworkingConfig(body containertypes.Create) (*network.NetworkingConfig, error) {
+func buildNetworkingConfig(body container.Create) (*network.NetworkingConfig, error) {
 	if body.NetworkingConfig != nil && len(body.NetworkingConfig.EndpointsConfig) > 0 {
 		networkingConfig := &network.NetworkingConfig{EndpointsConfig: make(map[string]*network.EndpointSettings)}
 		for name, endpoint := range body.NetworkingConfig.EndpointsConfig {
@@ -597,7 +400,7 @@ func buildNetworkingConfig(body containertypes.Create) (*network.NetworkingConfi
 	return nil, nil
 }
 
-func (h *ContainerHandler) CreateContainer(ctx context.Context, input *CreateContainerInput) (*handlerutil.Out[containertypes.Created], error) {
+func (h *ContainerHandler) CreateContainer(ctx context.Context, input *CreateContainerInput) (*handlerutil.Out[container.Created], error) {
 	user, err := handlerutil.RequireUser(ctx)
 	if err != nil {
 		return nil, err
@@ -628,7 +431,7 @@ func (h *ContainerHandler) CreateContainer(ctx context.Context, input *CreateCon
 		return nil, huma.Error500InternalServerError("Failed to create container: " + err.Error())
 	}
 
-	out := containertypes.Created{
+	out := container.Created{
 		ID:      containerJSON.ID,
 		Name:    containerJSON.Name,
 		Image:   containerJSON.Config.Image,
@@ -636,29 +439,29 @@ func (h *ContainerHandler) CreateContainer(ctx context.Context, input *CreateCon
 		Created: containerJSON.Created,
 	}
 
-	return &handlerutil.Out[containertypes.Created]{
-		Body: base.ApiResponse[containertypes.Created]{
+	return &handlerutil.Out[container.Created]{
+		Body: base.ApiResponse[container.Created]{
 			Success: true,
 			Data:    out,
 		},
 	}, nil
 }
 
-func (h *ContainerHandler) GetContainer(ctx context.Context, input *GetContainerInput) (*handlerutil.Out[containertypes.Details], error) {
+func (h *ContainerHandler) GetContainer(ctx context.Context, input *GetContainerInput) (*handlerutil.Out[container.Details], error) {
 	details, err := h.containerService.GetContainerDetails(ctx, input.ContainerID)
 	if err != nil {
 		return nil, huma.Error404NotFound("Failed to retrieve container: " + err.Error())
 	}
 
-	return &handlerutil.Out[containertypes.Details]{
-		Body: base.ApiResponse[containertypes.Details]{
+	return &handlerutil.Out[container.Details]{
+		Body: base.ApiResponse[container.Details]{
 			Success: true,
 			Data:    details,
 		},
 	}, nil
 }
 
-func (h *ContainerHandler) GetContainerProcesses(ctx context.Context, input *GetContainerInput) (*handlerutil.Out[containertypes.Processes], error) {
+func (h *ContainerHandler) GetContainerProcesses(ctx context.Context, input *GetContainerInput) (*handlerutil.Out[container.Processes], error) {
 	processes, err := h.containerService.GetContainerProcesses(ctx, input.ContainerID)
 	if err != nil {
 		message := "Failed to retrieve container processes: " + err.Error()
@@ -674,8 +477,8 @@ func (h *ContainerHandler) GetContainerProcesses(ctx context.Context, input *Get
 		}
 	}
 
-	return &handlerutil.Out[containertypes.Processes]{
-		Body: base.ApiResponse[containertypes.Processes]{
+	return &handlerutil.Out[container.Processes]{
+		Body: base.ApiResponse[container.Processes]{
 			Success: true,
 			Data:    processes,
 		},
@@ -693,16 +496,16 @@ func (h *ContainerHandler) DownloadContainerLogs(ctx context.Context, input *Get
 	return handlerutil.DownloadResponse(reader, -1, filename), nil
 }
 
-func (h *ContainerHandler) GenerateCompose(ctx context.Context, input *GenerateComposeInput) (*handlerutil.Out[containertypes.GenerateComposeResponse], error) {
+func (h *ContainerHandler) GenerateCompose(ctx context.Context, input *GenerateComposeInput) (*handlerutil.Out[container.GenerateComposeResponse], error) {
 	composeContent, err := projects.ComposeGenerate(ctx, h.dockerService.DockerHost(), "", input.Body.ContainerIDs)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("Failed to generate compose file: " + err.Error())
 	}
 
-	return &handlerutil.Out[containertypes.GenerateComposeResponse]{
-		Body: base.ApiResponse[containertypes.GenerateComposeResponse]{
+	return &handlerutil.Out[container.GenerateComposeResponse]{
+		Body: base.ApiResponse[container.GenerateComposeResponse]{
 			Success: true,
-			Data:    containertypes.GenerateComposeResponse{ComposeContent: composeContent},
+			Data:    container.GenerateComposeResponse{ComposeContent: composeContent},
 		},
 	}, nil
 }
@@ -714,7 +517,7 @@ func (h *ContainerHandler) StartContainer(ctx context.Context, input *ContainerA
 		StartMessage:    "Container start requested",
 		CompleteMessage: "Container started",
 		SuccessMessage:  "Container started successfully",
-		Action: func(runtimeCtx context.Context, containerID string, user common.User) error {
+		Action: func(runtimeCtx context.Context, containerID string, user usertypes.Actor) error {
 			return h.containerService.StartContainer(runtimeCtx, containerID, user)
 		},
 		Error: func(err error) error {
@@ -730,7 +533,7 @@ func (h *ContainerHandler) StopContainer(ctx context.Context, input *ContainerAc
 		StartMessage:    "Container stop requested",
 		CompleteMessage: "Container stopped",
 		SuccessMessage:  "Container stopped successfully",
-		Action: func(runtimeCtx context.Context, containerID string, user common.User) error {
+		Action: func(runtimeCtx context.Context, containerID string, user usertypes.Actor) error {
 			return h.containerService.StopContainer(runtimeCtx, containerID, user)
 		},
 		Error: func(err error) error {
@@ -746,7 +549,7 @@ func (h *ContainerHandler) RestartContainer(ctx context.Context, input *Containe
 		StartMessage:    "Container restart requested",
 		CompleteMessage: "Container restarted",
 		SuccessMessage:  "Container restarted successfully",
-		Action: func(runtimeCtx context.Context, containerID string, user common.User) error {
+		Action: func(runtimeCtx context.Context, containerID string, user usertypes.Actor) error {
 			return h.containerService.RestartContainer(runtimeCtx, containerID, user)
 		},
 		Error: func(err error) error {
@@ -763,7 +566,7 @@ func (h *ContainerHandler) KillContainer(ctx context.Context, input *KillContain
 		StartMessage:    "Container kill requested",
 		CompleteMessage: "Container killed",
 		SuccessMessage:  "Container killed successfully",
-		Action: func(runtimeCtx context.Context, containerID string, user common.User) error {
+		Action: func(runtimeCtx context.Context, containerID string, user usertypes.Actor) error {
 			return h.containerService.KillContainer(runtimeCtx, containerID, signal, user)
 		},
 		Error: func(err error) error {
@@ -779,7 +582,7 @@ func (h *ContainerHandler) PauseContainer(ctx context.Context, input *ContainerA
 		StartMessage:    "Container pause requested",
 		CompleteMessage: "Container paused",
 		SuccessMessage:  "Container paused successfully",
-		Action: func(runtimeCtx context.Context, containerID string, user common.User) error {
+		Action: func(runtimeCtx context.Context, containerID string, user usertypes.Actor) error {
 			return h.containerService.PauseContainer(runtimeCtx, containerID, user)
 		},
 		Error: func(err error) error {
@@ -795,7 +598,7 @@ func (h *ContainerHandler) UnpauseContainer(ctx context.Context, input *Containe
 		StartMessage:    "Container unpause requested",
 		CompleteMessage: "Container unpaused",
 		SuccessMessage:  "Container unpaused successfully",
-		Action: func(runtimeCtx context.Context, containerID string, user common.User) error {
+		Action: func(runtimeCtx context.Context, containerID string, user usertypes.Actor) error {
 			return h.containerService.UnpauseContainer(runtimeCtx, containerID, user)
 		},
 		Error: func(err error) error {
@@ -810,7 +613,7 @@ type containerActionConfigInternal struct {
 	StartMessage    string
 	CompleteMessage string
 	SuccessMessage  string
-	Action          func(context.Context, string, common.User) error
+	Action          func(context.Context, string, usertypes.Actor) error
 	Error           func(error) error
 }
 
@@ -863,7 +666,7 @@ func (h *ContainerHandler) runContainerActionInternal(ctx context.Context, input
 	}, nil
 }
 
-func (h *ContainerHandler) CommitContainer(ctx context.Context, input *CommitContainerInput) (*handlerutil.Out[containertypes.CommitResult], error) {
+func (h *ContainerHandler) CommitContainer(ctx context.Context, input *CommitContainerInput) (*handlerutil.Out[container.CommitResult], error) {
 	if strings.TrimSpace(input.ContainerID) == "" {
 		return nil, huma.Error400BadRequest("container ID is required")
 	}
@@ -878,15 +681,15 @@ func (h *ContainerHandler) CommitContainer(ctx context.Context, input *CommitCon
 		return nil, huma.Error500InternalServerError(fmt.Sprintf("failed to commit container: %v", err))
 	}
 
-	return &handlerutil.Out[containertypes.CommitResult]{
-		Body: base.ApiResponse[containertypes.CommitResult]{
+	return &handlerutil.Out[container.CommitResult]{
+		Body: base.ApiResponse[container.CommitResult]{
 			Success: true,
 			Data:    *out,
 		},
 	}, nil
 }
 
-func (h *ContainerHandler) RedeployContainer(ctx context.Context, input *ContainerActionInput) (*handlerutil.Out[containertypes.Details], error) {
+func (h *ContainerHandler) RedeployContainer(ctx context.Context, input *ContainerActionInput) (*handlerutil.Out[container.Details], error) {
 	user, err := handlerutil.RequireUser(ctx)
 	if err != nil {
 		return nil, err
@@ -929,8 +732,8 @@ func (h *ContainerHandler) RedeployContainer(ctx context.Context, input *Contain
 	if inspectErr == nil {
 		details.ActivityID = mo.EmptyableToOption(strings.TrimSpace(activityID)).ToPointer()
 
-		return &handlerutil.Out[containertypes.Details]{
-			Body: base.ApiResponse[containertypes.Details]{
+		return &handlerutil.Out[container.Details]{
+			Body: base.ApiResponse[container.Details]{
 				Success: true,
 				Data:    details,
 			},
@@ -939,10 +742,10 @@ func (h *ContainerHandler) RedeployContainer(ctx context.Context, input *Contain
 
 	// Container was redeployed successfully, but we couldn't fetch full details.
 	// Return minimal response with just the ID so frontend can still navigate.
-	return &handlerutil.Out[containertypes.Details]{
-		Body: base.ApiResponse[containertypes.Details]{
+	return &handlerutil.Out[container.Details]{
+		Body: base.ApiResponse[container.Details]{
 			Success: true,
-			Data: containertypes.Details{
+			Data: container.Details{
 				ID:         newContainerID,
 				ActivityID: mo.EmptyableToOption(strings.TrimSpace(activityID)).ToPointer(),
 			},
@@ -950,14 +753,14 @@ func (h *ContainerHandler) RedeployContainer(ctx context.Context, input *Contain
 	}, nil
 }
 
-func (h *ContainerHandler) GetContainerEditConfig(ctx context.Context, input *GetContainerEditConfigInput) (*handlerutil.Out[containertypes.EditConfig], error) {
+func (h *ContainerHandler) GetContainerEditConfig(ctx context.Context, input *GetContainerEditConfigInput) (*handlerutil.Out[container.EditConfig], error) {
 	editConfig, err := h.containerService.GetContainerEditConfig(ctx, input.ContainerID)
 	if err != nil {
 		return nil, huma.Error404NotFound("Failed to retrieve container: " + err.Error())
 	}
 
-	return &handlerutil.Out[containertypes.EditConfig]{
-		Body: base.ApiResponse[containertypes.EditConfig]{
+	return &handlerutil.Out[container.EditConfig]{
+		Body: base.ApiResponse[container.EditConfig]{
 			Success: true,
 			Data:    editConfig,
 		},
@@ -975,7 +778,7 @@ func editContainerHTTPErrorInternal(err error) error {
 	}
 }
 
-func (h *ContainerHandler) EditContainer(ctx context.Context, input *EditContainerInput) (*handlerutil.Out[containertypes.Details], error) {
+func (h *ContainerHandler) EditContainer(ctx context.Context, input *EditContainerInput) (*handlerutil.Out[container.Details], error) {
 	user, err := handlerutil.RequireUser(ctx)
 	if err != nil {
 		return nil, err
@@ -1018,8 +821,8 @@ func (h *ContainerHandler) EditContainer(ctx context.Context, input *EditContain
 	if inspectErr == nil {
 		details.ActivityID = mo.EmptyableToOption(strings.TrimSpace(activityID)).ToPointer()
 
-		return &handlerutil.Out[containertypes.Details]{
-			Body: base.ApiResponse[containertypes.Details]{
+		return &handlerutil.Out[container.Details]{
+			Body: base.ApiResponse[container.Details]{
 				Success: true,
 				Data:    details,
 			},
@@ -1028,10 +831,10 @@ func (h *ContainerHandler) EditContainer(ctx context.Context, input *EditContain
 
 	// Container was recreated successfully, but we couldn't fetch full details.
 	// Return minimal response with just the ID so frontend can still navigate.
-	return &handlerutil.Out[containertypes.Details]{
-		Body: base.ApiResponse[containertypes.Details]{
+	return &handlerutil.Out[container.Details]{
+		Body: base.ApiResponse[container.Details]{
 			Success: true,
-			Data: containertypes.Details{
+			Data: container.Details{
 				ID:         newContainerID,
 				ActivityID: mo.EmptyableToOption(strings.TrimSpace(activityID)).ToPointer(),
 			},

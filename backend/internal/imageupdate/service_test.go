@@ -13,22 +13,22 @@ import (
 	"testing"
 	"time"
 
-	ref "github.com/distribution/reference"
+	"github.com/distribution/reference"
 	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
 	"github.com/getarcaneapp/arcane/types/v2/containerregistry"
 	"github.com/getarcaneapp/arcane/types/v2/imageupdate"
 	"github.com/libtnb/sqlite"
-	dockerauthconfig "github.com/moby/moby/api/pkg/authconfig"
-	dockertypescontainer "github.com/moby/moby/api/types/container"
-	dockertypesimage "github.com/moby/moby/api/types/image"
+	"github.com/moby/moby/api/pkg/authconfig"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/image"
 	dockerregistry "github.com/moby/moby/api/types/registry"
 	"github.com/moby/moby/client"
 	"github.com/opencontainers/go-digest"
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/samber/mo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/kit/pkg"
 	"go.getarcane.app/sys/crypto"
 	"go.getarcane.app/updater/labels"
 	"gorm.io/gorm"
@@ -118,7 +118,7 @@ func createImageUpdateTestPullRegistryInternal(t *testing.T, db *database.DB, lo
 
 func decodeImageUpdateRegistryAuthInternal(t *testing.T, encoded string) dockerregistry.AuthConfig {
 	t.Helper()
-	config, err := dockerauthconfig.Decode(encoded)
+	config, err := authconfig.Decode(encoded)
 	require.NoError(t, err)
 	return *config
 }
@@ -331,7 +331,7 @@ func TestImageUpdateService_DockerReferenceCompatibility(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Test that official parser can handle it
-			named, err := ref.ParseNormalizedNamed(tt.imageRef)
+			named, err := reference.ParseNormalizedNamed(tt.imageRef)
 			require.NoError(t, err, "official parser failed")
 
 			// Test our parser
@@ -340,8 +340,8 @@ func TestImageUpdateService_DockerReferenceCompatibility(t *testing.T) {
 			require.NotNil(t, parts, "our parser returned nil")
 
 			// Verify they produce the same results
-			assert.Equal(t, ref.Domain(named), parts.Registry)
-			assert.Equal(t, ref.Path(named), parts.Repository)
+			assert.Equal(t, reference.Domain(named), parts.Registry)
+			assert.Equal(t, reference.Path(named), parts.Repository)
 		})
 	}
 }
@@ -378,7 +378,7 @@ func newComposeBuildImageUpdateServiceInternal(t *testing.T) (*ImageUpdateServic
 			distributionInspectFn: func(context.Context, string, client.DistributionInspectOptions) (client.DistributionInspectResult, error) {
 				registryCalls.Add(1)
 				return client.DistributionInspectResult{
-					Descriptor: ocispec.Descriptor{Digest: digest.Digest(remoteDigest)},
+					Descriptor: v1.Descriptor{Digest: digest.Digest(remoteDigest)},
 				}, nil
 			},
 		}, nil
@@ -437,7 +437,7 @@ func TestImageUpdateService_CheckMultipleImages_ComposeBuildMissingLocallySkipsR
 	dockerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/containers/json") {
 			w.Header().Set("Content-Type", "application/json")
-			if !assert.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{})) {
+			if !assert.NoError(t, json.NewEncoder(w).Encode([]container.Summary{})) {
 				return
 			}
 			return
@@ -479,7 +479,7 @@ func newArcaneLocalImageUpdateServiceInternal(t *testing.T, imageExists bool) (*
 	dockerServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/containers/json") {
 			w.Header().Set("Content-Type", "application/json")
-			if !assert.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{})) {
+			if !assert.NoError(t, json.NewEncoder(w).Encode([]container.Summary{})) {
 				return
 			}
 			return
@@ -487,7 +487,7 @@ func newArcaneLocalImageUpdateServiceInternal(t *testing.T, imageExists bool) (*
 
 		if imageExists && strings.Contains(r.URL.Path, "/images/") && strings.HasSuffix(r.URL.Path, "/json") {
 			w.Header().Set("Content-Type", "application/json")
-			assert.NoError(t, json.NewEncoder(w).Encode(dockertypesimage.InspectResponse{
+			assert.NoError(t, json.NewEncoder(w).Encode(image.InspectResponse{
 				ID:          "sha256:arcane-local-image-id",
 				RepoTags:    []string{"arcane.local/demo-2ab41b29/worker:latest"},
 				RepoDigests: []string{"arcane.local/demo-2ab41b29/worker@" + localDigest},
@@ -504,7 +504,7 @@ func newArcaneLocalImageUpdateServiceInternal(t *testing.T, imageExists bool) (*
 			distributionInspectFn: func(context.Context, string, client.DistributionInspectOptions) (client.DistributionInspectResult, error) {
 				registryCalls.Add(1)
 				return client.DistributionInspectResult{
-					Descriptor: ocispec.Descriptor{Digest: digest.FromString("arcane-local-remote")},
+					Descriptor: v1.Descriptor{Digest: digest.FromString("arcane-local-remote")},
 				}, nil
 			},
 		}, nil
@@ -569,7 +569,7 @@ func TestImageUpdateService_InspectLocalImageSnapshot_NoRepoDigestsRemainsLocal(
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/containers/json") {
 			w.Header().Set("Content-Type", "application/json")
-			if !assert.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{})) {
+			if !assert.NoError(t, json.NewEncoder(w).Encode([]container.Summary{})) {
 				return
 			}
 			return
@@ -577,7 +577,7 @@ func TestImageUpdateService_InspectLocalImageSnapshot_NoRepoDigestsRemainsLocal(
 
 		if strings.Contains(r.URL.Path, "/images/") && strings.HasSuffix(r.URL.Path, "/json") {
 			w.Header().Set("Content-Type", "application/json")
-			if !assert.NoError(t, json.NewEncoder(w).Encode(dockertypesimage.InspectResponse{
+			if !assert.NoError(t, json.NewEncoder(w).Encode(image.InspectResponse{
 				ID:       "sha256:local-only-image",
 				RepoTags: []string{"local-only:latest"},
 			})) {
@@ -627,7 +627,7 @@ func newImageUpdateFallbackServer(t *testing.T, repositoryTag, localDigest, remo
 	return httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/containers/json") {
 			w.Header().Set("Content-Type", "application/json")
-			if !assert.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{})) {
+			if !assert.NoError(t, json.NewEncoder(w).Encode([]container.Summary{})) {
 				return
 			}
 			return
@@ -642,7 +642,7 @@ func newImageUpdateFallbackServer(t *testing.T, repositoryTag, localDigest, remo
 			}
 
 			w.Header().Set("Content-Type", "application/json")
-			if !assert.NoError(t, json.NewEncoder(w).Encode(dockertypesimage.InspectResponse{
+			if !assert.NoError(t, json.NewEncoder(w).Encode(image.InspectResponse{
 				ID:          "sha256:local-image-id",
 				RepoTags:    []string{imageRef},
 				RepoDigests: []string{repositoryRef + "@" + localDigest},
@@ -675,7 +675,7 @@ func newImageUpdateRegistryOnlyServer(t *testing.T, repositoryTag, remoteDigest 
 	return httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/containers/json") {
 			w.Header().Set("Content-Type", "application/json")
-			if !assert.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{})) {
+			if !assert.NoError(t, json.NewEncoder(w).Encode([]container.Summary{})) {
 				return
 			}
 			return
@@ -696,7 +696,7 @@ func newImageUpdateRegistryOnlyServer(t *testing.T, repositoryTag, remoteDigest 
 	}))
 }
 
-func newImageRefResolutionServer(t *testing.T, containers []dockertypescontainer.Summary) *httptest.Server {
+func newImageRefResolutionServer(t *testing.T, containers []container.Summary) *httptest.Server {
 	t.Helper()
 
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -723,20 +723,20 @@ func TestImageUpdateService_GetImageRefByIDInternal_UsesContainerFallback(t *tes
 
 	tests := []struct {
 		name       string
-		containers []dockertypescontainer.Summary
+		containers []container.Summary
 		wantRef    string
 		wantErr    string
 	}{
 		{
 			name: "uses repo tag from matching container when inspect fails",
-			containers: []dockertypescontainer.Summary{
+			containers: []container.Summary{
 				{ImageID: imageID, Image: "frooodle/s-pdf:latest"},
 			},
 			wantRef: "frooodle/s-pdf:latest",
 		},
 		{
 			name: "ignores named digest references from matching container",
-			containers: []dockertypescontainer.Summary{
+			containers: []container.Summary{
 				{ImageID: imageID, Image: "frooodle/s-pdf@sha256:abc123"},
 			},
 			wantErr: "no local image or running container found",
@@ -870,7 +870,7 @@ func newImageUpdateNoRepoTagsServer(t *testing.T, imageID, localDigest string) *
 	return httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/containers/json") {
 			w.Header().Set("Content-Type", "application/json")
-			if !assert.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{})) {
+			if !assert.NoError(t, json.NewEncoder(w).Encode([]container.Summary{})) {
 				return
 			}
 			return
@@ -878,7 +878,7 @@ func newImageUpdateNoRepoTagsServer(t *testing.T, imageID, localDigest string) *
 
 		if strings.Contains(r.URL.Path, "/images/") && strings.HasSuffix(r.URL.Path, "/json") {
 			w.Header().Set("Content-Type", "application/json")
-			if !assert.NoError(t, json.NewEncoder(w).Encode(dockertypesimage.InspectResponse{
+			if !assert.NoError(t, json.NewEncoder(w).Encode(image.InspectResponse{
 				ID:          imageID,
 				RepoTags:    []string{},
 				RepoDigests: []string{r.Host + "/valkey/valkey@" + localDigest},
@@ -1172,7 +1172,7 @@ func TestImageUpdateService_CheckMultipleImages_UsesDockerHubCredentialsOnFirstA
 				assert.Equal(t, "https://index.docker.io/v1/", authCfg.ServerAddress)
 
 				return client.DistributionInspectResult{
-					Descriptor: ocispec.Descriptor{
+					Descriptor: v1.Descriptor{
 						Digest: digest.Digest(remoteDigest),
 					},
 				}, nil
@@ -1726,7 +1726,7 @@ func TestImageUpdateService_MarkUpdatesAsNotified_EmptyList(t *testing.T) {
 // with "context canceled" so notifications were never dispatched (issue #2920).
 // newImageUpdateNotificationDockerServiceInternal stubs the container listing
 // the notification flush uses to resolve current update-check eligibility.
-func newImageUpdateNotificationDockerServiceInternal(t *testing.T, containers []dockertypescontainer.Summary) *docker.DockerClientService {
+func newImageUpdateNotificationDockerServiceInternal(t *testing.T, containers []container.Summary) *docker.DockerClientService {
 	t.Helper()
 	server := newImageUpdateDiscoveryServerInternal(t, nil, containers)
 	t.Cleanup(server.Close)
@@ -1758,7 +1758,7 @@ func TestImageUpdateService_SendBatchNotifications_FiltersByUpdateCheckEligibili
 	require.NoError(t, db.AutoMigrate(&notification.NotificationSettings{}))
 	calls := newImageUpdateGenericWebhookProviderInternal(t, db)
 
-	containers := []dockertypescontainer.Summary{
+	containers := []container.Summary{
 		{ID: "install-excluded", ImageID: "sha256:install-excluded", Image: "test/install-excluded:latest", Labels: map[string]string{labels.LabelUpdater: "false"}},
 		{ID: "unmonitored", ImageID: "sha256:unmonitored", Image: "test/unmonitored:latest", Labels: map[string]string{imageref.UpdateCheckLabel: "false"}},
 		{ID: "shared-unmonitored", ImageID: "sha256:shared", Image: "test/shared:latest", Labels: map[string]string{imageref.UpdateCheckLabel: "false"}},
@@ -2093,7 +2093,7 @@ func newBlockedDockerAPIServerInternal(t *testing.T, pathContains string) *httpt
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/containers/json") {
 			w.Header().Set("Content-Type", "application/json")
-			if !assert.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{})) {
+			if !assert.NoError(t, json.NewEncoder(w).Encode([]container.Summary{})) {
 				return
 			}
 			return
@@ -2120,8 +2120,8 @@ func containsAll(set map[string]struct{}, refs ...string) bool {
 
 func newImageUpdateDiscoveryServerInternal(
 	t *testing.T,
-	images []dockertypesimage.Summary,
-	containers []dockertypescontainer.Summary,
+	images []image.Summary,
+	containers []container.Summary,
 ) *httptest.Server {
 	t.Helper()
 
@@ -2160,14 +2160,14 @@ func TestImageUpdateService_GetAllImageRefsHonorsExclusiveContainerOptOutInterna
 		idOnlyImage     = "sha256:00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
 	)
 
-	images := []dockertypesimage.Summary{
+	images := []image.Summary{
 		{ID: "sha256:disabled", RepoTags: []string{disabledRef}},
 		{ID: "sha256:enabled", RepoTags: []string{enabledRef}},
 		{ID: "sha256:shared", RepoTags: []string{sharedRef}},
 		{ID: "sha256:unused", RepoTags: []string{unusedRef}},
 		{ID: "sha256:untagged", RepoTags: []string{"<none>:<none>"}},
 	}
-	containers := []dockertypescontainer.Summary{
+	containers := []container.Summary{
 		{
 			ID:     "disabled-container",
 			Image:  disabledRef,
@@ -2186,8 +2186,8 @@ func TestImageUpdateService_GetAllImageRefsHonorsExclusiveContainerOptOutInterna
 			ID:    "shared-enabled-container",
 			Image: sharedRef,
 		},
-		{ID: "running-only", ImageID: "sha256:untagged", Image: runningOnlyRef, State: dockertypescontainer.StateRunning},
-		{ID: "stopped-only", ImageID: "sha256:pruned", Image: stoppedOnlyRef, State: dockertypescontainer.StateExited},
+		{ID: "running-only", ImageID: "sha256:untagged", Image: runningOnlyRef, State: container.StateRunning},
+		{ID: "stopped-only", ImageID: "sha256:pruned", Image: stoppedOnlyRef, State: container.StateExited},
 		{ID: "disabled-only", ImageID: "sha256:pruned-disabled", Image: disabledOnlyRef, Labels: map[string]string{imageref.UpdateCheckLabel: "false"}},
 		{ID: "enabled-alias", ImageID: "sha256:enabled", Image: enabledAlias},
 		{ID: "pinned-container", ImageID: "sha256:pinned", Image: pinnedRef},
@@ -2221,12 +2221,12 @@ func TestImageUpdateService_GetAllImageRefsAppliesLimitAfterOptOutFilteringInter
 		containerOnlyRef = "local/container-only:1.0"
 	)
 
-	images := []dockertypesimage.Summary{
+	images := []image.Summary{
 		{ID: "sha256:disabled", RepoTags: []string{disabledRef}},
 		{ID: "sha256:enabled", RepoTags: []string{enabledRef}},
 		{ID: "sha256:unused", RepoTags: []string{unusedRef}},
 	}
-	containers := []dockertypescontainer.Summary{
+	containers := []container.Summary{
 		{
 			ID:     "disabled-container",
 			Image:  disabledRef,
@@ -2269,7 +2269,7 @@ func TestImageUpdateService_GetAllImageRefsExcludesAliasesOfOptedOutImageInterna
 		enabledRef = "local/enabled:latest"
 	)
 
-	images := []dockertypesimage.Summary{
+	images := []image.Summary{
 		{
 			ID:       imageID,
 			RepoTags: []string{primaryRef, aliasRef},
@@ -2279,7 +2279,7 @@ func TestImageUpdateService_GetAllImageRefsExcludesAliasesOfOptedOutImageInterna
 			RepoTags: []string{enabledRef},
 		},
 	}
-	containers := []dockertypescontainer.Summary{
+	containers := []container.Summary{
 		{
 			ID:      "disabled-container",
 			ImageID: imageID,
@@ -2321,13 +2321,13 @@ func TestImageUpdateService_GetAllImageRefsKeepsImageSharedByEligibleContainerIn
 		aliasRef = "local/shared:dev"
 	)
 
-	images := []dockertypesimage.Summary{
+	images := []image.Summary{
 		{
 			ID:       imageID,
 			RepoTags: []string{imageRef, aliasRef},
 		},
 	}
-	containers := []dockertypescontainer.Summary{
+	containers := []container.Summary{
 		{
 			ID:      "disabled-container",
 			ImageID: imageID,
@@ -2364,13 +2364,13 @@ func TestImageUpdateService_GetAllImageRefsKeepsImageSharedByEligibleContainerIn
 func TestImageUpdateService_GetAllImageRefsFallsBackToRefWhenImageIDsDifferInternal(t *testing.T) {
 	const imageRef = "local/caddy:latest"
 
-	images := []dockertypesimage.Summary{
+	images := []image.Summary{
 		{
 			ID:       "sha256:image-list-id",
 			RepoTags: []string{imageRef},
 		},
 	}
-	containers := []dockertypescontainer.Summary{
+	containers := []container.Summary{
 		{
 			ID:      "disabled-container",
 			ImageID: "sha256:container-list-id",
@@ -2404,13 +2404,13 @@ func TestImageUpdateService_GetAllImageRefsMergesIDAndReferenceEligibilityIntern
 		imageID  = "sha256:image-summary-id"
 	)
 
-	images := []dockertypesimage.Summary{
+	images := []image.Summary{
 		{
 			ID:       imageID,
 			RepoTags: []string{imageRef},
 		},
 	}
-	containers := []dockertypescontainer.Summary{
+	containers := []container.Summary{
 		{
 			ID:      "disabled-container",
 			ImageID: imageID,
@@ -2453,7 +2453,7 @@ func TestImageUpdateService_GetAllImageRefsFallsBackWhenContainerDiscoveryFailsI
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/images/json"):
 			w.Header().Set("Content-Type", "application/json")
-			if !assert.NoError(t, json.NewEncoder(w).Encode([]dockertypesimage.Summary{
+			if !assert.NoError(t, json.NewEncoder(w).Encode([]image.Summary{
 				{ID: "sha256:first", RepoTags: []string{firstRef}},
 				{ID: "sha256:second", RepoTags: []string{secondRef}},
 			})) {
@@ -2491,7 +2491,7 @@ func TestFilterImageSummariesKeepsInstallExcludedContainersMonitoredInternal(t *
 		sharedRef        = "local/shared:latest"
 	)
 
-	images := []dockertypesimage.Summary{
+	images := []image.Summary{
 		{ID: "sha256:label-disabled", RepoTags: []string{labelDisabledRef}},
 		{ID: "sha256:ui-excluded", RepoTags: []string{uiExcludedRef}},
 		{ID: "sha256:unmonitored", RepoTags: []string{unmonitoredRef}},
@@ -2499,7 +2499,7 @@ func TestFilterImageSummariesKeepsInstallExcludedContainersMonitoredInternal(t *
 	}
 	// Both automatic-installation exclusions keep the image monitored; only the
 	// update-check label (any spelling, false-like values only) removes it.
-	containers := []dockertypescontainer.Summary{
+	containers := []container.Summary{
 		{ID: "c1", Names: []string{"/label-disabled"}, ImageID: "sha256:label-disabled", Image: labelDisabledRef, Labels: map[string]string{labels.LabelUpdater: "false"}},
 		{ID: "c2", Names: []string{"/ui-excluded"}, ImageID: "sha256:ui-excluded", Image: uiExcludedRef},
 		{ID: "c3", Names: []string{"/unmonitored"}, ImageID: "sha256:unmonitored", Image: unmonitoredRef, Labels: map[string]string{strings.ToUpper(imageref.UpdateCheckLabel): "no"}},
@@ -2565,7 +2565,7 @@ func TestContainerTagChecksPersistIndependentPoliciesInternal(t *testing.T) {
 		case strings.HasSuffix(r.URL.Path, "/containers/json"):
 			if !assert.NoError(
 				t,
-				json.NewEncoder(w).Encode([]dockertypescontainer.Summary{
+				json.NewEncoder(w).Encode([]container.Summary{
 					{
 						ID:      "one",
 						Image:   imageRef,
@@ -2585,7 +2585,7 @@ func TestContainerTagChecksPersistIndependentPoliciesInternal(t *testing.T) {
 		case strings.Contains(r.URL.Path, "/images/"):
 			if !assert.NoError(
 				t,
-				json.NewEncoder(w).Encode(dockertypesimage.InspectResponse{
+				json.NewEncoder(w).Encode(image.InspectResponse{
 					ID:          imageID,
 					RepoTags:    []string{imageRef},
 					RepoDigests: []string{registryURL.Host + "/team/app@" + imageID},
@@ -2597,10 +2597,10 @@ func TestContainerTagChecksPersistIndependentPoliciesInternal(t *testing.T) {
 			id := kit.Ternary(strings.Contains(r.URL.Path, "/two/"), "two", "one")
 			if !assert.NoError(
 				t,
-				json.NewEncoder(w).Encode(dockertypescontainer.InspectResponse{
+				json.NewEncoder(w).Encode(container.InspectResponse{
 					ID:    id,
 					Image: imageID,
-					Config: &dockertypescontainer.Config{
+					Config: &container.Config{
 						Image:  imageRef,
 						Labels: values[id],
 					},
@@ -2655,7 +2655,7 @@ func TestContainerTagChecksPersistIndependentPoliciesInternal(t *testing.T) {
 	require.False(t, records[0].HasUpdate)
 	require.True(t, records[1].HasUpdate)
 	limited := &imageupdate.Response{UpdateType: UpdateTypeTag, Error: "registry status: 429", CheckTime: time.Now().UTC()}
-	current := dockertypescontainer.Summary{ID: "two", Image: imageRef, ImageID: imageID, Labels: values["two"]}
+	current := container.Summary{ID: "two", Image: imageRef, ImageID: imageID, Labels: values["two"]}
 	require.NoError(t, svc.saveContainerTagResultInternal(t.Context(), current, limited))
 	var retained ImageUpdateRecord
 	require.NoError(t, db.First(&retained, "id = ?", "container::two").Error)
@@ -2703,7 +2703,7 @@ func TestContainerTagChecksSeparateMonitoringFromInstallationInternal(t *testing
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/containers/json"):
-			if !assert.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{
+			if !assert.NoError(t, json.NewEncoder(w).Encode([]container.Summary{
 				{ID: "install-excluded", Names: []string{"/install-excluded"}, Image: imageRef, ImageID: imageID, Labels: values["install-excluded"]},
 				{ID: "unmonitored", Names: []string{"/unmonitored"}, Image: imageRef, ImageID: imageID, Labels: values["unmonitored"]},
 			})) {
@@ -2714,11 +2714,11 @@ func TestContainerTagChecksSeparateMonitoringFromInstallationInternal(t *testing
 			inspected = append(inspected, id)
 			if !assert.NoError(
 				t,
-				json.NewEncoder(w).Encode(dockertypescontainer.InspectResponse{
+				json.NewEncoder(w).Encode(container.InspectResponse{
 					ID:    id,
 					Name:  "/" + id,
 					Image: imageID,
-					Config: &dockertypescontainer.Config{
+					Config: &container.Config{
 						Image:  imageRef,
 						Labels: values[id],
 					},
@@ -2772,22 +2772,6 @@ func TestContainerTagChecksSeparateMonitoringFromInstallationInternal(t *testing
 	require.Equal(t, stale.PolicyKey, retained.PolicyKey)
 }
 
-func TestContainerAggregationPreservesImageResultInternal(t *testing.T) {
-	original := &imageupdate.Response{HasUpdate: false, UpdateType: UpdateTypeDigest, CurrentVersion: "3.20.0", LatestVersion: "3.20.0"}
-	results := map[string]*imageupdate.Response{"alpine:3.20.0": original}
-	scoped := &imageupdate.Response{ImageRef: "docker.io/library/alpine:3.20.0", HasUpdate: true, UpdateType: UpdateTypeTag, CurrentVersion: "3.20.0", LatestVersion: "3.20.1"}
-	attachContainerUpdatesInternal(results, map[string]*imageupdate.Response{"tagged": scoped})
-	require.True(t, original.HasUpdate)
-	require.Equal(t, UpdateTypeTag, original.UpdateType)
-	require.Equal(t, "3.20.1", original.LatestVersion)
-	require.Same(t, scoped, original.ContainerUpdates["tagged"])
-	require.NotNil(t, original.ImageUpdate)
-	require.False(t, original.ImageUpdate.HasUpdate, "untagged siblings must keep the original digest result")
-	require.Equal(t, UpdateTypeDigest, original.ImageUpdate.UpdateType)
-	require.Nil(t, original.ImageUpdate.ContainerUpdates)
-	require.Nil(t, original.ImageUpdate.ImageUpdate, "snapshot must not create recursive JSON")
-}
-
 func TestContainerTagChecksUseRegistryTagTimeoutInternal(t *testing.T) {
 	for _, tt := range []struct {
 		name            string
@@ -2829,20 +2813,20 @@ func TestContainerTagChecksUseRegistryTagTimeoutInternal(t *testing.T) {
 				w.Header().Set("Content-Type", "application/json")
 				switch {
 				case strings.HasSuffix(r.URL.Path, "/containers/json"):
-					if !assert.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{{ID: "one", Image: imageRef, ImageID: imageID, Labels: autoLabels}})) {
+					if !assert.NoError(t, json.NewEncoder(w).Encode([]container.Summary{{ID: "one", Image: imageRef, ImageID: imageID, Labels: autoLabels}})) {
 						return
 					}
 				case strings.Contains(r.URL.Path, "/images/"):
-					if !assert.NoError(t, json.NewEncoder(w).Encode(dockertypesimage.InspectResponse{ID: imageID, RepoTags: []string{imageRef}})) {
+					if !assert.NoError(t, json.NewEncoder(w).Encode(image.InspectResponse{ID: imageID, RepoTags: []string{imageRef}})) {
 						return
 					}
 				case strings.Contains(r.URL.Path, "/containers/"):
 					if !assert.NoError(
 						t,
-						json.NewEncoder(w).Encode(dockertypescontainer.InspectResponse{
+						json.NewEncoder(w).Encode(container.InspectResponse{
 							ID:    "one",
 							Image: imageID,
-							Config: &dockertypescontainer.Config{
+							Config: &container.Config{
 								Image:  imageRef,
 								Labels: autoLabels,
 							},
@@ -2911,23 +2895,23 @@ func TestContainerTagChecksPersistResultsFinishedBeforeScanDeadlineInternal(t *t
 		name := nameFor(r.URL.Path)
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/containers/json"):
-			if !assert.NoError(t, json.NewEncoder(w).Encode([]dockertypescontainer.Summary{
+			if !assert.NoError(t, json.NewEncoder(w).Encode([]container.Summary{
 				{ID: "fast", Image: imageRefs["fast"], ImageID: imageIDs["fast"], Labels: autoLabels},
 				{ID: "slow", Image: imageRefs["slow"], ImageID: imageIDs["slow"], Labels: autoLabels},
 			})) {
 				return
 			}
 		case strings.Contains(r.URL.Path, "/images/"):
-			if !assert.NoError(t, json.NewEncoder(w).Encode(dockertypesimage.InspectResponse{ID: imageIDs[name], RepoTags: []string{imageRefs[name]}})) {
+			if !assert.NoError(t, json.NewEncoder(w).Encode(image.InspectResponse{ID: imageIDs[name], RepoTags: []string{imageRefs[name]}})) {
 				return
 			}
 		case strings.Contains(r.URL.Path, "/containers/"):
 			if !assert.NoError(
 				t,
-				json.NewEncoder(w).Encode(dockertypescontainer.InspectResponse{
+				json.NewEncoder(w).Encode(container.InspectResponse{
 					ID:    name,
 					Image: imageIDs[name],
-					Config: &dockertypescontainer.Config{
+					Config: &container.Config{
 						Image:  imageRefs[name],
 						Labels: autoLabels,
 					},

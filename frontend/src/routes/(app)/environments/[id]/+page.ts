@@ -1,11 +1,12 @@
-import { featureStore } from '#lib/stores/features.store.svelte.js';
-import { tryCatch } from '#lib/utils/try-catch.js';
+import { queryKeys } from '#lib/query/query-keys.js';
 import { environmentManagementService } from '#lib/services/env-mgmt-service.js';
 import { settingsService } from '#lib/services/settings-service.js';
 import { swarmService } from '#lib/services/swarm-service.js';
-import { queryKeys } from '#lib/query/query-keys.js';
+import { featureStore } from '#lib/stores/features.store.svelte.js';
 import { userHasPermission } from '#lib/utils/auth.js';
 import { isEnvironmentOnline } from '#lib/utils/docker.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
+
 import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ params, parent }) => {

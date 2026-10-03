@@ -1,5 +1,5 @@
-import type { FileEntry } from '#lib/types/shared.js';
 import type { UploadProgressCallback } from '#lib/services/upload-service.js';
+import type { FileEntry } from '#lib/types/shared.js';
 
 export interface FileProvider {
 	list: (path: string) => Promise<FileEntry[]>;

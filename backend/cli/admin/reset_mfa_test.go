@@ -10,11 +10,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/passkey"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/session"
+	userdomain "github.com/getarcaneapp/arcane/backend/v2/internal/user"
 )
 
 func newResetMFATestDBInternal(t *testing.T) *database.DB {
@@ -22,7 +22,7 @@ func newResetMFATestDBInternal(t *testing.T) *database.DB {
 	gormDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, gormDB.AutoMigrate(
-		&common.User{},
+		&userdomain.User{},
 		&session.UserSession{},
 		&passkey.Passkey{},
 		&passkey.PasskeyCeremony{},
@@ -54,7 +54,7 @@ func TestConfirmMFAResetInternal(t *testing.T) {
 func TestResetMFACommandServiceStatePreservesPasskey(t *testing.T) {
 	db := newResetMFATestDBInternal(t)
 	ctx := t.Context()
-	user := &common.User{
+	user := &userdomain.User{
 		ID:                "mfa-reset-user",
 		Username:          "alice",
 		PasskeyMFAEnabled: true,
@@ -101,7 +101,7 @@ func TestResetMFACommandServiceStatePreservesPasskey(t *testing.T) {
 	service := passkey.NewPasskeyService(db, &config.Config{AppUrl: "https://arcane.example.test"})
 	require.NoError(t, service.ResetMFAForUser(ctx, user.ID))
 
-	var updatedUser common.User
+	var updatedUser userdomain.User
 	require.NoError(t, db.Where("id = ?", user.ID).First(&updatedUser).Error)
 	require.False(t, updatedUser.PasskeyMFAEnabled)
 	var count int64

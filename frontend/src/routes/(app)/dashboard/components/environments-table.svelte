@@ -25,16 +25,16 @@
 </script>
 
 <script lang="ts">
-	import { featureStore } from '#lib/stores/features.store.svelte.js';
-	import * as Table from '#lib/components/ui/table/index.js';
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
 	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import { EnvironmentsIcon, ShieldAlertIcon, UpdateIcon, VerifiedCheckIcon, type IconType } from '#lib/icons/index.js';
 	import MetricRing, { type MetricRingVariant } from '#lib/components/metric-ring.svelte';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
+	import * as Table from '#lib/components/ui/table/index.js';
+	import { EnvironmentsIcon, ShieldAlertIcon, UpdateIcon, VerifiedCheckIcon, type IconType } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { featureStore } from '#lib/stores/features.store.svelte.js';
 	import { cn } from '#lib/utils.js';
 
 	let { rows }: { rows: EnvironmentTableRow[] } = $props();

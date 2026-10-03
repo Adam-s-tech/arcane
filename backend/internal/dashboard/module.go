@@ -4,9 +4,14 @@
 package dashboard
 
 import (
+	"net/http"
+
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/environment"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
 )
 
 // Module is the dashboard domain's wiring seam: it owns the service and the
@@ -46,4 +51,18 @@ func (m *Module) RegisterRoutes(api huma.API) {
 		return
 	}
 	RegisterDashboard(api, m.service, m.handler.environmentService)
+}
+
+func RegisterDashboard(api huma.API, dashboardService *DashboardService, environmentService *environment.EnvironmentService) {
+	h := NewHandler(dashboardService, environmentService)
+
+	middleware.RegisterWithPermission(api, huma.Operation{
+		OperationID: "get-dashboard",
+		Method:      http.MethodGet,
+		Path:        "/environments/{id}/dashboard",
+		Summary:     "Get dashboard snapshot",
+		Description: "Returns the dashboard first-paint snapshot in a single response",
+		Tags:        []string{"Dashboard"},
+		Security:    handlerutil.DefaultOperationSecurity(),
+	}, authz.PermDashboardRead, h.GetDashboard)
 }

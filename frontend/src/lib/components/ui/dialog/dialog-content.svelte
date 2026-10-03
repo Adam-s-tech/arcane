@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { Dialog as DialogPrimitive } from 'bits-ui';
-	import { CloseIcon } from '#lib/icons/index.js';
 	import type { Snippet } from 'svelte';
-	import Overlay from './dialog-overlay.svelte';
-	import { cn, type WithoutChildrenOrChild } from '#lib/utils.js';
+
+	import { CloseIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { cn, type WithoutChildrenOrChild } from '#lib/utils.js';
+
+	import Overlay from './dialog-overlay.svelte';
 
 	let {
 		ref = $bindable(null),

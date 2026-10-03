@@ -2,7 +2,7 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, "release/**", "breaking/**"]
+    branches: [main, 'release/**', 'breaking/**']
 
 permissions:
   contents: read
@@ -12,7 +12,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: "${{ github.workflow }}-${{ github.event.pull_request.number }}"
+  group: '${{ github.workflow }}-${{ github.event.pull_request.number }}'
   cancel-in-progress: true
 
 jobs:
@@ -28,17 +28,17 @@ jobs:
             path: backend
             timeout: 30
             gcc: true
-            cgo_enabled: "1"
+            cgo_enabled: '1'
           - name: cli
             path: cli
             timeout: 10
             gcc: false
-            cgo_enabled: "1"
+            cgo_enabled: '1'
           - name: types
             path: types
             timeout: 10
             gcc: false
-            cgo_enabled: "1"
+            cgo_enabled: '1'
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -214,7 +214,9 @@ jobs:
           name: playwright-report-${{ matrix.database.name }}
           path: |
             tests/.report
-            tests/test-results
+            !tests/.report/auth/**
+            !tests/.report/bin/**
+            !tests/.report/cli/**
           include-hidden-files: true
           retention-days: 15
 
@@ -257,7 +259,7 @@ jobs:
         env:
           COMPOSE_FILE: setup/compose-proxy.yaml
           BASE_URL: http://localhost:3002
-          PLAYWRIGHT_DOCKER_BROWSER: "0"
+          PLAYWRIGHT_DOCKER_BROWSER: '0'
           E2E_ADMIN_STATIC_API_KEY: ${{ secrets.E2E_ADMIN_STATIC_API_KEY }}
 
       - name: Upload Playwright HTML report
@@ -267,6 +269,8 @@ jobs:
           name: playwright-report-proxy-cli
           path: |
             tests/.report
-            tests/test-results
+            !tests/.report/auth/**
+            !tests/.report/bin/**
+            !tests/.report/cli/**
           include-hidden-files: true
           retention-days: 15

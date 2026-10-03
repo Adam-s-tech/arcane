@@ -1,6 +1,6 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
-import type { SystemStats } from '#lib/types/shared.js';
 import type { Diagnostics, LogEntry } from '#lib/types/diagnostics.js';
+import type { SystemStats } from '#lib/types/shared.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
 
 export interface ReconnectWSOptions<T> {
 	buildUrl: () => string | Promise<string>;

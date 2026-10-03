@@ -1,6 +1,7 @@
 <script lang="ts">
-	import type { IconType } from '#lib/icons/index.js';
 	import type { Snippet } from 'svelte';
+
+	import type { IconType } from '#lib/icons/index.js';
 	import { cn } from '#lib/utils.js';
 
 	interface Props {

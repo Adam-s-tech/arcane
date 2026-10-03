@@ -23,7 +23,7 @@ import (
 	"github.com/samber/mo"
 	"go.getarcane.app/acfs"
 	"go.getarcane.app/kit/normalization"
-	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/kit/pkg"
 	"go.getarcane.app/kit/pkg/mapping"
 	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm"
@@ -34,7 +34,7 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
-	httputils "github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/httpx"
 )
 
 type registryFetchMeta struct {
@@ -46,7 +46,7 @@ type TemplateService struct {
 	db              *database.DB
 	httpClient      *http.Client
 	safeHTTPClient  *http.Client
-	lookupIP        httputils.LookupIPFunc
+	lookupIP        httpx.LookupIPFunc
 	settingsService *settings.SettingsService
 
 	remoteCache      *hot.HotCache[uint64, []ComposeTemplate]
@@ -78,7 +78,7 @@ func NewTemplateService(ctx context.Context, db *database.DB, httpClient *http.C
 	service := &TemplateService{
 		db:                db,
 		httpClient:        httpClient,
-		lookupIP:          httputils.DefaultLookupIP,
+		lookupIP:          httpx.DefaultLookupIP,
 		settingsService:   settingsService,
 		registryFetchMeta: make(map[string]*registryFetchMeta),
 		registryErrors:    make(map[string]string),
@@ -858,7 +858,7 @@ func (s *TemplateService) fetchURL(ctx context.Context, url string) (string, err
 }
 
 func (s *TemplateService) newSafeHTTPClientInternal() *http.Client {
-	client, err := httputils.NewSafeOutboundHTTPClient(s.httpClient, s.lookupIP)
+	client, err := httpx.NewSafeOutboundHTTPClient(s.httpClient, s.lookupIP)
 	if err != nil {
 		slog.Warn("failed to configure safe HTTP client", "error", err)
 		return nil
@@ -867,7 +867,7 @@ func (s *TemplateService) newSafeHTTPClientInternal() *http.Client {
 }
 
 func (s *TemplateService) newSafeRequestInternal(ctx context.Context, method, rawURL string) (*http.Client, *http.Request, error) {
-	parsedURL, err := httputils.ValidateSafeRemoteURL(ctx, rawURL, s.lookupIP)
+	parsedURL, err := httpx.ValidateSafeRemoteURL(ctx, rawURL, s.lookupIP)
 	if err != nil {
 		return nil, nil, err
 	}

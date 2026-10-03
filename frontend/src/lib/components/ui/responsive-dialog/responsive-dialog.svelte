@@ -1,12 +1,13 @@
 <script lang="ts">
-	// Close convention: the component that owns `open` must close it in the
-	// success path. Dialogs delegate closing to their parent and never self-close on submit.
-	import { IsMobile } from '#lib/hooks/is-mobile.svelte.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import * as Drawer from '#lib/components/ui/drawer/index.js';
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
-	import type { ResponsiveDialogProps } from './responsive-dialog.type.js';
+	// Close convention: the component that owns `open` must close it in the
+	// success path. Dialogs delegate closing to their parent and never self-close on submit.
+	import { IsMobile } from '#lib/hooks/is-mobile.svelte.js';
 	import { cn } from '#lib/utils.js';
+
+	import type { ResponsiveDialogProps } from './responsive-dialog.type.js';
 
 	let {
 		open = $bindable(false),

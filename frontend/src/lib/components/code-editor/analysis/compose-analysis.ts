@@ -1,6 +1,6 @@
-import type { ErrorObject } from 'ajv';
 import type { Diagnostic } from '@codemirror/lint';
 import type { EditorView } from '@codemirror/view';
+import type { ErrorObject } from 'ajv';
 import {
 	LineCounter,
 	isMap,
@@ -13,8 +13,9 @@ import {
 	type Pair,
 	type YAMLMap
 } from 'yaml';
-import type { AnalysisResult, EditorContext, OutlineItem } from './types';
+
 import type { ComposeSchemaContext } from './compose-schema';
+import type { AnalysisResult, EditorContext, OutlineItem } from './types';
 import { resolveVariableSource } from './vars-analysis';
 
 const MAX_SCHEMA_DIAGNOSTICS_DEFAULT = 30;

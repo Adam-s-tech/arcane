@@ -1,19 +1,18 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
+	import { z } from 'zod/v4';
 
-	import * as ResponsiveDialog from '#lib/components/ui/responsive-dialog/index.js';
-	import SheetFooterActions from '#lib/components/sheets/sheet-footer-actions.svelte';
 	import FormInput from '#lib/components/form/form-input.svelte';
 	import SelectWithLabel from '#lib/components/form/select-with-label.svelte';
-	import type { WebhookActionType, WebhookTargetType, CreateWebhook } from '#lib/types/environment.js';
-	import { containerService } from '#lib/services/container-service.js';
-	import { projectService } from '#lib/services/project-service.js';
-	import { gitOpsSyncService } from '#lib/services/gitops-sync-service.js';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import { z } from 'zod/v4';
-	import { createForm, preventDefault } from '#lib/utils/settings.svelte.js';
-
+	import SheetFooterActions from '#lib/components/sheets/sheet-footer-actions.svelte';
+	import * as ResponsiveDialog from '#lib/components/ui/responsive-dialog/index.js';
 	import * as m from '#lib/paraglide/messages.js';
+	import { containerService } from '#lib/services/container-service.js';
+	import { gitOpsSyncService } from '#lib/services/gitops-sync-service.js';
+	import { projectService } from '#lib/services/project-service.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import type { WebhookActionType, WebhookTargetType, CreateWebhook } from '#lib/types/environment.js';
+	import { createForm, preventDefault } from '#lib/utils/settings.svelte.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	type WebhookFormProps = {
 		open: boolean;

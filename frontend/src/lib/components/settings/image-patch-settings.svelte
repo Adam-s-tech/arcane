@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import { featureStore } from '#lib/stores/features.store.svelte.js';
-	import { Switch } from '#lib/components/ui/switch/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
 	import SettingsRow from '#lib/components/settings/settings-row.svelte';
 	import SettingsSection from '#lib/components/settings/settings-section.svelte';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Switch } from '#lib/components/ui/switch/index.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import { featureStore } from '#lib/stores/features.store.svelte.js';
 
 	type ImagePatchFormValues = {
 		imagePatchSuffix: string;

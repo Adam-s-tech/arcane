@@ -9,6 +9,7 @@ import (
 
 	"github.com/getarcaneapp/arcane/types/v2/base"
 	"github.com/getarcaneapp/arcane/types/v2/gitops"
+	"github.com/getarcaneapp/arcane/types/v2/user"
 	"github.com/libtnb/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -70,7 +71,7 @@ func newSettingsServiceForTestInternal(t testing.TB, ctx context.Context, db *da
 func createGitRepositoryServiceTestRepoInternal(t *testing.T, svc *GitRepositoryService, req gitops.CreateRepositoryRequest) *GitRepository {
 	t.Helper()
 
-	repo, err := svc.CreateRepository(t.Context(), req, common.User{
+	repo, err := svc.CreateRepository(t.Context(), req, user.Actor{
 		ID:       "admin-1",
 		Username: "admin",
 	})
@@ -99,7 +100,7 @@ func TestGitRepositoryService_UpdateRepository_RejectsURLChangeWhenStoredTokenWo
 
 	_, err := svc.UpdateRepository(t.Context(), repo.ID, gitops.UpdateRepositoryRequest{
 		URL: new("https://attacker.tld/repo.git"),
-	}, common.User{})
+	}, user.Actor{})
 	require.Error(t, err)
 
 	require.ErrorIs(t, err, common.ErrValidation)
@@ -125,7 +126,7 @@ func TestGitRepositoryService_UpdateRepository_RejectsURLChangeWhenStoredSSHKeyW
 
 	_, err := svc.UpdateRepository(t.Context(), repo.ID, gitops.UpdateRepositoryRequest{
 		URL: new("git@attacker.tld:acme/private.git"),
-	}, common.User{})
+	}, user.Actor{})
 	require.Error(t, err)
 
 	require.ErrorIs(t, err, common.ErrValidation)
@@ -153,7 +154,7 @@ func TestGitRepositoryService_UpdateRepository_RejectsURLChangeWhenStoredTokenAn
 
 	_, err := svc.UpdateRepository(t.Context(), repo.ID, gitops.UpdateRepositoryRequest{
 		URL: new("https://attacker.tld/repo.git"),
-	}, common.User{})
+	}, user.Actor{})
 	require.Error(t, err)
 
 	var apiErr *common.APIError
@@ -176,7 +177,7 @@ func TestGitRepositoryService_UpdateRepository_AllowsURLChangeWhenTokenIsResuppl
 	updated, err := svc.UpdateRepository(t.Context(), repo.ID, gitops.UpdateRepositoryRequest{
 		URL:   new("https://github.com/acme/private-rotated.git"),
 		Token: new("ghp_new_token"),
-	}, common.User{})
+	}, user.Actor{})
 	require.NoError(t, err)
 
 	assert.Equal(t, "https://github.com/acme/private-rotated.git", updated.URL)
@@ -202,7 +203,7 @@ func TestGitRepositoryService_UpdateRepository_AllowsURLChangeWhenTokenIsCleared
 	updated, err := svc.UpdateRepository(t.Context(), repo.ID, gitops.UpdateRepositoryRequest{
 		URL:   new("https://github.com/acme/public.git"),
 		Token: new(""),
-	}, common.User{})
+	}, user.Actor{})
 	require.NoError(t, err)
 
 	assert.Equal(t, "https://github.com/acme/public.git", updated.URL)
@@ -226,7 +227,7 @@ func TestGitRepositoryService_UpdateRepository_AllowsSameURLWithoutCredentialRes
 	updated, err := svc.UpdateRepository(t.Context(), repo.ID, gitops.UpdateRepositoryRequest{
 		URL:      new("https://github.com/acme/private.git"),
 		Username: new("deploy-bot"),
-	}, common.User{})
+	}, user.Actor{})
 	require.NoError(t, err)
 
 	assert.Equal(t, "deploy-bot", updated.Username)

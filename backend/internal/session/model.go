@@ -3,8 +3,8 @@ package session
 import (
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/user"
 )
 
 const (
@@ -22,12 +22,12 @@ const (
 type UserSession struct {
 	database.BaseModel
 
-	UserID           string       `json:"userId" gorm:"column:user_id;not null;index"`
-	User             *common.User `json:"user,omitempty" gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"`
-	RefreshTokenHash string       `json:"-" gorm:"column:refresh_token_hash;not null;uniqueIndex"`
-	UserAgent        *string      `json:"userAgent,omitempty" gorm:"column:user_agent"`
-	IPAddress        *string      `json:"ipAddress,omitempty" gorm:"column:ip_address"`
-	Source           string       `json:"source,omitempty" gorm:"column:source"`
+	UserID           string     `json:"userId" gorm:"column:user_id;not null;index"`
+	User             *user.User `json:"user,omitempty" gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"`
+	RefreshTokenHash string     `json:"-" gorm:"column:refresh_token_hash;not null;uniqueIndex"`
+	UserAgent        *string    `json:"userAgent,omitempty" gorm:"column:user_agent"`
+	IPAddress        *string    `json:"ipAddress,omitempty" gorm:"column:ip_address"`
+	Source           string     `json:"source,omitempty" gorm:"column:source"`
 	// FederatedCredentialID links federated sessions to their credential row;
 	// the FK (ON DELETE SET NULL) lives in the SQL migrations.
 	FederatedCredentialID *string    `json:"federatedCredentialId,omitempty" gorm:"column:federated_credential_id;index"`

@@ -1,6 +1,8 @@
 import { environmentStore } from '#lib/stores/environment.store.svelte.js';
 import type { VolumeWorkspace, VolumeWorkspaceFileContent, VolumeWorkspaceUpdateManifest } from '#lib/types/volume-workspace.js';
 import { downloadBlob, filenameFromPath } from '#lib/utils/browser-download.js';
+import { createWorkspaceFormData } from '#lib/utils/workspace-files.js';
+
 import BaseAPIService from './api-service';
 
 class VolumeWorkspaceService extends BaseAPIService {
@@ -30,9 +32,7 @@ class VolumeWorkspaceService extends BaseAPIService {
 		environmentId?: string
 	): Promise<VolumeWorkspace> {
 		const envId = await this.resolveEnvironmentId(environmentId);
-		const form = new FormData();
-		form.append('manifest', JSON.stringify(manifest));
-		for (const file of files) form.append('files', file, file.name);
+		const form = createWorkspaceFormData(manifest, files);
 		return this.handleResponse(this.api.put(`/environments/${envId}/volumes/${volumeName}/workspace`, form));
 	}
 

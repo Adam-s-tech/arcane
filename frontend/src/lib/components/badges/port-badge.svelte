@@ -1,13 +1,14 @@
 <script lang="ts">
-	import type { ContainerPorts } from '#lib/types/docker.js';
-	import type { ServicePort } from '#lib/types/swarm.js';
-	import { m } from '#lib/paraglide/messages.js';
+	import { mergeProps } from 'bits-ui';
+
 	import * as ArcaneTooltip from '#lib/components/arcane-tooltip/index.js';
 	import { badgeVariants } from '#lib/components/ui/badge/index.js';
-	import { cn } from '#lib/utils.js';
+	import { m } from '#lib/paraglide/messages.js';
 	import settingsStore from '#lib/stores/config-store.svelte.js';
+	import type { ContainerPorts } from '#lib/types/docker.js';
+	import type { ServicePort } from '#lib/types/swarm.js';
+	import { cn } from '#lib/utils.js';
 	import { toPortHref } from '#lib/utils/navigation.js';
-	import { mergeProps } from 'bits-ui';
 
 	let {
 		ports = [] as PortBadgePort[],

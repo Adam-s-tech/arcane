@@ -9,15 +9,14 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/containerd/platforms"
 	"github.com/danielgtaylor/huma/v2"
 	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
 	"github.com/getarcaneapp/arcane/types/v2/base"
 	"github.com/getarcaneapp/arcane/types/v2/image"
 	"github.com/getarcaneapp/arcane/types/v2/system"
 	uploadtypes "github.com/getarcaneapp/arcane/types/v2/upload"
-	buildtypes "go.getarcane.app/builds/types"
-	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/builds/types"
+	"go.getarcane.app/kit/pkg"
 	"gorm.io/gorm"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
@@ -25,10 +24,8 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/docker"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/imageupdate"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/upload"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	activitylib "github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
@@ -46,8 +43,6 @@ type ImageHandler struct {
 	uploadService      *upload.UploadService
 	appCtx             context.Context
 }
-
-// --- Huma Input/Output Wrappers ---
 
 // ListImagesOutput is the image list response including the upload limit.
 type ListImagesOutput struct {
@@ -68,14 +63,6 @@ type ListImagesInput struct {
 type GetImageInput struct {
 	EnvironmentID string `path:"id" doc:"Environment ID"`
 	ImageID       string `path:"imageId" doc:"Image ID"`
-}
-
-type GetImageAttestationsInput struct {
-	EnvironmentID string `path:"id" doc:"Environment ID"`
-	ImageName     string `path:"name" doc:"Image ID or image reference"`
-	Platform      string `query:"platform" doc:"OCI platform selector, for example linux/amd64"`
-	PredicateType string `query:"predicateType" doc:"Exact in-toto predicate type URI to include"`
-	WithStatement bool   `query:"statement" default:"false" doc:"Include verbatim statement JSON bodies"`
 }
 
 type TagImageInput struct {
@@ -112,7 +99,7 @@ type PullImageInput struct {
 
 type BuildImageInput struct {
 	EnvironmentID string `path:"id" doc:"Environment ID"`
-	Body          buildtypes.BuildRequest
+	Body          types.BuildRequest
 }
 
 type ListImageBuildsInput struct {
@@ -149,183 +136,6 @@ type GetImageUsageCountsInput struct {
 type UploadImageInput struct {
 	EnvironmentID string `path:"id" doc:"Environment ID"`
 	Body          uploadtypes.ConsumeRequest
-}
-
-// RegisterImages registers image management routes using Huma.
-func RegisterImages(
-	api huma.API,
-	dockerService *docker.DockerClientService,
-	imageService *ImageService,
-	imageUpdateService *imageupdate.ImageUpdateService,
-	settingsService *settings.SettingsService,
-	buildService *build.BuildService,
-	activityService *activity.ActivityService,
-	uploadService *upload.UploadService,
-	appCtx handlerutil.ActivityAppContext,
-) {
-	h := &ImageHandler{
-		dockerService:      dockerService,
-		imageService:       imageService,
-		imageUpdateService: imageUpdateService,
-		settingsService:    settingsService,
-		buildService:       buildService,
-		activityService:    activityService,
-		uploadService:      uploadService,
-		appCtx:             appCtx.Context(),
-	}
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "list-images",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/images",
-		Summary:     "List images",
-		Description: "Get a paginated list of Docker images",
-		Tags:        []string{"Images"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermImagesList, h.ListImages)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "get-image-usage-counts",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/images/counts",
-		Summary:     "Get image usage counts",
-		Description: "Get counts of images in use, unused, total, and total size",
-		Tags:        []string{"Images"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermImagesList, h.GetImageUsageCounts)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "get-image-attestations",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/images/{name}/attestations",
-		Summary:     "Get image attestations",
-		Description: "Get in-toto attestation statements attached to a Docker image",
-		Tags:        []string{"Images"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermImagesRead, h.GetImageAttestations)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "search-images",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/images/search",
-		Summary:     "Search images",
-		Description: "Search Docker Hub images",
-		Tags:        []string{"Images"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermImagesRead, h.SearchImages)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "tag-image",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/images/{name}/tag",
-		Summary:     "Tag image",
-		Description: "Add a repository tag to an image",
-		Tags:        []string{"Images"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermImagesTag, h.TagImage)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "get-image-history",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/images/{name}/history",
-		Summary:     "Get image history",
-		Description: "Get Docker image layer history",
-		Tags:        []string{"Images"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermImagesRead, h.GetImageHistory)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "export-image",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/images/{name}/export",
-		Summary:     "Export image",
-		Description: "Download a Docker image as a tar archive",
-		Tags:        []string{"Images"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermImagesRead, h.ExportImage)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "get-image",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/images/{imageId}",
-		Summary:     "Get image by ID",
-		Description: "Get a Docker image by its ID",
-		Tags:        []string{"Images"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermImagesRead, h.GetImage)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "remove-image",
-		Method:      http.MethodDelete,
-		Path:        "/environments/{id}/images/{imageId}",
-		Summary:     "Remove an image",
-		Description: "Remove a Docker image by ID",
-		Tags:        []string{"Images"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermImagesDelete, h.RemoveImage)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "pull-image",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/images/pull",
-		Summary:     "Pull an image",
-		Description: "Pull a Docker image from a registry with streaming progress output",
-		Tags:        []string{"Images"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermImagesPull, h.PullImage)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "build-image",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/images/build",
-		Summary:     "Build an image",
-		Description: "Build a Docker image using BuildKit with streaming progress output",
-		Tags:        []string{"Images"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermImagesBuild, h.BuildImage)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "list-image-builds",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/images/builds",
-		Summary:     "List image builds",
-		Description: "Get a paginated list of image build history for an environment",
-		Tags:        []string{"Images"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermImagesList, h.ListImageBuilds)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "get-image-build",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/images/builds/{buildId}",
-		Summary:     "Get image build",
-		Description: "Get a single image build history entry with output",
-		Tags:        []string{"Images"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermImagesRead, h.GetImageBuild)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "prune-images",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/images/prune",
-		Summary:     "Prune unused images",
-		Description: "Remove unused Docker images",
-		Tags:        []string{"Images"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermImagesPrune, h.PruneImages)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "upload-image",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/images/upload",
-		Summary:     "Upload an image",
-		Description: "Load a Docker image tar archive from a complete chunked upload session. multipart/form-data bodies " +
-			"are still accepted for backward compatibility; that form is deprecated and will be removed in a " +
-			"future release.",
-		Tags:        []string{"Images"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: upload.LegacyMultipartMiddleware(api, h.uploadService, uploadtypes.KindImage),
-	}, authz.PermImagesUpload, h.UploadImage)
 }
 
 // ListImages returns a paginated list of images.
@@ -368,36 +178,6 @@ func (h *ImageHandler) GetImage(ctx context.Context, input *GetImageInput) (*han
 
 	return &handlerutil.Out[image.DetailSummary]{
 		Body: base.ApiResponse[image.DetailSummary]{
-			Success: true,
-			Data:    *out,
-		},
-	}, nil
-}
-
-// GetImageAttestations returns in-toto attestation statements attached to an image.
-func (h *ImageHandler) GetImageAttestations(ctx context.Context, input *GetImageAttestationsInput) (*handlerutil.Out[image.AttestationList], error) {
-	imageName, err := validateImageNameInternal(input.ImageName)
-	if err != nil {
-		return nil, err
-	}
-
-	if input.Platform != "" {
-		if _, parseErr := platforms.Parse(input.Platform); parseErr != nil {
-			return nil, huma.Error400BadRequest(fmt.Sprintf("invalid platform %q", input.Platform))
-		}
-	}
-
-	out, err := h.imageService.GetImageAttestations(ctx, imageName, ImageAttestationQuery{
-		Platform:         strings.TrimSpace(input.Platform),
-		PredicateType:    strings.TrimSpace(input.PredicateType),
-		IncludeStatement: input.WithStatement,
-	})
-	if err != nil {
-		return nil, huma.Error500InternalServerError(fmt.Sprintf("failed to get image attestations: %v", err))
-	}
-
-	return &handlerutil.Out[image.AttestationList]{
-		Body: base.ApiResponse[image.AttestationList]{
 			Success: true,
 			Data:    *out,
 		},

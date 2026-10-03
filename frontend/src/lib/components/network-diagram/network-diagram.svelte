@@ -1,16 +1,6 @@
 <script lang="ts">
 	import { browser } from '$app/env';
 	import { goto } from '$app/navigation';
-	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import { EyeOnIcon } from '#lib/icons/index.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import type { NetworkTopologyDto, TopologyEdgeDto, TopologyNodeDto } from '#lib/types/docker.js';
-	import { cn } from '#lib/utils.js';
-	import { mode } from 'mode-watcher';
-	import { PersistedState } from 'runed';
-	import { onMount } from 'svelte';
 	import {
 		Background,
 		BackgroundVariant,
@@ -22,6 +12,18 @@
 		type Node,
 		type XYPosition
 	} from '@xyflow/svelte';
+	import { mode } from 'mode-watcher';
+	import { PersistedState } from 'runed';
+	import { onMount } from 'svelte';
+
+	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import { EyeOnIcon } from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import type { NetworkTopologyDto, TopologyEdgeDto, TopologyNodeDto } from '#lib/types/docker.js';
+	import { cn } from '#lib/utils.js';
+
 	import '@xyflow/svelte/dist/style.css';
 
 	let {

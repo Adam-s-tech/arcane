@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"crypto/sha256"
 	"encoding/json/v2"
 	"errors"
 	"fmt"
@@ -12,13 +13,17 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
-	eventtypes "github.com/getarcaneapp/arcane/types/v2/event"
+	"github.com/getarcaneapp/arcane/types/v2/event"
+	"github.com/moby/moby/api/types/events"
 	"github.com/samber/mo"
 	"github.com/samber/mo/option"
+	"go.getarcane.app/kit/pkg"
 	"go.getarcane.app/kit/pkg/mapping"
 	"go.getarcane.app/streams/agg"
+	"go.getarcane.app/streams/bus"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	"gorm.io/gorm"
@@ -26,6 +31,7 @@ import (
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/event/children/correlation"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/edge"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
@@ -34,11 +40,11 @@ import (
 )
 
 type EventService struct {
-	changes           *concurrency.Signal[struct{}]
-	dockerCorrelation dockerCorrelationInternal
-	db                *database.DB
-	cfg               *config.Config
-	httpClient        *http.Client
+	changes     *concurrency.Signal[struct{}]
+	correlation *correlation.Service
+	db          *database.DB
+	cfg         *config.Config
+	httpClient  *http.Client
 }
 
 func NewEventService(db *database.DB, cfg *config.Config, httpClient *http.Client) *EventService {
@@ -48,11 +54,11 @@ func NewEventService(db *database.DB, cfg *config.Config, httpClient *http.Clien
 		}
 	}
 	return &EventService{
-		changes:           concurrency.NewSignal[struct{}](),
-		dockerCorrelation: dockerCorrelationInternal{now: time.Now},
-		db:                db,
-		cfg:               cfg,
-		httpClient:        httpClient,
+		changes:     concurrency.NewSignal[struct{}](),
+		correlation: correlation.NewService(time.Now),
+		db:          db,
+		cfg:         cfg,
+		httpClient:  httpClient,
 	}
 }
 
@@ -308,8 +314,8 @@ func normalizeOptionalStringPtr(value *string) *string {
 	return &trimmed
 }
 
-func (s *EventService) ListEventsPaginated(ctx context.Context, params pagination.QueryParams) ([]eventtypes.Event, pagination.Response, error) {
-	var events []Event
+func (s *EventService) ListEventsPaginated(ctx context.Context, params pagination.QueryParams) ([]event.Event, pagination.Response, error) {
+	var eventRecords []Event
 	q := s.db.WithContext(ctx).Model(&Event{})
 
 	if term := strings.TrimSpace(params.Search); term != "" {
@@ -326,12 +332,12 @@ func (s *EventService) ListEventsPaginated(ctx context.Context, params paginatio
 	q = pagination.ApplyFilter(q, "username", params.Filters["username"])
 	q = pagination.ApplyFilter(q, "environment_id", params.Filters["environmentId"])
 
-	paginationResp, err := pagination.PaginateAndSortDB(params, q, &events)
+	paginationResp, err := pagination.PaginateAndSortDB(params, q, &eventRecords)
 	if err != nil {
 		return nil, pagination.Response{}, fmt.Errorf("failed to paginate events: %w", err)
 	}
 
-	eventDtos, mapErr := mapping.MapSlice[Event, eventtypes.Event](events)
+	eventDtos, mapErr := mapping.MapSlice[Event, event.Event](eventRecords)
 	if mapErr != nil {
 		return nil, pagination.Response{}, fmt.Errorf("failed to map events: %w", mapErr)
 	}
@@ -339,8 +345,8 @@ func (s *EventService) ListEventsPaginated(ctx context.Context, params paginatio
 	return eventDtos, paginationResp, nil
 }
 
-func (s *EventService) GetEventsByEnvironmentPaginated(ctx context.Context, environmentID string, params pagination.QueryParams) ([]eventtypes.Event, pagination.Response, error) {
-	var events []Event
+func (s *EventService) GetEventsByEnvironmentPaginated(ctx context.Context, environmentID string, params pagination.QueryParams) ([]event.Event, pagination.Response, error) {
+	var eventRecords []Event
 	q := s.db.WithContext(ctx).Model(&Event{}).Where("environment_id = ?", environmentID)
 
 	if term := strings.TrimSpace(params.Search); term != "" {
@@ -356,12 +362,12 @@ func (s *EventService) GetEventsByEnvironmentPaginated(ctx context.Context, envi
 	q = pagination.ApplyFilter(q, "resource_type", params.Filters["resourceType"])
 	q = pagination.ApplyFilter(q, "username", params.Filters["username"])
 
-	paginationResp, err := pagination.PaginateAndSortDB(params, q, &events)
+	paginationResp, err := pagination.PaginateAndSortDB(params, q, &eventRecords)
 	if err != nil {
 		return nil, pagination.Response{}, fmt.Errorf("failed to paginate events: %w", err)
 	}
 
-	eventDtos, mapErr := mapping.MapSlice[Event, eventtypes.Event](events)
+	eventDtos, mapErr := mapping.MapSlice[Event, event.Event](eventRecords)
 	if mapErr != nil {
 		return nil, pagination.Response{}, fmt.Errorf("failed to map events: %w", mapErr)
 	}
@@ -752,7 +758,7 @@ func (s *EventService) getEventSeverity(eventType EventType) EventSeverity {
 }
 
 // RunStreamProducer signals committed event changes so clients can refresh their current query.
-func (s *EventService) RunStreamProducer(ctx context.Context, events chan<- eventtypes.StreamEvent) {
+func (s *EventService) RunStreamProducer(ctx context.Context, streamEvents chan<- event.StreamEvent) {
 	changed := make(chan struct{}, 1)
 	unsubscribe := s.changes.Subscribe(func(struct{}) {
 		// One pending invalidation covers all changes, without blocking event persistence.
@@ -764,7 +770,7 @@ func (s *EventService) RunStreamProducer(ctx context.Context, events chan<- even
 	defer unsubscribe()
 
 	// Subscribe first so connecting and reconnecting clients cannot miss a change.
-	if !agg.Send(ctx, events, eventtypes.StreamEvent{Type: "changed", Timestamp: time.Now()}) {
+	if !agg.Send(ctx, streamEvents, event.StreamEvent{Type: "changed", Timestamp: time.Now()}) {
 		return
 	}
 	for {
@@ -772,9 +778,238 @@ func (s *EventService) RunStreamProducer(ctx context.Context, events chan<- even
 		case <-ctx.Done():
 			return
 		case <-changed:
-			if !agg.Send(ctx, events, eventtypes.StreamEvent{Type: "changed", Timestamp: time.Now()}) {
+			if !agg.Send(ctx, streamEvents, event.StreamEvent{Type: "changed", Timestamp: time.Now()}) {
 				return
 			}
 		}
 	}
+}
+
+const daemonEventChanBuffer = 256
+
+// SubscribeDockerEvents prepares subscriptions before the watcher starts. The caller
+// runs the returned worker and calls cleanup after joining it, including on failed startup.
+func (s *EventService) SubscribeDockerEvents(eventBus *bus.DockerEventBus) (run func(context.Context) error, cleanup func()) {
+	containers, unsubscribeContainers := eventBus.Subscribe(events.ContainerEventType, bus.WithSubscriberBuffer(daemonEventChanBuffer))
+	images, unsubscribeImages := eventBus.Subscribe(events.ImageEventType, bus.WithSubscriberBuffer(daemonEventChanBuffer))
+	volumes, unsubscribeVolumes := eventBus.Subscribe(events.VolumeEventType, bus.WithSubscriberBuffer(daemonEventChanBuffer))
+	networks, unsubscribeNetworks := eventBus.Subscribe(events.NetworkEventType, bus.WithSubscriberBuffer(daemonEventChanBuffer))
+	cleanup = sync.OnceFunc(func() {
+		unsubscribeContainers()
+		unsubscribeImages()
+		unsubscribeVolumes()
+		unsubscribeNetworks()
+	})
+	return func(ctx context.Context) error {
+		return s.runDockerEventsInternal(ctx, containers, images, volumes, networks)
+	}, cleanup
+}
+
+func (s *EventService) runDockerEventsInternal(ctx context.Context, containers, images, volumes, networks <-chan events.Message) error {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for containers != nil || images != nil || volumes != nil || networks != nil {
+		var msg events.Message
+		var ok bool
+		select {
+		case <-ctx.Done():
+			return nil
+		case msg, ok = <-containers:
+			if !ok {
+				containers = nil
+				continue
+			}
+		case msg, ok = <-images:
+			if !ok {
+				images = nil
+				continue
+			}
+		case msg, ok = <-volumes:
+			if !ok {
+				volumes = nil
+				continue
+			}
+		case msg, ok = <-networks:
+			if !ok {
+				networks = nil
+				continue
+			}
+		case <-ticker.C:
+			s.correlation.Prune()
+			continue
+		}
+		s.RecordDockerEvent(ctx, msg)
+	}
+	return nil
+}
+
+// RecordDockerEvent persists a daemon occurrence once across normal and overflow delivery.
+func (s *EventService) RecordDockerEvent(ctx context.Context, msg events.Message) {
+	if ctx.Err() != nil {
+		return
+	}
+	req, ok := mapDaemonEventInternal(msg)
+	if !ok {
+		return
+	}
+	if s.ShouldSuppressDaemonEvent(string(msg.Type), msg.Actor.ID, *req.ResourceName, msg.Actor.Attributes["com.docker.compose.project"]) {
+		return
+	}
+	if msg.TimeNano != 0 {
+		identity, err := json.Marshal(msg, json.Deterministic(true))
+		if err != nil {
+			slog.WarnContext(ctx, "Failed to identify Docker daemon event", "type", req.Type, "resourceId", msg.Actor.ID, "error", err)
+			return
+		}
+		req.deduplicationKey = fmt.Sprintf("%x", sha256.Sum256(identity))
+	}
+	if _, err := s.CreateEvent(ctx, req); err != nil {
+		slog.WarnContext(ctx, "Failed to log Docker daemon event", "type", req.Type, "resourceId", msg.Actor.ID, "error", err)
+	}
+}
+
+var daemonEventTypesInternal = map[events.Type]map[events.Action]EventType{
+	events.ContainerEventType: {
+		events.ActionCreate:                EventTypeContainerCreate,
+		events.ActionStart:                 EventTypeContainerStart,
+		events.ActionStop:                  EventTypeContainerStop,
+		events.ActionRestart:               EventTypeContainerRestart,
+		events.ActionDie:                   EventTypeContainerDie,
+		events.ActionOOM:                   EventTypeContainerOOM,
+		events.ActionKill:                  EventTypeContainerKill,
+		events.ActionDestroy:               EventTypeContainerDelete,
+		events.ActionPause:                 EventTypeContainerPause,
+		events.ActionUnPause:               EventTypeContainerUnpause,
+		events.ActionRename:                EventTypeContainerRename,
+		events.ActionUpdate:                EventTypeContainerUpdate,
+		events.ActionHealthStatusUnhealthy: EventTypeContainerUnhealthy,
+	},
+	events.ImageEventType: {
+		events.ActionPull:   EventTypeImagePull,
+		events.ActionDelete: EventTypeImageDelete,
+		events.ActionTag:    EventTypeImageTag,
+		events.ActionUnTag:  EventTypeImageUntag,
+		events.ActionImport: EventTypeImageImport,
+		events.ActionLoad:   EventTypeImageLoad,
+		events.ActionPrune:  EventTypeImagePrune,
+	},
+	events.VolumeEventType: {
+		events.ActionCreate:  EventTypeVolumeCreate,
+		events.ActionDestroy: EventTypeVolumeDelete,
+		events.ActionPrune:   EventTypeVolumePrune,
+	},
+	events.NetworkEventType: {
+		events.ActionCreate:  EventTypeNetworkCreate,
+		events.ActionDestroy: EventTypeNetworkDelete,
+		events.ActionPrune:   EventTypeNetworkPrune,
+	},
+}
+
+func mapDaemonEventInternal(msg events.Message) (CreateEventRequest, bool) {
+	eventType := daemonEventTypesInternal[msg.Type][msg.Action]
+	if eventType == "" || (msg.Actor.ID == "" && msg.Action != events.ActionPrune) {
+		return CreateEventRequest{}, false
+	}
+	abnormalExit := eventType == EventTypeContainerDie && msg.Actor.Attributes["exitCode"] != "0"
+	severity := kit.Ternary(abnormalExit || eventType == EventTypeContainerUnhealthy, EventSeverityWarning, EventSeverityInfo)
+	if eventType == EventTypeContainerOOM {
+		severity = EventSeverityError
+	}
+
+	name := cmp.Or(msg.Actor.Attributes["name"], msg.Actor.ID, "prune")
+	metadata := database.JSON{"source": "docker", "action": string(msg.Action), "scope": msg.Scope}
+	for _, key := range []string{"name", "image", "exitCode", "signal"} {
+		if value, ok := msg.Actor.Attributes[key]; ok {
+			metadata[key] = value
+		}
+	}
+	for attr, key := range map[string]string{"com.docker.compose.project": "composeProject", "com.docker.compose.service": "composeService"} {
+		if value, ok := msg.Actor.Attributes[attr]; ok {
+			metadata[key] = value
+		}
+	}
+	return CreateEventRequest{
+		Type: eventType, Severity: severity,
+		Title:        fmt.Sprintf("Docker %s %s: %s", msg.Type, msg.Action, name),
+		Description:  fmt.Sprintf("%s '%s': %s observed from the Docker daemon", msg.Type, name, msg.Action),
+		ResourceType: new(string(msg.Type)), ResourceID: new(msg.Actor.ID), ResourceName: new(name),
+		EnvironmentID: new("0"), Metadata: metadata,
+	}, true
+}
+
+// MarkDockerExpectation correlates subsequent daemon observations with a local Arcane action.
+func (s *EventService) MarkDockerExpectation(resourceType, resourceID, resourceName string) {
+	if s == nil {
+		return
+	}
+	s.correlation.MarkExpectation(resourceType, resourceID, resourceName)
+}
+
+// BeginComposeSuppressionWindow covers daemon events labeled with the Compose project.
+func (s *EventService) BeginComposeSuppressionWindow(composeProject string) func() {
+	if s == nil {
+		return func() {}
+	}
+	return s.correlation.BeginComposeWindow(composeProject)
+}
+
+// BeginDockerResourceSuppressionWindow covers a mutation for its full duration and cleanup grace.
+func (s *EventService) BeginDockerResourceSuppressionWindow(resourceType, resourceID, resourceName string) func() {
+	if s == nil {
+		return func() {}
+	}
+	return s.correlation.BeginResourceWindow(resourceType, resourceID, resourceName)
+}
+
+// BeginDockerTypeSuppressionWindow covers bulk daemon operations whose per-item IDs are unknown until they finish.
+func (s *EventService) BeginDockerTypeSuppressionWindow(resourceType string) func() {
+	if s == nil {
+		return func() {}
+	}
+	return s.correlation.BeginTypeWindow(resourceType)
+}
+
+// SetDockerUpdatingContainers supplies the updater's live identities without coupling domains.
+func (s *EventService) SetDockerUpdatingContainers(source func() []string) {
+	if s == nil {
+		return
+	}
+	s.correlation.SetUpdatingContainers(source)
+}
+
+// ShouldSuppressDaemonEvent reports whether a daemon observation matches a recent local action.
+func (s *EventService) ShouldSuppressDaemonEvent(resourceType, actorID, actorName, composeProject string) bool {
+	if s == nil {
+		return false
+	}
+	return s.correlation.ShouldSuppress(resourceType, actorID, actorName, composeProject)
+}
+
+func (s *EventService) correlateCreatedEventInternal(req CreateEventRequest) {
+	if req.ResourceType == nil || req.Metadata["source"] == "docker" {
+		return
+	}
+	if req.EnvironmentID != nil && *req.EnvironmentID != "" && *req.EnvironmentID != "0" {
+		return
+	}
+	// Failure and observational records do not identify a successful Docker mutation.
+	//exhaustive:ignore
+	switch req.Type {
+	case EventTypeContainerStart, EventTypeContainerStop, EventTypeContainerRestart,
+		EventTypeContainerDelete, EventTypeContainerCreate, EventTypeContainerUpdate,
+		EventTypeContainerDeploy, EventTypeContainerKill, EventTypeContainerPause, EventTypeContainerUnpause,
+		EventTypeImagePull, EventTypeImageLoad, EventTypeImageTag, EventTypeImageCommit, EventTypeImageDelete,
+		EventTypeVolumeCreate, EventTypeVolumeDelete, EventTypeVolumeRename,
+		EventTypeNetworkCreate, EventTypeNetworkDelete:
+	default:
+		return
+	}
+	var id, name string
+	if req.ResourceID != nil {
+		id = *req.ResourceID
+	}
+	if req.ResourceName != nil {
+		name = *req.ResourceName
+	}
+	s.MarkDockerExpectation(*req.ResourceType, id, name)
 }

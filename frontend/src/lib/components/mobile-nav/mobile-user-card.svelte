@@ -1,15 +1,9 @@
 <script lang="ts">
-	import { cn } from '#lib/utils.js';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import ThemeModeSelector from '#lib/components/theme-mode/theme-mode-selector.svelte';
-	import { m } from '#lib/paraglide/messages.js';
-	import type { User } from '#lib/types/auth.js';
-	import LocalePicker from '#lib/components/locale-picker.svelte';
-	import EnvironmentSwitcherDialog from '#lib/components/dialogs/environment-switcher-dialog.svelte';
-	import settingsStore from '#lib/stores/config-store.svelte.js';
-	import userStore from '#lib/stores/user-store.svelte.js';
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+	import EnvironmentSwitcherDialog from '#lib/components/dialogs/environment-switcher-dialog.svelte';
 	import IfPermitted from '#lib/components/if-permitted.svelte';
+	import LocalePicker from '#lib/components/locale-picker.svelte';
+	import ThemeModeSelector from '#lib/components/theme-mode/theme-mode-selector.svelte';
 	import {
 		ArrowDownIcon,
 		LogoutIcon,
@@ -18,6 +12,12 @@
 		LanguageIcon,
 		ArrowRightIcon
 	} from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import settingsStore from '#lib/stores/config-store.svelte.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import userStore from '#lib/stores/user-store.svelte.js';
+	import type { User } from '#lib/types/auth.js';
+	import { cn } from '#lib/utils.js';
 
 	type Props = {
 		user: User;

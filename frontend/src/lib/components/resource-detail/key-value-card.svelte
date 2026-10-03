@@ -1,13 +1,14 @@
 <script lang="ts">
-	import * as Card from '#lib/components/ui/card/index.js';
 	import type { Snippet } from 'svelte';
+
+	import * as Card from '#lib/components/ui/card/index.js';
 	import { cn } from '#lib/utils.js';
 
 	interface Props {
 		label: string;
 		children: Snippet;
-		/** `code` renders a selectable monospace value; `text` renders plain text. */
-		valueFormat?: 'code' | 'text';
+		/** `custom` preserves the value snippet's own formatting. */
+		valueFormat?: 'code' | 'text' | 'custom';
 		/** Stacks multiple value children vertically. */
 		stacked?: boolean;
 		valueTitle?: string;

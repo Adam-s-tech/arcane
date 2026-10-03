@@ -1,13 +1,14 @@
 <script lang="ts">
-	import ResponsiveDialog from '#lib/components/ui/responsive-dialog/responsive-dialog.svelte';
-	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
-	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import { createQuery } from '@tanstack/svelte-query';
+
+	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+	import ResponsiveDialog from '#lib/components/ui/responsive-dialog/responsive-dialog.svelte';
+	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import { m } from '#lib/paraglide/messages.js';
 	import { queryKeys } from '#lib/query/query-keys.js';
 	import { gitOpsSyncService } from '#lib/services/gitops-sync-service.js';
-	import { formatDateTimeShort } from '#lib/utils/formatting.js';
-	import { m } from '#lib/paraglide/messages.js';
 	import type { GitOpsBackupHistoryEntry, GitOpsSync } from '#lib/types/automation.js';
+	import { formatDateTimeShort } from '#lib/utils/formatting.js';
 
 	let {
 		open = $bindable(false),

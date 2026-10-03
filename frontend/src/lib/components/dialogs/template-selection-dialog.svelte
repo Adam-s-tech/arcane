@@ -1,20 +1,20 @@
 <script lang="ts">
+	import { createMutation } from '@tanstack/svelte-query';
+	import { toast } from 'svelte-sonner';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { tryCatch } from '#lib/utils/try-catch.js';
 
-	import { ResponsiveDialog } from '#lib/components/ui/responsive-dialog/index.js';
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
-	import { Card } from '#lib/components/ui/card/index.js';
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import { ScrollArea } from '#lib/components/ui/scroll-area/index.js';
-	import type { Template } from '#lib/types/swarm.js';
-	import { Label } from '#lib/components/ui/label/index.js';
-	import * as Select from '#lib/components/ui/select/index.js';
-	import * as Collapsible from '#lib/components/ui/collapsible/index.js';
-	import * as InputGroup from '#lib/components/ui/input-group/index.js';
-	import EmptyState from '#lib/components/states/empty-state.svelte';
 	import SwitchWithLabel from '#lib/components/form/labeled-switch.svelte';
+	import SearchInput from '#lib/components/form/search-input.svelte';
 	import IconImage from '#lib/components/icon-image.svelte';
+	import EmptyState from '#lib/components/states/empty-state.svelte';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Card } from '#lib/components/ui/card/index.js';
+	import * as Collapsible from '#lib/components/ui/collapsible/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import { ResponsiveDialog } from '#lib/components/ui/responsive-dialog/index.js';
+	import { ScrollArea } from '#lib/components/ui/scroll-area/index.js';
+	import * as Select from '#lib/components/ui/select/index.js';
 	import {
 		ArrowDownIcon,
 		ArrowRightIcon,
@@ -23,14 +23,12 @@
 		DownloadIcon,
 		SettingsIcon,
 		FileTextIcon,
-		SearchIcon,
-		CloseIcon
+		SearchIcon
 	} from '#lib/icons/index.js';
-
-	import { toast } from 'svelte-sonner';
 	import { m } from '#lib/paraglide/messages.js';
 	import { templateService } from '#lib/services/template-service.js';
-	import { createMutation } from '@tanstack/svelte-query';
+	import type { Template } from '#lib/types/swarm.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	interface Props {
 		open: boolean;
@@ -310,30 +308,13 @@
 >
 	{#snippet children()}
 		<div class="space-y-4">
-			<InputGroup.Root>
-				<InputGroup.Addon>
-					<SearchIcon aria-hidden="true" />
-				</InputGroup.Addon>
-				<InputGroup.Input
-					type="text"
-					placeholder={m.templates_search_placeholder()}
-					aria-label={m.common_search()}
-					bind:value={searchQuery}
-					bind:ref={searchInput}
-				/>
-				{#if searchQuery}
-					<InputGroup.Addon align="inline-end">
-						<InputGroup.Button
-							size="icon-xs"
-							onclick={clearSearch}
-							title={m.common_clear_search()}
-							aria-label={m.common_clear_search()}
-						>
-							<CloseIcon class="size-4" />
-						</InputGroup.Button>
-					</InputGroup.Addon>
-				{/if}
-			</InputGroup.Root>
+			<SearchInput
+				onClear={clearSearch}
+				placeholder={m.templates_search_placeholder()}
+				aria-label={m.common_search()}
+				bind:value={searchQuery}
+				bind:ref={searchInput}
+			/>
 
 			<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 				<div class="flex items-center gap-3">

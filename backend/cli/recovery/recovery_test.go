@@ -15,7 +15,7 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/systembackup"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/system"
 )
 
 func newRestoredDatabaseForTestInternal(t *testing.T, runIDs ...string) (string, string) {
@@ -25,12 +25,12 @@ func newRestoredDatabaseForTestInternal(t *testing.T, runIDs ...string) (string,
 	require.NoError(t, err)
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&systembackup.SystemBackupRun{}, &activity.Activity{}, &settings.SettingVariable{}))
+	require.NoError(t, db.AutoMigrate(&system.SystemBackupRun{}, &activity.Activity{}, &settings.SettingVariable{}))
 	require.NoError(t, db.Create(&settings.SettingVariable{Key: "projectsDirectory", Value: "/app/data/projects"}).Error)
 	for i, id := range runIDs {
-		require.NoError(t, db.Create(&systembackup.SystemBackupRun{
+		require.NoError(t, db.Create(&system.SystemBackupRun{
 			ID: id, CreatedAt: time.Date(2026, 1, 1+i, 0, 0, 0, 0, time.UTC),
-			Status: systembackup.SystemBackupStatusRunning,
+			Status: system.SystemBackupStatusRunning,
 		}).Error)
 	}
 	resourceType := "system_backup"
@@ -59,17 +59,17 @@ func TestFinalizeRestoredBackupInternal(t *testing.T) {
 
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	require.NoError(t, err)
-	var selected, older, safety systembackup.SystemBackupRun
+	var selected, older, safety system.SystemBackupRun
 	require.NoError(t, db.First(&selected, "id = ?", "selected").Error)
-	require.Equal(t, systembackup.SystemBackupStatusSucceeded, selected.Status)
+	require.Equal(t, system.SystemBackupStatusSucceeded, selected.Status)
 	require.EqualValues(t, 1234, selected.Size)
 	require.Equal(t, "snapshot-1", selected.RemoteSnapshotID)
 	require.Equal(t, "destination-1", selected.S3DestinationID)
 	require.NoError(t, db.First(&older, "id = ?", "older").Error)
-	require.Equal(t, systembackup.SystemBackupStatusRunning, older.Status)
+	require.Equal(t, system.SystemBackupStatusRunning, older.Status)
 	require.NoError(t, db.First(&safety, "id = ?", "safety").Error)
-	require.Equal(t, systembackup.SystemBackupStatusSucceeded, safety.Status)
-	require.Equal(t, systembackup.SystemBackupTriggerSafety, safety.Trigger)
+	require.Equal(t, system.SystemBackupStatusSucceeded, safety.Status)
+	require.Equal(t, system.SystemBackupTriggerSafety, safety.Trigger)
 	require.Equal(t, "safety-snapshot", safety.LocalSnapshotID)
 	require.EqualValues(t, 4321, safety.Size)
 	var entry activity.Activity
@@ -87,9 +87,9 @@ func TestFinalizeRestoredBackupInternalFallsBackForLegacyManifest(t *testing.T) 
 
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	require.NoError(t, err)
-	var newest systembackup.SystemBackupRun
+	var newest system.SystemBackupRun
 	require.NoError(t, db.First(&newest, "id = ?", "newest").Error)
-	require.Equal(t, systembackup.SystemBackupStatusSucceeded, newest.Status)
+	require.Equal(t, system.SystemBackupStatusSucceeded, newest.Status)
 	var entry activity.Activity
 	require.NoError(t, db.First(&entry, "id = ?", "activity-1").Error)
 	require.Equal(t, activitytypes.StatusSuccess, entry.Status)

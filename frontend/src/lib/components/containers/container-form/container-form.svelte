@@ -1,31 +1,31 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
+	import { createQuery } from '@tanstack/svelte-query';
 
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
-	import * as Tabs from '#lib/components/ui/tabs/index.js';
-	import { TabBar, type TabItem } from '#lib/components/tab-bar/index.js';
 	import FormInput from '#lib/components/form/form-input.svelte';
-	import SelectWithLabel from '#lib/components/form/select-with-label.svelte';
-	import SearchableSelect from '#lib/components/form/searchable-select.svelte';
 	import KeyValueEditor from '#lib/components/form/key-value-editor.svelte';
-	import PortMappingEditor from '#lib/components/form/port-mapping-editor.svelte';
-	import VolumeMountEditor from '#lib/components/form/volume-mount-editor.svelte';
 	import NetworkAttachmentEditor from '#lib/components/form/network-attachment-editor.svelte';
-	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
-	import { Label } from '#lib/components/ui/label/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
+	import PortMappingEditor from '#lib/components/form/port-mapping-editor.svelte';
+	import SearchableSelect from '#lib/components/form/searchable-select.svelte';
+	import SelectWithLabel from '#lib/components/form/select-with-label.svelte';
+	import VolumeMountEditor from '#lib/components/form/volume-mount-editor.svelte';
+	import { TabBar, type TabItem } from '#lib/components/tab-bar/index.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
-	import { m } from '#lib/paraglide/messages.js';
+	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import { CloseIcon, ContainersIcon, NetworksIcon, SettingsIcon, VariableIcon, VolumesIcon } from '#lib/icons/index.js';
-	import { preventDefault, createForm } from '#lib/utils/settings.svelte.js';
-
-	import { createQuery } from '@tanstack/svelte-query';
+	import { m } from '#lib/paraglide/messages.js';
 	import { queryKeys } from '#lib/query/query-keys.js';
-	import { volumeService } from '#lib/services/volume-service.js';
-	import { networkService } from '#lib/services/network-service.js';
 	import { imageService } from '#lib/services/image-service.js';
+	import { networkService } from '#lib/services/network-service.js';
+	import { volumeService } from '#lib/services/volume-service.js';
 	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
 	import type { ImageSearchResultDto } from '#lib/types/docker.js';
+	import { preventDefault, createForm } from '#lib/utils/settings.svelte.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+
 	import { LINUX_CAPABILITIES, containerFormSchema, type ContainerFormRows } from './container-form-state';
 
 	let {

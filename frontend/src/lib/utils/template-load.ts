@@ -1,12 +1,14 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
+import type { QueryClient } from '@tanstack/svelte-query';
+
 import { queryKeys } from '#lib/query/query-keys.js';
 import { templateService } from '#lib/services/template-service.js';
 import { variableService } from '#lib/services/variable-service.js';
-import { extractApiErrorMessage } from '#lib/utils/api.js';
-import { userHasPermission } from '#lib/utils/auth.js';
 import type { User } from '#lib/types/auth.js';
 import type { Template, TemplateContentData } from '#lib/types/swarm.js';
 import type { GlobalVariable } from '#lib/types/variable.js';
+import { extractApiErrorMessage } from '#lib/utils/api.js';
+import { userHasPermission } from '#lib/utils/auth.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
 
 type QueryClientLike = {
 	query: <T>(options: { queryKey: unknown; queryFn: () => Promise<T> }) => Promise<T>;
@@ -39,6 +41,16 @@ export type SelectedTemplateLoad = {
 
 export function globalVariablesToMap(globalVariables: GlobalVariable[] | null | undefined): Record<string, string> {
 	return Object.fromEntries((globalVariables ?? []).map((item) => [item.key, item.value]));
+}
+
+export async function loadGlobalVariablesOrEmpty(queryClient: QueryClient): Promise<GlobalVariable[]> {
+	const result = await tryCatch(
+		queryClient.query({
+			queryKey: queryKeys.variables.list(),
+			queryFn: () => variableService.list()
+		})
+	);
+	return result.error ? [] : result.data;
 }
 
 const EMPTY_DEFAULT_TEMPLATES = { composeTemplate: '', envTemplate: '' };

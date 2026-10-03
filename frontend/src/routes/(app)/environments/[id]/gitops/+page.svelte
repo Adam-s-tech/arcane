@@ -1,5 +1,14 @@
 <script lang="ts">
+	import { afterNavigate, goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { toast } from 'svelte-sonner';
+
+	import GitOpsImportDialog from '#lib/components/dialogs/gitops-import-dialog.svelte';
+	import GitOpsSyncFormSheet from '#lib/components/dialogs/gitops-sync-dialog.svelte';
+	import { RefreshIcon, ClockIcon, SuccessIcon, GitBranchIcon, UploadIcon } from '#lib/icons/index.js';
+	import { ResourcePageLayout, type ActionButton, type StatCardConfig } from '#lib/layouts/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { gitOpsSyncService } from '#lib/services/gitops-sync-service.js';
 	import type {
 		GitOpsSync,
 		GitOpsSyncCounts,
@@ -8,17 +17,10 @@
 		GitOpsSyncUpdateDto,
 		ImportGitOpsSyncRequest
 	} from '#lib/types/automation.js';
-	import GitOpsSyncFormSheet from '#lib/components/dialogs/gitops-sync-dialog.svelte';
-	import GitOpsImportDialog from '#lib/components/dialogs/gitops-import-dialog.svelte';
 	import { extractApiErrorMessage, handleApiResultWithCallbacks } from '#lib/utils/api.js';
 	import { tryCatch } from '#lib/utils/try-catch.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import { gitOpsSyncService } from '#lib/services/gitops-sync-service.js';
-	import { page } from '$app/state';
-	import { afterNavigate, goto } from '$app/navigation';
-	import { ResourcePageLayout, type ActionButton, type StatCardConfig } from '#lib/layouts/index.js';
+
 	import SyncTable from './components/sync-table.svelte';
-	import { RefreshIcon, ClockIcon, SuccessIcon, GitBranchIcon, UploadIcon } from '#lib/icons/index.js';
 
 	let { data } = $props();
 

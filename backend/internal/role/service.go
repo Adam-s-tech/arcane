@@ -17,7 +17,7 @@ import (
 	"github.com/samber/hot"
 	"github.com/samber/mo"
 	"go.getarcane.app/kit/normalization"
-	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/kit/pkg"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -243,7 +243,7 @@ func lockAssignedUserRowsInternal(tx *gorm.DB, roleID string) ([]string, error) 
 		return ids, nil
 	}
 	var locked []string
-	if err := tx.Model(&common.User{}).
+	if err := tx.Table("users").
 		Clauses(clause.Locking{Strength: "UPDATE"}).
 		Where("id IN ?", ids).
 		Order("id").
@@ -385,9 +385,12 @@ func (s *RoleService) replaceUserAssignmentsForSourceInternal(ctx context.Contex
 		// Lock the target's user row so assignment swaps serialize with
 		// user-domain update/delete transactions, whose in-transaction privilege
 		// checks lock the same row.
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+		var locked struct{ ID string }
+		if err := tx.Table("users").
+			Select("id").
+			Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("id = ?", userID).
-			First(&common.User{}).Error; err != nil {
+			Take(&locked).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return common.ErrUserNotFound
 			}
@@ -542,21 +545,21 @@ func (s *RoleService) countEffectiveGlobalAdminsInternal(ctx context.Context, tx
 
 // ResolvePermissions returns the effective PermissionSet for a user, caching
 // the result per-user for permissionCacheTTL.
-func (s *RoleService) ResolvePermissions(ctx context.Context, user *common.User) (*authz.PermissionSet, error) {
-	if user == nil {
+func (s *RoleService) ResolvePermissions(ctx context.Context, userID string) (*authz.PermissionSet, error) {
+	if userID == "" {
 		return authz.NewPermissionSet(), nil
 	}
-	if ps, ok, _ := s.userCache.Get(user.ID); ok {
+	if ps, ok, _ := s.userCache.Get(userID); ok {
 		return ps, nil
 	}
 	gen := s.userCacheGen.Load()
-	ps, err := s.ResolveUserPermissionsInDB(ctx, s.db.WithContext(ctx), user.ID)
+	ps, err := s.ResolveUserPermissionsInDB(ctx, s.db.WithContext(ctx), userID)
 	if err != nil {
 		return nil, err
 	}
 	s.cacheFillMu.Lock()
 	if s.userCacheGen.Load() == gen {
-		s.userCache.Set(user.ID, ps)
+		s.userCache.Set(userID, ps)
 	}
 	s.cacheFillMu.Unlock()
 	return ps, nil
@@ -614,8 +617,8 @@ func (s *RoleService) ResolveExecutionPermissions(ctx context.Context, userID, k
 		return nil, errors.New("requesting user unavailable")
 	}
 	db := s.db.WithContext(ctx)
-	var user common.User
-	if err := db.Select("id").First(&user, "id = ?", userID).Error; err != nil {
+	var user struct{ ID string }
+	if err := db.Table("users").Select("id").Where("id = ?", userID).Take(&user).Error; err != nil {
 		return nil, fmt.Errorf("failed to load requesting user: %w", err)
 	}
 	if keyID == "" {

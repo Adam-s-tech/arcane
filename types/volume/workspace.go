@@ -1,14 +1,14 @@
 package volume
 
-import workspacetypes "github.com/getarcaneapp/arcane/types/v2/workspace"
+import "github.com/getarcaneapp/arcane/types/v2/workspace"
 
 const (
-	FileOpCreateFile   = workspacetypes.FileOpCreateFile
-	FileOpCreateFolder = workspacetypes.FileOpCreateFolder
-	FileOpUpdateFile   = workspacetypes.FileOpUpdateFile
-	FileOpRename       = workspacetypes.FileOpRename
-	FileOpMove         = workspacetypes.FileOpMove
-	FileOpDelete       = workspacetypes.FileOpDelete
+	FileOpCreateFile   = workspace.FileOpCreateFile
+	FileOpCreateFolder = workspace.FileOpCreateFolder
+	FileOpUpdateFile   = workspace.FileOpUpdateFile
+	FileOpRename       = workspace.FileOpRename
+	FileOpMove         = workspace.FileOpMove
+	FileOpDelete       = workspace.FileOpDelete
 	FileOpRestoreFile  = "restore_file"
 )
 

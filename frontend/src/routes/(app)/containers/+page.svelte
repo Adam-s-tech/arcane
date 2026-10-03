@@ -1,22 +1,24 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
 	import { goto } from '$app/navigation';
-	import { containerService } from '#lib/services/container-service.js';
-	import ContainerTable from './components/container-table.svelte';
-	import { m } from '#lib/paraglide/messages.js';
-	import { imageService } from '#lib/services/image-service.js';
-	import { untrack } from 'svelte';
-	import { ResourcePageLayout, type ActionButton, type StatCardConfig } from '#lib/layouts/index.js';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import { hasPermission } from '#lib/utils/auth.js';
-	import type { ContainerStatusCounts } from '#lib/types/docker.js';
 	import { createMutation } from '@tanstack/svelte-query';
+	import { untrack } from 'svelte';
+	import { toast } from 'svelte-sonner';
+
 	import { BoxIcon } from '#lib/icons/index.js';
+	import { ResourcePageLayout, type ActionButton, type StatCardConfig } from '#lib/layouts/index.js';
+	import { m } from '#lib/paraglide/messages.js';
 	import { queryKeys } from '#lib/query/query-keys.js';
-	import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
+	import { containerService } from '#lib/services/container-service.js';
 	import type { ContainerListRequestOptions } from '#lib/services/container-service.js';
-	import ContainerEnvironmentSync from './components/container-environment-sync.svelte';
+	import { imageService } from '#lib/services/image-service.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import type { ContainerStatusCounts } from '#lib/types/docker.js';
+	import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
 	import { activityToastOptions, extractActivityId } from '#lib/utils/activity-toast.js';
+	import { hasPermission } from '#lib/utils/auth.js';
+
+	import ContainerEnvironmentSync from './components/container-environment-sync.svelte';
+	import ContainerTable from './components/container-table.svelte';
 
 	let { data } = $props();
 

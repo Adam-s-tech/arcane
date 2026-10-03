@@ -1,5 +1,5 @@
-import type { EditorContext } from './types';
 import { hasClosingQuote, isOpenQuote } from './parse-env-utils';
+import type { EditorContext } from './types';
 
 const ENV_KEY_REGEX = /^[A-Za-z_][A-Za-z0-9_]*$/;
 

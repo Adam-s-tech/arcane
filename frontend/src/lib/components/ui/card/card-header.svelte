@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { cn, type WithElementRef } from '#lib/utils.js';
 	import type { HTMLAttributes } from 'svelte/elements';
+
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import { cn, type WithElementRef } from '#lib/utils.js';
 
 	let {
 		ref = $bindable(null),

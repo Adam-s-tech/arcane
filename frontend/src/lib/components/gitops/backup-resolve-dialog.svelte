@@ -1,16 +1,17 @@
 <script lang="ts">
-	import ResponsiveDialog from '#lib/components/ui/responsive-dialog/responsive-dialog.svelte';
+	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
+	import { toast } from 'svelte-sonner';
+
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
+	import ResponsiveDialog from '#lib/components/ui/responsive-dialog/responsive-dialog.svelte';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
-	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
+	import { m } from '#lib/paraglide/messages.js';
 	import { queryKeys } from '#lib/query/query-keys.js';
 	import { gitOpsSyncService } from '#lib/services/gitops-sync-service.js';
+	import type { GitOpsBackupFileChange, GitOpsSync } from '#lib/types/automation.js';
 	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
 	import { tryCatch } from '#lib/utils/try-catch.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import { toast } from 'svelte-sonner';
-	import type { GitOpsBackupFileChange, GitOpsSync } from '#lib/types/automation.js';
 
 	let {
 		open = $bindable(false),

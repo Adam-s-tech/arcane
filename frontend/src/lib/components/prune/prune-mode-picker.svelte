@@ -1,9 +1,10 @@
 <script lang="ts">
+	import { useId } from 'bits-ui';
+
+	import SelectWithLabel from '#lib/components/form/select-with-label.svelte';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
-	import SelectWithLabel from '#lib/components/form/select-with-label.svelte';
 	import { m } from '#lib/paraglide/messages.js';
-	import { useId } from 'bits-ui';
 
 	export type PruneModeOption = {
 		value: string;

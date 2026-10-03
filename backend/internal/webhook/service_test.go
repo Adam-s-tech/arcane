@@ -1,0 +1,798 @@
+package webhook
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"testing"
+
+	"github.com/getarcaneapp/arcane/types/v2"
+	"github.com/getarcaneapp/arcane/types/v2/user"
+	"github.com/labstack/echo/v5"
+	"github.com/libtnb/sqlite"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.getarcane.app/kit/pkg"
+	"go.getarcane.app/sys/crypto"
+	"gorm.io/gorm"
+
+	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
+)
+
+// setupWebhookServiceTestDB creates an isolated in-memory SQLite DB for each test.
+func setupWebhookServiceTestDB(t *testing.T) *database.DB {
+	t.Helper()
+	initWebhookTokenCryptoForTests()
+
+	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared", strings.NewReplacer("/", "_", " ", "_").Replace(t.Name()))
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&Webhook{}))
+
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
+	sqlDB.SetMaxIdleConns(1)
+
+	return &database.DB{DB: db}
+}
+
+func initWebhookTokenCryptoForTests() {
+	crypto.InitEncryption(&crypto.Config{
+		EncryptionKey: "test-encryption-key-for-testing-32bytes-min",
+		Environment:   "test",
+	})
+}
+
+// newTestWebhookService returns a WebhookService with nil updater/project/gitops services,
+// sufficient for all tests that exercise lookup, hashing, and CRUD logic.
+// Tests that exercise the dispatch path use an unknown target type to avoid a nil dereference.
+func newTestWebhookService(db *database.DB) *WebhookService {
+	return &WebhookService{db: db}
+}
+
+// fetchWebhook loads a webhook directly from the DB to inspect stored fields.
+func fetchWebhook(t *testing.T, db *database.DB, id string) Webhook {
+	t.Helper()
+	var wh Webhook
+	require.NoError(t, db.WithContext(t.Context()).Where("id = ?", id).First(&wh).Error)
+	return wh
+}
+
+func defaultTestWebhookActionType(targetType string) string {
+	switch targetType {
+	case WebhookTargetTypeContainer, WebhookTargetTypeProject:
+		return WebhookActionTypeUpdate
+	case WebhookTargetTypeUpdater:
+		return WebhookActionTypeRun
+	case WebhookTargetTypeGitOps:
+		return WebhookActionTypeSync
+	default:
+		return WebhookActionTypeUpdate
+	}
+}
+
+func TestWebhookTokenFormat(t *testing.T) {
+	initWebhookTokenCryptoForTests()
+
+	raw, hash, prefix, err := generateWebhookTokenInternal()
+	require.NoError(t, err)
+
+	assert.True(t, strings.HasPrefix(raw, webhookTokenPrefix), "token must start with %q", webhookTokenPrefix)
+	tokenHex := strings.TrimPrefix(raw, webhookTokenPrefix)
+	encryptedBytes, err := hex.DecodeString(tokenHex)
+	require.NoError(t, err)
+	assert.Equal(t, webhookTokenPrefix+tokenHex[:webhookTokenPrefixLen], prefix, "prefix must be arc_wh_ + first %d chars of token hex", webhookTokenPrefixLen)
+
+	encrypted := base64.StdEncoding.EncodeToString(encryptedBytes)
+	decrypted, err := crypto.Decrypt(encrypted)
+	require.NoError(t, err)
+	assert.Len(t, decrypted, webhookTokenLength*2, "decrypted token payload must be 64 hex chars (32 bytes)")
+
+	expected := sha256.Sum256([]byte(raw))
+	assert.Equal(t, hex.EncodeToString(expected[:]), hash, "stored hash must be SHA-256 of the raw token")
+}
+
+func TestHashWebhookTokenIsDeterministic(t *testing.T) {
+	raw := "arc_wh_0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"
+	first := kit.SHA256Hex(raw)
+	second := kit.SHA256Hex(raw)
+	assert.Equal(t, first, second)
+}
+
+func TestParseWebhookPrefix_ValidToken(t *testing.T) {
+	raw := "arc_wh_0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"
+	prefix, err := parseWebhookPrefixInternal(raw)
+	require.NoError(t, err)
+	assert.Equal(t, "arc_wh_01020304", prefix)
+}
+
+func TestParseWebhookPrefix_MissingPrefix(t *testing.T) {
+	_, err := parseWebhookPrefixInternal("notawebhooktoken")
+	assert.ErrorIs(t, err, ErrWebhookInvalid)
+}
+
+func TestParseWebhookPrefix_TooShort(t *testing.T) {
+	_, err := parseWebhookPrefixInternal("arc_wh_0102030") // 7 chars after prefix — too short
+	assert.ErrorIs(t, err, ErrWebhookInvalid)
+}
+
+func TestParseWebhookPrefix_LeadingWhitespaceStripped(t *testing.T) {
+	raw := "  arc_wh_0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20  "
+	prefix, err := parseWebhookPrefixInternal(raw)
+	require.NoError(t, err)
+	assert.Equal(t, "arc_wh_01020304", prefix)
+}
+
+func TestIsKnownToken_StoredIdentity(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+	wh, raw, err := svc.CreateWebhook(ctx, "known", WebhookTargetTypeProject, WebhookActionTypeUpdate, "p1", "env-1", user.Actor{})
+	require.NoError(t, err)
+	require.True(t, svc.IsKnownToken(raw))
+
+	unstored, _, _, err := generateWebhookTokenInternal()
+	require.NoError(t, err)
+	for _, token := range []string{unstored, "", "arc_wh_bad", " " + raw, raw + " ", strings.ToUpper(raw), raw[:len(raw)-1], webhookTokenPrefix + strings.Repeat("ab", 512*1024)} {
+		require.False(t, svc.IsKnownToken(token))
+	}
+	var unavailable *WebhookService
+	require.False(t, unavailable.IsKnownToken(raw))
+
+	restarted := newTestWebhookService(db)
+	require.NoError(t, restarted.LoadTokenHashes(ctx))
+	require.True(t, restarted.IsKnownToken(raw), "existing tokens must be recognized before their first request after restart")
+	_, err = restarted.UpdateWebhook(ctx, wh.ID, "env-1", false, user.Actor{})
+	require.NoError(t, err)
+	require.True(t, restarted.IsKnownToken(raw), "disabled tokens retain their independent abuse budget")
+	require.ErrorIs(t, restarted.TriggerByToken(ctx, raw), ErrWebhookDisabled)
+	require.ErrorIs(t, restarted.DeleteWebhook(ctx, wh.ID, "wrong-environment", user.Actor{}), ErrWebhookNotFound)
+	require.True(t, restarted.IsKnownToken(raw))
+	require.NoError(t, restarted.DeleteWebhook(ctx, wh.ID, "env-1", user.Actor{}))
+	require.False(t, restarted.IsKnownToken(raw))
+	require.ErrorIs(t, restarted.TriggerByToken(ctx, raw), ErrWebhookNotFound)
+}
+
+func TestKnownTokenRateLimit_ExhaustedIPDoesNotBlockFirstUse(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+	_, first, err := svc.CreateWebhook(ctx, "first", WebhookTargetTypeProject, WebhookActionTypeUpdate, "p1", "env-1", user.Actor{})
+	require.NoError(t, err)
+	_, second, err := svc.CreateWebhook(ctx, "second", WebhookTargetTypeProject, WebhookActionTypeUpdate, "p2", "env-1", user.Actor{})
+	require.NoError(t, err)
+	svc = newTestWebhookService(db)
+	require.NoError(t, svc.LoadTokenHashes(ctx))
+
+	// Closing the database proves admission never queries it, even for unknown tokens.
+	sqlDB, err := db.DB.DB()
+	require.NoError(t, err)
+	require.NoError(t, sqlDB.Close())
+	router := echo.New()
+	router.IPExtractor = echo.ExtractIPDirect()
+	router.Use(middleware.PerTokenRateLimitForPaths([]string{"/trigger/:token"}, 1, 1, svc.IsKnownToken))
+	router.POST("/trigger/:token", func(c *echo.Context) error { return c.NoContent(http.StatusAccepted) })
+	request := func(token string) int {
+		req := httptest.NewRequest(http.MethodPost, "/trigger/"+token, http.NoBody)
+		req.RemoteAddr = "192.0.2.10:4000"
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		if rec.Code == http.StatusTooManyRequests {
+			require.Equal(t, "60", rec.Header().Get("Retry-After"))
+		}
+		return rec.Code
+	}
+	require.Equal(t, http.StatusAccepted, request(webhookTokenPrefix+strings.Repeat("0", webhookTokenHexLen)))
+	for i := range 200 {
+		require.Equal(t, http.StatusTooManyRequests, request(fmt.Sprintf("%s%0184x", webhookTokenPrefix, i+1)))
+	}
+	require.Equal(t, http.StatusAccepted, request(first))
+	require.Equal(t, http.StatusTooManyRequests, request(first))
+	require.Equal(t, http.StatusAccepted, request(second))
+}
+
+func TestLoadTokenHashes_FailurePreservesIndex(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+	_, raw, err := svc.CreateWebhook(ctx, "known", WebhookTargetTypeProject, WebhookActionTypeUpdate, "p1", "env-1", user.Actor{})
+	require.NoError(t, err)
+	require.NoError(t, db.Migrator().DropTable(&Webhook{}))
+	require.Error(t, svc.LoadTokenHashes(ctx))
+	require.True(t, svc.IsKnownToken(raw))
+	_, failed, err := svc.CreateWebhook(ctx, "failed", WebhookTargetTypeProject, WebhookActionTypeUpdate, "p1", "env-1", user.Actor{})
+	require.Error(t, err)
+	require.Empty(t, failed)
+	require.Len(t, svc.tokenHashes, 1)
+}
+
+func TestKnownTokenIndex_ConcurrentReloadAndCRUD(t *testing.T) {
+	ctx := t.Context()
+	svc := newTestWebhookService(setupWebhookServiceTestDB(t))
+	var workers sync.WaitGroup
+	workers.Go(func() {
+		for range 30 {
+			if err := svc.LoadTokenHashes(ctx); err != nil {
+				t.Errorf("reload token hashes: %v", err)
+				return
+			}
+			svc.IsKnownToken("arc_wh_unknown")
+		}
+	})
+	for range 30 {
+		wh, raw, err := svc.CreateWebhook(ctx, "known", WebhookTargetTypeProject, WebhookActionTypeUpdate, "p1", "env-1", user.Actor{})
+		require.NoError(t, err)
+		require.True(t, svc.IsKnownToken(raw))
+		require.NoError(t, svc.DeleteWebhook(ctx, wh.ID, "env-1", user.Actor{}))
+		require.False(t, svc.IsKnownToken(raw))
+	}
+	workers.Wait()
+}
+
+func TestCreateWebhook_TokenNotStoredInPlaintext(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	wh, rawToken, err := svc.CreateWebhook(ctx, "my-hook", WebhookTargetTypeProject, WebhookActionTypeUpdate, "project-id", "env-1", user.Actor{})
+	require.NoError(t, err)
+	require.NotEmpty(t, rawToken)
+
+	stored := fetchWebhook(t, db, wh.ID)
+	assert.NotEqual(t, rawToken, stored.TokenHash, "raw token must not be stored as-is")
+	assert.Equal(t, kit.SHA256Hex(rawToken), stored.TokenHash, "stored hash must match SHA-256 of raw token")
+}
+
+func TestCreateWebhook_PrefixMatchesToken(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	wh, rawToken, err := svc.CreateWebhook(ctx, "  cafe\u0301 hook  ", WebhookTargetTypeProject, WebhookActionTypeUpdate, "p1", "env-1", user.Actor{})
+	require.NoError(t, err)
+
+	hexPart := strings.TrimPrefix(rawToken, webhookTokenPrefix)
+	expectedPrefix := webhookTokenPrefix + hexPart[:webhookTokenPrefixLen]
+	assert.Equal(t, expectedPrefix, wh.TokenPrefix)
+	assert.Equal(t, "café hook", wh.Name)
+
+	stored := fetchWebhook(t, db, wh.ID)
+	assert.Equal(t, expectedPrefix, stored.TokenPrefix)
+}
+
+func TestCreateWebhook_InvalidTargetTypeRejected(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	_, _, err := svc.CreateWebhook(ctx, "bad", "invalid-type", WebhookActionTypeUpdate, "c1", "env-1", user.Actor{})
+	assert.ErrorIs(t, err, ErrWebhookInvalidType)
+}
+
+func TestCreateWebhook_EmptyTargetIDRejectedForNonUpdaterTypes(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	for _, targetType := range []string{
+		WebhookTargetTypeContainer,
+		WebhookTargetTypeProject,
+		WebhookTargetTypeGitOps,
+	} {
+		_, _, err := svc.CreateWebhook(ctx, "hook", targetType, defaultTestWebhookActionType(targetType), "", "env-1", user.Actor{})
+		assert.ErrorIs(t, err, ErrWebhookMissingTarget, "expected ErrWebhookMissingTarget for type %s with empty targetID", targetType)
+	}
+}
+
+func TestCreateWebhook_InvalidActionTypeRejected(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	_, _, err := svc.CreateWebhook(ctx, "bad-action", WebhookTargetTypeContainer, WebhookActionTypeDown, "container-id", "env-1", user.Actor{})
+	assert.ErrorIs(t, err, ErrWebhookInvalidAction)
+}
+
+func TestCreateWebhook_EmptyActionTypeDefaultsPerTarget(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	projectWebhook, _, err := svc.CreateWebhook(ctx, "project-hook", WebhookTargetTypeProject, "", "project-id", "env-1", user.Actor{})
+	require.NoError(t, err)
+	assert.Equal(t, WebhookActionTypeUpdate, projectWebhook.ActionType)
+
+	updaterWebhook, _, err := svc.CreateWebhook(ctx, "updater-hook", WebhookTargetTypeUpdater, "", "", "env-1", user.Actor{})
+	require.NoError(t, err)
+	assert.Equal(t, WebhookActionTypeRun, updaterWebhook.ActionType)
+}
+
+func TestCreateWebhook_EmptyTargetIDAcceptedForUpdaterType(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	wh, _, err := svc.CreateWebhook(ctx, "updater-hook", WebhookTargetTypeUpdater, WebhookActionTypeRun, "", "env-1", user.Actor{})
+	require.NoError(t, err)
+	assert.Empty(t, wh.TargetID)
+}
+
+func TestCreateWebhook_ContainerTypeAccepted(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	wh, _, err := svc.CreateWebhook(ctx, "container-hook", WebhookTargetTypeContainer, WebhookActionTypeUpdate, "container-id", "env-1", user.Actor{})
+	require.NoError(t, err)
+	assert.Equal(t, WebhookTargetTypeContainer, wh.TargetType)
+	assert.Equal(t, WebhookActionTypeUpdate, wh.ActionType)
+}
+
+func TestCreateWebhook_ProjectTypeAccepted(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	wh, _, err := svc.CreateWebhook(ctx, "stack-hook", WebhookTargetTypeProject, WebhookActionTypeUpdate, "project-id", "env-1", user.Actor{})
+	require.NoError(t, err)
+	assert.Equal(t, WebhookTargetTypeProject, wh.TargetType)
+	assert.Equal(t, WebhookActionTypeUpdate, wh.ActionType)
+}
+
+func TestCreateWebhook_UpdaterTypeAccepted(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	wh, _, err := svc.CreateWebhook(ctx, "updater-hook", WebhookTargetTypeUpdater, WebhookActionTypeRun, "", "env-1", user.Actor{})
+	require.NoError(t, err)
+	assert.Equal(t, WebhookTargetTypeUpdater, wh.TargetType)
+	assert.Equal(t, WebhookActionTypeRun, wh.ActionType)
+}
+
+func TestCreateWebhook_GitOpsTypeAccepted(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	wh, _, err := svc.CreateWebhook(ctx, "gitops-hook", WebhookTargetTypeGitOps, WebhookActionTypeSync, "sync-id", "env-1", user.Actor{})
+	require.NoError(t, err)
+	assert.Equal(t, WebhookTargetTypeGitOps, wh.TargetType)
+	assert.Equal(t, WebhookActionTypeSync, wh.ActionType)
+}
+
+func TestCreateWebhook_EnabledByDefault(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	wh, _, err := svc.CreateWebhook(ctx, "enabled", WebhookTargetTypeProject, WebhookActionTypeUpdate, "p1", "env-1", user.Actor{})
+	require.NoError(t, err)
+	assert.True(t, wh.Enabled)
+}
+
+func TestCreateWebhook_UniqueTokensEachCall(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	_, token1, err := svc.CreateWebhook(ctx, "h1", WebhookTargetTypeProject, WebhookActionTypeUpdate, "p1", "env-1", user.Actor{})
+	require.NoError(t, err)
+	_, token2, err := svc.CreateWebhook(ctx, "h2", WebhookTargetTypeProject, WebhookActionTypeUpdate, "p2", "env-1", user.Actor{})
+	require.NoError(t, err)
+
+	assert.NotEqual(t, token1, token2)
+}
+
+func TestListWebhooks_ScopedToEnvironment(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	_, _, err := svc.CreateWebhook(ctx, "env1-hook", WebhookTargetTypeProject, WebhookActionTypeUpdate, "p1", "env-1", user.Actor{})
+	require.NoError(t, err)
+	_, _, err = svc.CreateWebhook(ctx, "env2-hook", WebhookTargetTypeProject, WebhookActionTypeUpdate, "p2", "env-2", user.Actor{})
+	require.NoError(t, err)
+
+	list, err := svc.ListWebhooks(ctx, "env-1")
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	assert.Equal(t, "env1-hook", list[0].Name)
+}
+
+func TestListWebhooks_EmptyForUnknownEnvironment(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	list, err := svc.ListWebhooks(ctx, "no-such-env")
+	require.NoError(t, err)
+	assert.Empty(t, list)
+}
+
+func TestListWebhookSummaries_ResolvesTargetNames(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	require.NoError(t, db.WithContext(ctx).Exec(`CREATE TABLE projects (id TEXT PRIMARY KEY, name TEXT NOT NULL)`).Error)
+	require.NoError(t, db.WithContext(ctx).Exec(`CREATE TABLE gitops_syncs (id TEXT PRIMARY KEY, environment_id TEXT NOT NULL, name TEXT NOT NULL)`).Error)
+	require.NoError(t, db.WithContext(ctx).Exec(`INSERT INTO projects (id, name) VALUES (?, ?)`, "project-1", "Main Project").Error)
+	require.NoError(t, db.WithContext(ctx).Exec(`INSERT INTO gitops_syncs (id, environment_id, name) VALUES (?, ?, ?)`, "sync-1", "env-1", "Deploy Sync").Error)
+
+	_, _, err := svc.CreateWebhook(ctx, "project-hook", WebhookTargetTypeProject, WebhookActionTypeUpdate, "project-1", "env-1", user.Actor{})
+	require.NoError(t, err)
+	_, _, err = svc.CreateWebhook(ctx, "updater-hook", WebhookTargetTypeUpdater, WebhookActionTypeRun, "", "env-1", user.Actor{})
+	require.NoError(t, err)
+	_, _, err = svc.CreateWebhook(ctx, "gitops-hook", WebhookTargetTypeGitOps, WebhookActionTypeSync, "sync-1", "env-1", user.Actor{})
+	require.NoError(t, err)
+
+	summaries, err := svc.ListWebhookSummaries(ctx, "env-1")
+	require.NoError(t, err)
+	require.Len(t, summaries, 3)
+
+	targetNamesByType := make(map[string]string, len(summaries))
+	for _, summary := range summaries {
+		targetNamesByType[summary.TargetType] = summary.TargetName
+		assert.Equal(t, defaultTestWebhookActionType(summary.TargetType), summary.ActionType)
+	}
+
+	assert.Equal(t, "Main Project", targetNamesByType[WebhookTargetTypeProject])
+	assert.Equal(t, "Environment updater", targetNamesByType[WebhookTargetTypeUpdater])
+	assert.Equal(t, "Deploy Sync", targetNamesByType[WebhookTargetTypeGitOps])
+}
+
+func TestListWebhookSummaries_DefaultsLegacyActionType(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	legacyWebhook := &Webhook{
+		Name:          "legacy-hook",
+		TokenHash:     "hash",
+		TokenPrefix:   "arc_wh_deadbeef",
+		TargetType:    WebhookTargetTypeProject,
+		ActionType:    "",
+		TargetID:      "project-1",
+		EnvironmentID: "env-1",
+		Enabled:       true,
+	}
+	require.NoError(t, db.WithContext(ctx).Create(legacyWebhook).Error)
+
+	summaries, err := svc.ListWebhookSummaries(ctx, "env-1")
+	require.NoError(t, err)
+	require.Len(t, summaries, 1)
+	assert.Equal(t, WebhookActionTypeUpdate, summaries[0].ActionType)
+}
+
+func TestGetWebhookByID_ReturnsCorrectWebhook(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	created, _, err := svc.CreateWebhook(ctx, "get-me", WebhookTargetTypeProject, WebhookActionTypeUpdate, "p1", "env-1", user.Actor{})
+	require.NoError(t, err)
+
+	got, err := svc.GetWebhookByID(ctx, created.ID, "env-1")
+	require.NoError(t, err)
+	assert.Equal(t, created.ID, got.ID)
+}
+
+func TestGetWebhookByID_NotFoundForWrongEnvironment(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	created, _, err := svc.CreateWebhook(ctx, "env-scoped", WebhookTargetTypeProject, WebhookActionTypeUpdate, "p1", "env-1", user.Actor{})
+	require.NoError(t, err)
+
+	_, err = svc.GetWebhookByID(ctx, created.ID, "env-2")
+	assert.ErrorIs(t, err, ErrWebhookNotFound)
+}
+
+func TestGetWebhookByID_NotFoundForUnknownID(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	_, err := svc.GetWebhookByID(ctx, "does-not-exist", "env-1")
+	assert.ErrorIs(t, err, ErrWebhookNotFound)
+}
+
+func TestDeleteWebhook_RemovesRecord(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	created, _, err := svc.CreateWebhook(ctx, "delete-me", WebhookTargetTypeProject, WebhookActionTypeUpdate, "p1", "env-1", user.Actor{})
+	require.NoError(t, err)
+
+	require.NoError(t, svc.DeleteWebhook(ctx, created.ID, "env-1", user.Actor{}))
+
+	_, err = svc.GetWebhookByID(ctx, created.ID, "env-1")
+	assert.ErrorIs(t, err, ErrWebhookNotFound)
+}
+
+func TestDeleteWebhook_NotFoundForWrongEnvironment(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	created, _, err := svc.CreateWebhook(ctx, "env-scoped-delete", WebhookTargetTypeProject, WebhookActionTypeUpdate, "p1", "env-1", user.Actor{})
+	require.NoError(t, err)
+
+	err = svc.DeleteWebhook(ctx, created.ID, "env-2", user.Actor{})
+	require.ErrorIs(t, err, ErrWebhookNotFound)
+
+	// Webhook must still exist in the correct environment
+	_, err = svc.GetWebhookByID(ctx, created.ID, "env-1")
+	assert.NoError(t, err)
+}
+
+func TestDeleteWebhook_NotFoundForUnknownID(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	err := svc.DeleteWebhook(ctx, "does-not-exist", "env-1", user.Actor{})
+	assert.ErrorIs(t, err, ErrWebhookNotFound)
+}
+
+func TestUpdateWebhook_DisableAndEnable(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	wh, _, err := svc.CreateWebhook(ctx, "hook", WebhookTargetTypeProject, WebhookActionTypeUpdate, "proj-1", "env-1", user.Actor{})
+	require.NoError(t, err)
+	assert.True(t, wh.Enabled)
+
+	updated, err := svc.UpdateWebhook(ctx, wh.ID, "env-1", false, user.Actor{})
+	require.NoError(t, err)
+	assert.False(t, updated.Enabled)
+
+	updated, err = svc.UpdateWebhook(ctx, wh.ID, "env-1", true, user.Actor{})
+	require.NoError(t, err)
+	assert.True(t, updated.Enabled)
+}
+
+func TestUpdateWebhook_NotFoundForWrongEnvironment(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	wh, _, err := svc.CreateWebhook(ctx, "hook", WebhookTargetTypeProject, WebhookActionTypeUpdate, "proj-1", "env-1", user.Actor{})
+	require.NoError(t, err)
+
+	_, err = svc.UpdateWebhook(ctx, wh.ID, "env-other", false, user.Actor{})
+	assert.ErrorIs(t, err, ErrWebhookNotFound)
+}
+
+func TestUpdateWebhook_NotFoundForUnknownID(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	_, err := svc.UpdateWebhook(ctx, "does-not-exist", "env-1", false, user.Actor{})
+	assert.ErrorIs(t, err, ErrWebhookNotFound)
+}
+
+func TestTriggerByToken_InvalidFormat(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	err := svc.TriggerByToken(ctx, "not-a-webhook-token")
+	assert.ErrorIs(t, err, ErrWebhookInvalid)
+}
+
+func TestTriggerByToken_NotFound(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	// Well-formatted token but not in the DB
+	raw := "arc_wh_0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"
+	err := svc.TriggerByToken(ctx, raw)
+	assert.ErrorIs(t, err, ErrWebhookNotFound)
+}
+
+func TestTriggerByToken_WrongHash_NotFound(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	_, rawToken, err := svc.CreateWebhook(ctx, "hash-check", WebhookTargetTypeProject, WebhookActionTypeUpdate, "p1", "env-1", user.Actor{})
+	require.NoError(t, err)
+
+	// Flip the last character of the token
+	tampered := rawToken[:len(rawToken)-1]
+	if rawToken[len(rawToken)-1] == 'a' {
+		tampered += "b"
+	} else {
+		tampered += "a"
+	}
+
+	err = svc.TriggerByToken(ctx, tampered)
+	assert.ErrorIs(t, err, ErrWebhookNotFound)
+}
+
+func TestTriggerByToken_DisabledWebhook(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	created, rawToken, err := svc.CreateWebhook(ctx, "disabled-hook", WebhookTargetTypeProject, WebhookActionTypeUpdate, "p1", "env-1", user.Actor{})
+	require.NoError(t, err)
+
+	require.NoError(t, db.WithContext(ctx).Model(&Webhook{}).Where("id = ?", created.ID).Update("enabled", false).Error)
+
+	err = svc.TriggerByToken(ctx, rawToken)
+	assert.ErrorIs(t, err, ErrWebhookDisabled)
+}
+
+func TestTriggerByToken_UnknownTargetType_ReturnsInvalidType(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	rawToken := "arc_wh_aabbccdd0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c"
+	hash := kit.SHA256Hex(rawToken)
+	hexPart := strings.TrimPrefix(rawToken, webhookTokenPrefix)
+	prefix := webhookTokenPrefix + hexPart[:webhookTokenPrefixLen]
+
+	wh := &Webhook{
+		Name:          "bad-type",
+		TokenHash:     hash,
+		TokenPrefix:   prefix,
+		TargetType:    "unknown-type",
+		TargetID:      "some-id",
+		EnvironmentID: "env-1",
+		Enabled:       true,
+	}
+	require.NoError(t, db.WithContext(ctx).Create(wh).Error)
+
+	err := svc.TriggerByToken(ctx, rawToken)
+	assert.ErrorIs(t, err, ErrWebhookInvalidType)
+}
+
+// insertWebhookDirect inserts a webhook record directly, bypassing CreateWebhook validation,
+// so dispatch tests can use known target types without needing real service dependencies.
+func insertWebhookDirect(t *testing.T, ctx context.Context, db *database.DB, rawToken, targetType, actionType, targetID, envID string) *Webhook {
+	t.Helper()
+	hash := kit.SHA256Hex(rawToken)
+	hexPart := strings.TrimPrefix(rawToken, webhookTokenPrefix)
+	wh := &Webhook{
+		Name:          "test-hook",
+		TokenHash:     hash,
+		TokenPrefix:   webhookTokenPrefix + hexPart[:webhookTokenPrefixLen],
+		TargetType:    targetType,
+		ActionType:    actionType,
+		TargetID:      targetID,
+		EnvironmentID: envID,
+		Enabled:       true,
+	}
+	require.NoError(t, db.WithContext(ctx).Create(wh).Error)
+	return wh
+}
+
+func TestTriggerByToken_AcceptsImmediatelyAndRecordsTriggerTime(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db) // action services are nil; the async action fails, acceptance must not
+
+	rawToken := "arc_wh_ccddeeff01020304aabbccdd0102030405060708090a0b0c0d0e0f1011121314"
+	wh := insertWebhookDirect(t, ctx, db, rawToken, WebhookTargetTypeContainer, WebhookActionTypeUpdate, "container-id", types.LocalDockerEnvironmentID)
+
+	// Valid token is accepted synchronously; the action itself runs (and here
+	// fails against nil services) in the background without surfacing.
+	require.NoError(t, svc.TriggerByToken(ctx, rawToken))
+
+	stored := fetchWebhook(t, db, wh.ID)
+	assert.NotNil(t, stored.LastTriggeredAt, "last_triggered_at must be set once the trigger is accepted")
+}
+
+func TestTriggerByToken_DoesNotUpdateLastTriggeredAtOnError(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	rawToken := "arc_wh_1122334401020304aabbccdd0102030405060708090a0b0c0d0e0f1011121315"
+	wh := insertWebhookDirect(t, ctx, db, rawToken, "unknown-type", WebhookActionTypeUpdate, "some-id", "env-1")
+
+	err := svc.TriggerByToken(ctx, rawToken)
+	require.Error(t, err)
+
+	stored := fetchWebhook(t, db, wh.ID)
+	assert.Nil(t, stored.LastTriggeredAt, "last_triggered_at must not be set when trigger fails")
+}
+
+func TestTriggerByToken_UnknownActionType_ReturnsInvalidAction(t *testing.T) {
+	ctx := t.Context()
+	db := setupWebhookServiceTestDB(t)
+	svc := newTestWebhookService(db)
+
+	rawToken := "arc_wh_0011223344556677aabbccdd0102030405060708090a0b0c0d0e0f1011121314"
+	insertWebhookDirect(t, ctx, db, rawToken, WebhookTargetTypeProject, "bogus", "project-id", "env-1")
+
+	err := svc.TriggerByToken(ctx, rawToken)
+	assert.ErrorIs(t, err, ErrWebhookInvalidAction)
+}
+
+func TestRemoteWebhookRequestInternal(t *testing.T) {
+	tests := []struct {
+		name       string
+		wh         Webhook
+		actionType string
+		wantMethod string
+		wantPath   string
+		wantResult bool
+		wantErr    error
+	}{
+		{
+			name:       "container update prefers target ref",
+			wh:         Webhook{TargetType: WebhookTargetTypeContainer, TargetID: "abc123", TargetRef: "my-app"},
+			actionType: WebhookActionTypeUpdate,
+			wantMethod: "POST",
+			wantPath:   "/api/environments/0/containers/my-app/update",
+			wantResult: true,
+		},
+		{
+			name:       "container start falls back to target id",
+			wh:         Webhook{TargetType: WebhookTargetTypeContainer, TargetID: "abc123"},
+			actionType: WebhookActionTypeStart,
+			wantMethod: "POST",
+			wantPath:   "/api/environments/0/containers/abc123/start",
+		},
+		{
+			name:       "project update maps to update-services",
+			wh:         Webhook{TargetType: WebhookTargetTypeProject, TargetID: "p1"},
+			actionType: WebhookActionTypeUpdate,
+			wantMethod: "POST",
+			wantPath:   "/api/environments/0/projects/p1/update-services",
+		},
+		{
+			name:       "gitops sync",
+			wh:         Webhook{TargetType: WebhookTargetTypeGitOps, TargetID: "sync-1"},
+			actionType: WebhookActionTypeSync,
+			wantMethod: "POST",
+			wantPath:   "/api/environments/0/gitops-syncs/sync-1/sync",
+		},
+		{
+			name:       "updater run carries result",
+			wh:         Webhook{TargetType: WebhookTargetTypeUpdater},
+			actionType: WebhookActionTypeRun,
+			wantMethod: "POST",
+			wantPath:   "/api/environments/0/updater/run",
+			wantResult: true,
+		},
+		{
+			name:       "invalid action rejected",
+			wh:         Webhook{TargetType: WebhookTargetTypeContainer, TargetID: "abc"},
+			actionType: WebhookActionTypeSync,
+			wantErr:    ErrWebhookInvalidAction,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			method, path, wantResult, err := remoteWebhookRequestInternal(&tt.wh, tt.actionType)
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantMethod, method)
+			assert.Equal(t, tt.wantPath, path)
+			assert.Equal(t, tt.wantResult, wantResult)
+		})
+	}
+}

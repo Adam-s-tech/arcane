@@ -1,4 +1,5 @@
 import { MediaQuery } from 'svelte/reactivity';
+
 import { getLayoutMode } from '#lib/stores/layout-mode.store.svelte.js';
 
 const MOBILE_BREAKPOINT = 768;

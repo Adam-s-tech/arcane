@@ -51,7 +51,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/swarm"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/system"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/systembackup"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/template"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/updater"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/user"
@@ -78,12 +77,10 @@ type graphParams struct {
 	Container         *container.Module
 	Image             *image.ImageService
 	Build             *build.BuildService
-	BuildWorkspace    *build.BuildWorkspaceService
 	Lifecycle         *project.LifecycleService
 	Volume            *volume.Module
 	BackupEngine      *backup.Engine
 	S3Destination     *s3domain.Module
-	SystemBackup      *systembackup.Module
 	Network           *network.NetworkService
 	Port              *port.PortService
 	Swarm             *swarm.SwarmService
@@ -95,7 +92,6 @@ type graphParams struct {
 	Template          *template.TemplateService
 	ContainerRegistry *registry.ContainerRegistryService
 	System            *system.Module
-	SystemUpgrade     *system.SystemUpgradeService
 	Diagnostics       *diagnostics.DiagnosticsService
 	Updater           *updater.Module
 	Event             *event.EventService

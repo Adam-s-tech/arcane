@@ -1,6 +1,8 @@
 <script lang="ts">
-	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import type { ComponentProps } from 'svelte';
+
+	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
+
 	import type { SelectionModifiers } from './arcane-table.types.svelte';
 
 	let {

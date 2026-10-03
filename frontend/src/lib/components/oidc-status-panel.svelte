@@ -1,10 +1,11 @@
 <script lang="ts">
+	import { mode } from 'mode-watcher';
 	import type { Snippet } from 'svelte';
+
+	import { m } from '#lib/paraglide/messages.js';
+	import userStore from '#lib/stores/user-store.svelte.js';
 	import { getApplicationLogo } from '#lib/utils/docker.js';
 	import { resolveLogoColor } from '#lib/utils/theme.svelte.js';
-	import userStore from '#lib/stores/user-store.svelte.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import { mode } from 'mode-watcher';
 
 	interface Props {
 		busy: boolean;

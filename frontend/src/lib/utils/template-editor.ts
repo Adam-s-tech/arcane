@@ -1,8 +1,9 @@
+import { toast } from 'svelte-sonner';
+import { z } from 'zod/v4';
+
 import { m } from '#lib/paraglide/messages.js';
 import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
 import { tryCatch } from '#lib/utils/try-catch.js';
-import { toast } from 'svelte-sonner';
-import { z } from 'zod/v4';
 
 export type TemplateEditorValidationState = {
 	composeValidationReady: boolean;

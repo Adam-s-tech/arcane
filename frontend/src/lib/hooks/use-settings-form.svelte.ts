@@ -1,11 +1,11 @@
-import { getSettingsFormContext, hasSettingsFormContext } from '#lib/hooks/settings-form-context.js';
 import { onDestroy } from 'svelte';
-import settingsStore from '#lib/stores/config-store.svelte.js';
+
+import { getSettingsFormContext, hasSettingsFormContext } from '#lib/hooks/settings-form-context.js';
 import { settingsService } from '#lib/services/settings-service.js';
+import settingsStore from '#lib/stores/config-store.svelte.js';
+import type { SettingsFormContext, SettingsFormState } from '#lib/types/settings-form.js';
 import type { Settings } from '#lib/types/settings.js';
 import { tryCatch } from '#lib/utils/try-catch.js';
-
-import type { SettingsFormContext } from '#lib/types/settings-form.js';
 
 type SettingsPayload = Partial<Settings> & Record<string, unknown>;
 
@@ -22,7 +22,7 @@ type Options<TFormInputs, TSaveData extends SettingsPayload> = {
 export class UseSettingsForm<
 	TFormInputs extends Record<string, { value: unknown; error: string | null }>,
 	TSaveData extends SettingsPayload
-> {
+> implements SettingsFormState {
 	#isLoading = $state(false);
 	#formValues: () => TFormInputs;
 	#saveFunction: (() => Promise<void> | void) | null = null;
@@ -100,10 +100,14 @@ export class UseSettingsForm<
 		return this.#isLoading;
 	}
 
+	// Read through SettingsFormState by the settings layouts.
+	// fallow-ignore-next-line unused-class-member
 	get saveFunction() {
 		return this.#saveFunction ?? undefined;
 	}
 
+	// Read through SettingsFormState by the settings layouts.
+	// fallow-ignore-next-line unused-class-member
 	get resetFunction() {
 		return this.#resetFunction ?? undefined;
 	}

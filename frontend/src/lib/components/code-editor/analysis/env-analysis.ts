@@ -1,6 +1,7 @@
 import type { Diagnostic } from '@codemirror/lint';
-import type { AnalysisResult, EditorContext, OutlineItem } from './types';
+
 import { hasClosingQuote, isOpenQuote } from './parse-env-utils';
+import type { AnalysisResult, EditorContext, OutlineItem } from './types';
 
 // Compose passes dotted and hyphenated names (e.g. .NET config keys) through to containers unchanged.
 const ENV_KEY_REGEX = /^[A-Za-z_][A-Za-z0-9_.-]*$/;

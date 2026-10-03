@@ -9,7 +9,7 @@ import { PersistedState } from 'runed';
  */
 export type LayoutMode = 'auto' | 'mobile' | 'desktop';
 
-export const LAYOUT_MODE_STORAGE_KEY = 'arcane-layout-mode';
+const LAYOUT_MODE_STORAGE_KEY = 'arcane-layout-mode';
 
 export const layoutModeStore = new PersistedState<LayoutMode>(LAYOUT_MODE_STORAGE_KEY, 'auto');
 

@@ -1,5 +1,5 @@
-import BaseAPIService, { extractServerMessage, handleUnauthorizedResponseInternal } from './api-service';
 import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+import type { Activity } from '#lib/types/activity.type.js';
 import type {
 	ContainerStatusCounts,
 	ContainerSummaryDto,
@@ -13,10 +13,11 @@ import type {
 	ContainerProcessesDto
 } from '#lib/types/docker.js';
 import type { SearchPaginationSortRequest, Paginated } from '#lib/types/shared.js';
-import type { Activity } from '#lib/types/activity.type.js';
-import { transformPaginationParams } from '#lib/utils/tables.js';
 import { downloadFromUrl } from '#lib/utils/browser-download.js';
+import { transformPaginationParams } from '#lib/utils/tables.js';
 import { tryCatch } from '#lib/utils/try-catch.js';
+
+import BaseAPIService, { extractServerMessage, handleUnauthorizedResponseInternal } from './api-service';
 
 export type ContainersPaginatedResponse = Paginated<ContainerSummaryDto, ContainerStatusCounts> & {
 	groups?: ContainerSummaryGroupDto[];

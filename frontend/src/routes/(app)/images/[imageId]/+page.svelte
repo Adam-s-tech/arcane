@@ -1,42 +1,19 @@
 <script lang="ts">
-	import { featureStore } from '#lib/stores/features.store.svelte.js';
-	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import { goto } from '$app/navigation';
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import { bytes, formatDateTimeShort, nowInstantString } from '#lib/utils/formatting.js';
-	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
-	import { handleApiResultWithCallbacks, extractApiErrorMessage } from '#lib/utils/api.js';
-	import { tryCatch } from '#lib/utils/try-catch.js';
-	import { toast } from 'svelte-sonner';
-	import { onMount, onDestroy, tick } from 'svelte';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import { queryKeys } from '#lib/query/query-keys.js';
-	import userStore from '#lib/stores/user-store.svelte.js';
-	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import { imageService } from '#lib/services/image-service.js';
-	import { vulnerabilityService } from '#lib/services/vulnerability-service.js';
-	import { activityToastOptions, extractActivityId } from '#lib/utils/activity-toast.js';
-	import {
-		startVulnerabilityScanPolling,
-		stabilizeFailedVulnerabilitySummary,
-		isVulnerabilityScanInProgress
-	} from '#lib/utils/docker.js';
-	import { ResourceDetailLayout } from '#lib/layouts/index.js';
+	import { onMount, onDestroy, tick } from 'svelte';
+	import { toast } from 'svelte-sonner';
+
 	import type { ActionButton } from '#lib/components/action-button-group/types.js';
-	import { TabBar, type TabItem } from '#lib/components/tab-bar/index.js';
-	import { useUrlTab } from '#lib/hooks/use-url-tab.svelte.js';
+	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
 	import { DetailMetaStrip, DetailSection, KeyValueCard } from '#lib/components/resource-detail/index.js';
-	import ImageAttestationsPanel from './components/image-attestations-panel.svelte';
-	import ImageHistoryPanel from './components/image-history-panel.svelte';
-	import ImageTagDialog from '../components/image-tag-dialog.svelte';
-	import VulnerabilityScanPanel from '#lib/components/vulnerability/vulnerability-scan-panel.svelte';
+	import { TabBar } from '#lib/components/tab-bar/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { CopyButton } from '#lib/components/ui/copy-button/index.js';
-	import type { VulnerabilityScanResult } from '#lib/types/environment.js';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import { hasPermission } from '#lib/utils/auth.js';
-	import { parseImageRef } from '#lib/utils/docker.js';
-	import { toastVulnerabilityScanStatus } from '#lib/utils/vulnerability.js';
+	import * as Tabs from '#lib/components/ui/tabs/index.js';
+	import VulnerabilityScanPanel from '#lib/components/vulnerability/vulnerability-scan-panel.svelte';
+	import { useUrlTab } from '#lib/hooks/use-url-tab.svelte.js';
 	import {
 		VolumesIcon,
 		ClockIcon,
@@ -47,6 +24,31 @@
 		ShieldCheckIcon,
 		InspectIcon
 	} from '#lib/icons/index.js';
+	import { ResourceDetailLayout } from '#lib/layouts/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { queryKeys } from '#lib/query/query-keys.js';
+	import { imageService } from '#lib/services/image-service.js';
+	import { vulnerabilityService } from '#lib/services/vulnerability-service.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import { featureStore } from '#lib/stores/features.store.svelte.js';
+	import userStore from '#lib/stores/user-store.svelte.js';
+	import type { VulnerabilityScanResult } from '#lib/types/environment.js';
+	import { activityToastOptions, extractActivityId } from '#lib/utils/activity-toast.js';
+	import { handleApiResultWithCallbacks, extractApiErrorMessage } from '#lib/utils/api.js';
+	import { hasPermission } from '#lib/utils/auth.js';
+	import {
+		startVulnerabilityScanPolling,
+		stabilizeFailedVulnerabilitySummary,
+		isVulnerabilityScanInProgress
+	} from '#lib/utils/docker.js';
+	import { parseImageRef } from '#lib/utils/docker.js';
+	import { bytes, formatDateTimeShort, nowInstantString } from '#lib/utils/formatting.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+	import { toastVulnerabilityScanStatus } from '#lib/utils/vulnerability.js';
+
+	import ImageTagDialog from '../components/image-tag-dialog.svelte';
+	import ImageAttestationsPanel from './components/image-attestations-panel.svelte';
+	import ImageHistoryPanel from './components/image-history-panel.svelte';
 
 	let { data } = $props();
 	let { image } = $derived(data);
@@ -54,14 +56,13 @@
 	const currentEnvId = $derived(environmentStore.selected?.id || '0');
 	const vulnerabilityManagementEnabled = $derived(featureStore.isEnabled('vulnerabilityManagement', currentEnvId));
 
-	const tabItems: TabItem[] = $derived([
-		{ value: 'overview', label: m.common_overview(), icon: ImagesIcon },
-		{ value: 'history', label: m.images_history_title(), icon: LayersIcon },
-		{ value: 'attestations', label: m.images_attestations_title(), icon: InspectIcon },
-		...(vulnerabilityManagementEnabled ? [{ value: 'vulnerabilities', label: m.vuln_title(), icon: ShieldCheckIcon }] : [])
-	]);
 	const urlTab = useUrlTab({
-		validTabs: () => tabItems.map((tab) => tab.value),
+		tabs: () => [
+			{ value: 'overview', label: m.common_overview(), icon: ImagesIcon },
+			{ value: 'history', label: m.images_history_title(), icon: LayersIcon },
+			{ value: 'attestations', label: m.images_attestations_title(), icon: InspectIcon },
+			{ value: 'vulnerabilities', label: m.vuln_title(), icon: ShieldCheckIcon, visible: vulnerabilityManagementEnabled }
+		],
 		defaultTab: () => 'overview'
 	});
 	const activeTab = $derived(urlTab.value);
@@ -423,7 +424,7 @@
 
 		<Tabs.Root value={activeTab}>
 			<div class="space-y-6">
-				<TabBar items={tabItems} value={activeTab} onValueChange={(value) => urlTab.select(value)} />
+				<TabBar items={urlTab.items} value={activeTab} onValueChange={(value) => urlTab.select(value)} />
 
 				<Tabs.Content value="overview">
 					<div class="space-y-6">

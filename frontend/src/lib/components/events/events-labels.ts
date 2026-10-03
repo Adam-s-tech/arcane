@@ -1,4 +1,4 @@
-import { m } from '#lib/paraglide/messages.js';
+import type { FilterOption } from '#lib/components/arcane-table/index.js';
 import type { IconType } from '#lib/icons/index.js';
 import {
 	ClockIcon,
@@ -15,7 +15,7 @@ import {
 	UserIcon,
 	VolumesIcon
 } from '#lib/icons/index.js';
-import type { FilterOption } from '#lib/components/arcane-table/index.js';
+import { m } from '#lib/paraglide/messages.js';
 
 export type EventBadgeVariant = 'blue' | 'green' | 'amber' | 'red';
 

@@ -10,6 +10,17 @@ const (
 	SystemBackupDestinationLocalS3 SystemBackupDestination = "local_s3"
 )
 
+// System backup run statuses and triggers.
+const (
+	SystemBackupStatusRunning   = "running"
+	SystemBackupStatusSucceeded = "succeeded"
+	SystemBackupStatusFailed    = "failed"
+
+	SystemBackupTriggerManual    = "manual"
+	SystemBackupTriggerScheduled = "scheduled"
+	SystemBackupTriggerSafety    = "safety"
+)
+
 type SystemBackupRun struct {
 	RemoteAvailable   *bool                   `json:"remoteAvailable,omitempty"`
 	ActivityID        string                  `json:"activityId,omitempty"`

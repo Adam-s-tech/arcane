@@ -1,10 +1,11 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
-import { containerRegistryService } from '#lib/services/container-registry-service.js';
+import { m } from '#lib/paraglide/messages.js';
 import { queryKeys } from '#lib/query/query-keys.js';
+import { containerRegistryService } from '#lib/services/container-registry-service.js';
 import type { RegistryRepository, RegistryTag } from '#lib/types/docker.js';
 import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
 import { extractApiErrorMessage, throwPageLoadError } from '#lib/utils/api.js';
-import { m } from '#lib/paraglide/messages.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
+
 import type { PageLoad } from './$types';
 
 const catalogPageSize = 500;

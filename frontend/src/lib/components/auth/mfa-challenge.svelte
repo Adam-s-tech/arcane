@@ -1,17 +1,17 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
 	import { startAuthentication, type PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
+
+	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+	import * as Alert from '#lib/components/ui/alert/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as InputGroup from '#lib/components/ui/input-group/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
 	import { ApiKeyIcon, AlertIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { passkeyService } from '#lib/services/passkey-service.js';
 	import type { AuthenticationResponse, MFAChallenge } from '#lib/types/auth.js';
-	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import * as InputGroup from '#lib/components/ui/input-group/index.js';
-	import { Label } from '#lib/components/ui/label/index.js';
-	import * as Alert from '#lib/components/ui/alert/index.js';
 	import { normalizeAuthenticationError } from '#lib/utils/auth.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	let {
 		challenge,
@@ -90,11 +90,7 @@
 	</div>
 
 	{#if error}
-		<Alert.Root variant="destructive">
-			<AlertIcon class="size-4" />
-			<Alert.Title>{m.auth_failed_title()}</Alert.Title>
-			<Alert.Description>{error}</Alert.Description>
-		</Alert.Root>
+		<Alert.Root variant="destructive" icon={AlertIcon} heading={m.auth_failed_title()} description={error} />
 	{/if}
 
 	<ArcaneButton

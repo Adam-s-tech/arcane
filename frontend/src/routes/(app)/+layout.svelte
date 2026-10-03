@@ -1,32 +1,34 @@
 <script lang="ts">
-	import type { LayoutProps } from './$types';
-	import { untrack } from 'svelte';
-	import { page } from '$app/state';
-	import { goto, afterNavigate } from '$app/navigation';
-	import { getAuthRedirectPath } from '#lib/utils/auth.js';
-	import * as Sidebar from '#lib/components/ui/sidebar/index.js';
-	import AppSidebar from '#lib/components/sidebar/sidebar.svelte';
-	import MobileNav from '#lib/components/mobile-nav/mobile-nav.svelte';
-	import ActivityCenter from '#lib/components/activity/activity-center.svelte';
-	import OperationWatchDialog from '#lib/components/operation-watch-dialog.svelte';
-	import { IsMobile } from '#lib/hooks/is-mobile.svelte.js';
-	import { IsTablet } from '#lib/hooks/is-tablet.svelte.js';
-	import { getEffectiveLandingPage, getEffectiveNavigationSettings, setMobileNavigation } from '#lib/utils/navigation.js';
 	import { browser } from '$app/env';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import { featureStore } from '#lib/stores/features.store.svelte.js';
-	import { isEnvironmentOnline } from '#lib/utils/docker.js';
-	import { environmentStatusStore } from '#lib/stores/environment-status.store.svelte.js';
-	import { versionStore } from '#lib/stores/version.store.svelte.js';
+	import { goto, afterNavigate } from '$app/navigation';
+	import { page } from '$app/state';
+	import { untrack } from 'svelte';
+
+	import ActivityCenter from '#lib/components/activity/activity-center.svelte';
+	import MobileNav from '#lib/components/mobile-nav/mobile-nav.svelte';
+	import OperationWatchDialog from '#lib/components/operation-watch-dialog.svelte';
+	import AppSidebar from '#lib/components/sidebar/sidebar.svelte';
+	import * as Sidebar from '#lib/components/ui/sidebar/index.js';
 	import {
 		navigationItems,
 		getManagementItems,
 		filterByPermissions,
 		type NavigationItem
 	} from '#lib/config/navigation-config.js';
-	import { isEditableTarget, matchesShortcutEvent } from '#lib/utils/navigation.js';
-	import { cn } from '#lib/utils.js';
+	import { IsMobile } from '#lib/hooks/is-mobile.svelte.js';
+	import { IsTablet } from '#lib/hooks/is-tablet.svelte.js';
+	import { environmentStatusStore } from '#lib/stores/environment-status.store.svelte.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import { featureStore } from '#lib/stores/features.store.svelte.js';
 	import userStore, { userHasPermissionInAnyEnvironment } from '#lib/stores/user-store.svelte.js';
+	import { versionStore } from '#lib/stores/version.store.svelte.js';
+	import { cn } from '#lib/utils.js';
+	import { getAuthRedirectPath } from '#lib/utils/auth.js';
+	import { isEnvironmentOnline } from '#lib/utils/docker.js';
+	import { getEffectiveLandingPage, getEffectiveNavigationSettings, setMobileNavigation } from '#lib/utils/navigation.js';
+	import { isEditableTarget, matchesShortcutEvent } from '#lib/utils/navigation.js';
+
+	import type { LayoutProps } from './$types';
 	let { data, children }: LayoutProps = $props();
 
 	const versionInformation = $derived(versionStore.current ?? data.versionInformation);

@@ -1,31 +1,33 @@
 <script lang="ts">
-	import type { PageProps } from './$types';
+	import { goto, refreshAll } from '$app/navigation';
 	import {
 		browserSupportsWebAuthn,
 		startAuthentication,
 		type PublicKeyCredentialRequestOptionsJSON
 	} from '@simplewebauthn/browser';
-	import { Label } from '#lib/components/ui/label/index.js';
-	import * as Alert from '#lib/components/ui/alert/index.js';
-	import * as InputGroup from '#lib/components/ui/input-group/index.js';
-	import { AlertIcon, ApiKeyIcon, LockIcon, UserIcon, GithubIcon, OpenIdIcon } from '#lib/icons/index.js';
-	import { goto, refreshAll } from '$app/navigation';
-	import userStore from '#lib/stores/user-store.svelte.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import { authService, MFARequiredError } from '#lib/services/auth-service.js';
-	import { passkeyService } from '#lib/services/passkey-service.js';
-	import type { AuthenticationResponse, MFAChallenge as MFAChallengeData } from '#lib/types/auth.js';
-	import { normalizeAuthenticationError } from '#lib/utils/auth.js';
-	import { getEffectiveLandingPage } from '#lib/utils/navigation.js';
-	import { queryKeys } from '#lib/query/query-keys.js';
-	import { getApplicationLogo } from '#lib/utils/docker.js';
-	import { resolveLogoColor } from '#lib/utils/theme.svelte.js';
+	import { createMutation, useQueryClient } from '@tanstack/svelte-query';
 	import { mode } from 'mode-watcher';
+	import { onMount, untrack } from 'svelte';
+
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
 	import AuthAmbient from '#lib/components/auth/auth-ambient.svelte';
 	import MFAChallenge from '#lib/components/auth/mfa-challenge.svelte';
-	import { onMount, untrack } from 'svelte';
-	import { createMutation, useQueryClient } from '@tanstack/svelte-query';
+	import * as Alert from '#lib/components/ui/alert/index.js';
+	import * as InputGroup from '#lib/components/ui/input-group/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import { AlertIcon, ApiKeyIcon, LockIcon, UserIcon, GithubIcon, OpenIdIcon } from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { queryKeys } from '#lib/query/query-keys.js';
+	import { authService, MFARequiredError } from '#lib/services/auth-service.js';
+	import { passkeyService } from '#lib/services/passkey-service.js';
+	import userStore from '#lib/stores/user-store.svelte.js';
+	import type { AuthenticationResponse, MFAChallenge as MFAChallengeData } from '#lib/types/auth.js';
+	import { normalizeAuthenticationError } from '#lib/utils/auth.js';
+	import { getApplicationLogo } from '#lib/utils/docker.js';
+	import { getEffectiveLandingPage } from '#lib/utils/navigation.js';
+	import { resolveLogoColor } from '#lib/utils/theme.svelte.js';
+
+	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 
@@ -217,19 +219,16 @@
 				{/if}
 
 				{#if data.errorMessage && !data.error}
-					<Alert.Root variant="destructive">
-						<AlertIcon class="size-4" />
-						<Alert.Title>{m.auth_login_problem_title()}</Alert.Title>
-						<Alert.Description>{data.errorMessage}</Alert.Description>
-					</Alert.Root>
+					<Alert.Root
+						variant="destructive"
+						icon={AlertIcon}
+						heading={m.auth_login_problem_title()}
+						description={data.errorMessage}
+					/>
 				{/if}
 
 				{#if error}
-					<Alert.Root variant="destructive">
-						<AlertIcon class="size-4" />
-						<Alert.Title>{m.auth_failed_title()}</Alert.Title>
-						<Alert.Description>{error}</Alert.Description>
-					</Alert.Root>
+					<Alert.Root variant="destructive" icon={AlertIcon} heading={m.auth_failed_title()} description={error} />
 				{/if}
 
 				{#if mfaChallenge}
@@ -243,11 +242,12 @@
 					/>
 				{:else}
 					{#if !showLocalLoginForm && !showOidcLoginButton && !showPasskeyLoginButton}
-						<Alert.Root variant="destructive">
-							<AlertIcon class="size-4" />
-							<Alert.Title>{m.auth_no_login_methods_title()}</Alert.Title>
-							<Alert.Description>{m.auth_no_login_methods_description()}</Alert.Description>
-						</Alert.Root>
+						<Alert.Root
+							variant="destructive"
+							icon={AlertIcon}
+							heading={m.auth_no_login_methods_title()}
+							description={m.auth_no_login_methods_description()}
+						/>
 					{/if}
 
 					{#if showLocalLoginForm}

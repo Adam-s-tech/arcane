@@ -1,7 +1,12 @@
 import { defineConfig, devices } from '@playwright/test';
+import path from 'node:path';
+import { authStateFile, reportDirectory } from './utils/report';
 
 const baseURL = process.env.BASE_URL || 'http://localhost:3000';
-const ciJunitOutputFile = process.env.PLAYWRIGHT_JUNIT_OUTPUT_FILE || 'test-results/junit.xml';
+const ciJunitOutputFile = path.join(
+	reportDirectory,
+	path.basename(process.env.PLAYWRIGHT_JUNIT_OUTPUT_FILE || 'junit.xml')
+);
 const configuredWorkers = process.env.PLAYWRIGHT_WORKERS;
 const workers =
 	configuredWorkers && Number.isInteger(Number(configuredWorkers))
@@ -10,6 +15,7 @@ const workers =
 
 export default defineConfig({
 	testDir: '.',
+	outputDir: path.join(reportDirectory, 'results'),
 	fullyParallel: false,
 	forbidOnly: !!process.env.CI,
 	failOnFlakyTests: !!process.env.CI,
@@ -23,7 +29,7 @@ export default defineConfig({
 	reporter: process.env.CI
 		? [
 				['./utils/compose-reporter.ts'],
-				['html', { outputFolder: '.report' }],
+				['html', { outputFolder: path.join(reportDirectory, 'html') }],
 				['github'],
 				[
 					'junit',
@@ -37,7 +43,7 @@ export default defineConfig({
 		: [
 				['./utils/compose-reporter.ts'],
 				['line'],
-				['html', { open: 'never', outputFolder: '.report' }]
+				['html', { open: 'never', outputFolder: path.join(reportDirectory, 'html') }]
 			],
 	use: {
 		baseURL,
@@ -54,12 +60,12 @@ export default defineConfig({
 		{
 			name: 'gitops-setup',
 			testMatch: '**/setup/gitops.setup.ts',
-			use: { storageState: '.auth/login.json' },
+			use: { storageState: authStateFile },
 			dependencies: ['auth-setup']
 		},
 		{
 			name: 'chromium',
-			use: { ...devices['Desktop Chrome'], storageState: '.auth/login.json' },
+			use: { ...devices['Desktop Chrome'], storageState: authStateFile },
 			dependencies: ['auth-setup', 'gitops-setup'],
 			testMatch: '**/spec/*.spec.ts',
 			testIgnore: [
@@ -70,7 +76,7 @@ export default defineConfig({
 		},
 		{
 			name: 'mobile-chromium',
-			use: { ...devices['Pixel 7'], storageState: '.auth/login.json' },
+			use: { ...devices['Pixel 7'], storageState: authStateFile },
 			dependencies: ['auth-setup'],
 			testMatch: '**/spec/responsive.spec.ts'
 		},
@@ -79,7 +85,7 @@ export default defineConfig({
 			use: {
 				...devices['Desktop Chrome'],
 				viewport: { width: 900, height: 1180 },
-				storageState: '.auth/login.json'
+				storageState: authStateFile
 			},
 			dependencies: ['auth-setup'],
 			testMatch: '**/spec/responsive.spec.ts'

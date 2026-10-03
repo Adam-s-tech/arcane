@@ -1,6 +1,7 @@
 <script lang="ts">
-	import * as ArcaneTooltip from '#lib/components/arcane-tooltip/index.js';
 	import type { Snippet } from 'svelte';
+
+	import * as ArcaneTooltip from '#lib/components/arcane-tooltip/index.js';
 	import { cn } from '#lib/utils.js';
 
 	type TooltipSide = 'top' | 'right' | 'bottom' | 'left';

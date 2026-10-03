@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { goto, refreshAll } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
-	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
+
+	import type { ActionButton } from '#lib/components/action-button-group/types.js';
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
 	import { EmptyState } from '#lib/components/states/index.js';
 	import * as Alert from '#lib/components/ui/alert/index.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
@@ -12,9 +14,8 @@
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
-	import { ResourceDetailLayout } from '#lib/layouts/index.js';
-	import type { ActionButton } from '#lib/components/action-button-group/types.js';
 	import { AlertTriangleIcon, ArrowRightIcon, RegistryIcon, SearchIcon, TagIcon, TrashIcon } from '#lib/icons/index.js';
+	import { ResourceDetailLayout } from '#lib/layouts/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { containerRegistryService } from '#lib/services/container-registry-service.js';
 	import type { RegistryTag } from '#lib/types/docker.js';

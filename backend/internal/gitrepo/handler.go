@@ -8,7 +8,6 @@ import (
 	"github.com/getarcaneapp/arcane/types/v2/gitops"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
 )
 
@@ -16,10 +15,6 @@ import (
 type GitRepositoryHandler struct {
 	repoService *GitRepositoryService
 }
-
-// ============================================================================
-// Input/Output Types
-// ============================================================================
 
 type ListGitRepositoriesInput struct {
 	Search string `query:"search" doc:"Search query"`
@@ -64,137 +59,6 @@ type BrowseFilesInput struct {
 type SyncGitRepositoriesInput struct {
 	Body gitops.RepositorySyncRequest
 }
-
-// ============================================================================
-// Registration
-// ============================================================================
-
-// RegisterGitRepositories registers all git repository endpoints.
-func RegisterGitRepositories(api huma.API, repoService *GitRepositoryService) {
-	h := &GitRepositoryHandler{repoService: repoService}
-
-	handlerutil.RegisterSecured(
-		api,
-		handlerutil.Operation(
-			"listGitRepositories",
-			"GET",
-			"/customize/git-repositories",
-			"List git repositories",
-			"Get a paginated list of git repositories",
-			"Customize",
-		),
-		authz.PermGitReposList,
-		h.ListRepositories,
-	)
-	handlerutil.RegisterSecured(
-		api,
-		handlerutil.Operation(
-			"createGitRepository",
-			"POST",
-			"/customize/git-repositories",
-			"Create a git repository",
-			"Create a new git repository configuration",
-			"Customize",
-		),
-		authz.PermGitReposCreate,
-		h.CreateRepository,
-	)
-	handlerutil.RegisterSecured(
-		api,
-		handlerutil.Operation(
-			"getGitRepository",
-			"GET",
-			"/customize/git-repositories/{id}",
-			"Get a git repository",
-			"Get a git repository by ID",
-			"Customize",
-		),
-		authz.PermGitReposRead,
-		h.GetRepository,
-	)
-	handlerutil.RegisterSecured(
-		api,
-		handlerutil.Operation(
-			"updateGitRepository",
-			"PUT",
-			"/customize/git-repositories/{id}",
-			"Update a git repository",
-			"Update an existing git repository configuration",
-			"Customize",
-		),
-		authz.PermGitReposUpdate,
-		h.UpdateRepository,
-	)
-	handlerutil.RegisterSecured(
-		api,
-		handlerutil.Operation(
-			"deleteGitRepository",
-			"DELETE",
-			"/customize/git-repositories/{id}",
-			"Delete a git repository",
-			"Delete a git repository configuration by ID",
-			"Customize",
-		),
-		authz.PermGitReposDelete,
-		h.DeleteRepository,
-	)
-	handlerutil.RegisterSecured(
-		api,
-		handlerutil.Operation(
-			"testGitRepository",
-			"POST",
-			"/customize/git-repositories/{id}/test",
-			"Test a git repository",
-			"Test connectivity and authentication to a git repository",
-			"Customize",
-		),
-		authz.PermGitReposTest,
-		h.TestRepository,
-	)
-	handlerutil.RegisterSecured(
-		api,
-		handlerutil.Operation(
-			"listGitRepositoryBranches",
-			"GET",
-			"/customize/git-repositories/{id}/branches",
-			"List repository branches",
-			"Get all branches from a git repository with default branch detection",
-			"Customize",
-		),
-		authz.PermGitReposRead,
-		h.ListBranches,
-	)
-	handlerutil.RegisterSecured(
-		api,
-		handlerutil.Operation(
-			"browseGitRepositoryFiles",
-			"GET",
-			"/customize/git-repositories/{id}/files",
-			"Browse repository files",
-			"Browse files and directories in a git repository",
-			"Customize",
-		),
-		authz.PermGitReposRead,
-		h.BrowseFiles,
-	)
-	handlerutil.RegisterSecured(
-		api,
-		handlerutil.Operation(
-			"syncGitRepositories",
-			"POST",
-			"/git-repositories/sync",
-			"Sync git repositories",
-			"Sync git repositories from a manager to this agent instance",
-			"Git Repositories",
-		),
-		authz.PermGitReposSync,
-		h.SyncRepositories,
-	)
-}
-
-// ============================================================================
-// Handler Methods
-// ============================================================================
 
 // ListRepositories returns a paginated list of git repositories.
 func (h *GitRepositoryHandler) ListRepositories(ctx context.Context, input *ListGitRepositoriesInput) (*handlerutil.Page[gitops.GitRepository], error) {

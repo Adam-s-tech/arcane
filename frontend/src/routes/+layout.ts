@@ -1,25 +1,27 @@
 import { browser } from '$app/env';
+import { redirect } from '@sveltejs/kit';
+import { QueryClient } from '@tanstack/svelte-query';
+
+import { queryKeys } from '#lib/query/query-keys.js';
+import { authService } from '#lib/services/auth-service.js';
 import { environmentManagementService } from '#lib/services/env-mgmt-service.js';
-import { settingsService } from '#lib/services/settings-service.js';
 import { roleService } from '#lib/services/role-service.js';
+import { settingsService } from '#lib/services/settings-service.js';
 import { swarmService } from '#lib/services/swarm-service.js';
 import { userService } from '#lib/services/user-service.js';
 import versionService from '#lib/services/version-service.js';
 import settingsStore from '#lib/stores/config-store.svelte.js';
-import { featureStore } from '#lib/stores/features.store.svelte.js';
 import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+import { featureStore } from '#lib/stores/features.store.svelte.js';
 import userStore from '#lib/stores/user-store.svelte.js';
 import { versionStore } from '#lib/stores/version.store.svelte.js';
-import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
 import type { PermissionsManifest, User } from '#lib/types/auth.js';
-import { authService } from '#lib/services/auth-service.js';
-import { tryCatch } from '#lib/utils/try-catch.js';
-import { QueryClient } from '@tanstack/svelte-query';
-import { queryKeys } from '#lib/query/query-keys.js';
-import { redirect } from '@sveltejs/kit';
-import { getAuthRedirectPath, userHasPermission } from '#lib/utils/auth.js';
+import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
 import { isAuthRejectionError } from '#lib/utils/api.js';
+import { getAuthRedirectPath, userHasPermission } from '#lib/utils/auth.js';
 import { getEffectiveLandingPage } from '#lib/utils/navigation.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
+
 import type { LayoutLoad } from './$types';
 
 export const ssr = false;

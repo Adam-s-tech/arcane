@@ -2,10 +2,10 @@
 	import LabeledSwitch from '#lib/components/form/labeled-switch.svelte';
 	import SelectWithLabel from '#lib/components/form/select-with-label.svelte';
 	import TextInputWithLabel from '#lib/components/form/text-input-with-label.svelte';
+	import * as m from '#lib/paraglide/messages.js';
 	import type { BackupDestination, BackupPolicyForm } from '#lib/types/backup.js';
 	import type { S3Destination } from '#lib/types/s3-destination.js';
 	import { backupDestinationOptions, s3DestinationOptions } from '#lib/utils/backups.js';
-	import * as m from '#lib/paraglide/messages.js';
 
 	let {
 		idPrefix,

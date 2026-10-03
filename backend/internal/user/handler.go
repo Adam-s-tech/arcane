@@ -8,13 +8,14 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/getarcaneapp/arcane/types/v2/base"
-	usertypes "github.com/getarcaneapp/arcane/types/v2/user"
+	"github.com/getarcaneapp/arcane/types/v2/user"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/userctx"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/validation"
 )
 
@@ -25,10 +26,6 @@ type UserHandler struct {
 	settingsService          *settings.SettingsService
 }
 
-// ============================================================================
-// Input/Output Types
-// ============================================================================
-
 type ListUsersInput struct {
 	Search string `query:"search" doc:"Search query"`
 	Sort   string `query:"sort" doc:"Column to sort by"`
@@ -38,7 +35,7 @@ type ListUsersInput struct {
 }
 
 type CreateUserInput struct {
-	Body usertypes.CreateUser
+	Body user.CreateUser
 }
 
 type GetUserInput struct {
@@ -47,7 +44,7 @@ type GetUserInput struct {
 
 type UpdateUserInput struct {
 	UserID string `path:"userId" doc:"User ID"`
-	Body   usertypes.UpdateUser
+	Body   user.UpdateUser
 }
 
 type DeleteUserInput struct {
@@ -65,88 +62,8 @@ type GetUserAvatarOutput struct {
 	Body                []byte
 }
 
-// ============================================================================
-// Registration
-// ============================================================================
-
-// RegisterUsers registers all user management endpoints.
-func RegisterUsers(api huma.API, userService *UserService, invalidateUserTokenCache func(string), settingsService *settings.SettingsService) {
-	h := &UserHandler{userService: userService, invalidateUserTokenCache: invalidateUserTokenCache, settingsService: settingsService}
-
-	huma.Register(api, huma.Operation{
-		OperationID: "listUsers",
-		Method:      "GET",
-		Path:        "/users",
-		Summary:     "List users",
-		Description: "Get a paginated list of all users",
-		Tags:        []string{"Users"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequirePermission(api, authz.PermUsersList),
-	}, h.ListUsers)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "createUser",
-		Method:      "POST",
-		Path:        "/users",
-		Summary:     "Create a user",
-		Description: "Create a new user account",
-		Tags:        []string{"Users"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequirePermission(api, authz.PermUsersCreate),
-	}, h.CreateUser)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "getUser",
-		Method:      "GET",
-		Path:        "/users/{userId}",
-		Summary:     "Get a user",
-		Description: "Get a user by ID",
-		Tags:        []string{"Users"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequirePermission(api, authz.PermUsersRead),
-	}, h.GetUser)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "updateUser",
-		Method:      "PUT",
-		Path:        "/users/{userId}",
-		Summary:     "Update a user",
-		Description: "Update an existing user's information",
-		Tags:        []string{"Users"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequirePermission(api, authz.PermUsersUpdate),
-	}, h.UpdateUser)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "deleteUser",
-		Method:      "DELETE",
-		Path:        "/users/{userId}",
-		Summary:     "Delete a user",
-		Description: "Delete a user by ID",
-		Tags:        []string{"Users"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-		Middlewares: middleware.RequirePermission(api, authz.PermUsersDelete),
-	}, h.DeleteUser)
-
-	// Unauthenticated by design: profile pictures are publicly visible
-	// so they can be displayed without requiring a session token.
-	huma.Register(api, huma.Operation{
-		OperationID: "getUserAvatar",
-		Method:      "GET",
-		Path:        "/users/{userId}/avatar",
-		Summary:     "Get user avatar",
-		Description: "Get the custom profile picture for a user",
-		Tags:        []string{"Users"},
-		Security:    []map[string][]string{},
-	}, h.GetUserAvatar)
-}
-
-// ============================================================================
-// Handler Methods
-// ============================================================================
-
 // ListUsers returns a paginated list of users.
-func (h *UserHandler) ListUsers(ctx context.Context, input *ListUsersInput) (*handlerutil.Page[usertypes.User], error) {
+func (h *UserHandler) ListUsers(ctx context.Context, input *ListUsersInput) (*handlerutil.Page[user.User], error) {
 	params := handlerutil.PaginationParams(input.Start, input.Limit, input.Sort, input.Order, input.Search)
 
 	users, paginationResp, err := h.userService.ListUsersPaginated(ctx, params)
@@ -154,8 +71,8 @@ func (h *UserHandler) ListUsers(ctx context.Context, input *ListUsersInput) (*ha
 		return nil, huma.Error500InternalServerError("Failed to list users: " + err.Error())
 	}
 
-	return &handlerutil.Page[usertypes.User]{
-		Body: base.Paginated[usertypes.User]{
+	return &handlerutil.Page[user.User]{
+		Body: base.Paginated[user.User]{
 			Success:    true,
 			Data:       users,
 			Pagination: handlerutil.PaginationResponse(paginationResp),
@@ -164,7 +81,7 @@ func (h *UserHandler) ListUsers(ctx context.Context, input *ListUsersInput) (*ha
 }
 
 // CreateUser creates a new usertypes.
-func (h *UserHandler) CreateUser(ctx context.Context, input *CreateUserInput) (*handlerutil.Out[usertypes.User], error) {
+func (h *UserHandler) CreateUser(ctx context.Context, input *CreateUserInput) (*handlerutil.Out[user.User], error) {
 	normalizedUsername, err := normalizeUsernameInternal(input.Body.Username)
 	if err != nil {
 		return nil, huma.Error400BadRequest(err.Error())
@@ -187,13 +104,13 @@ func (h *UserHandler) CreateUser(ctx context.Context, input *CreateUserInput) (*
 		return nil, huma.Error500InternalServerError("Failed to hash password")
 	}
 
-	userModel := &common.User{
+	userModel := &User{
 		Username:     input.Body.Username,
 		PasswordHash: hashedPassword,
 		DisplayName:  input.Body.DisplayName,
 		Email:        input.Body.Email,
 		Locale:       input.Body.Locale,
-		TimeFormat:   usertypes.TimeFormatAuto,
+		TimeFormat:   user.TimeFormatAuto,
 		CreatedAt:    time.Now(),
 	}
 	if input.Body.TimeFormat != nil {
@@ -213,8 +130,8 @@ func (h *UserHandler) CreateUser(ctx context.Context, input *CreateUserInput) (*
 		return nil, huma.Error500InternalServerError("Failed to map user")
 	}
 
-	return &handlerutil.Out[usertypes.User]{
-		Body: base.ApiResponse[usertypes.User]{
+	return &handlerutil.Out[user.User]{
+		Body: base.ApiResponse[user.User]{
 			Success: true,
 			Data:    out,
 		},
@@ -222,7 +139,7 @@ func (h *UserHandler) CreateUser(ctx context.Context, input *CreateUserInput) (*
 }
 
 // GetUser returns a user by ID.
-func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (*handlerutil.Out[usertypes.User], error) {
+func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (*handlerutil.Out[user.User], error) {
 	userModel, err := h.userService.GetUserByID(ctx, input.UserID)
 	if err != nil {
 		return nil, huma.Error404NotFound("User not found")
@@ -233,8 +150,8 @@ func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (*handle
 		return nil, huma.Error500InternalServerError("Failed to map user")
 	}
 
-	return &handlerutil.Out[usertypes.User]{
-		Body: base.ApiResponse[usertypes.User]{
+	return &handlerutil.Out[user.User]{
+		Body: base.ApiResponse[user.User]{
 			Success: true,
 			Data:    out,
 		},
@@ -242,7 +159,7 @@ func (h *UserHandler) GetUser(ctx context.Context, input *GetUserInput) (*handle
 }
 
 // UpdateUser updates a usertypes.
-func (h *UserHandler) UpdateUser(ctx context.Context, input *UpdateUserInput) (*handlerutil.Out[usertypes.User], error) {
+func (h *UserHandler) UpdateUser(ctx context.Context, input *UpdateUserInput) (*handlerutil.Out[user.User], error) {
 	userModel, err := h.userService.GetUserByID(ctx, input.UserID)
 	if err != nil {
 		return nil, huma.Error404NotFound("User not found")
@@ -320,8 +237,8 @@ func (h *UserHandler) UpdateUser(ctx context.Context, input *UpdateUserInput) (*
 		return nil, huma.Error500InternalServerError("Failed to map user")
 	}
 
-	return &handlerutil.Out[usertypes.User]{
-		Body: base.ApiResponse[usertypes.User]{
+	return &handlerutil.Out[user.User]{
+		Body: base.ApiResponse[user.User]{
 			Success: true,
 			Data:    out,
 		},
@@ -334,7 +251,7 @@ func (h *UserHandler) DeleteUser(ctx context.Context, input *DeleteUserInput) (*
 	// target. The service enforces the same check; this pre-check produces a
 	// clean 403 without entering the delete path.
 	callerPerms, _ := middleware.PermissionsFromContext(ctx)
-	caller, _ := common.CurrentUserFromContext(ctx)
+	caller, _ := userctx.CurrentUserFromContext(ctx)
 	if callerPerms != nil && !callerPerms.IsGlobalAdmin() && caller != nil && caller.ID != input.UserID {
 		targetPerms, err := h.userService.ResolveUserPermissions(ctx, input.UserID)
 		if err != nil {
@@ -416,7 +333,7 @@ func NormalizeOptionalEmail(email *string) (*string, error) {
 // re-enforces the target-admin check.
 func (h *UserHandler) checkUpdateUserPrivilegesInternal(ctx context.Context, input *UpdateUserInput, targetID string) (*authz.PermissionSet, error) {
 	callerPerms, _ := middleware.PermissionsFromContext(ctx)
-	caller, _ := common.CurrentUserFromContext(ctx)
+	caller, _ := userctx.CurrentUserFromContext(ctx)
 	if callerPerms != nil && !callerPerms.IsGlobalAdmin() {
 		if input.Body.Password != nil && *input.Body.Password != "" && caller != nil && caller.ID != targetID {
 			return nil, huma.Error403Forbidden(ErrInsufficientPrivilege.Error())

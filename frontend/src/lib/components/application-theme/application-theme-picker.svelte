@@ -1,15 +1,16 @@
 <script lang="ts">
-	import { cn } from '#lib/utils.js';
+	import { mode } from 'mode-watcher';
 	import { onDestroy } from 'svelte';
+
 	import * as Card from '#lib/components/ui/card/index.js';
+	import type { CarouselAPI } from '#lib/components/ui/carousel/context.js';
 	import * as Carousel from '#lib/components/ui/carousel/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import * as RadioGroup from '#lib/components/ui/radio-group/index.js';
-	import { mode } from 'mode-watcher';
 	import { m } from '#lib/paraglide/messages.js';
-	import { APPLICATION_THEME_OPTIONS, applyApplicationTheme, resolveApplicationTheme } from '#lib/utils/theme.svelte.js';
-	import type { CarouselAPI } from '#lib/components/ui/carousel/context.js';
 	import type { ApplicationTheme } from '#lib/types/settings.js';
+	import { cn } from '#lib/utils.js';
+	import { APPLICATION_THEME_OPTIONS, applyApplicationTheme, resolveApplicationTheme } from '#lib/utils/theme.svelte.js';
 
 	let {
 		selectedTheme = $bindable(),

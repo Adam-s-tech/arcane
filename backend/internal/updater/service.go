@@ -13,19 +13,26 @@ import (
 	"sync"
 	"time"
 
+	"github.com/compose-spec/compose-go/v2/types"
+	"github.com/containerd/errdefs"
 	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
-	schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
+	"github.com/getarcaneapp/arcane/types/v2/containerregistry"
+	projecttypes "github.com/getarcaneapp/arcane/types/v2/project"
+	"github.com/getarcaneapp/arcane/types/v2/scheduler"
 	arcaneupdater "github.com/getarcaneapp/arcane/types/v2/updater"
-	"github.com/italypaleale/francis/actor"
+	usertypes "github.com/getarcaneapp/arcane/types/v2/user"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
 	"github.com/samber/mo"
 	"go.getarcane.app/docker/compat"
-	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/kit/pkg"
 	"go.getarcane.app/sys/cgroup"
 	"go.getarcane.app/updater"
 	"go.getarcane.app/updater/labels"
+	"go.getarcane.app/updater/pkg/utils/tagpolicy"
 	"go.getarcane.app/updater/refs"
+	updatertypes "go.getarcane.app/updater/types"
+	"gorm.io/gorm"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
@@ -40,31 +47,31 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/registry"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/role"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/updater/children/execution"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/updater/children/recovery"
 	dockerutil "github.com/getarcaneapp/arcane/backend/v2/pkg/dockerutil"
 	activitylib "github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/activity"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/timeouts"
-	projectspkg "github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/projects"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/jobcontext"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/scheduler/runs"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/francis"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/imageref"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/notifications"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/userctx"
 )
 
 // UpdaterService is Arcane's handler-facing service for the standalone updater engine.
 type UpdaterService struct {
-	admission      *runs.Admission
-	config         *config.Config
-	coordinator    *runs.Coordinator
-	roles          *role.RoleService
-	deps           updaterDependenciesInternal
-	engine         *updater.Service
-	singleUpdates  *actor.Service
-	singleMu       sync.Mutex
-	singleContext  context.Context
-	singleCancel   context.CancelFunc
-	singleWorkers  sync.WaitGroup
-	singleDone     chan struct{}
-	singleStopping bool
+	admission   *runs.Admission
+	config      *config.Config
+	coordinator *runs.Coordinator
+	roles       *role.RoleService
+	deps        updaterDependenciesInternal
+	engine      *updater.Service
+	execution   *execution.Service
+	recovery    *recovery.Service
 	// updateMu serializes per-container updates. docker compose's recreate
 	// pipeline is not concurrency-safe for sibling containers sharing a
 	// namespace. ponytail: global lock ceiling — all updates serialize; fine
@@ -84,14 +91,14 @@ type updaterDependenciesInternal struct {
 	Notifications          *notification.NotificationService
 	SelfUpgrade            selfUpgradeServiceInternal
 	Activity               *activity.ActivityService
-	SystemUser             common.User
+	SystemUser             usertypes.Actor
 	Logger                 *slog.Logger
 }
 
 type selfUpgradeServiceInternal interface {
 	// TriggerUpgradeViaCLI returns the spawned upgrader container's ID, which this
 	// service does not need — only update-all's manager step uses it.
-	TriggerUpgradeViaCLI(ctx context.Context, user common.User, target updater.SelfUpdateTarget) (string, error)
+	TriggerUpgradeViaCLI(ctx context.Context, user usertypes.Actor, target updater.SelfUpdateTarget) (string, error)
 }
 
 // NewUpdaterService constructs the Arcane updater facade.
@@ -99,7 +106,7 @@ func NewUpdaterService(
 	db *database.DB,
 	localSettings *settings.SettingsService,
 	localDocker *docker.DockerClientService,
-	projects *projectpkg.ProjectService,
+	projectService *projectpkg.ProjectService,
 	imageUpdates *imageupdate.ImageUpdateService,
 	registries *registry.ContainerRegistryService,
 	events *event.EventService,
@@ -118,7 +125,7 @@ func NewUpdaterService(
 			DB:                     db,
 			Docker:                 localDocker,
 			Settings:               localSettings,
-			Projects:               projects,
+			Projects:               projectService,
 			ImagePuller:            imageSvc,
 			ImageUpdates:           imageUpdates,
 			RegistryDigestResolver: registries,
@@ -126,9 +133,32 @@ func NewUpdaterService(
 			Notifications:          localNotifications,
 			SelfUpgrade:            upgrade,
 			Activity:               activityService,
-			SystemUser:             common.SystemUser,
+			SystemUser:             usertypes.SystemUser,
 		},
 	}
+	service.recovery = recovery.NewService(
+		service.DockerClient,
+		service.registryDigestResolverInternal,
+		service.PendingImageUpdates,
+		activityIDFromContextInternal,
+		service.acquireUpdateInternal,
+		service.ApplyPending,
+	)
+	service.execution = execution.NewService(execution.Dependencies{
+		Coordinator:      coordinator,
+		Config:           cfg,
+		Roles:            roles,
+		Activity:         activityService,
+		Logger:           service.loggerInternal,
+		AcquireUpdate:    service.acquireUpdateInternal,
+		UpdateBusy:       errUpdateBusyInternal,
+		TrackActivity:    service.trackActivityInternal,
+		RunUpdate:        service.runSingleContainerUpdateInternal,
+		FinishUpdate:     service.finishSingleContainerUpdateInternal,
+		FreezeContainer:  service.recovery.FreezeContainer,
+		ConfirmTarget:    service.recovery.ConfirmTarget,
+		WithFrozenTarget: service.recovery.WithSingleTarget,
+	})
 	engine, err := updater.New(service.configInternal())
 	if err != nil {
 		return nil, fmt.Errorf("configure updater engine: %w", err)
@@ -220,7 +250,7 @@ func (s *UpdaterService) ApplyPending(ctx context.Context, options arcaneupdater
 		s.completeAutoUpdateActivityInternal(ctx, activityID, out, err)
 	}()
 
-	ctx, err = s.freezePendingInternal(ctx)
+	ctx, err = s.recovery.FreezePending(ctx)
 	if err != nil {
 		return out, err
 	}
@@ -306,12 +336,12 @@ func (s *UpdaterService) applyScopedUpdatesInternal(ctx context.Context, options
 	engineOpts := moduleOptionsFromUpdaterOptionsInternal(options)
 	var engineErrs []error
 	for _, containerID := range containerIDs {
-		target := schedulertypes.TargetOutcome{ID: containerID, ResourceType: "container", Status: schedulertypes.Running}
+		target := scheduler.TargetOutcome{ID: containerID, ResourceType: "container", Status: scheduler.Running}
 		if progressErr := jobcontext.Progress(ctx, target); progressErr != nil {
 			return progressErr
 		}
 		moduleResult, engineErr := s.engineInternal().UpdateContainer(ctx, containerID, engineOpts)
-		target.Status = schedulertypes.NeedsAttention
+		target.Status = scheduler.NeedsAttention
 		if moduleResult != nil {
 			partial := resultFromModuleInternal(moduleResult)
 			out.Checked += partial.Checked
@@ -320,11 +350,11 @@ func (s *UpdaterService) applyScopedUpdatesInternal(ctx context.Context, options
 			out.Skipped += partial.Skipped
 			out.Failed += partial.Failed
 			out.Items = append(out.Items, partial.Items...)
-			target.Status = schedulertypes.Succeeded
+			target.Status = scheduler.Succeeded
 			if partial.Failed > 0 {
-				target.Status = schedulertypes.Failed
+				target.Status = scheduler.Failed
 			} else if partial.Skipped > 0 {
-				target.Status = schedulertypes.Skipped
+				target.Status = scheduler.Skipped
 			}
 		}
 		if engineErr != nil {
@@ -336,7 +366,7 @@ func (s *UpdaterService) applyScopedUpdatesInternal(ctx context.Context, options
 				Error:        engineErr.Error(),
 			})
 			engineErrs = append(engineErrs, fmt.Errorf("%s: %w", containerID, engineErr))
-			target.Status = schedulertypes.Failed
+			target.Status = scheduler.Failed
 			target.Message = engineErr.Error()
 		}
 		if progressErr2 := jobcontext.Progress(ctx, target); progressErr2 != nil {
@@ -474,21 +504,15 @@ func (s *UpdaterService) UpdateSingleContainer(ctx context.Context, containerID 
 
 // AcceptSingleContainerUpdate persists and submits a cancellable update activity.
 func (s *UpdaterService) AcceptSingleContainerUpdate(ctx context.Context, containerID string) (*activitytypes.Activity, error) {
-	if s.deps.Activity == nil || s.singleUpdates == nil {
+	if s.deps.Activity == nil || !s.execution.Ready() {
 		return nil, errors.New("asynchronous container updates unavailable")
 	}
 	localActivity, workCtx, err := s.startSingleContainerUpdateActivityInternal(ctx, containerID, false)
 	if err != nil {
 		return nil, err
 	}
-	command := singleUpdateCommandInternal(ctx, containerID, localActivity.ID)
-	state := arcaneupdater.SingleUpdateState{Command: command, Status: "queued"}
-	if setStateErr := s.singleUpdates.SetState(workCtx, singleUpdateStateTypeInternal, localActivity.ID, state, nil); setStateErr != nil {
-		s.finishSingleContainerUpdateInternal(workCtx, localActivity.ID, nil, setStateErr)
-		return nil, fmt.Errorf("persist container update: %w", setStateErr)
-	}
-	if dispatchSingleErr := s.dispatchSingleInternal(workCtx, state); dispatchSingleErr != nil {
-		s.loggerInternal().WarnContext(workCtx, "container update dispatch deferred", "activityId", localActivity.ID, "error", dispatchSingleErr)
+	if submitErr := s.execution.Submit(ctx, workCtx, containerID, localActivity.ID); submitErr != nil {
+		return nil, submitErr
 	}
 	return localActivity, nil
 }
@@ -646,7 +670,7 @@ func (s *UpdaterService) PullImage(ctx context.Context, imageRef string, progres
 	if s == nil || s.deps.ImagePuller == nil {
 		return common.Classify(common.ErrUnavailable, errors.New("image service unavailable"))
 	}
-	pulledRef, err := s.prepareFrozenPullInternal(ctx, imageRef)
+	pulledRef, err := s.recovery.PreparePull(ctx, imageRef)
 	if err != nil {
 		return err
 	}
@@ -680,8 +704,8 @@ func (s *UpdaterService) PullImage(ctx context.Context, imageRef string, progres
 
 // PendingImageUpdates returns pending image update records from Arcane's database.
 func (s *UpdaterService) PendingImageUpdates(ctx context.Context) ([]updater.ImageUpdateRecord, error) {
-	if frozen, ok := ctx.Value(frozenPendingKeyInternal{}).(*frozenUpdatePlanInternal); ok {
-		return slices.Clone(frozen.Records), nil
+	if records, ok := s.recovery.FrozenRecords(ctx); ok {
+		return records, nil
 	}
 	if s == nil || s.deps.DB == nil {
 		return nil, common.Classify(common.ErrUnavailable, errors.New("database unavailable"))
@@ -757,7 +781,7 @@ func (s *UpdaterService) UpdateServices(ctx context.Context, projectID string, s
 // TriggerSelfUpdate runs Arcane's CLI-backed self-update hook.
 func (s *UpdaterService) TriggerSelfUpdate(ctx context.Context, target updater.SelfUpdateTarget) error {
 	if target.NewImageRef != "" {
-		pinned, err := s.prepareFrozenPullInternal(ctx, target.NewImageRef)
+		pinned, err := s.recovery.PreparePull(ctx, target.NewImageRef)
 		if err != nil {
 			return err
 		}
@@ -967,9 +991,9 @@ func (s *UpdaterService) startSingleContainerUpdateActivityInternal(ctx context.
 		}
 	}
 	cancelLookup()
-	user, _ := common.CurrentUserFromContext(ctx)
+	user, _ := userctx.CurrentUserFromContext(ctx)
 	if initiator, ok := utils.UpdateInitiatorFromContext(ctx); ok {
-		user = &common.User{Username: initiator.Username}
+		user = &usertypes.Actor{Username: initiator.Username}
 		user.ID = initiator.UserID
 		if initiator.DisplayName != "" {
 			user.DisplayName = &initiator.DisplayName
@@ -1449,12 +1473,12 @@ func (s *UpdaterService) collectUsedImagesFromProjectsInternal(ctx context.Conte
 		return nil
 	}
 
-	projects, err := s.deps.Projects.ListAllProjects(ctx)
+	allProjects, err := s.deps.Projects.ListAllProjects(ctx)
 	if err != nil {
 		return err
 	}
 
-	activeProjectNames := activeComposeProjectNameSetInternal(projects)
+	activeProjectNames := activeComposeProjectNameSetInternal(allProjects)
 	if len(activeProjectNames) == 0 {
 		return nil
 	}
@@ -1467,7 +1491,7 @@ func (s *UpdaterService) collectUsedImagesFromProjectsInternal(ctx context.Conte
 		}
 		dockerClient = cli
 	}
-	composeContainers, err := projectspkg.ListGlobalComposeContainers(ctx, dockerClient, s.deps.Docker.DockerHost())
+	composeContainers, err := projects.ListGlobalComposeContainers(ctx, dockerClient, s.deps.Docker.DockerHost())
 	if err != nil {
 		return err
 	}
@@ -1476,9 +1500,9 @@ func (s *UpdaterService) collectUsedImagesFromProjectsInternal(ctx context.Conte
 	return nil
 }
 
-func activeComposeProjectNameSetInternal(projects []projectpkg.Project) map[string]struct{} {
+func activeComposeProjectNameSetInternal(items []projectpkg.Project) map[string]struct{} {
 	active := make(map[string]struct{})
-	for _, project := range projects {
+	for _, project := range items {
 		if project.IsArchived {
 			continue
 		}
@@ -1491,7 +1515,7 @@ func activeComposeProjectNameSetInternal(projects []projectpkg.Project) map[stri
 			continue
 		}
 		active[name] = struct{}{}
-		if normalized := projectspkg.NormalizeProjectName(name); normalized != "" {
+		if normalized := projects.NormalizeProjectName(name); normalized != "" {
 			active[normalized] = struct{}{}
 		}
 	}
@@ -1534,7 +1558,7 @@ func (s *UpdaterService) acquireUpdateInternal(ctx context.Context) (context.Con
 	if s.admission == nil || ctx.Value(updateAdmissionKeyInternal{}) == s {
 		return ctx, func() {}, nil
 	}
-	lease, admitted, err := s.admission.TryAcquire(ctx, schedulertypes.AdmissionKey{Scope: "updater"})
+	lease, admitted, err := s.admission.TryAcquire(ctx, scheduler.AdmissionKey{Scope: "updater"})
 	if err != nil {
 		return ctx, nil, err
 	}
@@ -1542,4 +1566,362 @@ func (s *UpdaterService) acquireUpdateInternal(ctx context.Context) (context.Con
 		return ctx, nil, errUpdateBusyInternal
 	}
 	return context.WithValue(ctx, updateAdmissionKeyInternal{}, s), func() { lease.Release(ctx) }, nil
+}
+
+type (
+	updateProgressKeyInternal struct{}
+	updateProgressInternal    struct {
+		mu            sync.Mutex
+		err           error
+		selfTriggered bool
+		selfID        string
+	}
+)
+
+// RecordUpdateRun persists one updater resource result into Arcane history.
+func (s *UpdaterService) RecordUpdateRun(ctx context.Context, result updater.ResourceResult) error {
+	var recordErr error
+	if s != nil && s.deps.DB != nil {
+		recordErr = s.recordRunInternal(ctx, resourceResultFromModuleInternal(result))
+	}
+	name := cmp.Or(strings.TrimSpace(result.ResourceName), result.ResourceID)
+	message := name + ": " + string(result.Status)
+	level := activitytypes.MessageLevelInfo
+	status := scheduler.NeedsAttention
+	switch result.Status {
+	case updater.StatusUpdated, updater.StatusRestarted, updater.StatusUpToDate:
+		status = scheduler.Succeeded
+		if result.Status != updater.StatusUpToDate && result.OldImage != "" && result.NewImage != "" && result.OldImage != result.NewImage {
+			message += " (" + result.OldImage + " -> " + result.NewImage + ")"
+		}
+	case updater.StatusSkipped:
+		status = scheduler.Skipped
+	case updater.StatusChecked, updater.StatusUpdateAvailable:
+		status = scheduler.NeedsAttention
+	case updater.StatusFailed:
+		status = scheduler.Failed
+		level = activitytypes.MessageLevelError
+	}
+	if reason := strings.TrimSpace(result.Error); reason != "" {
+		if level == activitytypes.MessageLevelError {
+			message = name + ": " + reason
+		} else {
+			message += " (" + reason + ")"
+		}
+	}
+	if activityID := activityIDFromContextInternal(ctx); activityID != "" && s != nil && s.deps.Activity != nil {
+		if _, appendErr := s.deps.Activity.AppendMessage(ctx, activityID, activitylib.AppendMessageRequest{Level: level, Message: message, Step: "Applying updates"}); appendErr != nil {
+			slog.DebugContext(ctx, "failed to append update result activity message", "activityId", activityID, "resource", name, "error", appendErr)
+		}
+	}
+	var evidenceErr error
+	if status == scheduler.Succeeded {
+		evidenceErr = s.recovery.VerifyResult(ctx, result.ResourceID)
+	}
+	if evidenceErr != nil {
+		status = scheduler.NeedsAttention
+	}
+	progressMessage := result.Error
+	if evidenceErr != nil {
+		progressMessage = evidenceErr.Error()
+	}
+	progressErr := jobcontext.Progress(
+		ctx,
+		scheduler.TargetOutcome{
+			ID: result.ResourceID,
+			ResourceType: string(
+				result.ResourceType,
+			),
+			Status:  status,
+			Message: progressMessage,
+			ActivityID: activityIDFromContextInternal(
+				ctx,
+			),
+		},
+	)
+	err := errors.Join(recordErr, progressErr, evidenceErr)
+	if progress, ok := ctx.Value(updateProgressKeyInternal{}).(*updateProgressInternal); ok && err != nil {
+		progress.mu.Lock()
+		progress.err = errors.Join(progress.err, err)
+		progress.mu.Unlock()
+	}
+	return err
+}
+
+func (p *updateProgressInternal) completeBatchInternal(ctx context.Context, options arcaneupdater.Options, out *arcaneupdater.Result, batchCompleted bool, err error) error {
+	activityID := activityIDFromContextInternal(ctx)
+	p.mu.Lock()
+	err = errors.Join(err, p.err)
+	recordingFailed := p.err != nil
+	_, durableRun := jobcontext.Run(ctx)
+	selfTriggered := p.selfTriggered && durableRun
+	selfID := p.selfID
+	p.mu.Unlock()
+	status := scheduler.Succeeded
+	if !batchCompleted && err == nil {
+		err = errors.New("update batch ended without a confirmed result")
+		recordingFailed = true
+	}
+	if err != nil || out.Failed > 0 {
+		status = scheduler.Partial
+	}
+	if recordingFailed {
+		status = scheduler.NeedsAttention
+	}
+	if selfTriggered {
+		err = errors.Join(
+			err,
+			jobcontext.Progress(
+				ctx,
+				scheduler.TargetOutcome{
+					ID:           selfID,
+					ResourceType: "container",
+					Status:       scheduler.NeedsAttention,
+					ActivityID:   activityID,
+					Message:      "Self-update completion requires review",
+				},
+			),
+		)
+		status = scheduler.NeedsAttention
+		err = errors.Join(err, errors.New("self-update was triggered but completion requires review"))
+	}
+	batchType := updateBatchTypeInternal(ctx, options, batchCompleted)
+	checkpoint := scheduler.TargetOutcome{ID: "auto-update", ResourceType: batchType, Status: status, ActivityID: activityID}
+	if err != nil {
+		checkpoint.Message = err.Error()
+	}
+	checkpointErr := jobcontext.Progress(ctx, checkpoint)
+	err = errors.Join(err, checkpointErr)
+	if err != nil {
+		out.Success = false
+	}
+	if recordingFailed || selfTriggered || checkpointErr != nil {
+		err = &scheduler.OutcomeError{Outcome: scheduler.Outcome{Status: scheduler.NeedsAttention, Message: err.Error(), ActivityID: activityID}, Cause: err}
+	}
+	return err
+}
+
+// ListTags supplies Arcane's registry credentials to the updater's tag checker.
+func (s *UpdaterService) ListTags(ctx context.Context, imageRef string) ([]string, error) {
+	if s.deps.RegistryDigestResolver == nil {
+		return nil, errors.New("registry service unavailable")
+	}
+	var credentials []containerregistry.Credential
+	if s.deps.Projects != nil {
+		resolved, err := s.deps.Projects.ResolveRegistryCredentials(ctx)
+		if err != nil {
+			return nil, err
+		}
+		credentials = resolved
+	}
+	return s.deps.RegistryDigestResolver.ListImageTags(ctx, imageRef, credentials)
+}
+
+// UpdateServiceImages persists and redeploys the selected Compose service images.
+func (s *UpdaterService) UpdateServiceImages(ctx context.Context, projectID string, changes map[string]updatertypes.ServiceImageChange) error {
+	if s.deps.Projects == nil {
+		return errors.New("project service unavailable")
+	}
+	s.appendAutoUpdateActivityMessageInternal(ctx, activityIDFromContextInternal(ctx), "Updating Compose image references", "Persisting image updates", 50)
+	return s.deps.Projects.UpdateProjectServiceImages(ctx, projectID, changes, s.deps.SystemUser)
+}
+
+func (s *UpdaterService) scopedPendingRecordsInternal(ctx context.Context, records []imageupdate.ImageUpdateRecord) ([]updater.ImageUpdateRecord, error) {
+	var scopedCount int64
+	if err := s.deps.DB.WithContext(ctx).Model(&imageupdate.ImageUpdateRecord{}).Where("container_id <> ?", "").Limit(1).Count(&scopedCount).Error; err != nil {
+		return nil, err
+	}
+	hasScoped := scopedCount > 0
+	if !hasScoped {
+		out := make([]updater.ImageUpdateRecord, 0, len(records))
+		for _, record := range records {
+			out = append(out, imageUpdateRecordToModuleInternal(record))
+		}
+		return out, nil
+	}
+	dockerClient, err := s.DockerClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	listed, err := dockerClient.ContainerList(ctx, client.ContainerListOptions{All: false})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]updater.ImageUpdateRecord, 0, len(records))
+	for _, record := range records {
+		converted := imageUpdateRecordToModuleInternal(record)
+		if record.ContainerID != "" {
+			out = append(out, converted)
+			continue
+		}
+		for _, cnt := range listed.Items {
+			resolved, policyErr := tagpolicy.Resolve(cnt.Image, updater.DefaultLabelPolicy().TagPolicy(cnt.Labels))
+			if policyErr != nil || resolved.Strategy == "tag" {
+				continue
+			}
+			if refs.NormalizeImageUpdateRef(cnt.Image) != refs.NormalizeImageUpdateRef(converted.ImageRef()) {
+				continue
+			}
+			converted.ContainerID = cnt.ID
+			out = append(out, converted)
+		}
+	}
+	return out, nil
+}
+
+func (s *UpdaterService) clearUnscopedRecordInternal(ctx context.Context, record updater.ImageUpdateRecord) error {
+	dockerClient, err := s.DockerClient(ctx)
+	if err != nil {
+		return err
+	}
+	target, err := dockerClient.ImageInspect(ctx, record.NewImageRef())
+	if err != nil {
+		return err
+	}
+	listed, err := dockerClient.ContainerList(ctx, client.ContainerListOptions{All: false})
+	if err != nil {
+		return err
+	}
+	for _, cnt := range listed.Items {
+		resolved, policyErr := tagpolicy.Resolve(cnt.Image, updater.DefaultLabelPolicy().TagPolicy(cnt.Labels))
+		if policyErr != nil || resolved.Strategy == "tag" {
+			continue
+		}
+		if refs.NormalizeImageUpdateRef(cnt.Image) == refs.NormalizeImageUpdateRef(record.ImageRef()) && cnt.ImageID != target.ID {
+			return nil
+		}
+	}
+	return s.deps.DB.WithContext(ctx).Model(&imageupdate.ImageUpdateRecord{}).Where("id = ? AND container_id = ?", record.ID, "").Update("has_update", false).Error
+}
+
+// CheckProjectUpdates checks effective Compose service policies without deploying containers.
+func (s *UpdaterService) CheckProjectUpdates(ctx context.Context, projectID string) (*projecttypes.UpdateInfo, error) {
+	if s.deps.Projects == nil || s.deps.DB == nil || s.engine == nil {
+		return nil, errors.New("project update checker unavailable")
+	}
+	details, err := s.deps.Projects.GetProjectDetails(ctx, projectID, projecttypes.DetailsOptions{IncludeServiceConfigs: true})
+	if err != nil {
+		return nil, err
+	}
+	if len(details.Services) == 0 {
+		return nil, errors.New("project has no resolved Compose services to check")
+	}
+	records := make([]imageupdate.ImageUpdateRecord, 0, len(details.Services))
+	for _, service := range details.Services {
+		if strings.TrimSpace(service.Image) == "" {
+			continue
+		}
+		records = append(records, s.checkProjectServiceInternal(ctx, projectID, service))
+	}
+	if transactionErr := s.deps.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if deleteProjectUpdatesErr := tx.Where("project_id = ?", projectID).Delete(&imageupdate.ImageUpdateRecord{}).Error; deleteProjectUpdatesErr != nil {
+			return deleteProjectUpdatesErr
+		}
+		if len(records) == 0 {
+			return nil
+		}
+		return tx.Create(&records).Error
+	}); transactionErr != nil {
+		return nil, fmt.Errorf("save project update checks: %w", transactionErr)
+	}
+	return projectpkg.BuildConfiguredUpdateInfo(projectID, details.Services, nil, records), nil
+}
+
+func (s *UpdaterService) checkProjectServiceInternal(ctx context.Context, projectID string, service types.ServiceConfig) imageupdate.ImageUpdateRecord {
+	record := imageupdate.ImageUpdateRecord{
+		ID:          "project::" + projectID + "::" + service.Name,
+		ProjectID:   projectID,
+		ServiceName: service.Name,
+		PolicyKey: imageref.UpdatePolicyKey(
+			service.Image,
+			service.Labels,
+		),
+		CheckTime: time.Now().UTC(),
+	}
+	parsed, err := refs.NormalizeReference(service.Image)
+	if err != nil {
+		record.LastError = new(err.Error())
+		return record
+	}
+	record.Repository = parsed.RegistryHost + "/" + parsed.Repository
+	record.Tag = parsed.Tag
+	record.CurrentVersion = parsed.Tag
+	if service.Build != nil {
+		record.UpdateType = imageupdate.UpdateTypeLocal
+		return record
+	}
+	// Disabling automatic installation keeps the preview check; only the
+	// update-check label opts a service out of monitoring.
+	if imageref.IsUpdateCheckDisabled(service.Labels) {
+		return record
+	}
+	check, err := s.engine.CheckImageUpdate(ctx, updatertypes.CheckRequest{ImageRef: service.Image, Policy: updater.DefaultLabelPolicy().TagPolicy(service.Labels)})
+	if err != nil {
+		if errdefs.IsNotFound(err) {
+			record.UpdateType = imageupdate.UpdateTypeNotPulled
+		} else {
+			record.LastError = new(err.Error())
+		}
+		return record
+	}
+	record.HasUpdate = check.UpdateAvailable
+	record.UpdateType = check.UpdateType
+	record.CurrentVersion = cmp.Or(check.CurrentVersion, record.CurrentVersion)
+	if check.CurrentDigest != "" {
+		record.CurrentDigest = new(check.CurrentDigest)
+	}
+	if check.TargetDigest != "" {
+		record.LatestDigest = new(check.TargetDigest)
+	}
+	if check.TargetRef != "" {
+		target, parseErr := refs.NormalizeReference(check.TargetRef)
+		if parseErr != nil {
+			record.HasUpdate = false
+			record.LastError = new(parseErr.Error())
+		} else {
+			record.LatestVersion = new(target.Tag)
+		}
+	}
+	return record
+}
+
+func updateBatchTypeInternal(ctx context.Context, options arcaneupdater.Options, batchCompleted bool) string {
+	batchType := "update-batch"
+	if previous, ok := jobcontext.Run(ctx); ok && len(options.ResourceIds) > 0 {
+		batchType = "update-retry"
+		for _, target := range previous.Outcome.Targets {
+			if target.ID == "auto-update" && target.ResourceType == "update-batch" && (target.Status == scheduler.Succeeded || target.Status == scheduler.Partial) {
+				batchType = "update-batch"
+			}
+		}
+	}
+	if !batchCompleted {
+		batchType = "update-interrupted"
+	}
+	return batchType
+}
+
+// RegisterActors registers durable single-container update delivery.
+func (s *UpdaterService) RegisterActors(runtime *francis.Runtime) error {
+	return s.execution.RegisterActors(runtime)
+}
+
+// Start repairs persisted single-container delivery intents until shutdown.
+func (s *UpdaterService) Start(ctx context.Context) error {
+	return s.execution.Start(ctx)
+}
+
+// Stop cancels business execution before the actor host drains jobs.
+func (s *UpdaterService) Stop(ctx context.Context) error {
+	return s.execution.Stop(ctx)
+}
+
+// ActiveUpdateActivityIDs lists activities owned by persisted single-container updates.
+func (s *UpdaterService) ActiveUpdateActivityIDs(ctx context.Context) ([]string, error) {
+	return s.execution.ActiveUpdateActivityIDs(ctx)
+}
+
+// ReconcilePending resumes only frozen targets whose original container is unchanged.
+func (s *UpdaterService) ReconcilePending(ctx context.Context, run scheduler.Run) (scheduler.Outcome, error) {
+	return s.recovery.ReconcilePending(ctx, run)
 }

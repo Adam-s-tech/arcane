@@ -1,5 +1,7 @@
 import { m } from '#lib/paraglide/messages.js';
 import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+import type { DeployProjectOptions } from '#lib/types/project-deployment.js';
+import type { ProjectWorkspaceFileDraft } from '#lib/types/project-workspace.js';
 import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
 import type {
 	Project,
@@ -9,10 +11,9 @@ import type {
 	ProjectTagColor,
 	ProjectTagOption
 } from '#lib/types/swarm.js';
-import type { ProjectWorkspaceFileDraft } from '#lib/types/project-workspace.js';
 import { readNdjsonStream } from '#lib/utils/streaming.js';
 import { transformPaginationParams } from '#lib/utils/tables.js';
-import type { DeployProjectOptions } from '#lib/types/project-deployment.js';
+
 import BaseAPIService from './api-service';
 
 class ProjectService extends BaseAPIService {

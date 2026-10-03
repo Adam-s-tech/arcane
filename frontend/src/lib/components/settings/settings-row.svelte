@@ -1,9 +1,10 @@
 <script lang="ts">
-	import { Label } from '#lib/components/ui/label/index.js';
+	import type { Snippet } from 'svelte';
+
 	import * as Alert from '#lib/components/ui/alert/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
 	import { AlertTriangleIcon } from '#lib/icons/index.js';
 	import { cn } from '#lib/utils.js';
-	import type { Snippet } from 'svelte';
 
 	// One setting: label and description on the left, the control on the right.
 	// `switch` keeps a compact right-aligned control; `wide` drops the control under the label.

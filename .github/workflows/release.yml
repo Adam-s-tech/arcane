@@ -238,7 +238,7 @@ jobs:
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           distribution: goreleaser-pro
-          version: "~> v2"
+          version: '~> v2'
           args: release --clean --skip=validate,announce
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}

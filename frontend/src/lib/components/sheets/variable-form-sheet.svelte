@@ -1,21 +1,21 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import * as ResponsiveDialog from '#lib/components/ui/responsive-dialog/index.js';
-	import SheetFooterActions from '#lib/components/sheets/sheet-footer-actions.svelte';
+	import { z } from 'zod/v4';
+
 	import SwitchWithLabel from '#lib/components/form/labeled-switch.svelte';
 	import EnvironmentMultiSelect from '#lib/components/sheets/environment-multi-select.svelte';
+	import SheetFooterActions from '#lib/components/sheets/sheet-footer-actions.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import * as RadioGroup from '#lib/components/ui/radio-group/index.js';
+	import * as ResponsiveDialog from '#lib/components/ui/responsive-dialog/index.js';
+	import { Textarea } from '#lib/components/ui/textarea/index.js';
+	import * as m from '#lib/paraglide/messages.js';
 	import type { Environment } from '#lib/types/environment.js';
 	import type { GlobalVariable, GlobalVariableCreateDto, GlobalVariableUpdateDto } from '#lib/types/variable.js';
 	import { parseEnvText, normalizeVariableKeyInput } from '#lib/utils/env-file.js';
-	import { z } from 'zod/v4';
 	import { createForm, preventDefault } from '#lib/utils/settings.svelte.js';
-
-	import * as m from '#lib/paraglide/messages.js';
 
 	type VariableFormPayload =
 		| { mode: 'create'; variable: GlobalVariableCreateDto }

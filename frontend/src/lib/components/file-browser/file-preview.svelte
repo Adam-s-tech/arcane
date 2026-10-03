@@ -1,0 +1,73 @@
+<script lang="ts">
+	import { onMount } from 'svelte';
+
+	import * as Sheet from '#lib/components/ui/sheet/index.js';
+	import { LoadingSpinnerIcon } from '#lib/icons/index.js';
+	import type { FileEntry } from '#lib/types/shared.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+
+	let { file, fetchContent, onClose }: { file: FileEntry; fetchContent: (path: string) => Promise<string>; onClose: () => void } =
+		$props();
+
+	let content = $state<string | null>(null);
+	let loading = $state(true);
+	let error = $state<string | null>(null);
+
+	function b64DecodeUnicode(str: string) {
+		try {
+			// Try to decode UTF-8 safely
+			return decodeURIComponent(
+				atob(str)
+					.split('')
+					.map(function (c) {
+						return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+					})
+					.join('')
+			);
+		} catch (e) {
+			// Fallback to plain atob if it's not proper UTF-8
+			return atob(str);
+		}
+	}
+
+	onMount(async () => {
+		try {
+			const operationResult1 = await tryCatch(
+				(async () => {
+					const res = await fetchContent(file.path);
+					content = b64DecodeUnicode(res);
+				})()
+			);
+			if (operationResult1.error !== null) {
+				const e = operationResult1.error;
+
+				error = e.message || 'Failed to load preview';
+			}
+		} finally {
+			loading = false;
+		}
+	});
+</script>
+
+<Sheet.Root open={!!file} onOpenChange={(open) => !open && onClose()}>
+	<Sheet.Content class="flex h-full flex-col sm:max-w-2xl">
+		<Sheet.Header>
+			<Sheet.Title><span class="block min-w-0 truncate">{file.name}</span></Sheet.Title>
+			<Sheet.Description class="break-all">{file.path}</Sheet.Description>
+		</Sheet.Header>
+
+		<div class="mt-6 min-h-0 flex-grow overflow-y-auto">
+			{#if loading}
+				<div class="flex h-full items-center justify-center p-12">
+					<LoadingSpinnerIcon class="h-8 w-8 text-muted-foreground" />
+				</div>
+			{:else if error}
+				<div class="rounded border border-destructive/20 bg-destructive/10 p-4 text-destructive">
+					{error}
+				</div>
+			{:else}
+				<pre class="w-full rounded bg-muted p-4 font-mono text-xs break-all whitespace-pre-wrap">{content}</pre>
+			{/if}
+		</div>
+	</Sheet.Content>
+</Sheet.Root>

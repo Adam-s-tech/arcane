@@ -1,26 +1,27 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import type { Snippet } from 'svelte';
-	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
-	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import { toast } from 'svelte-sonner';
-	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
-	import { tryCatch } from '#lib/utils/try-catch.js';
-	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
-	import type { ContainerRegistry, ContainerRegistryPullUsage } from '#lib/types/docker.js';
+
+	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
+	import ActionMenuItem from '#lib/components/arcane-table/cells/action-menu-item.svelte';
+	import CreatedAtCell from '#lib/components/arcane-table/cells/created-at-cell.svelte';
+	import EnabledStatusCell from '#lib/components/arcane-table/cells/enabled-status-cell.svelte';
 	import type { ColumnSpec, MobileFieldVisibility, BulkAction } from '#lib/components/arcane-table/index.js';
 	import { UniversalMobileCard } from '#lib/components/arcane-table/index.js';
-	import EnabledStatusCell from '#lib/components/arcane-table/cells/enabled-status-cell.svelte';
-	import CreatedAtCell from '#lib/components/arcane-table/cells/created-at-cell.svelte';
+	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
+	import IfPermitted from '#lib/components/if-permitted.svelte';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import { RegistryIcon, UserIcon, ExternalLinkIcon, EditIcon, TrashIcon, TestIcon, FolderOpenIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { containerRegistryService } from '#lib/services/container-registry-service.js';
-	import { RegistryIcon, UserIcon, ExternalLinkIcon, EditIcon, TrashIcon, TestIcon, FolderOpenIcon } from '#lib/icons/index.js';
-	import { goto } from '$app/navigation';
+	import type { ContainerRegistry, ContainerRegistryPullUsage } from '#lib/types/docker.js';
+	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
+	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
 	import { hasPermission } from '#lib/utils/auth.js';
-	import { getRegistryDisplayName } from '#lib/utils/registry.js';
-	import IfPermitted from '#lib/components/if-permitted.svelte';
 	import { bulkConfirmAndRun, confirmAndRun } from '#lib/utils/bulk-actions.js';
+	import { getRegistryDisplayName } from '#lib/utils/registry.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	let {
 		registries = $bindable(),
@@ -272,14 +273,12 @@
 		{/if}
 
 		<IfPermitted perm="registries:test">
-			<DropdownMenu.Item onclick={() => handleTest(item.id, item.url)} disabled={testingId === item.id}>
-				{#if testingId === item.id}
-					<Spinner class="size-4" />
-				{:else}
-					<TestIcon class="size-4" />
-				{/if}
-				{m.test_connection()}
-			</DropdownMenu.Item>
+			<ActionMenuItem
+				icon={TestIcon}
+				label={m.test_connection()}
+				onclick={() => handleTest(item.id, item.url)}
+				loading={testingId === item.id}
+			/>
 		</IfPermitted>
 
 		<IfPermitted perm="registries:update">
@@ -292,18 +291,13 @@
 		{#if canDeleteRegistry}
 			<DropdownMenu.Separator />
 
-			<DropdownMenu.Item
-				variant="destructive"
+			<ActionMenuItem
+				icon={TrashIcon}
+				label={m.common_remove()}
 				onclick={() => handleDeleteOne(item.id, item.url)}
-				disabled={removingId === item.id}
-			>
-				{#if removingId === item.id}
-					<Spinner class="size-4" />
-				{:else}
-					<TrashIcon class="size-4" />
-				{/if}
-				{m.common_remove()}
-			</DropdownMenu.Item>
+				loading={removingId === item.id}
+				destructive
+			/>
 		{/if}
 	</RowActionsMenu>
 {/snippet}

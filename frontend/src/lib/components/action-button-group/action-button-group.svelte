@@ -1,10 +1,7 @@
 <script lang="ts">
-	import { flushSync } from 'svelte';
 	import { goto } from '$app/navigation';
-	import * as ButtonGroup from '#lib/components/ui/button-group/index.js';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import * as ArcaneTooltip from '#lib/components/arcane-tooltip/index.js';
-	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import { flushSync } from 'svelte';
+
 	import {
 		ArcaneButton,
 		actionConfigs,
@@ -12,9 +9,14 @@
 		type ArcaneButtonSize,
 		type ArcaneButtonTone
 	} from '#lib/components/arcane-button/index.js';
+	import * as ArcaneTooltip from '#lib/components/arcane-tooltip/index.js';
+	import * as ButtonGroup from '#lib/components/ui/button-group/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import { ArrowDownIcon, EllipsisIcon } from '#lib/icons/index.js';
-	import { cn } from '#lib/utils.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { cn } from '#lib/utils.js';
+
 	import type { ActionButton, ActionGroup } from './types.js';
 
 	interface Props {
@@ -118,6 +120,22 @@
 		}
 		target.onclick?.();
 	}
+
+	function buttonProps(button: ActionButton) {
+		return {
+			action: button.action,
+			tone: toneFor(button),
+			customLabel: button.label,
+			loadingLabel: button.loadingLabel,
+			loading: button.loading,
+			disabled: button.disabled,
+			title: button.disabledReason,
+			onclick: button.onclick,
+			href: button.href,
+			rel: button.rel,
+			icon: button.icon
+		};
+	}
 </script>
 
 {#snippet itemBody(button: ActionButton)}
@@ -168,22 +186,7 @@
 {/snippet}
 
 {#snippet plainButton(button: ActionButton)}
-	<ArcaneButton
-		action={button.action}
-		tone={toneFor(button)}
-		{size}
-		showLabel={!compact}
-		aria-label={button.label}
-		customLabel={button.label}
-		loadingLabel={button.loadingLabel}
-		loading={button.loading}
-		disabled={button.disabled}
-		title={button.disabledReason}
-		onclick={button.onclick}
-		href={button.href}
-		rel={button.rel}
-		icon={button.icon}
-	>
+	<ArcaneButton {...buttonProps(button)} {size} showLabel={!compact} aria-label={button.label}>
 		{#if button.badge !== undefined}
 			<span class="rounded-full border px-1 py-0.5 text-3xs text-muted-foreground">{button.badge}</span>
 		{/if}
@@ -201,22 +204,7 @@
 		<ArcaneTooltip.Root>
 			<ArcaneTooltip.Trigger>
 				{#snippet child({ props })}
-					<ArcaneButton
-						{...props}
-						action={button.action}
-						tone={toneFor(button)}
-						size="icon"
-						class={iconSize}
-						customLabel={button.label}
-						loadingLabel={button.loadingLabel}
-						loading={button.loading}
-						disabled={button.disabled}
-						title={button.disabledReason}
-						onclick={button.onclick}
-						href={button.href}
-						rel={button.rel}
-						icon={button.icon}
-					/>
+					<ArcaneButton {...props} {...buttonProps(button)} size="icon" class={iconSize} />
 				{/snippet}
 			</ArcaneTooltip.Trigger>
 			<ArcaneTooltip.Content>{button.label}</ArcaneTooltip.Content>

@@ -1,7 +1,8 @@
-import { gitRepositoryService } from '#lib/services/git-repository-service.js';
 import { queryKeys } from '#lib/query/query-keys.js';
+import { gitRepositoryService } from '#lib/services/git-repository-service.js';
 import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
 import { resolveInitialTableRequest } from '#lib/utils/tables.js';
+
 import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ parent }) => {

@@ -1,16 +1,35 @@
 <script lang="ts">
 	import { goto, refreshAll } from '$app/navigation';
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import TabbedPageLayout from '#lib/layouts/tabbed-page-layout.svelte';
-	import { ActionButtonGroup, type ActionButton } from '#lib/components/action-button-group/index.js';
-	import { type TabItem } from '#lib/components/tab-bar/index.js';
-	import * as Tabs from '#lib/components/ui/tabs/index.js';
-	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
 	import { toast } from 'svelte-sonner';
-	import { tryCatch } from '#lib/utils/try-catch.js';
-	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
+
+	import { ActionButtonGroup, type ActionButton } from '#lib/components/action-button-group/index.js';
+	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
+	import ServiceEditorDialog from '#lib/components/dialogs/service-editor-dialog.svelte';
+	import ResourceNotFound from '#lib/components/resource-not-found.svelte';
+	import SheetFooterActions from '#lib/components/sheets/sheet-footer-actions.svelte';
+	import { type TabItem } from '#lib/components/tab-bar/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import * as ResponsiveDialog from '#lib/components/ui/responsive-dialog/index.js';
+	import * as Tabs from '#lib/components/ui/tabs/index.js';
+	import { useUrlTab } from '#lib/hooks/use-url-tab.svelte.js';
+	import {
+		DockIcon,
+		FileTextIcon,
+		JobsIcon,
+		SettingsIcon,
+		NetworksIcon,
+		VolumesIcon,
+		EditIcon,
+		LayersIcon,
+		RedeployIcon,
+		TrashIcon
+	} from '#lib/icons/index.js';
+	import TabbedPageLayout from '#lib/layouts/tabbed-page-layout.svelte';
+	import { m } from '#lib/paraglide/messages.js';
 	import { swarmService } from '#lib/services/swarm-service.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
 	import type {
 		RawServiceNetworkAttachment,
 		RawServiceVirtualIP,
@@ -24,39 +43,22 @@
 		SwarmServicePort,
 		SwarmServiceModeSpec
 	} from '#lib/types/swarm.js';
-	import ServiceEditorDialog from '#lib/components/dialogs/service-editor-dialog.svelte';
-	import ServiceOverview from '../components/ServiceOverview.svelte';
-	import ServiceLogsPanel from '../components/ServiceLogsPanel.svelte';
-	import ServiceTasksPanel from '../components/ServiceTasksPanel.svelte';
-	import ServiceConfiguration from '../components/ServiceConfiguration.svelte';
-	import ServiceNetwork from '../components/ServiceNetwork.svelte';
-	import ServiceStorage from '../components/ServiceStorage.svelte';
-	import { Input } from '#lib/components/ui/input/index.js';
-	import { Label } from '#lib/components/ui/label/index.js';
-	import * as ResponsiveDialog from '#lib/components/ui/responsive-dialog/index.js';
-	import SheetFooterActions from '#lib/components/sheets/sheet-footer-actions.svelte';
-	import ResourceNotFound from '#lib/components/resource-not-found.svelte';
-	import {
-		DockIcon,
-		FileTextIcon,
-		JobsIcon,
-		SettingsIcon,
-		NetworksIcon,
-		VolumesIcon,
-		EditIcon,
-		LayersIcon,
-		RedeployIcon,
-		TrashIcon
-	} from '#lib/icons/index.js';
+	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
+	import { hasPermission } from '#lib/utils/auth.js';
 	import {
 		getSwarmServiceModeFromSpec,
 		getSwarmServiceModeLabel,
 		getSwarmServiceModeVariant,
 		isSwarmServiceModeScalable
 	} from '#lib/utils/docker.js';
-	import { hasPermission } from '#lib/utils/auth.js';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import { useUrlTab } from '#lib/hooks/use-url-tab.svelte.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+
+	import ServiceConfiguration from '../components/service-configuration.svelte';
+	import ServiceLogsPanel from '../components/service-logs-panel.svelte';
+	import ServiceNetwork from '../components/service-network.svelte';
+	import ServiceOverview from '../components/service-overview.svelte';
+	import ServiceStorage from '../components/service-storage.svelte';
+	import ServiceTasksPanel from '../components/service-tasks-panel.svelte';
 
 	let { data } = $props();
 	let service = $derived(data?.service as SwarmServiceInspect);

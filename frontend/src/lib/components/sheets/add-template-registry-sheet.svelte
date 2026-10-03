@@ -1,16 +1,16 @@
 <script lang="ts">
-	import * as ResponsiveDialog from '#lib/components/ui/responsive-dialog/index.js';
-	import SheetFooterActions from '#lib/components/sheets/sheet-footer-actions.svelte';
+	import { createMutation } from '@tanstack/svelte-query';
+	import { z } from 'zod/v4';
+
 	import FormInput from '#lib/components/form/form-input.svelte';
 	import SwitchWithLabel from '#lib/components/form/labeled-switch.svelte';
-	import { z } from 'zod/v4';
-	import { createForm, preventDefault } from '#lib/utils/settings.svelte.js';
-
+	import SheetFooterActions from '#lib/components/sheets/sheet-footer-actions.svelte';
 	import * as Alert from '#lib/components/ui/alert/index.js';
+	import * as ResponsiveDialog from '#lib/components/ui/responsive-dialog/index.js';
+	import { AlertIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { templateService } from '#lib/services/template-service.js';
-	import { AlertIcon } from '#lib/icons/index.js';
-	import { createMutation } from '@tanstack/svelte-query';
+	import { createForm, preventDefault } from '#lib/utils/settings.svelte.js';
 
 	type TemplateRegistryFormProps = {
 		open: boolean;

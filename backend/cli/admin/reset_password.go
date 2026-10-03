@@ -17,6 +17,7 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/role"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/session"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/user"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/validation"
@@ -158,7 +159,7 @@ func resetPasswordInternal(ctx context.Context, db *database.DB, username, passw
 	}
 
 	roleService := role.NewRoleService(db)
-	userService := user.NewUserService(db, roleService)
+	userService := user.NewUserService(db, roleService, session.RevokeAllUserSessionsExceptInDB)
 	target, err := userService.GetUserByUsername(ctx, username)
 	if err != nil {
 		if errors.Is(err, common.ErrUserNotFound) {
@@ -167,7 +168,7 @@ func resetPasswordInternal(ctx context.Context, db *database.DB, username, passw
 		return fmt.Errorf("failed to find user: %w", err)
 	}
 
-	permissions, err := roleService.ResolvePermissions(ctx, target)
+	permissions, err := roleService.ResolvePermissions(ctx, target.ID)
 	if err != nil {
 		return fmt.Errorf("failed to resolve user permissions: %w", err)
 	}

@@ -1,17 +1,17 @@
 <script lang="ts">
-	import * as ResponsiveDialog from '#lib/components/ui/responsive-dialog/index.js';
-	import SheetFooterActions from '#lib/components/sheets/sheet-footer-actions.svelte';
-	import FormInput from '#lib/components/form/form-input.svelte';
-	import PermissionPicker from '#lib/components/role-editor/permission-picker.svelte';
-	import type { ApiKey } from '#lib/types/auth.js';
-	import type { PermissionsManifest, ApiKeyPermissionGrant } from '#lib/types/auth.js';
-	import { normalizePermissionSelection } from '#lib/utils/permissions.js';
-	import { plainDateFromInstant, plainDateToInstantString } from '#lib/utils/formatting.js';
 	import { Temporal } from 'temporal-polyfill';
 	import { z } from 'zod/v4';
-	import { createForm, preventDefault } from '#lib/utils/settings.svelte.js';
 
+	import FormInput from '#lib/components/form/form-input.svelte';
+	import PermissionPicker from '#lib/components/role-editor/permission-picker.svelte';
+	import SheetFooterActions from '#lib/components/sheets/sheet-footer-actions.svelte';
+	import * as ResponsiveDialog from '#lib/components/ui/responsive-dialog/index.js';
 	import * as m from '#lib/paraglide/messages.js';
+	import type { ApiKey } from '#lib/types/auth.js';
+	import type { PermissionsManifest, ApiKeyPermissionGrant } from '#lib/types/auth.js';
+	import { plainDateFromInstant, plainDateToInstantString } from '#lib/utils/formatting.js';
+	import { normalizePermissionSelection } from '#lib/utils/permissions.js';
+	import { createForm, preventDefault } from '#lib/utils/settings.svelte.js';
 
 	type ApiKeyFormProps = {
 		open: boolean;

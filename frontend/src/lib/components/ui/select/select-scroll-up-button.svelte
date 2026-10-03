@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { ArrowUpIcon } from '#lib/icons/index.js';
 	import { Select as SelectPrimitive } from 'bits-ui';
+
+	import { ArrowUpIcon } from '#lib/icons/index.js';
 	import { cn, type WithoutChildrenOrChild } from '#lib/utils.js';
 
 	let {

@@ -1,26 +1,28 @@
 <script lang="ts">
-	import { UsersIcon } from '#lib/icons/index.js';
 	import { toast } from 'svelte-sonner';
-	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
-	import { tryCatch } from '#lib/utils/try-catch.js';
-	import UserTable from './components/user-table.svelte';
-	import UserFormSheet from '#lib/components/sheets/user-form-sheet.svelte';
-	import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
-	import type { Settings } from '#lib/types/settings.js';
-	import type { User } from '#lib/types/auth.js';
-	import type { CreateUser } from '#lib/types/auth.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import { userService } from '#lib/services/user-service.js';
-	import { roleService } from '#lib/services/role-service.js';
-	import { settingsService } from '#lib/services/settings-service.js';
-	import userStore from '#lib/stores/user-store.svelte.js';
-	import settingsStore from '#lib/stores/config-store.svelte.js';
-	import { SettingsPageLayout } from '#lib/layouts/index.js';
+
 	import type { ActionButton } from '#lib/components/action-button-group/types.js';
 	import SettingsRow from '#lib/components/settings/settings-row.svelte';
 	import SettingsSection from '#lib/components/settings/settings-section.svelte';
-	import { Switch } from '#lib/components/ui/switch/index.js';
+	import UserFormSheet from '#lib/components/sheets/user-form-sheet.svelte';
 	import { Input } from '#lib/components/ui/input/index.js';
+	import { Switch } from '#lib/components/ui/switch/index.js';
+	import { UsersIcon } from '#lib/icons/index.js';
+	import { SettingsPageLayout } from '#lib/layouts/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { roleService } from '#lib/services/role-service.js';
+	import { settingsService } from '#lib/services/settings-service.js';
+	import { userService } from '#lib/services/user-service.js';
+	import settingsStore from '#lib/stores/config-store.svelte.js';
+	import userStore from '#lib/stores/user-store.svelte.js';
+	import type { User } from '#lib/types/auth.js';
+	import type { CreateUser } from '#lib/types/auth.js';
+	import type { Settings } from '#lib/types/settings.js';
+	import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
+	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+
+	import UserTable from './components/user-table.svelte';
 
 	let { data } = $props();
 

@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/role"
@@ -25,7 +24,7 @@ func newResetPasswordTestDBInternal(t *testing.T) *database.DB {
 	gormDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, gormDB.AutoMigrate(
-		&common.User{},
+		&user.User{},
 		&session.UserSession{},
 		&role.Role{},
 		&role.UserRoleAssignment{},
@@ -38,15 +37,15 @@ func newResetPasswordTestDBInternal(t *testing.T) *database.DB {
 	return db
 }
 
-func createGlobalAdminInternal(t *testing.T, db *database.DB) (*common.User, *user.UserService) {
+func createGlobalAdminInternal(t *testing.T, db *database.DB) (*user.User, *user.UserService) {
 	t.Helper()
 	ctx := t.Context()
 	roleService := role.NewRoleService(db)
 	require.NoError(t, roleService.EnsureBuiltInRoles(ctx))
-	userService := user.NewUserService(db, roleService)
+	userService := user.NewUserService(db, roleService, session.RevokeAllUserSessionsExceptInDB)
 	passwordHash, err := userService.HashPassword("old-password")
 	require.NoError(t, err)
-	adminUser, err := userService.CreateUser(ctx, &common.User{
+	adminUser, err := userService.CreateUser(ctx, &user.User{
 		ID:                     "admin-1",
 		Username:               "arcane",
 		PasswordHash:           passwordHash,
@@ -121,7 +120,7 @@ func TestResetPasswordInternalRejectsNonAdmin(t *testing.T) {
 	_, userService := createGlobalAdminInternal(t, db)
 	passwordHash, err := userService.HashPassword("old-password")
 	require.NoError(t, err)
-	nonAdmin, err := userService.CreateUser(ctx, &common.User{
+	nonAdmin, err := userService.CreateUser(ctx, &user.User{
 		ID:                     "user-1",
 		Username:               "operator",
 		PasswordHash:           passwordHash,

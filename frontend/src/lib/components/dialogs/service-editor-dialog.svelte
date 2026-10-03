@@ -1,17 +1,17 @@
 <script lang="ts">
-	import { ResponsiveDialog } from '#lib/components/ui/responsive-dialog/index.js';
-	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
-	import * as Select from '#lib/components/ui/select/index.js';
-	import { preventDefault } from '#lib/utils/settings.svelte.js';
+	import { untrack } from 'svelte';
 
-	import { m } from '#lib/paraglide/messages.js';
-	import { AddIcon, TrashIcon } from '#lib/icons/index.js';
+	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+	import FormInput from '#lib/components/form/form-input.svelte';
 	import * as Accordion from '#lib/components/ui/accordion/index.js';
 	import * as Alert from '#lib/components/ui/alert/index.js';
-	import FormInput from '#lib/components/form/form-input.svelte';
-	import { untrack } from 'svelte';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { ResponsiveDialog } from '#lib/components/ui/responsive-dialog/index.js';
+	import * as Select from '#lib/components/ui/select/index.js';
+	import { AddIcon, TrashIcon } from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
 	import { getSwarmServiceModeLabel } from '#lib/utils/docker.js';
+	import { preventDefault } from '#lib/utils/settings.svelte.js';
 
 	type ServiceEditorPayload = {
 		spec: Record<string, unknown>;

@@ -4,45 +4,30 @@ import (
 	"cmp"
 	"context"
 	"errors"
-	"log/slog"
-	"net/http"
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/getarcaneapp/arcane/types/v2/base"
-	containertypes "github.com/getarcaneapp/arcane/types/v2/container"
+	"github.com/getarcaneapp/arcane/types/v2/container"
 	"github.com/getarcaneapp/arcane/types/v2/dockerinfo"
 	"github.com/getarcaneapp/arcane/types/v2/system"
 	dockersystem "github.com/moby/moby/api/types/system"
 	"github.com/moby/moby/client"
 	"go.getarcane.app/docker/convert"
-	converttypes "go.getarcane.app/docker/convert/types"
-	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/docker/convert/types"
 	"go.getarcane.app/sys/cgroup"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/activity"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/docker"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/environment"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
 )
 
 // SystemHandler handles system management endpoints.
 type SystemHandler struct {
-	dockerService      *docker.DockerClientService
-	systemService      *SystemService
-	upgradeService     *SystemUpgradeService
-	environmentService *environment.EnvironmentService
-	activityService    *activity.ActivityService
-	cfg                *config.Config
-	appCtx             context.Context
+	dockerService *docker.DockerClientService
+	systemService *SystemService
+	appCtx        context.Context
 }
-
-// --- Input/Output Types ---
 
 type SystemHealthInput struct {
 	EnvironmentID string `path:"id" doc:"Environment ID"`
@@ -54,11 +39,6 @@ type GetDockerInfoInput struct {
 
 type GetDockerInfoOutput struct {
 	Body dockerinfo.Info
-}
-
-type PruneAllInput struct {
-	EnvironmentID string                 `path:"id" doc:"Environment ID"`
-	Body          system.PruneAllRequest `doc:"Prune options"`
 }
 
 type StartAllContainersInput struct {
@@ -82,188 +62,8 @@ type ConvertDockerRunOutput struct {
 	Body system.ConvertDockerRunResponse
 }
 
-type CheckUpgradeInput struct {
-	EnvironmentID string `path:"id" doc:"Environment ID"`
-}
-
-// UpgradeCheckResultData is the response for upgrade check.
-type UpgradeCheckResultData struct {
-	CanUpgrade bool   `json:"canUpgrade"`
-	Error      bool   `json:"error"`
-	Message    string `json:"message"`
-}
-
-type CheckUpgradeOutput struct {
-	Body UpgradeCheckResultData
-}
-
-type TriggerUpgradeInput struct {
-	EnvironmentID string              `path:"id" doc:"Environment ID"`
-	Body          *TriggerUpgradeBody `doc:"Optional upgrade parameters"`
-}
-
-type TriggerUpgradeBody struct {
-	TargetVersion string `json:"targetVersion,omitempty" doc:"Release version to upgrade to; overrides this instance's own version check"`
-}
-
-// TriggerUpgradeData reports the upgrade was accepted. UpToDate lets a client skip
-// waiting for a restart: the upgrader still pulls, but when the environment already
-// runs the newest image it finds nothing to swap in and no restart follows.
-type TriggerUpgradeData struct {
-	Message  string `json:"message" doc:"Response message"`
-	UpToDate bool   `json:"upToDate" doc:"Environment already runs the newest image, so no restart is expected"`
-}
-
-type TriggerUpdateAllInput struct {
-	EnvironmentID string `path:"id" doc:"Environment ID"`
-}
-
-type UpdateAllStatusInput struct {
-	EnvironmentID string `path:"id" doc:"Environment ID"`
-}
-
-// RegisterSystem registers system management endpoints using Huma.
-// WebSocket statistics endpoints live in api/ws.
-func RegisterSystem(
-	api huma.API,
-	dockerService *docker.DockerClientService,
-	systemService *SystemService,
-	upgradeService *SystemUpgradeService,
-	environmentService *environment.EnvironmentService,
-	cfg *config.Config,
-	activityService *activity.ActivityService,
-	appCtx handlerutil.ActivityAppContext,
-) {
-	h := &SystemHandler{
-		dockerService:      dockerService,
-		systemService:      systemService,
-		upgradeService:     upgradeService,
-		environmentService: environmentService,
-		activityService:    activityService,
-		cfg:                cfg,
-		appCtx:             appCtx.Context(),
-	}
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID:   "system-health",
-		Method:        http.MethodHead,
-		Path:          "/environments/{id}/system/health",
-		Summary:       "Check system health",
-		Description:   "Check if the Docker daemon is responsive",
-		Tags:          []string{"System"},
-		DefaultStatus: http.StatusOK,
-		Security:      handlerutil.DefaultOperationSecurity(),
-	}, authz.PermSystemRead, h.Health)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "get-docker-info",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/system/docker/info",
-		Summary:     "Get Docker info",
-		Description: "Get Docker daemon version and system information",
-		Tags:        []string{"System"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermSystemRead, h.GetDockerInfo)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "prune-all",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/system/prune",
-		Summary:     "Prune Docker resources",
-		Description: "Remove unused Docker resources (containers, images, volumes, networks)",
-		Tags:        []string{"System"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermSystemPrune, h.PruneAll)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "start-all-containers",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/system/containers/start-all",
-		Summary:     "Start all containers",
-		Description: "Start all Docker containers",
-		Tags:        []string{"System"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermContainersStart, h.StartAllContainers)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "start-all-stopped-containers",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/system/containers/start-stopped",
-		Summary:     "Start all stopped containers",
-		Description: "Start all stopped Docker containers",
-		Tags:        []string{"System"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermContainersStart, h.StartAllStoppedContainers)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "stop-all-containers",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/system/containers/stop-all",
-		Summary:     "Stop all containers",
-		Description: "Stop all running Docker containers",
-		Tags:        []string{"System"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermContainersStop, h.StopAllContainers)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "convert-docker-run",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/system/convert",
-		Summary:     "Convert docker run command",
-		Description: "Convert a docker run command to docker-compose format",
-		Tags:        []string{"System"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermContainersCreate, h.ConvertDockerRun)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "check-upgrade",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/system/upgrade/check",
-		Summary:     "Check for system upgrade",
-		Description: "Check if a system upgrade is available",
-		Tags:        []string{"System"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermSystemRead, h.CheckUpgradeAvailable)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID:   "trigger-upgrade",
-		Method:        http.MethodPost,
-		Path:          "/environments/{id}/system/upgrade",
-		Summary:       "Trigger system upgrade",
-		Description:   "Trigger a system upgrade",
-		DefaultStatus: http.StatusAccepted,
-		Tags:          []string{"System"},
-		Security:      handlerutil.DefaultOperationSecurity(),
-	}, authz.PermSystemUpgrade, h.TriggerUpgrade)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID:   "trigger-update-all",
-		Method:        http.MethodPost,
-		Path:          "/environments/{id}/system/upgrade/all",
-		Summary:       "Update all environments",
-		Description:   "Upgrade every Arcane environment, starting with the manager",
-		DefaultStatus: http.StatusAccepted,
-		Tags:          []string{"System"},
-		Security:      handlerutil.DefaultOperationSecurity(),
-	}, authz.PermSystemUpgrade, h.TriggerUpdateAll)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "update-all-status",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/system/upgrade/all/status",
-		Summary:     "Get update-all status",
-		Description: "Get the status of the latest update-all-environments job",
-		Tags:        []string{"System"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermSystemRead, h.GetUpdateAllStatus)
-}
-
-// rejectIfAgentModeInternal blocks manager-only operations when running as an agent.
-func (h *SystemHandler) rejectIfAgentModeInternal() error {
-	if h.cfg != nil && h.cfg.AgentMode {
-		return huma.Error400BadRequest("update-all is managed on the Arcane manager")
-	}
-	return nil
+func NewHandler(dockerService *docker.DockerClientService, systemService *SystemService, appCtx context.Context) *SystemHandler {
+	return &SystemHandler{dockerService: dockerService, systemService: systemService, appCtx: appCtx}
 }
 
 // Health checks if the Docker daemon is responsive.
@@ -363,38 +163,16 @@ func extractVersionDetailsFromComponents(components []dockersystem.ComponentVers
 	return gitCommit, goVersion, buildTime
 }
 
-// PruneAll removes unused Docker resources.
-func (h *SystemHandler) PruneAll(ctx context.Context, input *PruneAllInput) (*handlerutil.Out[system.PruneAllResult], error) {
-	slog.InfoContext(ctx, "System prune operation initiated",
-		"containers", input.Body.Containers,
-		"images", input.Body.Images,
-		"volumes", input.Body.Volumes,
-		"networks", input.Body.Networks,
-		"build_cache", input.Body.BuildCache)
-
-	runtimeCtx := utils.ActivityRuntimeContext(ctx, h.appCtx)
-	result := h.systemService.StartPruneAll(runtimeCtx, input.EnvironmentID, input.Body)
-
-	slog.InfoContext(runtimeCtx, "System prune background activity started", "activityId", result.ActivityID)
-
-	return &handlerutil.Out[system.PruneAllResult]{
-		Body: base.ApiResponse[system.PruneAllResult]{
-			Success: true,
-			Data:    *result,
-		},
-	}, nil
-}
-
 // StartAllContainers starts all Docker containers.
-func (h *SystemHandler) StartAllContainers(ctx context.Context, input *StartAllContainersInput) (*handlerutil.Out[containertypes.ActionResult], error) {
+func (h *SystemHandler) StartAllContainers(ctx context.Context, input *StartAllContainersInput) (*handlerutil.Out[container.ActionResult], error) {
 	runtimeCtx := utils.ActivityRuntimeContext(ctx, h.appCtx)
 	result, err := h.systemService.StartAllContainers(runtimeCtx, input.EnvironmentID)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("Failed to start containers: " + err.Error())
 	}
 
-	return &handlerutil.Out[containertypes.ActionResult]{
-		Body: base.ApiResponse[containertypes.ActionResult]{
+	return &handlerutil.Out[container.ActionResult]{
+		Body: base.ApiResponse[container.ActionResult]{
 			Success: true,
 			Data:    *result,
 		},
@@ -402,15 +180,15 @@ func (h *SystemHandler) StartAllContainers(ctx context.Context, input *StartAllC
 }
 
 // StartAllStoppedContainers starts all stopped Docker containers.
-func (h *SystemHandler) StartAllStoppedContainers(ctx context.Context, input *StartAllStoppedContainersInput) (*handlerutil.Out[containertypes.ActionResult], error) {
+func (h *SystemHandler) StartAllStoppedContainers(ctx context.Context, input *StartAllStoppedContainersInput) (*handlerutil.Out[container.ActionResult], error) {
 	runtimeCtx := utils.ActivityRuntimeContext(ctx, h.appCtx)
 	result, err := h.systemService.StartAllStoppedContainers(runtimeCtx, input.EnvironmentID)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("Failed to start stopped containers: " + err.Error())
 	}
 
-	return &handlerutil.Out[containertypes.ActionResult]{
-		Body: base.ApiResponse[containertypes.ActionResult]{
+	return &handlerutil.Out[container.ActionResult]{
+		Body: base.ApiResponse[container.ActionResult]{
 			Success: true,
 			Data:    *result,
 		},
@@ -418,15 +196,15 @@ func (h *SystemHandler) StartAllStoppedContainers(ctx context.Context, input *St
 }
 
 // StopAllContainers stops all running Docker containers.
-func (h *SystemHandler) StopAllContainers(ctx context.Context, input *StopAllContainersInput) (*handlerutil.Out[containertypes.ActionResult], error) {
+func (h *SystemHandler) StopAllContainers(ctx context.Context, input *StopAllContainersInput) (*handlerutil.Out[container.ActionResult], error) {
 	runtimeCtx := utils.ActivityRuntimeContext(ctx, h.appCtx)
 	result, err := h.systemService.StopAllContainers(runtimeCtx, input.EnvironmentID)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("Failed to stop containers: " + err.Error())
 	}
 
-	return &handlerutil.Out[containertypes.ActionResult]{
-		Body: base.ApiResponse[containertypes.ActionResult]{
+	return &handlerutil.Out[container.ActionResult]{
+		Body: base.ApiResponse[container.ActionResult]{
 			Success: true,
 			Data:    *result,
 		},
@@ -435,9 +213,9 @@ func (h *SystemHandler) StopAllContainers(ctx context.Context, input *StopAllCon
 
 // ConvertDockerRun converts a docker run command to docker-compose format.
 func (h *SystemHandler) ConvertDockerRun(ctx context.Context, input *ConvertDockerRunInput) (*ConvertDockerRunOutput, error) {
-	result, err := convert.Convert(input.Body.DockerRunCommand, converttypes.Options{})
+	result, err := convert.Convert(input.Body.DockerRunCommand, types.Options{})
 	if err != nil {
-		if errors.Is(err, converttypes.ErrParse) {
+		if errors.Is(err, types.ErrParse) {
 			return nil, huma.Error400BadRequest("Failed to parse docker run command. Please check the syntax.")
 		}
 		return nil, huma.Error500InternalServerError("Failed to convert to Docker Compose format.")
@@ -454,131 +232,6 @@ func (h *SystemHandler) ConvertDockerRun(ctx context.Context, input *ConvertDock
 			DockerCompose: string(result.YAML),
 			EnvVars:       strings.TrimSuffix(string(result.EnvFile), "\n"),
 			ServiceName:   serviceName,
-		},
-	}, nil
-}
-
-// CheckUpgradeAvailable checks if a system upgrade is available.
-func (h *SystemHandler) CheckUpgradeAvailable(ctx context.Context, input *CheckUpgradeInput) (*CheckUpgradeOutput, error) {
-	canUpgrade, err := h.upgradeService.CanUpgrade(ctx)
-	if err != nil {
-		slog.Debug("System upgrade check failed", "error", err)
-		return &CheckUpgradeOutput{
-			Body: UpgradeCheckResultData{
-				CanUpgrade: false,
-				Error:      true,
-				Message:    "Failed to check for updates: " + err.Error(),
-			},
-		}, nil
-	}
-
-	return &CheckUpgradeOutput{
-		Body: UpgradeCheckResultData{
-			CanUpgrade: canUpgrade,
-			Error:      false,
-			Message:    "System can be upgraded",
-		},
-	}, nil
-}
-
-// TriggerUpgrade triggers a system upgrade.
-func (h *SystemHandler) TriggerUpgrade(ctx context.Context, input *TriggerUpgradeInput) (*handlerutil.Out[TriggerUpgradeData], error) {
-	user, err := handlerutil.RequireUser(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	slog.Info("System upgrade triggered", "user", user.Username, "userId", user.ID)
-
-	// Resolved before triggering, while the version check still describes the running
-	// container: the upgrade itself may replace it.
-	upToDate := h.upgradeService.AlreadyOnNewestImage(ctx)
-
-	targetVersion := ""
-	if input.Body != nil {
-		targetVersion = input.Body.TargetVersion
-	}
-
-	err = h.upgradeService.TriggerUpgradeAsync(utils.ActivityRuntimeContext(ctx, h.appCtx), *user, targetVersion)
-	if err != nil {
-		slog.Error("System upgrade failed", "error", err, "user", user.Username)
-
-		if errors.Is(err, common.ErrUpgradeInProgress) {
-			return nil, huma.Error409Conflict("Failed to initiate upgrade: " + err.Error())
-		}
-
-		return nil, huma.Error500InternalServerError("Failed to initiate upgrade: " + err.Error())
-	}
-
-	message := kit.Ternary(
-		upToDate,
-		"Already running the newest image. The upgrade pulls it again and leaves the container in place.",
-		"Upgrade initiated successfully. A new container is being created and will replace this one shortly.",
-	)
-
-	return &handlerutil.Out[TriggerUpgradeData]{
-		Body: base.ApiResponse[TriggerUpgradeData]{
-			Success: true,
-			Data: TriggerUpgradeData{
-				Message:  message,
-				UpToDate: upToDate,
-			},
-		},
-	}, nil
-}
-
-// TriggerUpdateAll starts a fleet-wide update, upgrading the manager first and then
-// the remote agents (the latter resume after the manager restarts).
-func (h *SystemHandler) TriggerUpdateAll(ctx context.Context, input *TriggerUpdateAllInput) (*handlerutil.Out[EnvironmentUpdateJob], error) {
-	if err := h.rejectIfAgentModeInternal(); err != nil {
-		return nil, err
-	}
-
-	user, err := handlerutil.RequireUser(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	slog.Info("Update-all environments triggered", "user", user.Username, "userId", user.ID)
-
-	// Use a runtime context so the agents phase can outlive the request when the
-	// manager is already up to date.
-	runtimeCtx := utils.ActivityRuntimeContext(ctx, h.appCtx)
-
-	job, err := h.upgradeService.StartUpdateAll(runtimeCtx, *user, h.environmentService)
-	if err != nil {
-		if errors.Is(err, common.ErrUpdateAllInProgress) {
-			return nil, huma.Error409Conflict(err.Error())
-		}
-		return nil, huma.Error500InternalServerError("Failed to initiate upgrade: " + err.Error())
-	}
-
-	return &handlerutil.Out[EnvironmentUpdateJob]{
-		Body: base.ApiResponse[EnvironmentUpdateJob]{
-			Success: true,
-			Data:    *job,
-		},
-	}, nil
-}
-
-// GetUpdateAllStatus returns the latest update-all job for live progress polling.
-func (h *SystemHandler) GetUpdateAllStatus(ctx context.Context, input *UpdateAllStatusInput) (*handlerutil.Out[EnvironmentUpdateJob], error) {
-	if err := h.rejectIfAgentModeInternal(); err != nil {
-		return nil, err
-	}
-
-	job, err := h.upgradeService.GetLatestUpdateAllJob(ctx)
-	if err != nil {
-		return nil, huma.Error500InternalServerError(err.Error())
-	}
-	if job == nil {
-		return nil, huma.Error404NotFound("no update-all job found")
-	}
-
-	return &handlerutil.Out[EnvironmentUpdateJob]{
-		Body: base.ApiResponse[EnvironmentUpdateJob]{
-			Success: true,
-			Data:    *job,
 		},
 	}, nil
 }

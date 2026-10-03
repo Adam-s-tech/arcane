@@ -1,7 +1,9 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
-import type { PageLoad } from './$types';
 import { error } from '@sveltejs/kit';
+
 import { swarmService } from '#lib/services/swarm-service.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
+
+import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ params }) => {
 	const serviceId = params.serviceId;

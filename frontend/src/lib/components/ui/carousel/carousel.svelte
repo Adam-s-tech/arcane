@@ -1,7 +1,9 @@
 <script lang="ts">
-	import { type CarouselAPI, type CarouselProps, setEmblaContext } from './context.js';
 	import { onDestroy } from 'svelte';
+
 	import { cn, type WithElementRef } from '#lib/utils.js';
+
+	import { type CarouselAPI, type CarouselProps, setEmblaContext } from './context.js';
 
 	let {
 		ref = $bindable(null),

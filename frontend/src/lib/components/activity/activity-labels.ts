@@ -1,7 +1,4 @@
 import { jobStatusLabel } from '#lib/components/job-card/job-status.js';
-import type { Activity } from '#lib/types/activity.type.js';
-import { m } from '#lib/paraglide/messages.js';
-import type { ActivityStatus, ActivityType } from '#lib/types/activity.type.js';
 import type { IconType } from '#lib/icons/index.js';
 import {
 	ActivityIcon,
@@ -16,6 +13,9 @@ import {
 	StopIcon,
 	TrashIcon
 } from '#lib/icons/index.js';
+import { m } from '#lib/paraglide/messages.js';
+import type { Activity } from '#lib/types/activity.type.js';
+import type { ActivityStatus, ActivityType } from '#lib/types/activity.type.js';
 
 export type ActivityBadgeVariant = 'red' | 'green' | 'blue' | 'gray' | 'amber' | 'purple';
 

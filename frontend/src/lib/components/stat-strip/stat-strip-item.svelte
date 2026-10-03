@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+
 	import * as ArcaneTooltip from '#lib/components/arcane-tooltip/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { InfoIcon, type IconType } from '#lib/icons/index.js';

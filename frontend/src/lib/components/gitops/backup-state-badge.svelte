@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { Badge } from '#lib/components/ui/badge/index.js';
 	import type { BadgeVariant } from '#lib/components/ui/badge/badge.svelte';
-	import type { GitOpsBackupState, GitOpsSync } from '#lib/types/automation.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import type { GitOpsBackupState, GitOpsSync } from '#lib/types/automation.js';
 
 	let { sync }: { sync: GitOpsSync } = $props();
 

@@ -1,14 +1,16 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
-	import FileTreeRow from '#lib/components/file-tree-row.svelte';
 	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
+	import FileTreeRow from '#lib/components/file-tree-row.svelte';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
 	import * as TreeView from '#lib/components/ui/tree-view/index.js';
 	import { createVirtualizer } from '#lib/components/ui/virtualizer.svelte.js';
+	import VirtualRows from '#lib/components/virtual-rows.svelte';
 	import {
 		ArrowDownIcon,
 		ArrowRightIcon,
@@ -740,21 +742,7 @@
 				{#if rows.length === 0}
 					<div class="px-7 py-3 text-xs text-muted-foreground">{emptyMessage}</div>
 				{:else}
-					<div class="relative h-(--total-height)" style={`--total-height: ${rowVirtualizer.totalSize}px`}>
-						{#each rowVirtualizer.virtualItems as virtualItem (virtualItem.key)}
-							{@const row = rows[virtualItem.index]}
-							{#if row}
-								<div
-									class="absolute top-0 left-0 w-full translate-y-(--row-start)"
-									style={`--row-start: ${virtualItem.start}px`}
-									data-index={virtualItem.index}
-									{@attach rowVirtualizer.measureElement}
-								>
-									{@render workspaceRow(row)}
-								</div>
-							{/if}
-						{/each}
-					</div>
+					<VirtualRows virtualizer={rowVirtualizer} {rows} row={workspaceRow} />
 				{/if}
 			</TreeView.Root>
 		</div>

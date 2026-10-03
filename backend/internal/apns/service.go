@@ -20,7 +20,7 @@ import (
 	"time"
 	"uuid"
 
-	apnstypes "github.com/getarcaneapp/arcane/types/v2/apns"
+	"github.com/getarcaneapp/arcane/types/v2/apns"
 	"go.getarcane.app/kit/normalization"
 	"go.getarcane.app/sys/crypto"
 	"gorm.io/gorm"
@@ -247,14 +247,14 @@ func (s *ApnsService) RevokeChannel(ctx context.Context) error {
 	return nil
 }
 
-func (s *ApnsService) IssuePairingToken(ctx context.Context) (apnstypes.PairingToken, error) {
+func (s *ApnsService) IssuePairingToken(ctx context.Context) (apns.PairingToken, error) {
 	channelID, err := s.EnsureChannel(ctx)
 	if err != nil {
-		return apnstypes.PairingToken{}, err
+		return apns.PairingToken{}, err
 	}
 	signer, err := s.signerInternal(ctx)
 	if err != nil {
-		return apnstypes.PairingToken{}, err
+		return apns.PairingToken{}, err
 	}
 	now := time.Now()
 	expiresAt := now.Add(pairingTokenLifetime)
@@ -266,17 +266,17 @@ func (s *ApnsService) IssuePairingToken(ctx context.Context) (apnstypes.PairingT
 		Nonce     string `json:"nonce"`
 	}{channelID, uuid.New().String(), now.Unix(), expiresAt.Unix(), uuid.New().String()})
 	if err != nil {
-		return apnstypes.PairingToken{}, fmt.Errorf("failed to marshal pairing token: %w", err)
+		return apns.PairingToken{}, fmt.Errorf("failed to marshal pairing token: %w", err)
 	}
 	sig, err := signer.sign(payload)
 	if err != nil {
-		return apnstypes.PairingToken{}, fmt.Errorf("failed to sign pairing token: %w", err)
+		return apns.PairingToken{}, fmt.Errorf("failed to sign pairing token: %w", err)
 	}
 	token := pairingFormatV1 + "." + base64.RawURLEncoding.EncodeToString(payload) + "." + base64.RawURLEncoding.EncodeToString(sig)
-	return apnstypes.PairingToken{Token: token, ChannelID: channelID, ExpiresAt: expiresAt}, nil
+	return apns.PairingToken{Token: token, ChannelID: channelID, ExpiresAt: expiresAt}, nil
 }
 
-func deviceDTOInternal(d Device) apnstypes.Device {
+func deviceDTOInternal(d Device) apns.Device {
 	events := d.Events
 	if events == nil {
 		events = map[string]bool{}
@@ -285,11 +285,11 @@ func deviceDTOInternal(d Device) apnstypes.Device {
 	if envs == nil {
 		envs = []string{}
 	}
-	return apnstypes.Device{ID: d.ID, Label: d.Label, Events: events, EnvironmentIDs: envs, CreatedAt: d.CreatedAt, LastSeenAt: d.LastSeenAt}
+	return apns.Device{ID: d.ID, Label: d.Label, Events: events, EnvironmentIDs: envs, CreatedAt: d.CreatedAt, LastSeenAt: d.LastSeenAt}
 }
 
-func (s *ApnsService) Status(ctx context.Context, userID string) (apnstypes.Status, error) {
-	status := apnstypes.Status{Enabled: s.Enabled(ctx), RelayURL: s.config.ApnsRelayUrl, Devices: []apnstypes.Device{}}
+func (s *ApnsService) Status(ctx context.Context, userID string) (apns.Status, error) {
+	status := apns.Status{Enabled: s.Enabled(ctx), RelayURL: s.config.ApnsRelayUrl, Devices: []apns.Device{}}
 	if status.Enabled {
 		status.ChannelID = s.settings.GetStringSetting(ctx, "apnsChannelId", "")
 	}
@@ -303,12 +303,12 @@ func (s *ApnsService) Status(ctx context.Context, userID string) (apnstypes.Stat
 	return status, nil
 }
 
-func (s *ApnsService) RegisterDevice(ctx context.Context, userID string, req apnstypes.RegisterDeviceRequest) (apnstypes.Device, error) {
+func (s *ApnsService) RegisterDevice(ctx context.Context, userID string, req apns.RegisterDeviceRequest) (apns.Device, error) {
 	if err := normalization.Normalize(&req); err != nil {
-		return apnstypes.Device{}, err
+		return apns.Device{}, err
 	}
 	if !s.Enabled(ctx) {
-		return apnstypes.Device{}, common.ErrApnsDisabled
+		return apns.Device{}, common.ErrApnsDisabled
 	}
 	events := req.Events
 	if events == nil {
@@ -332,22 +332,22 @@ func (s *ApnsService) RegisterDevice(ctx context.Context, userID string, req apn
 	err := s.db.WithContext(ctx).Where("recipient_id = ?", req.RecipientID).First(&existing).Error
 	switch {
 	case err == nil && existing.UserID != userID:
-		return apnstypes.Device{}, common.ErrApnsDeviceConflict
+		return apns.Device{}, common.ErrApnsDeviceConflict
 	case err == nil:
 		existing.Label = req.Label
 		existing.Events = events
 		existing.EnvironmentIDs = environmentIDs
 		existing.LastSeenAt = &now
 		if updateDeviceErr := s.db.WithContext(ctx).Save(&existing).Error; updateDeviceErr != nil {
-			return apnstypes.Device{}, fmt.Errorf("failed to update push device: %w", updateDeviceErr)
+			return apns.Device{}, fmt.Errorf("failed to update push device: %w", updateDeviceErr)
 		}
 		return deviceDTOInternal(existing), nil
 	case !errors.Is(err, gorm.ErrRecordNotFound):
-		return apnstypes.Device{}, fmt.Errorf("failed to load push device: %w", err)
+		return apns.Device{}, fmt.Errorf("failed to load push device: %w", err)
 	}
 	device := Device{UserID: userID, RecipientID: req.RecipientID, Label: req.Label, Events: events, EnvironmentIDs: environmentIDs, LastSeenAt: &now}
 	if createDeviceErr := s.db.WithContext(ctx).Create(&device).Error; createDeviceErr != nil {
-		return apnstypes.Device{}, fmt.Errorf("failed to register push device: %w", createDeviceErr)
+		return apns.Device{}, fmt.Errorf("failed to register push device: %w", createDeviceErr)
 	}
 	return deviceDTOInternal(device), nil
 }
@@ -363,13 +363,13 @@ func (s *ApnsService) deviceInternal(ctx context.Context, userID, id string) (*D
 	return &device, nil
 }
 
-func (s *ApnsService) UpdateDevice(ctx context.Context, userID, id string, req apnstypes.UpdateDeviceRequest) (apnstypes.Device, error) {
+func (s *ApnsService) UpdateDevice(ctx context.Context, userID, id string, req apns.UpdateDeviceRequest) (apns.Device, error) {
 	if err := normalization.Normalize(&req); err != nil {
-		return apnstypes.Device{}, err
+		return apns.Device{}, err
 	}
 	device, err := s.deviceInternal(ctx, userID, id)
 	if err != nil {
-		return apnstypes.Device{}, err
+		return apns.Device{}, err
 	}
 	if req.Label != nil {
 		device.Label = *req.Label
@@ -385,7 +385,7 @@ func (s *ApnsService) UpdateDevice(ctx context.Context, userID, id string, req a
 	}
 	device.LastSeenAt = new(time.Now())
 	if saveDeviceErr := s.db.WithContext(ctx).Save(device).Error; saveDeviceErr != nil {
-		return apnstypes.Device{}, fmt.Errorf("failed to update push device: %w", saveDeviceErr)
+		return apns.Device{}, fmt.Errorf("failed to update push device: %w", saveDeviceErr)
 	}
 	return deviceDTOInternal(*device), nil
 }
@@ -460,7 +460,7 @@ func (s *ApnsService) Enqueue(ctx context.Context, environmentID, environmentNam
 		}
 	}
 	title, body, severity := "Arcane notification", subject, "info"
-	route := apnstypes.Route{Kind: "environment", EnvironmentID: environmentID}
+	route := apns.Route{Kind: "environment", EnvironmentID: environmentID}
 	switch eventType {
 	case notifications.NotificationEventImageUpdate:
 		title, body = "Image update available", fmt.Sprintf("%s in %s", subject, environmentName)
@@ -481,10 +481,10 @@ func (s *ApnsService) Enqueue(ctx context.Context, environmentID, environmentNam
 		title, severity = "Container restarted", "warning"
 		body = fmt.Sprintf("%s was restarted by auto-heal in %s", subject, environmentName)
 		if containerID, _ := metadata["containerID"].(string); containerID != "" {
-			route = apnstypes.Route{Kind: "container", EnvironmentID: environmentID, ID: containerID}
+			route = apns.Route{Kind: "container", EnvironmentID: environmentID, ID: containerID}
 		}
 	}
-	envelope := apnstypes.Envelope{
+	envelope := apns.Envelope{
 		Version:         1,
 		EventID:         uuid.New().String(),
 		OccurredAt:      time.Now().UTC(),
@@ -591,7 +591,7 @@ func (s *ApnsService) drainOutboxInternal(ctx context.Context) error {
 }
 
 func (s *ApnsService) sendOutboxEntryInternal(ctx context.Context, entry OutboxEntry, channelID string, signer *signerInternal) bool {
-	var envelope apnstypes.Envelope
+	var envelope apns.Envelope
 	if err := json.Unmarshal([]byte(entry.Envelope), &envelope); err != nil {
 		s.finishOutboxInternal(ctx, entry, envelope, "invalid envelope: "+err.Error())
 		return false
@@ -636,7 +636,7 @@ func (s *ApnsService) sendOutboxEntryInternal(ctx context.Context, entry OutboxE
 	return false
 }
 
-func (s *ApnsService) retryOutboxInternal(ctx context.Context, entry OutboxEntry, envelope apnstypes.Envelope, reason string, backoff time.Duration) {
+func (s *ApnsService) retryOutboxInternal(ctx context.Context, entry OutboxEntry, envelope apns.Envelope, reason string, backoff time.Duration) {
 	entry.Attempts++
 	if entry.Attempts >= maxOutboxAttempts {
 		s.finishOutboxInternal(ctx, entry, envelope, "gave up after "+reason)
@@ -649,7 +649,7 @@ func (s *ApnsService) retryOutboxInternal(ctx context.Context, entry OutboxEntry
 	}
 }
 
-func (s *ApnsService) finishOutboxInternal(ctx context.Context, entry OutboxEntry, envelope apnstypes.Envelope, failure string) {
+func (s *ApnsService) finishOutboxInternal(ctx context.Context, entry OutboxEntry, envelope apns.Envelope, failure string) {
 	if err := s.db.WithContext(ctx).Delete(&entry).Error; err != nil {
 		slog.WarnContext(ctx, "Failed to delete push outbox entry", "error", err)
 	}

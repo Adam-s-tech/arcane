@@ -1,25 +1,27 @@
 <script lang="ts">
 	import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import { m } from '#lib/paraglide/messages.js';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import { queryKeys } from '#lib/query/query-keys.js';
-	import * as Tabs from '#lib/components/ui/tabs/index.js';
-	import { TabBar, type TabItem } from '#lib/components/tab-bar/index.js';
+	import { toast } from 'svelte-sonner';
+
 	import EmptyState from '#lib/components/states/empty-state.svelte';
+	import { TabBar, type TabItem } from '#lib/components/tab-bar/index.js';
 	import Spinner from '#lib/components/ui/spinner/spinner.svelte';
+	import * as Tabs from '#lib/components/ui/tabs/index.js';
+	import { useUrlTab } from '#lib/hooks/use-url-tab.svelte.js';
+	import { ContainersIcon, ProjectsIcon, UpdateIcon } from '#lib/icons/index.js';
 	import { ResourcePageLayout, type ActionButton, type StatCardConfig } from '#lib/layouts/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { queryKeys } from '#lib/query/query-keys.js';
+	import { containerService, type ContainerListRequestOptions } from '#lib/services/container-service.js';
+	import { imageService } from '#lib/services/image-service.js';
+	import { projectService } from '#lib/services/project-service.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
+	import { extractApiErrorMessage } from '#lib/utils/api.js';
+	import { ensureStandaloneContainerUpdatesFilter, ensureUpdatesFilter } from '#lib/utils/docker.js';
+	import { confirmAndApplyAllUpdates } from '#lib/utils/update-actions.js';
+
 	import ContainerUpdatesTable from './components/container-updates-table.svelte';
 	import ProjectUpdatesTable from './components/project-updates-table.svelte';
-	import { imageService } from '#lib/services/image-service.js';
-	import { containerService, type ContainerListRequestOptions } from '#lib/services/container-service.js';
-	import { projectService } from '#lib/services/project-service.js';
-	import { confirmAndApplyAllUpdates } from '#lib/utils/update-actions.js';
-	import { extractApiErrorMessage } from '#lib/utils/api.js';
-	import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
-	import { ContainersIcon, ProjectsIcon, UpdateIcon } from '#lib/icons/index.js';
-	import { toast } from 'svelte-sonner';
-	import { ensureStandaloneContainerUpdatesFilter, ensureUpdatesFilter } from '#lib/utils/docker.js';
-	import { useUrlTab } from '#lib/hooks/use-url-tab.svelte.js';
 
 	let { data } = $props();
 	const queryClient = useQueryClient();

@@ -1,7 +1,8 @@
 import type { ColumnFiltersState, ColumnVisibilityState, RowData } from '@tanstack/table-core';
-import type { ArcaneColumn, ArcaneFilterFn, ArcaneRow } from './table-features';
 import type { Snippet } from 'svelte';
 import type { Component } from 'svelte';
+
+import type { ArcaneColumn, ArcaneFilterFn, ArcaneRow } from './table-features';
 
 export interface FilterOption {
 	value: string | boolean;

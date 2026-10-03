@@ -1,16 +1,23 @@
 <script lang="ts" generics="TData extends Record<string, any> & { id: string }">
 	import { createTable, createTableState, renderComponent, renderSnippet } from '@tanstack/svelte-table';
 	import type { ColumnFiltersState, RowSelectionState, SortingState, ColumnVisibilityState } from '@tanstack/table-core';
-	import { arcaneTableFeatures, type ArcaneColumnDef, type ArcaneRow, type ArcaneTable } from './table-features';
-	import DataTableToolbar from './arcane-table-toolbar.svelte';
-	import { onDestroy, onMount, untrack } from 'svelte';
-	import { IsMobile } from '#lib/hooks/is-mobile.svelte.js';
-	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
-	import type { Snippet } from 'svelte';
-	import type { ColumnSpec } from './arcane-table.types.svelte';
-	import TableCheckbox from './arcane-table-checkbox.svelte';
-	import { m } from '#lib/paraglide/messages.js';
 	import { PersistedState } from 'runed';
+	import { onDestroy, onMount, untrack } from 'svelte';
+	import type { Snippet } from 'svelte';
+	import type { Component } from 'svelte';
+
+	import { IsMobile } from '#lib/hooks/is-mobile.svelte.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
+
+	import ArcaneTableCell from './arcane-table-cell.svelte';
+	import TableCheckbox from './arcane-table-checkbox.svelte';
+	import ArcaneTableDesktopView from './arcane-table-desktop-view.svelte';
+	import ArcaneTableHeader from './arcane-table-header.svelte';
+	import ArcaneTableMobileView from './arcane-table-mobile-view.svelte';
+	import ArcaneTablePagination from './arcane-table-pagination.svelte';
+	import DataTableToolbar from './arcane-table-toolbar.svelte';
+	import type { ColumnSpec } from './arcane-table.types.svelte';
 	import {
 		type CompactTablePrefs,
 		type FieldSpec,
@@ -26,7 +33,6 @@
 		buildMobileVisibility,
 		type BulkAction
 	} from './arcane-table.types.svelte';
-	import type { Component } from 'svelte';
 	import {
 		extractPersistedPreferences,
 		fromFilterMap,
@@ -34,12 +40,8 @@
 		restoreTableRequestOptions,
 		toFilterMap
 	} from './arcane-table.utils';
-	import ArcaneTablePagination from './arcane-table-pagination.svelte';
-	import ArcaneTableHeader from './arcane-table-header.svelte';
-	import ArcaneTableCell from './arcane-table-cell.svelte';
-	import ArcaneTableDesktopView from './arcane-table-desktop-view.svelte';
-	import ArcaneTableMobileView from './arcane-table-mobile-view.svelte';
 	import TableEmpty from './table-empty.svelte';
+	import { arcaneTableFeatures, type ArcaneColumnDef, type ArcaneRow, type ArcaneTable } from './table-features';
 
 	let {
 		items,

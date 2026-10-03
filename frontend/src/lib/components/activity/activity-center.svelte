@@ -1,17 +1,13 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
 	import { onMount } from 'svelte';
-	import ResponsiveDialog from '#lib/components/ui/responsive-dialog/responsive-dialog.svelte';
+	import { toast } from 'svelte-sonner';
+
+	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
+	import IfPermitted from '#lib/components/if-permitted.svelte';
 	import * as Collapsible from '#lib/components/ui/collapsible/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
-	import ActivityListItem from './activity-list-item.svelte';
-	import ActivityBatchItem from './activity-batch-item.svelte';
-	import ActivityDetailPanel from './activity-detail-panel.svelte';
-	import ActivityFilterPopover from './activity-filter-popover.svelte';
-	import { activityStore } from '#lib/stores/activity.store.svelte.js';
-	import type { Activity, ActivityGroup } from '#lib/types/activity.type.js';
+	import ResponsiveDialog from '#lib/components/ui/responsive-dialog/responsive-dialog.svelte';
 	import {
 		ActivityIcon,
 		AlertTriangleIcon,
@@ -22,12 +18,17 @@
 		TrashIcon
 	} from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { activityStore } from '#lib/stores/activity.store.svelte.js';
+	import type { Activity, ActivityGroup } from '#lib/types/activity.type.js';
 	import { cn } from '#lib/utils.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+
+	import ActivityBatchItem from './activity-batch-item.svelte';
 	import { confirmCancelActivity } from './activity-cancel';
 	import { activityCompletionToastsEnabled } from './activity-completion-toasts';
-	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
-	import { toast } from 'svelte-sonner';
-	import IfPermitted from '#lib/components/if-permitted.svelte';
+	import ActivityDetailPanel from './activity-detail-panel.svelte';
+	import ActivityFilterPopover from './activity-filter-popover.svelte';
+	import ActivityListItem from './activity-list-item.svelte';
 
 	onMount(() => {
 		void activityStore.start();

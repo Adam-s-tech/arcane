@@ -1,25 +1,28 @@
 <script lang="ts">
-	import type { LayoutProps } from './$types';
 	import { browser, dev } from '$app/env';
 	import { refreshAll } from '$app/navigation';
 	import { navigating, page } from '$app/state';
+	import { QueryClientProvider } from '@tanstack/svelte-query';
+	import { SvelteQueryDevtools } from '@tanstack/svelte-query-devtools';
+	import { ModeWatcher } from 'mode-watcher';
+	import { onMount } from 'svelte';
+
 	import ConfirmDialog from '#lib/components/confirm-dialog/confirm-dialog.svelte';
 	import FirstLoginPasswordDialog from '#lib/components/dialogs/first-login-password-dialog.svelte';
 	import Error from '#lib/components/error.svelte';
 	import LoadingIndicator from '#lib/components/loading-indicator.svelte';
 	import { Toaster } from '#lib/components/ui/sonner/index.js';
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
+	import { getNavigationTitleForPath } from '#lib/config/navigation-config.js';
 	import { IsMobile } from '#lib/hooks/is-mobile.svelte.js';
 	import { IsTablet } from '#lib/hooks/is-tablet.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import { getNavigationTitleForPath } from '#lib/config/navigation-config.js';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
 	import settingsStore from '#lib/stores/config-store.svelte.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
 	import { cn } from '#lib/utils.js';
-	import { QueryClientProvider } from '@tanstack/svelte-query';
-	import { SvelteQueryDevtools } from '@tanstack/svelte-query-devtools';
-	import { ModeWatcher } from 'mode-watcher';
-	import { onMount } from 'svelte';
+
+	import type { LayoutProps } from './$types';
+
 	import './layout.css';
 
 	let { data, children }: LayoutProps = $props();

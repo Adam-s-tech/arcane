@@ -4,13 +4,11 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
-	backuptypes "github.com/getarcaneapp/arcane/types/v2/backup"
+	"github.com/getarcaneapp/arcane/types/v2/backup"
 	"github.com/getarcaneapp/arcane/types/v2/base"
 
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
 )
 
@@ -35,7 +33,7 @@ type listS3DestinationsInputInternal struct {
 }
 
 type listAllS3DestinationsOutputInternal struct {
-	Body []backuptypes.S3Destination
+	Body []backup.S3Destination
 }
 
 type s3DestinationIDInputInternal struct {
@@ -43,106 +41,29 @@ type s3DestinationIDInputInternal struct {
 }
 
 type createS3DestinationInputInternal struct {
-	Body backuptypes.CreateS3Destination
+	Body backup.CreateS3Destination
 }
 
 type updateS3DestinationInputInternal struct {
 	ID   string `path:"id" doc:"S3 destination ID"`
-	Body backuptypes.UpdateS3Destination
+	Body backup.UpdateS3Destination
 }
 
 type s3DestinationOutputInternal struct {
-	Body backuptypes.S3Destination
+	Body backup.S3Destination
 }
 
 type testS3DestinationInputInternal struct {
-	ID   string                           `path:"id" doc:"S3 destination ID"`
-	Body *backuptypes.UpdateS3Destination `json:"body,omitempty"`
+	ID   string                      `path:"id" doc:"S3 destination ID"`
+	Body *backup.UpdateS3Destination `json:"body,omitempty"`
 }
 
 type testS3DestinationConfigurationInputInternal struct {
-	Body backuptypes.CreateS3Destination
+	Body backup.CreateS3Destination
 }
 
 type syncS3DestinationsInputInternal struct {
-	Body backuptypes.S3DestinationSyncRequest
-}
-
-func RegisterS3Destinations(api huma.API, service *S3DestinationService, syncRemoteDestinations func(context.Context) error) {
-	handler := &s3DestinationHandlerInternal{service: service, syncRemoteDestinations: syncRemoteDestinations}
-
-	handlerutil.RegisterSecured(api,
-		handlerutil.Operation(
-			"list-s3-destinations",
-			http.MethodGet,
-			s3DestinationPathInternal,
-			"List S3 destinations",
-			"List saved S3-compatible backup destinations with search, sorting, and pagination",
-			s3DestinationTagInternal,
-		),
-		authz.PermS3DestinationsList, handler.listInternal)
-	handlerutil.RegisterSecured(api,
-		handlerutil.Operation(
-			"list-all-s3-destinations",
-			http.MethodGet,
-			s3DestinationPathInternal+"/options",
-			"List all S3 destination options",
-			"List saved S3-compatible destinations for backup configuration selectors",
-			s3DestinationTagInternal,
-		),
-		authz.PermS3DestinationsList, handler.listAllInternal)
-	handlerutil.RegisterSecured(api,
-		handlerutil.Operation(
-			"sync-s3-destinations",
-			http.MethodPost,
-			s3DestinationPathInternal+"/sync",
-			"Sync S3 destinations",
-			"Synchronize manager-owned S3 destinations to an agent",
-			s3DestinationTagInternal,
-		),
-		authz.PermS3DestinationsSync, handler.syncInternal)
-	handlerutil.RegisterSecured(api,
-		handlerutil.Operation("get-s3-destination", http.MethodGet, s3DestinationPathInternal+"/{id}", "Get S3 destination", "", s3DestinationTagInternal),
-		authz.PermS3DestinationsRead, handler.getInternal)
-	handlerutil.RegisterSecured(api,
-		handlerutil.Operation("create-s3-destination", http.MethodPost, s3DestinationPathInternal, "Create S3 destination", "", s3DestinationTagInternal),
-		authz.PermS3DestinationsCreate, handler.createInternal)
-	handlerutil.RegisterSecured(api,
-		handlerutil.Operation("update-s3-destination", http.MethodPut, s3DestinationPathInternal+"/{id}", "Update S3 destination", "", s3DestinationTagInternal),
-		authz.PermS3DestinationsUpdate, handler.updateInternal)
-	handlerutil.RegisterSecured(api,
-		handlerutil.Operation(
-			"test-s3-destination-configuration",
-			http.MethodPost,
-			s3DestinationPathInternal+"/test",
-			"Test unsaved S3 destination configuration",
-			"Verify upload, download, and delete access before saving an S3 destination",
-			s3DestinationTagInternal,
-		),
-		authz.PermS3DestinationsTest, handler.testConfigurationInternal)
-	handlerutil.RegisterSecured(api,
-		handlerutil.Operation(
-			"test-s3-destination",
-			http.MethodPost,
-			s3DestinationPathInternal+"/{id}/test",
-			"Test S3 destination",
-			"Verify upload, download, and delete access using the saved or supplied S3 destination configuration",
-			s3DestinationTagInternal,
-		),
-		authz.PermS3DestinationsTest, handler.testInternal)
-	handlerutil.RegisterSecured(api,
-		handlerutil.Operation(
-			"get-s3-destination-usage",
-			http.MethodGet,
-			s3DestinationPathInternal+"/{id}/in-use",
-			"Check S3 destination references",
-			"Report whether backup records, policies, or settings on this environment still reference the destination",
-			s3DestinationTagInternal,
-		),
-		authz.PermS3DestinationsRead, handler.inUseInternal)
-	handlerutil.RegisterSecured(api,
-		handlerutil.Operation("delete-s3-destination", http.MethodDelete, s3DestinationPathInternal+"/{id}", "Delete S3 destination", "", s3DestinationTagInternal),
-		authz.PermS3DestinationsDelete, handler.deleteInternal)
+	Body backup.S3DestinationSyncRequest
 }
 
 type s3DestinationUsageOutputInternal struct {
@@ -161,14 +82,14 @@ func (h *s3DestinationHandlerInternal) inUseInternal(ctx context.Context, input 
 	return output, nil
 }
 
-func (h *s3DestinationHandlerInternal) listInternal(ctx context.Context, input *listS3DestinationsInputInternal) (*handlerutil.Page[backuptypes.S3Destination], error) {
+func (h *s3DestinationHandlerInternal) listInternal(ctx context.Context, input *listS3DestinationsInputInternal) (*handlerutil.Page[backup.S3Destination], error) {
 	params := handlerutil.PaginationParams(input.Start, input.Limit, input.Sort, input.Order, input.Search)
 	destinations, paginationResponse, err := h.service.ListS3Destinations(ctx, params)
 	if err != nil {
 		return nil, huma.Error500InternalServerError(err.Error())
 	}
-	return &handlerutil.Page[backuptypes.S3Destination]{
-		Body: base.Paginated[backuptypes.S3Destination]{
+	return &handlerutil.Page[backup.S3Destination]{
+		Body: base.Paginated[backup.S3Destination]{
 			Success:    true,
 			Data:       destinations,
 			Pagination: handlerutil.PaginationResponse(paginationResponse),
@@ -184,7 +105,7 @@ func (h *s3DestinationHandlerInternal) listAllInternal(ctx context.Context, _ *s
 	return &listAllS3DestinationsOutputInternal{Body: destinations}, nil
 }
 
-func (h *s3DestinationHandlerInternal) getInternal(ctx context.Context, input *s3DestinationIDInputInternal) (*handlerutil.Out[backuptypes.S3Destination], error) {
+func (h *s3DestinationHandlerInternal) getInternal(ctx context.Context, input *s3DestinationIDInputInternal) (*handlerutil.Out[backup.S3Destination], error) {
 	destination, err := h.service.GetS3Destination(ctx, input.ID)
 	if errors.Is(err, ErrS3DestinationNotFound) {
 		return nil, huma.Error404NotFound(err.Error())
@@ -192,7 +113,7 @@ func (h *s3DestinationHandlerInternal) getInternal(ctx context.Context, input *s
 	if err != nil {
 		return nil, huma.Error500InternalServerError(err.Error())
 	}
-	return &handlerutil.Out[backuptypes.S3Destination]{Body: base.ApiResponse[backuptypes.S3Destination]{Success: true, Data: *destination}}, nil
+	return &handlerutil.Out[backup.S3Destination]{Body: base.ApiResponse[backup.S3Destination]{Success: true, Data: *destination}}, nil
 }
 
 func (h *s3DestinationHandlerInternal) createInternal(ctx context.Context, input *createS3DestinationInputInternal) (*s3DestinationOutputInternal, error) {

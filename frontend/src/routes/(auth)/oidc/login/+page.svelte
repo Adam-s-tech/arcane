@@ -1,12 +1,13 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { m } from '#lib/paraglide/messages.js';
-	import { authService } from '#lib/services/auth-service.js';
-	import { APIError } from '#lib/services/api-service.js';
-	import OidcStatusPanel from '#lib/components/oidc-status-panel.svelte';
 	import { createMutation } from '@tanstack/svelte-query';
+	import { onMount } from 'svelte';
+
+	import OidcStatusPanel from '#lib/components/oidc-status-panel.svelte';
+	import { m } from '#lib/paraglide/messages.js';
+	import { APIError } from '#lib/services/api-service.js';
+	import { authService } from '#lib/services/auth-service.js';
 
 	let error = $state('');
 

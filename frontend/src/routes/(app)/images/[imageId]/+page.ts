@@ -1,12 +1,14 @@
-import { featureStore } from '#lib/stores/features.store.svelte.js';
-import { tryCatch } from '#lib/utils/try-catch.js';
+import { error } from '@sveltejs/kit';
+
+import { queryKeys } from '#lib/query/query-keys.js';
 import { imageService } from '#lib/services/image-service.js';
 import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+import { featureStore } from '#lib/stores/features.store.svelte.js';
 import type { ImageDetailSummaryDto } from '#lib/types/docker.js';
 import { parseImageRef } from '#lib/utils/docker.js';
-import { queryKeys } from '#lib/query/query-keys.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
+
 import type { PageLoad } from './$types';
-import { error } from '@sveltejs/kit';
 
 type ImageDetailData = {
 	image: ImageDetailSummaryDto;

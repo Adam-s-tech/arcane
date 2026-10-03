@@ -1,15 +1,14 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
-	import SheetFooterActions from '#lib/components/sheets/sheet-footer-actions.svelte';
-	import * as ResponsiveDialog from '#lib/components/ui/responsive-dialog/index.js';
-	import RepoTagFields from '#lib/components/form/repo-tag-fields.svelte';
-	import { createForm, preventDefault } from '#lib/utils/settings.svelte.js';
-
-	import { imageService } from '#lib/services/image-service.js';
-	import { m } from '#lib/paraglide/messages.js';
 	import { toast } from 'svelte-sonner';
 	import { z } from 'zod/v4';
+
+	import RepoTagFields from '#lib/components/form/repo-tag-fields.svelte';
+	import SheetFooterActions from '#lib/components/sheets/sheet-footer-actions.svelte';
+	import * as ResponsiveDialog from '#lib/components/ui/responsive-dialog/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { imageService } from '#lib/services/image-service.js';
+	import { createForm, preventDefault } from '#lib/utils/settings.svelte.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	type Props = {
 		open: boolean;

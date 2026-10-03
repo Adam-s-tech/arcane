@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	dockercontainer "github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,7 +17,7 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
 )
 
-func newPortServiceTestDockerService(t *testing.T, containers []dockercontainer.Summary) *docker.DockerClientService {
+func newPortServiceTestDockerService(t *testing.T, containers []container.Summary) *docker.DockerClientService {
 	t.Helper()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -38,11 +38,11 @@ func newPortServiceTestDockerService(t *testing.T, containers []dockercontainer.
 }
 
 func TestPortService_ListPortsPaginated_FlattensPublishedAndExposedPorts(t *testing.T) {
-	svc := NewPortService(newPortServiceTestDockerService(t, []dockercontainer.Summary{
+	svc := NewPortService(newPortServiceTestDockerService(t, []container.Summary{
 		{
 			ID:    "container-published",
 			Names: []string{"/web"},
-			Ports: []dockercontainer.PortSummary{
+			Ports: []container.PortSummary{
 				{IP: netip.MustParseAddr("0.0.0.0"), PrivatePort: 80, PublicPort: 8080, Type: "tcp"},
 				{PrivatePort: 443, Type: "tcp"},
 			},
@@ -50,7 +50,7 @@ func TestPortService_ListPortsPaginated_FlattensPublishedAndExposedPorts(t *test
 		{
 			ID:    "container-exposed",
 			Names: []string{"/api"},
-			Ports: []dockercontainer.PortSummary{
+			Ports: []container.PortSummary{
 				{PrivatePort: 9000, Type: "udp"},
 			},
 		},
@@ -84,25 +84,25 @@ func TestPortService_ListPortsPaginated_FlattensPublishedAndExposedPorts(t *test
 }
 
 func TestPortService_ListPortsPaginated_SortsByHostPortWithUnpublishedLast(t *testing.T) {
-	svc := NewPortService(newPortServiceTestDockerService(t, []dockercontainer.Summary{
+	svc := NewPortService(newPortServiceTestDockerService(t, []container.Summary{
 		{
 			ID:    "container-3000",
 			Names: []string{"/api"},
-			Ports: []dockercontainer.PortSummary{
+			Ports: []container.PortSummary{
 				{IP: netip.MustParseAddr("127.0.0.1"), PrivatePort: 3000, PublicPort: 3000, Type: "tcp"},
 			},
 		},
 		{
 			ID:    "container-8080",
 			Names: []string{"/web"},
-			Ports: []dockercontainer.PortSummary{
+			Ports: []container.PortSummary{
 				{IP: netip.MustParseAddr("0.0.0.0"), PrivatePort: 80, PublicPort: 8080, Type: "tcp"},
 			},
 		},
 		{
 			ID:    "container-unpublished",
 			Names: []string{"/worker"},
-			Ports: []dockercontainer.PortSummary{
+			Ports: []container.PortSummary{
 				{PrivatePort: 9000, Type: "tcp"},
 			},
 		},
@@ -129,25 +129,25 @@ func TestPortService_ListPortsPaginated_SortsByHostPortWithUnpublishedLast(t *te
 }
 
 func TestPortService_ListPortsPaginated_SortsByHostPortDescWithUnpublishedLast(t *testing.T) {
-	svc := NewPortService(newPortServiceTestDockerService(t, []dockercontainer.Summary{
+	svc := NewPortService(newPortServiceTestDockerService(t, []container.Summary{
 		{
 			ID:    "container-3000",
 			Names: []string{"/api"},
-			Ports: []dockercontainer.PortSummary{
+			Ports: []container.PortSummary{
 				{IP: netip.MustParseAddr("127.0.0.1"), PrivatePort: 3000, PublicPort: 3000, Type: "tcp"},
 			},
 		},
 		{
 			ID:    "container-8080",
 			Names: []string{"/web"},
-			Ports: []dockercontainer.PortSummary{
+			Ports: []container.PortSummary{
 				{IP: netip.MustParseAddr("0.0.0.0"), PrivatePort: 80, PublicPort: 8080, Type: "tcp"},
 			},
 		},
 		{
 			ID:    "container-unpublished",
 			Names: []string{"/worker"},
-			Ports: []dockercontainer.PortSummary{
+			Ports: []container.PortSummary{
 				{PrivatePort: 9000, Type: "tcp"},
 			},
 		},
@@ -174,25 +174,25 @@ func TestPortService_ListPortsPaginated_SortsByHostPortDescWithUnpublishedLast(t
 }
 
 func TestPortService_ListPortsPaginated_SortsByHostIPDescWithUnpublishedLast(t *testing.T) {
-	svc := NewPortService(newPortServiceTestDockerService(t, []dockercontainer.Summary{
+	svc := NewPortService(newPortServiceTestDockerService(t, []container.Summary{
 		{
 			ID:    "container-127",
 			Names: []string{"/api"},
-			Ports: []dockercontainer.PortSummary{
+			Ports: []container.PortSummary{
 				{IP: netip.MustParseAddr("127.0.0.1"), PrivatePort: 3000, PublicPort: 3000, Type: "tcp"},
 			},
 		},
 		{
 			ID:    "container-000",
 			Names: []string{"/web"},
-			Ports: []dockercontainer.PortSummary{
+			Ports: []container.PortSummary{
 				{IP: netip.MustParseAddr("0.0.0.0"), PrivatePort: 80, PublicPort: 8080, Type: "tcp"},
 			},
 		},
 		{
 			ID:    "container-unpublished",
 			Names: []string{"/worker"},
-			Ports: []dockercontainer.PortSummary{
+			Ports: []container.PortSummary{
 				{PrivatePort: 9000, Type: "tcp"},
 			},
 		},

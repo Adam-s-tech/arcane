@@ -7,19 +7,20 @@ import (
 	"github.com/getarcaneapp/arcane/types/v2/auth"
 	"github.com/libtnb/sqlite"
 	"github.com/stretchr/testify/require"
-	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/kit/pkg"
 	"gorm.io/gorm"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/role"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/user"
 )
 
 func TestSessionService_RotateRefreshTokenRequiresCurrentHash(t *testing.T) {
 	ctx := t.Context()
 	db := setupAuthServiceTestDB(t)
-	require.NoError(t, db.Create(&common.User{
+	require.NoError(t, db.Create(&user.User{
 		ID:       "u-session",
 		Username: "session-user",
 	}).Error)
@@ -41,7 +42,7 @@ func TestSessionService_RotateRefreshTokenRequiresCurrentHash(t *testing.T) {
 func TestSessionService_DeleteExpiredSessions(t *testing.T) {
 	ctx := t.Context()
 	db := setupAuthServiceTestDB(t)
-	require.NoError(t, db.Create(&common.User{
+	require.NoError(t, db.Create(&user.User{
 		ID:       "u-cleanup",
 		Username: "cleanup-user",
 	}).Error)
@@ -81,7 +82,7 @@ func setupAuthServiceTestDB(t *testing.T) *database.DB {
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(
 		&settings.SettingVariable{},
-		&common.User{},
+		&user.User{},
 		&UserSession{},
 		&role.Role{},
 		&role.UserRoleAssignment{},

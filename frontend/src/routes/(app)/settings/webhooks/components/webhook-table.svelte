@@ -1,22 +1,23 @@
 <script lang="ts">
+	import { toast } from 'svelte-sonner';
+
 	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
 	import { UniversalMobileCard } from '#lib/components/arcane-table/index.js';
 	import type { ColumnSpec, MobileFieldVisibility } from '#lib/components/arcane-table/index.js';
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
-	import { CopyButton } from '#lib/components/ui/copy-button/index.js';
-	import { toast } from 'svelte-sonner';
 	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
-	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
-	import { tryCatch } from '#lib/utils/try-catch.js';
-	import type { Webhook } from '#lib/types/environment.js';
-	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
-	import { webhookService } from '#lib/services/webhook-service.js';
+	import IfPermitted from '#lib/components/if-permitted.svelte';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { CopyButton } from '#lib/components/ui/copy-button/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import { TrashIcon, GlobeIcon } from '#lib/icons/index.js';
 	import * as m from '#lib/paraglide/messages.js';
-	import IfPermitted from '#lib/components/if-permitted.svelte';
+	import { webhookService } from '#lib/services/webhook-service.js';
+	import type { Webhook } from '#lib/types/environment.js';
+	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
+	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
 	import { formatDateTime } from '#lib/utils/formatting.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	let {
 		webhooks = $bindable(),

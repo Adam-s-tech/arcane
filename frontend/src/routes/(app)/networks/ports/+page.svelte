@@ -1,11 +1,13 @@
 <script lang="ts">
-	import { useEnvironmentRefresh } from '#lib/hooks/use-environment-refresh.svelte.js';
 	import { createQuery } from '@tanstack/svelte-query';
+
+	import { useEnvironmentRefresh } from '#lib/hooks/use-environment-refresh.svelte.js';
 	import { ResourcePageLayout, type ActionButton } from '#lib/layouts/index.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { queryKeys } from '#lib/query/query-keys.js';
 	import { portService } from '#lib/services/port-service.js';
 	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import { queryKeys } from '#lib/query/query-keys.js';
+
 	import PortTable from './components/port-table.svelte';
 
 	let { data } = $props();

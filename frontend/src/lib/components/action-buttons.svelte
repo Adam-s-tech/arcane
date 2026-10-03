@@ -1,30 +1,32 @@
 <script lang="ts">
-	import { openConfirmDialog } from './confirm-dialog';
 	import { goto, refreshAll } from '$app/navigation';
+	import { createMutation } from '@tanstack/svelte-query';
 	import { toast } from 'svelte-sonner';
-	import { tryCatch } from '#lib/utils/try-catch.js';
-	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
+	import { Temporal } from 'temporal-polyfill';
+
 	import ActionButtonGroup from '#lib/components/action-button-group/action-button-group.svelte';
 	import type { ActionButton } from '#lib/components/action-button-group/types.js';
 	import DeployOptionsMenuItems from '#lib/components/deploy-split-button/deploy-options-menu-items.svelte';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import { TerminalIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import settingsStore from '#lib/stores/config-store.svelte.js';
-	import { deployOptionsStore } from '#lib/stores/deploy-options.store.svelte.js';
 	import { containerService } from '#lib/services/container-service.js';
 	import { projectService } from '#lib/services/project-service.js';
-	import type { DeployProjectOptions } from '#lib/types/project-deployment.js';
-	import { activityToastOptions, activityIdFromStreamFrame, extractActivityId } from '#lib/utils/activity-toast.js';
+	import settingsStore from '#lib/stores/config-store.svelte.js';
+	import { deployOptionsStore } from '#lib/stores/deploy-options.store.svelte.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
 	import { operationWatchStore } from '#lib/stores/operation-watch.store.svelte.js';
-	import { attachProjectLogsToWatch } from '#lib/utils/watch-logs.js';
-	import type { Project } from '#lib/types/swarm.js';
 	import type { ContainerDetailsDto } from '#lib/types/docker.js';
-	import { TerminalIcon } from '#lib/icons/index.js';
-	import { createMutation } from '@tanstack/svelte-query';
+	import type { DeployProjectOptions } from '#lib/types/project-deployment.js';
+	import type { Project } from '#lib/types/swarm.js';
+	import { activityToastOptions, activityIdFromStreamFrame, extractActivityId } from '#lib/utils/activity-toast.js';
+	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
 	import { hasPermission } from '#lib/utils/auth.js';
 	import { isDepotBuildAvailable } from '#lib/utils/build-provider.js';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import { Temporal } from 'temporal-polyfill';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+	import { attachProjectLogsToWatch } from '#lib/utils/watch-logs.js';
+
+	import { openConfirmDialog } from './confirm-dialog';
 
 	type TargetType = 'container' | 'project';
 	type LoadingStates = {

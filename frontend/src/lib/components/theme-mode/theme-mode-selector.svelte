@@ -1,13 +1,13 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
-
 	import { userPrefersMode, setMode } from 'mode-watcher';
-	import { m } from '#lib/paraglide/messages.js';
+
 	import { SunIcon, MoonIcon, MonitorIcon } from '#lib/icons/index.js';
-	import { cn } from '#lib/utils.js';
+	import { m } from '#lib/paraglide/messages.js';
 	import { userService } from '#lib/services/user-service.js';
 	import userStore from '#lib/stores/user-store.svelte.js';
+	import { cn } from '#lib/utils.js';
+	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	type Props = {
 		disabled?: boolean;

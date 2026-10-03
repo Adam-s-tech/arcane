@@ -2,12 +2,12 @@
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
 	import * as ArcaneTooltip from '#lib/components/arcane-tooltip/index.js';
 	import SwitchWithLabel from '#lib/components/form/labeled-switch.svelte';
-	import { DownloadIcon, EllipsisIcon } from '#lib/icons/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import * as Select from '#lib/components/ui/select/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
-	import { m } from '#lib/paraglide/messages.js';
+	import * as Select from '#lib/components/ui/select/index.js';
 	import type { UseLogPreferences } from '#lib/hooks/use-log-preferences.svelte.js';
+	import { DownloadIcon, EllipsisIcon } from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
 
 	let {
 		autoScroll = $bindable(),

@@ -1,9 +1,11 @@
 <script lang="ts">
-	import { IsTouchDevice } from '#lib/hooks/is-touch-device.svelte.js';
-	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
-	import * as Popover from '#lib/components/ui/popover/index.js';
-	import { setArcaneTooltipContext } from './context.svelte.js';
 	import type { Snippet } from 'svelte';
+
+	import * as Popover from '#lib/components/ui/popover/index.js';
+	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
+	import { IsTouchDevice } from '#lib/hooks/is-touch-device.svelte.js';
+
+	import { setArcaneTooltipContext } from './context.svelte.js';
 
 	let {
 		open = $bindable(false),

@@ -1,4 +1,5 @@
 import { type Completion, snippetCompletion } from '@codemirror/autocomplete';
+
 import type { DiagnosticSummary } from './analysis/types';
 
 export const YAML_SNIPPETS: Completion[] = [

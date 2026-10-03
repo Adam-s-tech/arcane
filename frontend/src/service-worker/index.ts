@@ -1,8 +1,9 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
 import { version } from '$app/env';
 import { assets } from '$app/manifest';
 import { asset } from '$app/paths';
 import { self } from '$app/service-worker';
+
+import { tryCatch } from '#lib/utils/try-catch.js';
 
 const CACHE = `cache-${version}`;
 

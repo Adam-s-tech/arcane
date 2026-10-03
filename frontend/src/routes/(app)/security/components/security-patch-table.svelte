@@ -1,26 +1,26 @@
 <script lang="ts">
-	import { featureStore } from '#lib/stores/features.store.svelte.js';
-	import { tryCatch } from '#lib/utils/try-catch.js';
-	import { extractApiErrorMessage } from '#lib/utils/api.js';
+	import { toast } from 'svelte-sonner';
 
 	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
-	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import UniversalMobileCard from '#lib/components/arcane-table/cards/universal-mobile-card.svelte';
-	import MonoCell from '#lib/components/vulnerability/mono-cell.svelte';
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import { imageService } from '#lib/services/image-service.js';
-	import { activityToastOptions } from '#lib/utils/activity-toast.js';
-	import { m } from '#lib/paraglide/messages.js';
 	import type { ColumnSpec } from '#lib/components/arcane-table/arcane-table.types.svelte.js';
-	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
-	import type { ImagePatchTargetDto } from '#lib/types/docker.js';
+	import UniversalMobileCard from '#lib/components/arcane-table/cards/universal-mobile-card.svelte';
+	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import MonoCell from '#lib/components/vulnerability/mono-cell.svelte';
 	import { ShieldCheckIcon, ImagesIcon, ClockIcon } from '#lib/icons/index.js';
-	import { formatDateTimeShort } from '#lib/utils/formatting.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { imageService } from '#lib/services/image-service.js';
 	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import { hasPermission } from '#lib/utils/auth.js';
+	import { featureStore } from '#lib/stores/features.store.svelte.js';
 	import userStore from '#lib/stores/user-store.svelte.js';
-	import { toast } from 'svelte-sonner';
+	import type { ImagePatchTargetDto } from '#lib/types/docker.js';
+	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
+	import { activityToastOptions } from '#lib/utils/activity-toast.js';
+	import { extractApiErrorMessage } from '#lib/utils/api.js';
+	import { hasPermission } from '#lib/utils/auth.js';
+	import { formatDateTimeShort } from '#lib/utils/formatting.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	type PatchTargetRow = ImagePatchTargetDto & { id: string };
 

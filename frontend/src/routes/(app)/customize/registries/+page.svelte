@@ -1,20 +1,22 @@
 <script lang="ts">
-	import { EmptyState } from '#lib/components/states/index.js';
-	import { RegistryIcon } from '#lib/icons/index.js';
-	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { createQuery } from '@tanstack/svelte-query';
 	import { toast } from 'svelte-sonner';
+
+	import ContainerRegistryFormSheet from '#lib/components/sheets/container-registry-sheet.svelte';
+	import { EmptyState } from '#lib/components/states/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { RegistryIcon } from '#lib/icons/index.js';
+	import { ResourcePageLayout, type ActionButton } from '#lib/layouts/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { queryKeys } from '#lib/query/query-keys.js';
+	import { containerRegistryService } from '#lib/services/container-registry-service.js';
 	import type { ContainerRegistry, ContainerRegistryPullUsage } from '#lib/types/docker.js';
 	import type { ContainerRegistryCreateDto, ContainerRegistryUpdateDto } from '#lib/types/docker.js';
-	import ContainerRegistryFormSheet from '#lib/components/sheets/container-registry-sheet.svelte';
-	import RegistryTable from './components/registry-table.svelte';
 	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
-	import { tryCatch } from '#lib/utils/try-catch.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import { containerRegistryService } from '#lib/services/container-registry-service.js';
-	import { queryKeys } from '#lib/query/query-keys.js';
-	import { ResourcePageLayout, type ActionButton } from '#lib/layouts/index.js';
-	import { createQuery } from '@tanstack/svelte-query';
 	import { hasPermission } from '#lib/utils/auth.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+
+	import RegistryTable from './components/registry-table.svelte';
 
 	let { data } = $props();
 

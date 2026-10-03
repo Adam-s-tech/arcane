@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { Pagination as PaginationPrimitive } from 'bits-ui';
-	import { ArrowLeftIcon } from '#lib/icons/index.js';
+
 	import { buttonVariants } from '#lib/components/ui/button/index.js';
+	import { ArrowLeftIcon } from '#lib/icons/index.js';
 	import { cn } from '#lib/utils.js';
 
 	let { ref = $bindable(null), class: className, children, ...restProps }: PaginationPrimitive.PrevButtonProps = $props();

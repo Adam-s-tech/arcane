@@ -1,6 +1,6 @@
-import { tags as t } from '@lezer/highlight';
-import { EditorView } from '@codemirror/view';
 import type { Extension } from '@codemirror/state';
+import { EditorView } from '@codemirror/view';
+import { tags as t } from '@lezer/highlight';
 import { createTheme } from '@uiw/codemirror-themes';
 
 function accentWithAlpha(alpha: number): string {

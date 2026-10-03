@@ -1,6 +1,6 @@
-import Root from './arcane-tooltip.svelte';
-import Trigger from './arcane-tooltip-trigger.svelte';
 import Content from './arcane-tooltip-content.svelte';
+import Trigger from './arcane-tooltip-trigger.svelte';
+import Root from './arcane-tooltip.svelte';
 
 export {
 	Root,

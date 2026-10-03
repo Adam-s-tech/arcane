@@ -1,9 +1,11 @@
 <script lang="ts">
-	import { fromAction } from 'svelte/attachments';
 	import emblaCarouselSvelte from 'embla-carousel-svelte';
+	import { fromAction } from 'svelte/attachments';
 	import type { HTMLAttributes } from 'svelte/elements';
-	import { getEmblaContext, type EmblaCarouselConfig } from './context.js';
+
 	import { cn, type WithElementRef } from '#lib/utils.js';
+
+	import { getEmblaContext, type EmblaCarouselConfig } from './context.js';
 
 	let {
 		ref = $bindable(null),

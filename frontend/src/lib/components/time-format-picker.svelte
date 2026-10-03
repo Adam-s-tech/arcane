@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { createMutation, useQueryClient } from '@tanstack/svelte-query';
 	import { toast } from 'svelte-sonner';
-	import { extractApiErrorMessage } from '#lib/utils/api.js';
+
 	import * as Select from '#lib/components/ui/select/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { queryKeys } from '#lib/query/query-keys.js';
@@ -9,6 +9,7 @@
 	import { timeFormatStore } from '#lib/stores/time-format.store.svelte.js';
 	import userStore from '#lib/stores/user-store.svelte.js';
 	import type { TimeFormat } from '#lib/types/auth.js';
+	import { extractApiErrorMessage } from '#lib/utils/api.js';
 
 	let {
 		id = 'timeFormatPicker',

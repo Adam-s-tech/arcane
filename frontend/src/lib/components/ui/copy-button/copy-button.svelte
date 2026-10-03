@@ -3,15 +3,17 @@
 -->
 
 <script lang="ts">
-	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
-	import { UseClipboard } from '#lib/hooks/use-clipboard.svelte.js';
-	import { cn } from '#lib/utils.js';
-	import { scale } from 'svelte/transition';
-	import type { CopyButtonProps } from './types';
-	import { CopyIcon, CloseIcon, CheckIcon } from '#lib/icons/index.js';
-	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
 	import { onMount } from 'svelte';
+	import { scale } from 'svelte/transition';
+
+	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
+	import { UseClipboard } from '#lib/hooks/use-clipboard.svelte.js';
+	import { CopyIcon, CloseIcon, CheckIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { cn } from '#lib/utils.js';
+
+	import type { CopyButtonProps } from './types';
 
 	let {
 		ref = $bindable(null),

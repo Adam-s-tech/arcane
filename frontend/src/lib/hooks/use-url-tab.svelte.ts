@@ -1,22 +1,31 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
 import { goto } from '$app/navigation';
 import { page } from '$app/state';
 import { onMount, untrack } from 'svelte';
 
+import type { TabItem } from '#lib/components/tab-bar/index.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
+
+type UrlTabItem<T extends string> = TabItem & { value: T; visible?: boolean };
+
 type UseUrlTabOptions<T extends string> = {
-	validTabs: () => readonly T[];
 	defaultTab: () => T;
 	ready?: () => boolean;
 	aliases?: () => Readonly<Partial<Record<string, T>>>;
-};
+} & ({ validTabs: () => readonly T[]; tabs?: never } | { tabs: () => readonly UrlTabItem<T>[]; validTabs?: never });
 
 export function useUrlTab<T extends string>({
-	validTabs,
+	validTabs: tabValues,
+	tabs,
 	defaultTab,
 	ready = () => true,
 	aliases = () => ({})
 }: UseUrlTabOptions<T>) {
+	const items = $derived(tabs?.().filter((tab) => tab.visible !== false) ?? []);
 	let pendingUrlUpdate = Promise.resolve();
+
+	function validTabs(): readonly T[] {
+		return tabValues?.() ?? items.map((tab) => tab.value);
+	}
 
 	function currentUrl() {
 		return new URL((page.shallow?.url ?? page.url).href);
@@ -87,6 +96,9 @@ export function useUrlTab<T extends string>({
 	return {
 		get value() {
 			return value;
+		},
+		get items() {
+			return items;
 		},
 		select
 	};

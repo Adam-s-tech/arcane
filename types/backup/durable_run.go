@@ -1,6 +1,6 @@
 package backup
 
-import schedulertypes "github.com/getarcaneapp/arcane/types/v2/scheduler"
+import "github.com/getarcaneapp/arcane/types/v2/scheduler"
 
 // DurableRunCommand freezes the input accepted by a backup domain.
 type DurableRunCommand struct {
@@ -16,9 +16,9 @@ type DurableRunCommand struct {
 
 // DurableRunState records dispatch and effect evidence across host restarts.
 type DurableRunState struct {
-	Command DurableRunCommand              `msgpack:"command"`
-	Started bool                           `msgpack:"started"`
-	Status  schedulertypes.RunStatus       `msgpack:"status"`
-	Targets []schedulertypes.TargetOutcome `msgpack:"targets"`
-	Error   string                         `msgpack:"error"`
+	Command DurableRunCommand         `msgpack:"command"`
+	Started bool                      `msgpack:"started"`
+	Status  scheduler.RunStatus       `msgpack:"status"`
+	Targets []scheduler.TargetOutcome `msgpack:"targets"`
+	Error   string                    `msgpack:"error"`
 }

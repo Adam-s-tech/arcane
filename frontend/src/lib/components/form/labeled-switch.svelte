@@ -1,7 +1,8 @@
 <script lang="ts">
+	import { mergeProps } from 'bits-ui';
+
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
-	import { mergeProps } from 'bits-ui';
 
 	let {
 		id,

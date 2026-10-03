@@ -11,7 +11,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: "${{ github.workflow }}-${{ github.ref }}"
+  group: '${{ github.workflow }}-${{ github.ref }}'
   cancel-in-progress: true
 
 jobs:
@@ -29,17 +29,17 @@ jobs:
             path: backend
             timeout: 30
             gcc: true
-            cgo_enabled: "1"
+            cgo_enabled: '1'
           - name: cli
             path: cli
             timeout: 10
             gcc: false
-            cgo_enabled: "1"
+            cgo_enabled: '1'
           - name: types
             path: types
             timeout: 10
             gcc: false
-            cgo_enabled: "1"
+            cgo_enabled: '1'
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -201,11 +201,11 @@ jobs:
           done
 
       - name: Run Playwright E2E tests
-        run: mkdir -p tests/test-results && vp -C tests exec playwright test --project=chromium
+        run: mkdir -p tests/.report && vp -C tests exec playwright test --project=chromium
         env:
           COMPOSE_FILE: ${{ matrix.database.compose_file }}
           BASE_URL: http://localhost:${{ matrix.database.port }}
-          PLAYWRIGHT_JUNIT_OUTPUT_FILE: test-results/playwright-${{ matrix.database.name }}.xml
+          PLAYWRIGHT_JUNIT_OUTPUT_FILE: .report/playwright-${{ matrix.database.name }}.xml
 
       - name: Upload Playwright HTML report
         if: always()
@@ -214,7 +214,9 @@ jobs:
           name: playwright-report-${{ matrix.database.name }}
           path: |
             tests/.report
-            tests/test-results
+            !tests/.report/auth/**
+            !tests/.report/bin/**
+            !tests/.report/cli/**
           include-hidden-files: true
           retention-days: 15
 
@@ -222,7 +224,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: depot/test-report-action@2ad5779840a9c63e884fa26f11d019768a27a941 # v1.0.1
         with:
-          path: tests/test-results/
+          path: tests/.report/*.xml
 
   cli-e2e-tests:
     name: CLI E2E Tests (proxy)
@@ -261,12 +263,12 @@ jobs:
         run: vp -C tests install
 
       - name: Run CLI E2E tests against socket proxy
-        run: mkdir -p tests/test-results && vp -C tests exec playwright test --project=cli
+        run: mkdir -p tests/.report && vp -C tests exec playwright test --project=cli
         env:
           COMPOSE_FILE: setup/compose-proxy.yaml
           BASE_URL: http://localhost:3002
-          PLAYWRIGHT_DOCKER_BROWSER: "0"
-          PLAYWRIGHT_JUNIT_OUTPUT_FILE: test-results/playwright-cli.xml
+          PLAYWRIGHT_DOCKER_BROWSER: '0'
+          PLAYWRIGHT_JUNIT_OUTPUT_FILE: .report/playwright-cli.xml
 
       - name: Upload Playwright HTML report
         if: always()
@@ -275,7 +277,9 @@ jobs:
           name: playwright-report-proxy-cli
           path: |
             tests/.report
-            tests/test-results
+            !tests/.report/auth/**
+            !tests/.report/bin/**
+            !tests/.report/cli/**
           include-hidden-files: true
           retention-days: 15
 
@@ -283,4 +287,4 @@ jobs:
         if: ${{ !cancelled() }}
         uses: depot/test-report-action@2ad5779840a9c63e884fa26f11d019768a27a941 # v1.0.1
         with:
-          path: tests/test-results/
+          path: tests/.report/*.xml

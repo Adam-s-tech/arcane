@@ -1,8 +1,9 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
-import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
 import { toast } from 'svelte-sonner';
+
+import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
 import { m } from '#lib/paraglide/messages.js';
 import { activityStore } from '#lib/stores/activity.store.svelte.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
 
 /**
  * Opens a confirmation dialog and, on confirm, requests cancellation of the

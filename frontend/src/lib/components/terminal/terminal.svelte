@@ -1,10 +1,12 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
-	import { Terminal } from '@xterm/xterm';
 	import { FitAddon } from '@xterm/addon-fit';
-	import '@xterm/xterm/css/xterm.css';
-	import { m } from '#lib/paraglide/messages.js';
+	import { Terminal } from '@xterm/xterm';
 	import { mode } from 'mode-watcher';
+
+	import '@xterm/xterm/css/xterm.css';
+	import { untrack } from 'svelte';
+
+	import { m } from '#lib/paraglide/messages.js';
 
 	let {
 		websocketUrl,

@@ -1,26 +1,30 @@
 <script lang="ts">
-	import { getSettingsFormContext, hasSettingsFormContext } from '#lib/hooks/settings-form-context.js';
-	import * as Tabs from '#lib/components/ui/tabs/index.js';
-	import * as Dialog from '#lib/components/ui/dialog/index.js';
-	import { Switch } from '#lib/components/ui/switch/index.js';
+	import { onDestroy, onMount } from 'svelte';
+	import { toast } from 'svelte-sonner';
+
+	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
 	import SettingsRow from '#lib/components/settings/settings-row.svelte';
 	import SettingsSection from '#lib/components/settings/settings-section.svelte';
-	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
-	import { toast } from 'svelte-sonner';
-	import { onDestroy, onMount } from 'svelte';
-	import type { SettingsFormState } from '#lib/types/settings-form.js';
-	import { SettingsPageLayout } from '#lib/layouts/index.js';
-	import settingsStore from '#lib/stores/config-store.svelte.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import { useUrlTab } from '#lib/hooks/use-url-tab.svelte.js';
-	import { notificationService } from '#lib/services/notification-service.js';
-	import { type NotificationProviderKey, NOTIFICATION_PROVIDER_KEYS } from '#lib/types/notifications.js';
-	import { NotificationsIcon } from '#lib/icons/index.js';
-	import { settingsService } from '#lib/services/settings-service.js';
-	import type { Settings } from '#lib/types/settings.js';
-	import { hasPermission } from '#lib/utils/auth.js';
 	import { TabBar, type TabItem } from '#lib/components/tab-bar/index.js';
-	import { BuiltInProviderForm } from './components/providers';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { Switch } from '#lib/components/ui/switch/index.js';
+	import * as Tabs from '#lib/components/ui/tabs/index.js';
+	import { getSettingsFormContext, hasSettingsFormContext } from '#lib/hooks/settings-form-context.js';
+	import { useUrlTab } from '#lib/hooks/use-url-tab.svelte.js';
+	import { NotificationsIcon } from '#lib/icons/index.js';
+	import { SettingsPageLayout } from '#lib/layouts/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { apnsService } from '#lib/services/apns-service.js';
+	import { notificationService } from '#lib/services/notification-service.js';
+	import { settingsService } from '#lib/services/settings-service.js';
+	import settingsStore from '#lib/stores/config-store.svelte.js';
+	import type { ApnsDevice } from '#lib/types/apns.js';
+	import { type NotificationProviderKey, NOTIFICATION_PROVIDER_KEYS } from '#lib/types/notifications.js';
+	import type { SettingsFormState } from '#lib/types/settings-form.js';
+	import type { Settings } from '#lib/types/settings.js';
+	import { extractApiErrorMessage, handleApiResultWithCallbacks } from '#lib/utils/api.js';
+	import { hasPermission } from '#lib/utils/auth.js';
+	import { formatRelativeTime } from '#lib/utils/formatting.js';
 	import {
 		cloneNotificationProviderFormState,
 		createNotificationProviderFormState,
@@ -31,11 +35,9 @@
 		type NotificationSettingsByProvider,
 		updateNotificationProviderFormState
 	} from '#lib/utils/notification-providers.js';
-	import { extractApiErrorMessage, handleApiResultWithCallbacks } from '#lib/utils/api.js';
 	import { tryCatch } from '#lib/utils/try-catch.js';
-	import { apnsService } from '#lib/services/apns-service.js';
-	import type { ApnsDevice } from '#lib/types/apns.js';
-	import { formatRelativeTime } from '#lib/utils/formatting.js';
+
+	import { BuiltInProviderForm } from './components/providers';
 
 	let { data } = $props();
 

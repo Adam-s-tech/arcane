@@ -1,4 +1,3 @@
-import { onMount, untrack } from 'svelte';
 import {
 	Virtualizer,
 	elementScroll,
@@ -7,6 +6,7 @@ import {
 	type VirtualItem,
 	type VirtualizerOptions
 } from '@tanstack/virtual-core';
+import { onMount, untrack } from 'svelte';
 
 // The three platform adapters (`observeElementRect` / `observeElementOffset` / `scrollToFn`) are
 // supplied for the caller, so they only provide the data-driven options (count, getScrollElement,

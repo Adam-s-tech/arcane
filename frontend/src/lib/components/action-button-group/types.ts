@@ -1,6 +1,7 @@
+import type { Snippet } from 'svelte';
+
 import type { Action } from '#lib/components/arcane-button/index.js';
 import type { IconType } from '#lib/icons/index.js';
-import type { Snippet } from 'svelte';
 
 export type ActionPlacement = 'primary' | 'secondary' | 'menu';
 export type ActionGroup = 'lifecycle' | 'deploy' | 'manage' | 'danger';

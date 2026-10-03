@@ -1,28 +1,30 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { TabBar, type TabItem } from '#lib/components/tab-bar/index.js';
+	import { onMount } from 'svelte';
+	import { toast } from 'svelte-sonner';
+
 	import CodeEditor from '#lib/components/code-editor/editor.svelte';
+	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
+	import EditorTabStrip from '#lib/components/editor-tab-strip.svelte';
+	import ResizableSplit from '#lib/components/resizable-split.svelte';
+	import { TabBar, type TabItem } from '#lib/components/tab-bar/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
-	import { useEnvironmentRefresh } from '#lib/hooks/use-environment-refresh.svelte.js';
-	import { LayersIcon, DockIcon, JobsIcon, TrashIcon, EditIcon, FileTextIcon } from '#lib/icons/index.js';
-	import EditorTabStrip from '#lib/components/editor-tab-strip.svelte';
 	import WorkspaceFileTreePanel from '#lib/components/workspace-file-tree-panel.svelte';
-	import ResizableSplit from '#lib/components/resizable-split.svelte';
+	import { useEnvironmentRefresh } from '#lib/hooks/use-environment-refresh.svelte.js';
+	import { useUrlTab } from '#lib/hooks/use-url-tab.svelte.js';
+	import { LayersIcon, DockIcon, JobsIcon, TrashIcon, EditIcon, FileTextIcon } from '#lib/icons/index.js';
 	import { ResourcePageLayout, type ActionButton, type StatCardConfig } from '#lib/layouts/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { swarmService } from '#lib/services/swarm-service.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import type { SwarmStackSource } from '#lib/types/swarm.js';
 	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
+	import { hasPermission } from '#lib/utils/auth.js';
 	import { tryCatch } from '#lib/utils/try-catch.js';
-	import { onMount } from 'svelte';
-	import { toast } from 'svelte-sonner';
-	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
+
 	import SwarmServicesTable from '../../services/components/services-table.svelte';
 	import SwarmTasksTable from '../../tasks/components/tasks-table.svelte';
-	import type { SwarmStackSource } from '#lib/types/swarm.js';
-	import { useUrlTab } from '#lib/hooks/use-url-tab.svelte.js';
-	import { hasPermission } from '#lib/utils/auth.js';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
 
 	let { data } = $props();
 

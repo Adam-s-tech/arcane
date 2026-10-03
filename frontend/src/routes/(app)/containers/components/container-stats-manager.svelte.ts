@@ -1,8 +1,9 @@
-import { createContainerStatsWebSocket } from '#lib/utils/ws.js';
+import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+
 import type { ContainerStats } from '#lib/types/docker.js';
 import { calculateCPUPercent, calculateMemoryPercent, calculateMemoryUsage } from '#lib/utils/docker.js';
+import { createContainerStatsWebSocket } from '#lib/utils/ws.js';
 import type { ReconnectingWebSocket } from '#lib/utils/ws.js';
-import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 
 export class ContainerStatsManager {
 	private connections = new SvelteMap<string, ReconnectingWebSocket<ContainerStats>>();

@@ -3,23 +3,19 @@ package webhook
 import (
 	"context"
 	"errors"
-	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/getarcaneapp/arcane/types/v2/base"
+	"github.com/getarcaneapp/arcane/types/v2/user"
 	"github.com/getarcaneapp/arcane/types/v2/webhook"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
-	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/userctx"
 )
 
 type WebhookHandler struct {
 	webhookService *WebhookService
 }
-
-// --- Input/Output types ---
 
 type ListWebhooksInput struct {
 	EnvironmentID string `path:"id" doc:"Environment ID"`
@@ -39,51 +35,6 @@ type UpdateWebhookInput struct {
 	EnvironmentID string               `path:"id" doc:"Environment ID"`
 	WebhookID     string               `path:"webhookId" doc:"Webhook ID"`
 	Body          *webhook.UpdateInput `required:"true"`
-}
-
-// RegisterWebhooks registers the authenticated CRUD routes for webhook management.
-func RegisterWebhooks(api huma.API, webhookService *WebhookService) {
-	h := &WebhookHandler{webhookService: webhookService}
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "list-webhooks",
-		Method:      http.MethodGet,
-		Path:        "/environments/{id}/webhooks",
-		Summary:     "List webhooks",
-		Description: "List all webhooks configured for this environment",
-		Tags:        []string{"Webhooks"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermWebhooksList, h.ListWebhooks)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "create-webhook",
-		Method:      http.MethodPost,
-		Path:        "/environments/{id}/webhooks",
-		Summary:     "Create webhook",
-		Description: "Create a webhook that triggers a container or stack update. The token is only returned once.",
-		Tags:        []string{"Webhooks"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermWebhooksCreate, h.CreateWebhook)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "update-webhook",
-		Method:      http.MethodPatch,
-		Path:        "/environments/{id}/webhooks/{webhookId}",
-		Summary:     "Update webhook",
-		Description: "Update a webhook's enabled state",
-		Tags:        []string{"Webhooks"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermWebhooksUpdate, h.UpdateWebhook)
-
-	middleware.RegisterWithPermission(api, huma.Operation{
-		OperationID: "delete-webhook",
-		Method:      http.MethodDelete,
-		Path:        "/environments/{id}/webhooks/{webhookId}",
-		Summary:     "Delete webhook",
-		Description: "Delete a webhook by ID",
-		Tags:        []string{"Webhooks"},
-		Security:    handlerutil.DefaultOperationSecurity(),
-	}, authz.PermWebhooksDelete, h.DeleteWebhook)
 }
 
 // ListWebhooks returns all webhooks for an environment (tokens are masked).
@@ -107,8 +58,8 @@ func (h *WebhookHandler) CreateWebhook(ctx context.Context, input *CreateWebhook
 		return nil, huma.Error400BadRequest("request body is required")
 	}
 
-	actor := common.User{}
-	if currentUser, exists := common.CurrentUserFromContext(ctx); exists && currentUser != nil {
+	actor := user.Actor{}
+	if currentUser, exists := userctx.CurrentUserFromContext(ctx); exists && currentUser != nil {
 		actor = *currentUser
 	}
 
@@ -156,8 +107,8 @@ func (h *WebhookHandler) UpdateWebhook(ctx context.Context, input *UpdateWebhook
 		return nil, huma.Error400BadRequest("request body is required")
 	}
 
-	actor := common.User{}
-	if currentUser, exists := common.CurrentUserFromContext(ctx); exists && currentUser != nil {
+	actor := user.Actor{}
+	if currentUser, exists := userctx.CurrentUserFromContext(ctx); exists && currentUser != nil {
 		actor = *currentUser
 	}
 
@@ -177,8 +128,8 @@ func (h *WebhookHandler) UpdateWebhook(ctx context.Context, input *UpdateWebhook
 
 // DeleteWebhook removes a webhook.
 func (h *WebhookHandler) DeleteWebhook(ctx context.Context, input *DeleteWebhookInput) (*handlerutil.Out[any], error) {
-	actor := common.User{}
-	if currentUser, exists := common.CurrentUserFromContext(ctx); exists && currentUser != nil {
+	actor := user.Actor{}
+	if currentUser, exists := userctx.CurrentUserFromContext(ctx); exists && currentUser != nil {
 		actor = *currentUser
 	}
 

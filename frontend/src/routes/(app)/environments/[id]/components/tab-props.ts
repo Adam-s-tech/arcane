@@ -1,5 +1,6 @@
-import type { FormInputs } from '#lib/types/form.js';
 import type { Environment, EnvironmentStatus } from '#lib/types/environment.js';
+import type { FormInputs } from '#lib/types/form.js';
+
 import type { EnvironmentFormValues } from './environment-form-schema';
 
 export type EnvironmentFormInputs = FormInputs<EnvironmentFormValues>;

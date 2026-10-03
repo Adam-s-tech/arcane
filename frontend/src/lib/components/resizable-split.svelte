@@ -1,7 +1,8 @@
 <script lang="ts">
+	import { PersistedState } from 'runed';
 	import type { Snippet } from 'svelte';
 	import { untrack } from 'svelte';
-	import { PersistedState } from 'runed';
+
 	import { DoubleArrowLeftIcon, DoubleArrowRightIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 

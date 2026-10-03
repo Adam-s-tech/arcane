@@ -2,20 +2,17 @@ package appimages
 
 import (
 	"context"
-	"net/http"
 	"path/filepath"
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
-	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/kit/pkg"
 )
 
 // AppImagesHandler provides Huma-based application image endpoints.
 type AppImagesHandler struct {
 	appImagesService *ApplicationImagesService
 }
-
-// --- Huma Input/Output Wrappers ---
 
 type GetLogoInput struct {
 	Full     bool   `query:"full" default:"false" doc:"Return full logo instead of icon"`
@@ -44,63 +41,6 @@ var allowedPWAIconFilenames = map[string]struct{}{
 	"icon-192x192.png": {},
 	"icon-384x384.png": {},
 	"icon-512x512.png": {},
-}
-
-// RegisterAppImages registers application image routes using Huma.
-func RegisterAppImages(api huma.API, appImagesService *ApplicationImagesService) {
-	h := &AppImagesHandler{
-		appImagesService: appImagesService,
-	}
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-logo",
-		Method:      http.MethodGet,
-		Path:        "/app-images/logo",
-		Summary:     "Get application logo",
-		Description: "Get the application logo image",
-		Tags:        []string{"Application Images"},
-		Security:    []map[string][]string{},
-	}, h.GetLogo)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-logo-email",
-		Method:      http.MethodGet,
-		Path:        "/app-images/logo-email",
-		Summary:     "Get application logo for email",
-		Description: "Get the application logo image in PNG format for emails",
-		Tags:        []string{"Application Images"},
-		Security:    []map[string][]string{},
-	}, h.GetLogoEmail)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-favicon",
-		Method:      http.MethodGet,
-		Path:        "/app-images/favicon",
-		Summary:     "Get application favicon",
-		Description: "Get the application favicon image",
-		Tags:        []string{"Application Images"},
-		Security:    []map[string][]string{},
-	}, h.GetFavicon)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-default-profile",
-		Method:      http.MethodGet,
-		Path:        "/app-images/profile",
-		Summary:     "Get default profile image",
-		Description: "Get the default user profile image",
-		Tags:        []string{"Application Images"},
-		Security:    []map[string][]string{},
-	}, h.GetDefaultProfile)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-pwa-icon",
-		Method:      http.MethodGet,
-		Path:        "/app-images/pwa/{filename}",
-		Summary:     "Get PWA icon",
-		Description: "Get a Progressive Web App icon image",
-		Tags:        []string{"Application Images"},
-		Security:    []map[string][]string{},
-	}, h.GetPWAIcon)
 }
 
 // GetLogo returns the application logo image.

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { FileTextIcon } from '#lib/icons/index.js';
 	import { cn } from '#lib/utils.js';
+
 	import type { TreeViewFileProps } from './types';
 
 	let { name, icon, type = 'button', class: className, ...rest }: TreeViewFileProps = $props();

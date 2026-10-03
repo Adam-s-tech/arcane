@@ -11,23 +11,23 @@ filter_unconventional = true
 tag_pattern = "v[0-9]*"
 commit_preprocessors = [{ pattern = '\((\w+\s)?#([0-9]+)\)', replace = "" }]
 commit_parsers = [
-  { message = "^feat\\(cli\\)", group = "CLI - New features" },
-  { message = "^feat", group = "New features" },
+	{ message = "^feat\\(cli\\)", group = "CLI - New features" },
+	{ message = "^feat", group = "New features" },
 
-  { message = "^fix\\(cli\\)", group = "CLI - Bug fixes" },
-  { message = "^fix", group = "Bug fixes" },
+	{ message = "^fix\\(cli\\)", group = "CLI - Bug fixes" },
+	{ message = "^fix", group = "Bug fixes" },
 
-  { message = "^perf\\(cli\\)", group = "CLI - Performance improvements" },
-  { message = "^perf", group = "Performance improvements" },
+	{ message = "^perf\\(cli\\)", group = "CLI - Performance improvements" },
+	{ message = "^perf", group = "Performance improvements" },
 
-  { message = "^docs\\(cli\\)", group = "CLI - Documentation", default_scope = "other" },
-  { message = "^docs", group = "Documentation", default_scope = "other" },
+	{ message = "^docs\\(cli\\)", group = "CLI - Documentation", default_scope = "other" },
+	{ message = "^docs", group = "Documentation", default_scope = "other" },
 
-  { message = "^chore\\(deps\\)", skip = true },
-  { message = "^chore", skip = true },
-  { message = "^release", skip = true },
-  { message = "update translations via Crowdin", skip = true },
-  { message = ".*", group = "Other", default_scope = "other" },
+	{ message = "^chore\\(deps\\)", skip = true },
+	{ message = "^chore", skip = true },
+	{ message = "^release", skip = true },
+	{ message = "update translations via Crowdin", skip = true },
+	{ message = ".*", group = "Other", default_scope = "other" }
 ]
 filter_commits = false
 

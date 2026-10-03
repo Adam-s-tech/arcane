@@ -1,12 +1,14 @@
 <script lang="ts">
 	import { Temporal } from 'temporal-polyfill';
-	import { Progress } from '#lib/components/ui/progress/index.js';
+
 	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Progress } from '#lib/components/ui/progress/index.js';
 	import { ArrowDownIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import type { Activity } from '#lib/types/activity.type.js';
 	import { cn } from '#lib/utils.js';
 	import { formatRelativeTime, formatDateTime, parseInstant } from '#lib/utils/formatting.js';
-	import type { Activity } from '#lib/types/activity.type.js';
+
 	import {
 		activityStatusAccentClass,
 		activityRunStatusLabel,

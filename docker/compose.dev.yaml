@@ -6,7 +6,7 @@ services:
       target: frontend-dev
     container_name: arcane-frontend-dev
     ports:
-      - "3000:3000"
+      - '3000:3000'
     volumes:
       - ${HOST_PROJECT_ROOT:-..}/frontend:/app/frontend:cached
       - ${HOST_PROJECT_ROOT:-..}/package.json:/app/package.json:ro
@@ -24,8 +24,7 @@ services:
       - arcane-dev
     restart: unless-stopped
     healthcheck:
-      test:
-        ["CMD-SHELL", "curl -f http://localhost:3000 >/dev/null 2>&1 || exit 1"]
+      test: ['CMD-SHELL', 'curl -f http://localhost:3000 >/dev/null 2>&1 || exit 1']
       interval: 30s
       timeout: 10s
       retries: 3
@@ -38,7 +37,7 @@ services:
       target: backend-dev
     container_name: arcane-backend-dev
     ports:
-      - "3552:3552"
+      - '3552:3552'
     volumes:
       - ${HOST_PROJECT_ROOT:-..}/go.work:/app/go.work:ro
       - ${HOST_PROJECT_ROOT:-..}/types:/app/types:cached
@@ -67,25 +66,21 @@ services:
       - arcane-dev
     restart: unless-stopped
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -fsS http://localhost:3552/api/health >/dev/null || exit 1",
-        ]
+      test: ['CMD-SHELL', 'curl -fsS http://localhost:3552/api/health >/dev/null || exit 1']
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
   arcane-agent:
-    profiles: ["agent"]
+    profiles: ['agent']
     build:
       context: ..
       dockerfile: docker/Dockerfile.dev
       target: backend-dev
     container_name: arcane-agent
     ports:
-      - "3553:3553"
+      - '3553:3553'
     environment:
       - GIN_MODE=debug
       - ENVIRONMENT=development
@@ -114,11 +109,7 @@ services:
       - arcane-dev
     restart: unless-stopped
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -fsS http://localhost:3553/api/health >/dev/null || exit 1",
-        ]
+      test: ['CMD-SHELL', 'curl -fsS http://localhost:3553/api/health >/dev/null || exit 1']
       interval: 30s
       timeout: 10s
       retries: 3

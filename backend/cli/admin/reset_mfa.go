@@ -14,6 +14,7 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/passkey"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/session"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/user"
 )
 
@@ -57,7 +58,7 @@ func runResetMFACommandInternal(cmd *cobra.Command, _ []string) error {
 		}
 	}()
 
-	userService := user.NewUserService(db, nil)
+	userService := user.NewUserService(db, nil, session.RevokeAllUserSessionsExceptInDB)
 	localUser, err := userService.GetUserByUsername(cmd.Context(), username)
 	if err != nil {
 		if errors.Is(err, common.ErrUserNotFound) {

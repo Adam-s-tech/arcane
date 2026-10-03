@@ -1,12 +1,13 @@
-import type { ArcaneRow } from './table-features';
 import type { RowData } from '@tanstack/table-core';
 import type { ColumnFiltersState } from '@tanstack/table-core';
+
 import type { FilterMap, FilterValue } from '#lib/types/shared.js';
+import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
+import type { PersistedPreferencesSnapshot } from '#lib/types/table-preferences.js';
+
 import type { CompactTablePrefs } from './arcane-table.types.svelte';
 import { decodeFilters, decodeSort } from './arcane-table.types.svelte';
-
-import type { PersistedPreferencesSnapshot } from '#lib/types/table-preferences.js';
-import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
+import type { ArcaneRow } from './table-features';
 
 export function toFilterMap(filters: ColumnFiltersState): FilterMap {
 	const out: FilterMap = {};
@@ -60,7 +61,7 @@ function filterValuesEqual(a: unknown, b: unknown): boolean {
 	return a != null && b != null && `${a}` === `${b}`;
 }
 
-export function filterMapsEqual(a?: FilterMap, b?: FilterMap): boolean {
+function filterMapsEqual(a?: FilterMap, b?: FilterMap): boolean {
 	const keys = Object.keys(a ?? {});
 	return keys.length === Object.keys(b ?? {}).length && keys.every((key) => filterValuesEqual(a?.[key], b?.[key]));
 }

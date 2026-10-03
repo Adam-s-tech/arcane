@@ -1,26 +1,27 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
 	import {
 		browserSupportsWebAuthn,
 		startRegistration,
 		type PublicKeyCredentialCreationOptionsJSON
 	} from '@simplewebauthn/browser';
-	import { Temporal } from 'temporal-polyfill';
 	import { onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
-	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
+	import { Temporal } from 'temporal-polyfill';
+
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
+	import * as Alert from '#lib/components/ui/alert/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
-	import * as Alert from '#lib/components/ui/alert/index.js';
+	import { AddIcon, AlertIcon, ApiKeyIcon, CopyIcon, EditIcon, ShieldCheckIcon, TrashIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import { formatDate, parseInstant } from '#lib/utils/formatting.js';
 	import { passkeyService } from '#lib/services/passkey-service.js';
 	import type { MFAStatus, Passkey, PasskeyCapabilities, StepUpGrant } from '#lib/types/auth.js';
-	import StepUpDialog from './step-up-dialog.svelte';
+	import { formatDate, parseInstant } from '#lib/utils/formatting.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+
 	import MFADialog from './mfa-dialog.svelte';
-	import { AddIcon, AlertIcon, ApiKeyIcon, CopyIcon, EditIcon, ShieldCheckIcon, TrashIcon } from '#lib/icons/index.js';
+	import StepUpDialog from './step-up-dialog.svelte';
 
 	let passkeys = $state<Passkey[]>([]);
 	let capabilities = $state<PasskeyCapabilities | null>(null);

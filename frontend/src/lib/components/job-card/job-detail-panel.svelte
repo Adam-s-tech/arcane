@@ -1,21 +1,20 @@
 <script lang="ts">
-	import { ResponsiveDialog } from '#lib/components/ui/responsive-dialog/index.js';
+	import type { Snippet } from 'svelte';
+
+	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
 	import { TabBar, type TabItem } from '#lib/components/tab-bar/index.js';
-	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import * as Alert from '#lib/components/ui/alert/index.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import { ResponsiveDialog } from '#lib/components/ui/responsive-dialog/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
-	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+	import * as Tabs from '#lib/components/ui/tabs/index.js';
+	import { useJobActions } from '#lib/hooks/use-job-actions.svelte.js';
 	import { AlertTriangleIcon, CheckIcon, ClockIcon, CloseIcon, EditIcon, RestartIcon, StartIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import { jobScheduleService } from '#lib/services/job-schedule-service.js';
-	import { extractApiErrorMessage } from '#lib/utils/api.js';
-	import { formatDateTimeShort, formatRelativeTime } from '#lib/utils/formatting.js';
 	import type { JobStatus } from '#lib/types/settings.js';
-	import type { Snippet } from 'svelte';
-	import { toast } from 'svelte-sonner';
-	import { createMutation } from '@tanstack/svelte-query';
+	import { formatDateTimeShort, formatRelativeTime } from '#lib/utils/formatting.js';
+
 	import JobRunHistory from './job-run-history.svelte';
 	import JobScheduleDialog from './job-schedule-dialog.svelte';
 	import { jobNameLabel, jobStatusLabel, jobStatusTone, type JobPanelSection } from './job-status';
@@ -50,39 +49,22 @@
 	let historyJobId = $state<string | null>(null);
 	let historyOwnerId = $state<string | null>(null);
 
-	const runMutation = createMutation(() => ({
-		mutationFn: (jobId: string) => jobScheduleService.runJob(jobId, environmentId),
-		retry: false,
-		onSuccess: () => {
-			toast.success(m.jobs_run_queued());
-			onScheduleUpdate?.();
-		},
-		onError: (err) => toast.error(m.jobs_run_now(), { description: extractApiErrorMessage(err) })
-	}));
-	const restartMutation = createMutation(() => ({
-		mutationFn: () => jobScheduleService.restartWorker(job.id, environmentId),
-		onSuccess: () => {
-			toast.success(m.jobs_worker_restarted());
-			onScheduleUpdate?.();
-		},
-		onError: (err) => toast.error(m.jobs_restart_worker(), { description: extractApiErrorMessage(err) })
-	}));
+	const jobActions = useJobActions(() => ({ job, environmentId, isAgent, durableRuns, enabledOverride, onScheduleUpdate }));
 
-	const run = $derived(job.currentRun ?? job.lastRun);
-	const isEnabled = $derived(enabledOverride ?? job.enabled);
-	const managerLocked = $derived(isAgent && job.managerOnly);
-	const canRun = $derived(durableRuns && isEnabled && job.canRunManually && !runMutation.isPending && !managerLocked);
-	const canEditSchedule = $derived(isEnabled && !!job.settingsKey && !managerLocked);
-	const canRestartWorker = $derived(durableRuns && job.isContinuous && isEnabled);
-	const description = $derived(job.id.startsWith('environment-health:') ? m.jobs_health_scope_description() : job.description);
-	const showSchedule = $derived(isEnabled && !!job.schedule && (!job.isContinuous || !!job.settingsKey));
+	const showSchedule = $derived(jobActions.isEnabled && !!job.schedule && (!job.isContinuous || !!job.settingsKey));
 	const statusLabel = $derived.by(() => {
-		if (!isEnabled) return m.common_disabled();
-		if (run) return jobStatusLabel(run.status);
+		if (!jobActions.isEnabled) return m.common_disabled();
+		if (jobActions.run) return jobStatusLabel(jobActions.run.status);
 		if (job.isContinuous) return m.jobs_continuous();
 		return m.jobs_never_run();
 	});
-	const statusTone = $derived(!isEnabled ? 'gray' : run ? jobStatusTone(run.status) : jobStatusTone(job.workerHealth?.status));
+	const statusTone = $derived(
+		!jobActions.isEnabled
+			? 'gray'
+			: jobActions.run
+				? jobStatusTone(jobActions.run.status)
+				: jobStatusTone(job.workerHealth?.status)
+	);
 	const errors = $derived([job.lastError, job.workerHealth?.lastError].filter((text): text is string => !!text));
 	const activeHistoryJobId = $derived(historyOwnerId === job.id && historyJobId ? historyJobId : job.id);
 	const activeHistoryJob = $derived(job.children?.find((child) => child.id === activeHistoryJobId));
@@ -114,7 +96,13 @@
 	<h3 class="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{text}</h3>
 {/snippet}
 
-<ResponsiveDialog bind:open variant="sheet" title={jobNameLabel(job)} {description} contentClass="sm:max-w-xl">
+<ResponsiveDialog
+	bind:open
+	variant="sheet"
+	title={jobNameLabel(job)}
+	description={jobActions.description}
+	contentClass="sm:max-w-xl"
+>
 	<div class="flex flex-col gap-5 pb-6">
 		<div class="flex flex-wrap items-center gap-2">
 			{@render enableControl?.()}
@@ -125,15 +113,22 @@
 				</Badge>
 			{/if}
 			<div class="ml-auto flex items-center gap-1">
-				{#if canRestartWorker}
-					<Button variant="ghost" size="sm" disabled={restartMutation.isPending} onclick={() => restartMutation.mutate()}>
+				{#if jobActions.canRestartWorker}
+					<Button
+						variant="ghost"
+						size="sm"
+						disabled={jobActions.restartMutation.isPending}
+						onclick={() => jobActions.restartMutation.mutate()}
+					>
 						<RestartIcon data-icon="inline-start" />
 						{m.jobs_restart_worker()}
 					</Button>
 				{/if}
-				{#if isEnabled && job.canRunManually}
-					<Button size="sm" disabled={!canRun} onclick={() => runMutation.mutate(job.id)}>
-						{#if runMutation.isPending}<Spinner data-icon="inline-start" />{:else}<StartIcon data-icon="inline-start" />{/if}
+				{#if jobActions.isEnabled && job.canRunManually}
+					<Button size="sm" disabled={!jobActions.canRun} onclick={() => jobActions.runMutation.mutate(job.id)}>
+						{#if jobActions.runMutation.isPending}<Spinner data-icon="inline-start" />{:else}<StartIcon
+								data-icon="inline-start"
+							/>{/if}
 						{job.children?.length ? m.jobs_run_all() : m.jobs_run_now()}
 					</Button>
 				{/if}
@@ -172,13 +167,13 @@
 				</Alert.Root>
 			{/each}
 
-			{#if isEnabled}
+			{#if jobActions.isEnabled}
 				<section class="flex flex-col gap-2">
 					{@render sectionTitle(m.jobs_schedule())}
 					{#if showSchedule}
 						<div class="flex items-center justify-between gap-3">
 							<code class="rounded-md bg-muted/60 px-2 py-1 text-xs break-all">{job.schedule}</code>
-							{#if canEditSchedule}
+							{#if jobActions.canEditSchedule}
 								<Button variant="ghost" size="sm" onclick={() => (showScheduleDialog = true)}>
 									<EditIcon data-icon="inline-start" />
 									{m.jobs_edit_schedule()}
@@ -197,20 +192,20 @@
 					{#if job.lastSuccess}
 						{@render metaRow(m.jobs_last_success(), formatRelativeTime(job.lastSuccess), formatDateTimeShort(job.lastSuccess))}
 					{/if}
-					{#if run?.nextAttempt}
-						{@render metaRow(m.jobs_next_retry(), formatDateTimeShort(run.nextAttempt))}
+					{#if jobActions.run?.nextAttempt}
+						{@render metaRow(m.jobs_next_retry(), formatDateTimeShort(jobActions.run.nextAttempt))}
 					{/if}
 					{#if job.workerHealth?.nextRetry}
 						{@render metaRow(m.jobs_next_retry(), formatDateTimeShort(job.workerHealth.nextRetry))}
 					{/if}
-					{#if run?.status === 'waiting' && run.remoteOutcome}
-						{@render metaRow(m.jobs_remote_status(), jobStatusLabel(run.remoteOutcome.status))}
+					{#if jobActions.run?.status === 'waiting' && jobActions.run.remoteOutcome}
+						{@render metaRow(m.jobs_remote_status(), jobStatusLabel(jobActions.run.remoteOutcome.status))}
 					{/if}
-					{#if run?.lastConfirmedAt}
-						{@render metaRow(m.jobs_last_confirmed(), formatDateTimeShort(run.lastConfirmedAt))}
+					{#if jobActions.run?.lastConfirmedAt}
+						{@render metaRow(m.jobs_last_confirmed(), formatDateTimeShort(jobActions.run.lastConfirmedAt))}
 					{/if}
-					{#if run?.status === 'waiting' && run.outcome.message}
-						<p class="text-sm break-words text-muted-foreground">{run.outcome.message}</p>
+					{#if jobActions.run?.status === 'waiting' && jobActions.run.outcome.message}
+						<p class="text-sm break-words text-muted-foreground">{jobActions.run.outcome.message}</p>
 					{/if}
 				</section>
 			{/if}
@@ -273,8 +268,8 @@
 										size="icon"
 										class="size-8"
 										aria-label={m.jobs_run_now()}
-										disabled={!durableRuns || runMutation.isPending || managerLocked}
-										onclick={() => runMutation.mutate(child.id)}
+										disabled={!durableRuns || jobActions.runMutation.isPending || jobActions.managerLocked}
+										onclick={() => jobActions.runMutation.mutate(child.id)}
 									>
 										<StartIcon class="size-4" />
 									</Button>

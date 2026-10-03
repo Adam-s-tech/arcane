@@ -1,18 +1,20 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
-	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
-	import { tryCatch } from '#lib/utils/try-catch.js';
-	import WebhookTable from './components/webhook-table.svelte';
-	import WebhookFormSheet from '#lib/components/sheets/webhook-form-sheet.svelte';
-	import type { Webhook, WebhookCreated, CreateWebhook } from '#lib/types/environment.js';
-	import { webhookService } from '#lib/services/webhook-service.js';
-	import { SettingsPageLayout } from '#lib/layouts/index.js';
+
 	import type { ActionButton } from '#lib/components/action-button-group/types.js';
-	import * as ResponsiveDialog from '#lib/components/ui/responsive-dialog/index.js';
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+	import WebhookFormSheet from '#lib/components/sheets/webhook-form-sheet.svelte';
+	import * as ResponsiveDialog from '#lib/components/ui/responsive-dialog/index.js';
 	import { Snippet } from '#lib/components/ui/snippet/index.js';
 	import { GlobeIcon } from '#lib/icons/index.js';
+	import { SettingsPageLayout } from '#lib/layouts/index.js';
 	import * as m from '#lib/paraglide/messages.js';
+	import { webhookService } from '#lib/services/webhook-service.js';
+	import type { Webhook, WebhookCreated, CreateWebhook } from '#lib/types/environment.js';
+	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
+
+	import WebhookTable from './components/webhook-table.svelte';
 
 	let { data } = $props();
 

@@ -1,6 +1,5 @@
 <script lang="ts">
-	import CodeMirror from 'svelte-codemirror-editor';
-	import * as Command from '#lib/components/ui/command/index.js';
+	import { browser } from '$app/env';
 	import { autocompletion, type Completion, type CompletionContext } from '@codemirror/autocomplete';
 	import { javascript } from '@codemirror/lang-javascript';
 	import { json } from '@codemirror/lang-json';
@@ -20,20 +19,23 @@
 		type Diagnostic,
 		type LintSource
 	} from '@codemirror/lint';
-	import { keymap, hoverTooltip, EditorView, ViewPlugin, closeHoverTooltips, hasHoverTooltips } from '@codemirror/view';
 	import { type Extension } from '@codemirror/state';
-	import { browser } from '$app/env';
+	import { keymap, hoverTooltip, EditorView, ViewPlugin, closeHoverTooltips, hasHoverTooltips } from '@codemirror/view';
+	import { mode } from 'mode-watcher';
+	import CodeMirror from 'svelte-codemirror-editor';
+
+	import * as Command from '#lib/components/ui/command/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import userStore from '#lib/stores/user-store.svelte.js';
-	import { mode } from 'mode-watcher';
-	import { createArcaneTheme } from './theme';
+
+	import type { YamlPositionContext } from './analysis/compose-analysis';
+	import type { ComposeSchemaContext } from './analysis/compose-schema';
+	import { analyzeEnvContent } from './analysis/env-analysis';
+	import type { CodeLanguage, CodeValidationMode, DiagnosticSummary, EditorContext, OutlineItem } from './analysis/types';
 	import { createDefaultSummary, ENV_SNIPPETS, YAML_SNIPPETS } from './editor-constants';
 	import { createEnterIndentKeymap } from './enter-indentation';
 	import { createMergeHostAttachment, type MergeAttachmentParams } from './merge-editor.svelte.js';
-	import { analyzeEnvContent } from './analysis/env-analysis';
-	import type { YamlPositionContext } from './analysis/compose-analysis';
-	import type { ComposeSchemaContext } from './analysis/compose-schema';
-	import type { CodeLanguage, CodeValidationMode, DiagnosticSummary, EditorContext, OutlineItem } from './analysis/types';
+	import { createArcaneTheme } from './theme';
 
 	const languageSupport = new Map(
 		Object.entries({

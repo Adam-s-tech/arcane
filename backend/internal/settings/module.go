@@ -2,9 +2,13 @@
 package settings
 
 import (
+	"net/http"
+
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/config"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/authz"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils/handlerutil"
 )
 
@@ -36,4 +40,66 @@ func (m *Module) RegisterRoutes(api huma.API) {
 		return
 	}
 	RegisterSettings(api, m.service, m.search, m.proxyRemoteJSON, m.config)
+}
+
+// RegisterSettings registers settings management routes using Huma.
+func RegisterSettings(api huma.API, settingsService *SettingsService, settingsSearchService *SettingsSearchService, proxyRemoteJSON handlerutil.RemoteJSONProxy, cfg *config.Config) {
+	h := &SettingsHandler{
+		settingsService:       settingsService,
+		settingsSearchService: settingsSearchService,
+		proxyRemoteJSON:       proxyRemoteJSON,
+		cfg:                   cfg,
+	}
+
+	// Environment-scoped settings endpoints
+	huma.Register(api, huma.Operation{
+		OperationID: "get-public-settings",
+		Method:      http.MethodGet,
+		Path:        "/environments/{id}/settings/public",
+		Summary:     "Get public settings",
+		Description: "Get all public settings for an environment",
+		Tags:        []string{"Settings"},
+		Security:    []map[string][]string{},
+	}, h.GetPublicSettings)
+
+	middleware.RegisterWithPermission(api, huma.Operation{
+		OperationID: "get-settings",
+		Method:      http.MethodGet,
+		Path:        "/environments/{id}/settings",
+		Summary:     "Get settings",
+		Description: "Get all settings for an environment",
+		Tags:        []string{"Settings"},
+		Security:    handlerutil.DefaultOperationSecurity(),
+	}, authz.PermSettingsRead, h.GetSettings)
+
+	middleware.RegisterWithPermission(api, huma.Operation{
+		OperationID: "update-settings",
+		Method:      http.MethodPut,
+		Path:        "/environments/{id}/settings",
+		Summary:     "Update settings",
+		Description: "Update settings for an environment",
+		Tags:        []string{"Settings"},
+		Security:    handlerutil.DefaultOperationSecurity(),
+	}, authz.PermSettingsWrite, h.UpdateSettings)
+
+	// Top-level settings endpoints (not environment-scoped)
+	huma.Register(api, huma.Operation{
+		OperationID: "search-settings",
+		Method:      http.MethodPost,
+		Path:        "/settings/search",
+		Summary:     "Search settings",
+		Description: "Search settings categories and individual settings by query",
+		Tags:        []string{"Settings"},
+		Security:    handlerutil.DefaultOperationSecurity(),
+	}, h.Search)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "get-settings-categories",
+		Method:      http.MethodGet,
+		Path:        "/settings/categories",
+		Summary:     "Get settings categories",
+		Description: "Get all available settings categories with metadata",
+		Tags:        []string{"Settings"},
+		Security:    handlerutil.DefaultOperationSecurity(),
+	}, h.GetCategories)
 }

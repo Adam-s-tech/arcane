@@ -13,8 +13,11 @@ import (
 	"sync"
 	"time"
 
-	activitytypes "github.com/getarcaneapp/arcane/types/v2/activity"
+	"github.com/getarcaneapp/arcane/types/v2/activity"
+	"github.com/getarcaneapp/arcane/types/v2/scheduler"
+	"github.com/getarcaneapp/arcane/types/v2/user"
 	"github.com/samber/mo"
+	"go.getarcane.app/kit/pkg"
 	"gorm.io/gorm"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
@@ -103,7 +106,7 @@ type ActivityService struct {
 // subscriberMessageQueueLimit with drop-oldest on overflow.
 type activitySubscriber struct {
 	environmentID string
-	ch            chan activitytypes.StreamEvent
+	ch            chan activity.StreamEvent
 	done          chan struct{}
 	wake          chan struct{}
 
@@ -115,10 +118,10 @@ type activitySubscriber struct {
 }
 
 type pendingStreamEvent struct {
-	event activitytypes.StreamEvent
+	event activity.StreamEvent
 }
 
-func newActivitySubscriberInternal(environmentID string, ch chan activitytypes.StreamEvent) *activitySubscriber {
+func newActivitySubscriberInternal(environmentID string, ch chan activity.StreamEvent) *activitySubscriber {
 	return &activitySubscriber{
 		environmentID:   environmentID,
 		ch:              ch,
@@ -128,11 +131,11 @@ func newActivitySubscriberInternal(environmentID string, ch chan activitytypes.S
 	}
 }
 
-func isCoalescableEventInternal(event activitytypes.StreamEvent) bool {
+func isCoalescableEventInternal(event activity.StreamEvent) bool {
 	return event.Type == "activity" && event.ActivityID != ""
 }
 
-func (sub *activitySubscriber) enqueue(event activitytypes.StreamEvent) {
+func (sub *activitySubscriber) enqueue(event activity.StreamEvent) {
 	sub.mu.Lock()
 	if isCoalescableEventInternal(event) {
 		if pending, ok := sub.pendingActivity[event.ActivityID]; ok {
@@ -172,12 +175,12 @@ func (sub *activitySubscriber) dropOldestMessageLockedInternal() {
 	}
 }
 
-func (sub *activitySubscriber) nextInternal() mo.Option[activitytypes.StreamEvent] {
+func (sub *activitySubscriber) nextInternal() mo.Option[activity.StreamEvent] {
 	sub.mu.Lock()
 	defer sub.mu.Unlock()
 
 	if len(sub.queue) == 0 {
-		return mo.None[activitytypes.StreamEvent]()
+		return mo.None[activity.StreamEvent]()
 	}
 	entry := sub.queue[0]
 	sub.queue = sub.queue[1:]
@@ -299,7 +302,7 @@ func (s *ActivityService) checkInitInternal() error {
 	return nil
 }
 
-func (s *ActivityService) StartActivity(ctx context.Context, req StartActivityRequest) (*activitytypes.Activity, error) {
+func (s *ActivityService) StartActivity(ctx context.Context, req StartActivityRequest) (*activity.Activity, error) {
 	if err := s.checkInitInternal(); err != nil {
 		return nil, err
 	}
@@ -326,15 +329,15 @@ func (s *ActivityService) StartActivity(ctx context.Context, req StartActivityRe
 	// Queue-opted activities take a concurrency slot up front when one is
 	// free; otherwise they are created as queued and AwaitActivitySlot blocks
 	// until a slot opens.
-	status := activitytypes.StatusRunning
+	status := activity.StatusRunning
 	var slotRelease func()
 	if req.Queue {
 		if req.DeferSlot {
-			status = activitytypes.StatusQueued
+			status = activity.StatusQueued
 		} else if release, ok := s.limiter.tryAcquireInternal(ctx, environmentID).Get(); ok {
 			slotRelease = release
 		} else {
-			status = activitytypes.StatusQueued
+			status = activity.StatusQueued
 		}
 	}
 
@@ -357,7 +360,7 @@ func (s *ActivityService) StartActivity(ctx context.Context, req StartActivityRe
 		CreatedAt:            now,
 	}
 	if model.Type == "" {
-		model.Type = activitytypes.TypeAutoUpdate
+		model.Type = activity.TypeAutoUpdate
 	}
 
 	if err := s.db.WithContext(ctx).Create(model).Error; err != nil {
@@ -377,13 +380,13 @@ func (s *ActivityService) StartActivity(ctx context.Context, req StartActivityRe
 
 // StartTrackedActivity holds the cancellation lock across persistence and
 // registration, so cancellation cannot treat the new row as untracked.
-func (s *ActivityService) StartTrackedActivity(ctx context.Context, req StartActivityRequest) (*activitytypes.Activity, context.Context, error) {
+func (s *ActivityService) StartTrackedActivity(ctx context.Context, req StartActivityRequest) (*activity.Activity, context.Context, error) {
 	if err := s.checkInitInternal(); err != nil {
 		return nil, nil, err
 	}
 	s.runningMu.Lock()
 	defer s.runningMu.Unlock()
-	activity, err := s.StartActivity(ctx, req)
+	started, err := s.StartActivity(ctx, req)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -391,8 +394,8 @@ func (s *ActivityService) StartTrackedActivity(ctx context.Context, req StartAct
 	if s.running == nil {
 		s.running = map[string]context.CancelCauseFunc{}
 	}
-	s.running[activity.ID] = cancel
-	return activity, workCtx, nil
+	s.running[started.ID] = cancel
+	return started, workCtx, nil
 }
 
 func (s *ActivityService) registerSlotReleaseInternal(activityID string, release func()) {
@@ -447,7 +450,7 @@ func (s *ActivityService) AwaitActivitySlot(ctx context.Context, activityID, env
 	}
 	s.registerSlotReleaseInternal(activityID, release)
 
-	if _, updateErr := s.UpdateActivity(ctx, activityID, UpdateActivityRequest{Status: activitytypes.StatusRunning}); updateErr != nil {
+	if _, updateErr := s.UpdateActivity(ctx, activityID, UpdateActivityRequest{Status: activity.StatusRunning}); updateErr != nil {
 		slog.Warn("failed to mark queued activity running", "activityId", activityID, "error", updateErr)
 	}
 	return nil
@@ -469,7 +472,7 @@ func (s *ActivityService) AwaitActivitySlotBounded(ctx context.Context, activity
 	return nil
 }
 
-func (s *ActivityService) UpdateActivity(ctx context.Context, activityID string, req UpdateActivityRequest) (*activitytypes.Activity, error) {
+func (s *ActivityService) UpdateActivity(ctx context.Context, activityID string, req UpdateActivityRequest) (*activity.Activity, error) {
 	if err := s.checkInitInternal(); err != nil {
 		return nil, err
 	}
@@ -532,7 +535,7 @@ func (s *ActivityService) UpdateActivity(ctx context.Context, activityID string,
 	return &dto, nil
 }
 
-func (s *ActivityService) AppendMessage(ctx context.Context, activityID string, req AppendActivityMessageRequest) (*activitytypes.Message, error) {
+func (s *ActivityService) AppendMessage(ctx context.Context, activityID string, req AppendActivityMessageRequest) (*activity.Message, error) {
 	messages, err := s.AppendMessages(ctx, activityID, []AppendActivityMessageRequest{req})
 	if err != nil || len(messages) == 0 {
 		return nil, err
@@ -549,7 +552,7 @@ func (s *ActivityService) AppendMessage(ctx context.Context, activityID string, 
 // CompleteActivity/UpdateActivity committed first; a terminal write that
 // commits after this transaction but publishes before this snapshot is
 // handled by admitActivityPublishInternal dropping the stale event.
-func (s *ActivityService) AppendMessages(ctx context.Context, activityID string, reqs []AppendActivityMessageRequest) ([]activitytypes.Message, error) {
+func (s *ActivityService) AppendMessages(ctx context.Context, activityID string, reqs []AppendActivityMessageRequest) ([]activity.Message, error) {
 	if err := s.checkInitInternal(); err != nil {
 		return nil, err
 	}
@@ -576,7 +579,7 @@ func (s *ActivityService) AppendMessages(ctx context.Context, activityID string,
 		return nil, err
 	}
 
-	out := make([]activitytypes.Message, 0, len(messages))
+	out := make([]activity.Message, 0, len(messages))
 	for _, message := range messages {
 		dto := activityMessageToDTOInternal(message)
 		s.publishMessageInternal(current.EnvironmentID, current.Type, dto)
@@ -604,7 +607,7 @@ func buildAppendBatchInternal(activityID string, reqs []AppendActivityMessageReq
 			messageText = messageText[:8192]
 		}
 
-		level := cmp.Or(req.Level, activitytypes.MessageLevelInfo)
+		level := cmp.Or(req.Level, activity.MessageLevelInfo)
 
 		messages = append(messages, &ActivityMessage{
 			ActivityID: activityID,
@@ -692,20 +695,20 @@ func (
 ) CompleteActivity(
 	ctx context.Context,
 	activityID string,
-	status activitytypes.Status,
+	status activity.Status,
 	finalMessage string,
 	errMessage *string,
 	finalStep ...string,
 ) (
-	*activitytypes.Activity,
+	*activity.Activity,
 	error,
 ) {
 	if err := s.checkInitInternal(); err != nil {
 		return nil, err
 	}
-	status = cmp.Or(status, activitytypes.StatusSuccess)
-	if status != activitytypes.StatusSuccess && status != activitytypes.StatusFailed && status != activitytypes.StatusCancelled {
-		status = activitytypes.StatusSuccess
+	status = cmp.Or(status, activity.StatusSuccess)
+	if status != activity.StatusSuccess && status != activity.StatusFailed && status != activity.StatusCancelled {
+		status = activity.StatusSuccess
 	}
 
 	activityID = strings.TrimSpace(activityID)
@@ -758,13 +761,13 @@ func (
 	}
 
 	if strings.TrimSpace(finalMessage) != "" {
-		level := activitytypes.MessageLevelSuccess
+		level := activity.MessageLevelSuccess
 		switch status {
-		case activitytypes.StatusFailed:
-			level = activitytypes.MessageLevelError
-		case activitytypes.StatusCancelled:
-			level = activitytypes.MessageLevelWarning
-		case activitytypes.StatusQueued, activitytypes.StatusRunning, activitytypes.StatusSuccess:
+		case activity.StatusFailed:
+			level = activity.MessageLevelError
+		case activity.StatusCancelled:
+			level = activity.MessageLevelWarning
+		case activity.StatusQueued, activity.StatusRunning, activity.StatusSuccess:
 		}
 		activityCtx := utils.ActivityRuntimeContext(ctx, nil)
 		if _, err := s.AppendMessage(activityCtx, activityID, AppendActivityMessageRequest{
@@ -788,7 +791,7 @@ func (
 // guarantees the terminal event carries every field already streamed. The
 // passed model is published as-is if the re-read fails, and is updated in
 // place otherwise so callers return the published state.
-func (s *ActivityService) publishTerminalSnapshotInternal(ctx context.Context, model *Activity) activitytypes.Activity {
+func (s *ActivityService) publishTerminalSnapshotInternal(ctx context.Context, model *Activity) activity.Activity {
 	lock := s.publishLockInternal(model.ID)
 	lock.Lock()
 	defer lock.Unlock()
@@ -809,7 +812,7 @@ func (s *ActivityService) publishTerminalSnapshotInternal(ctx context.Context, m
 // its own terminal status); otherwise it marks the activity cancelled directly,
 // but only if it is still active. Returns ErrActivityNotCancelable if the activity
 // has already reached a terminal state, or gorm.ErrRecordNotFound if it is unknown.
-func (s *ActivityService) CancelActivity(ctx context.Context, environmentID, activityID, requestedBy string) (*activitytypes.Activity, error) {
+func (s *ActivityService) CancelActivity(ctx context.Context, environmentID, activityID, requestedBy string) (*activity.Activity, error) {
 	if err := s.checkInitInternal(); err != nil {
 		return nil, err
 	}
@@ -823,20 +826,20 @@ func (s *ActivityService) CancelActivity(ctx context.Context, environmentID, act
 	if err := s.db.WithContext(ctx).Where("id = ? AND environment_id = ?", activityID, environmentID).First(&model).Error; err != nil {
 		return nil, err
 	}
-	if model.Type == activitytypes.TypeJobRun {
+	if model.Type == activity.TypeJobRun {
 		return nil, ErrActivityNotCancelable
 	}
 	switch model.Status {
-	case activitytypes.StatusSuccess, activitytypes.StatusFailed, activitytypes.StatusCancelled:
+	case activity.StatusSuccess, activity.StatusFailed, activity.StatusCancelled:
 		return nil, ErrActivityNotCancelable
-	case activitytypes.StatusQueued, activitytypes.StatusRunning:
+	case activity.StatusQueued, activity.StatusRunning:
 		// Active states — cancellation can proceed.
 	}
 
 	requestedBy = cmp.Or(strings.TrimSpace(requestedBy), "a user")
 	writeCtx := utils.ActivityRuntimeContext(ctx, nil)
 	if _, err := s.AppendMessage(writeCtx, activityID, AppendActivityMessageRequest{
-		Level:   activitytypes.MessageLevelWarning,
+		Level:   activity.MessageLevelWarning,
 		Message: "Cancellation requested by " + requestedBy,
 	}); err != nil {
 		slog.DebugContext(ctx, "failed to append cancellation message", "activityId", activityID, "error", err)
@@ -859,9 +862,9 @@ func (s *ActivityService) CancelActivity(ctx context.Context, environmentID, act
 		if err := tx.First(&finalized, "id = ? AND environment_id = ?", activityID, environmentID).Error; err != nil {
 			return err
 		}
-		updates := completeActivityUpdatesInternal(finalized.StartedAt, activitytypes.StatusCancelled, cancelledMessageInternal, nil, nil, now)
+		updates := completeActivityUpdatesInternal(finalized.StartedAt, activity.StatusCancelled, cancelledMessageInternal, nil, nil, now)
 		result := tx.Model(&Activity{}).
-			Where("id = ? AND status IN ?", activityID, []activitytypes.Status{activitytypes.StatusQueued, activitytypes.StatusRunning}).
+			Where("id = ? AND status IN ?", activityID, []activity.Status{activity.StatusQueued, activity.StatusRunning}).
 			Updates(updates)
 		if result.Error != nil {
 			return fmt.Errorf("failed to cancel activity: %w", result.Error)
@@ -892,7 +895,7 @@ func (s *ActivityService) FailStaleImageUpdateChecks(ctx context.Context) (int64
 	cutoff := time.Now().Add(-staleImageUpdateCheckAge)
 	var staleChecks []Activity
 	if err := s.db.WithContext(ctx).
-		Where("type = ? AND status = ? AND started_at < ?", activitytypes.TypeImageUpdateCheck, activitytypes.StatusRunning, cutoff).
+		Where("type = ? AND status = ? AND started_at < ?", activity.TypeImageUpdateCheck, activity.StatusRunning, cutoff).
 		Find(&staleChecks).Error; err != nil {
 		return 0, fmt.Errorf("find stale image update checks: %w", err)
 	}
@@ -902,7 +905,7 @@ func (s *ActivityService) FailStaleImageUpdateChecks(ctx context.Context) (int64
 	var failed int64
 	var failErrs []error
 	for i := range staleChecks {
-		if _, err := s.CompleteActivity(ctx, staleChecks[i].ID, activitytypes.StatusFailed, message, &errMessage, "Image update check failed"); err != nil {
+		if _, err := s.CompleteActivity(ctx, staleChecks[i].ID, activity.StatusFailed, message, &errMessage, "Image update check failed"); err != nil {
 			failErrs = append(failErrs, fmt.Errorf("fail stale image update check %s: %w", staleChecks[i].ID, err))
 			continue
 		}
@@ -939,11 +942,11 @@ func (s *ActivityService) FailAbandonedActivities(ctx context.Context) (int64, e
 	}
 
 	cutoff := time.Now().Add(-abandonedActivityGrace)
-	activeStatuses := []activitytypes.Status{activitytypes.StatusQueued, activitytypes.StatusRunning}
+	activeStatuses := []activity.Status{activity.StatusQueued, activity.StatusRunning}
 	var candidates []Activity
 	if err := s.db.WithContext(ctx).
 		Where("status IN ? AND started_at < ?", activeStatuses, cutoff).
-		Where("type <> ?", activitytypes.TypeJobRun).
+		Where("type <> ?", activity.TypeJobRun).
 		Find(&candidates).Error; err != nil {
 		return 0, fmt.Errorf("find abandoned activities: %w", err)
 	}
@@ -962,7 +965,7 @@ func (s *ActivityService) FailAbandonedActivities(ctx context.Context) (int64, e
 		var finalized Activity
 		lostRace := false
 		if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-			updates := completeActivityUpdatesInternal(candidates[i].StartedAt, activitytypes.StatusFailed, message, &errMessage, nil, now)
+			updates := completeActivityUpdatesInternal(candidates[i].StartedAt, activity.StatusFailed, message, &errMessage, nil, now)
 			result := tx.Model(&Activity{}).
 				Where("id = ? AND status IN ?", activityID, activeStatuses).
 				Updates(updates)
@@ -1003,8 +1006,8 @@ func (s *ActivityService) ResolveOrphanedQueuedActivities(ctx context.Context, p
 
 	var queued []Activity
 	if err := s.db.WithContext(ctx).
-		Where("status = ?", activitytypes.StatusQueued).
-		Where("type <> ?", activitytypes.TypeJobRun).
+		Where("status = ?", activity.StatusQueued).
+		Where("type <> ?", activity.TypeJobRun).
 		Where("id NOT IN ?", append(protectedIDs, "")).
 		Find(&queued).Error; err != nil {
 		return 0, fmt.Errorf("find orphaned queued activities: %w", err)
@@ -1015,7 +1018,7 @@ func (s *ActivityService) ResolveOrphanedQueuedActivities(ctx context.Context, p
 	var failed int64
 	var failErrs []error
 	for i := range queued {
-		if _, err := s.CompleteActivity(ctx, queued[i].ID, activitytypes.StatusFailed, message, &errMessage); err != nil {
+		if _, err := s.CompleteActivity(ctx, queued[i].ID, activity.StatusFailed, message, &errMessage); err != nil {
 			failErrs = append(failErrs, fmt.Errorf("fail orphaned queued activity %s: %w", queued[i].ID, err))
 			continue
 		}
@@ -1040,11 +1043,11 @@ func (s *ActivityService) PatchActivityMetadata(ctx context.Context, activityID 
 	}
 
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var activity Activity
-		if err := tx.First(&activity, "id = ?", activityID).Error; err != nil {
+		var record Activity
+		if err := tx.First(&record, "id = ?", activityID).Error; err != nil {
 			return fmt.Errorf("failed to load activity: %w", err)
 		}
-		merged := cloneJSONInternal(activity.Metadata)
+		merged := cloneJSONInternal(record.Metadata)
 		if merged == nil {
 			merged = database.JSON{}
 		}
@@ -1068,7 +1071,7 @@ func (s *ActivityService) ResolveStaleAutoUpdateActivities(ctx context.Context, 
 
 	var stale []Activity
 	if err := s.db.WithContext(ctx).
-		Where("type = ? AND status = ?", activitytypes.TypeAutoUpdate, activitytypes.StatusRunning).
+		Where("type = ? AND status = ?", activity.TypeAutoUpdate, activity.StatusRunning).
 		Where("id NOT IN ?", append(protectedIDs, "")).
 		Find(&stale).Error; err != nil {
 		return 0, fmt.Errorf("find stale auto-update activities: %w", err)
@@ -1077,11 +1080,11 @@ func (s *ActivityService) ResolveStaleAutoUpdateActivities(ctx context.Context, 
 	var resolved int64
 	var resolveErrs []error
 	for i := range stale {
-		status := activitytypes.StatusFailed
+		status := activity.StatusFailed
 		message := "Auto-update interrupted by Arcane restart"
 		var errMessage *string
 		if selfUpdate, _ := stale[i].Metadata["selfUpdateTriggered"].(bool); selfUpdate {
-			status = activitytypes.StatusSuccess
+			status = activity.StatusSuccess
 			message = "Auto-update completed — Arcane restarted with the updated image"
 		} else {
 			errMessage = new(message)
@@ -1096,7 +1099,7 @@ func (s *ActivityService) ResolveStaleAutoUpdateActivities(ctx context.Context, 
 	return resolved, errors.Join(resolveErrs...)
 }
 
-func completeActivityUpdatesInternal(startedAt time.Time, status activitytypes.Status, finalMessage string, errMessage *string, finalStep []string, now time.Time) map[string]any {
+func completeActivityUpdatesInternal(startedAt time.Time, status activity.Status, finalMessage string, errMessage *string, finalStep []string, now time.Time) map[string]any {
 	updates := map[string]any{
 		"status":      status,
 		"ended_at":    now,
@@ -1114,13 +1117,13 @@ func completeActivityUpdatesInternal(startedAt time.Time, status activitytypes.S
 	if errMessage != nil && strings.TrimSpace(*errMessage) != "" {
 		updates["error"] = strings.TrimSpace(*errMessage)
 	}
-	if status == activitytypes.StatusSuccess {
+	if status == activity.StatusSuccess {
 		updates["progress"] = 100
 	}
 	return updates
 }
 
-func (s *ActivityService) ListActivitiesPaginated(ctx context.Context, environmentID string, params pagination.QueryParams) ([]activitytypes.Activity, pagination.Response, error) {
+func (s *ActivityService) ListActivitiesPaginated(ctx context.Context, environmentID string, params pagination.QueryParams) ([]activity.Activity, pagination.Response, error) {
 	if err := s.checkInitInternal(); err != nil {
 		return nil, pagination.Response{}, err
 	}
@@ -1160,14 +1163,14 @@ func (s *ActivityService) ListActivitiesPaginated(ctx context.Context, environme
 		return nil, pagination.Response{}, fmt.Errorf("failed to paginate activities: %w", err)
 	}
 
-	out := make([]activitytypes.Activity, 0, len(activities))
+	out := make([]activity.Activity, 0, len(activities))
 	for i := range activities {
 		out = append(out, activityToDTOInternal(&activities[i]))
 	}
 	return out, paginationResp, nil
 }
 
-func (s *ActivityService) GetActivityDetail(ctx context.Context, environmentID, activityID string, limit int) (*activitytypes.Detail, error) {
+func (s *ActivityService) GetActivityDetail(ctx context.Context, environmentID, activityID string, limit int) (*activity.Detail, error) {
 	if err := s.checkInitInternal(); err != nil {
 		return nil, err
 	}
@@ -1191,12 +1194,12 @@ func (s *ActivityService) GetActivityDetail(ctx context.Context, environmentID, 
 		return nil, fmt.Errorf("failed to load activity messages: %w", err)
 	}
 
-	outMessages := make([]activitytypes.Message, 0, len(messages))
+	outMessages := make([]activity.Message, 0, len(messages))
 	for _, v := range slices.Backward(messages) {
 		outMessages = append(outMessages, activityMessageToDTOInternal(&v))
 	}
 
-	return &activitytypes.Detail{
+	return &activity.Detail{
 		Activity: activityToDTOInternal(&model),
 		Messages: outMessages,
 	}, nil
@@ -1274,8 +1277,8 @@ func (s *ActivityService) DeleteHistory(ctx context.Context, environmentID strin
 	return deleted, nil
 }
 
-func (s *ActivityService) Subscribe(environmentID string) (<-chan activitytypes.StreamEvent, func() bool, func()) {
-	ch := make(chan activitytypes.StreamEvent, 64)
+func (s *ActivityService) Subscribe(environmentID string) (<-chan activity.StreamEvent, func() bool, func()) {
+	ch := make(chan activity.StreamEvent, 64)
 	if s == nil {
 		close(ch)
 		return ch, func() bool { return false }, func() {}
@@ -1324,14 +1327,14 @@ func (s *ActivityService) Subscribe(environmentID string) (<-chan activitytypes.
 	return ch, missedEvents, unsubscribe
 }
 
-func (s *ActivityService) publishActivityInternal(activity activitytypes.Activity) {
-	if !s.admitActivityPublishInternal(activity) {
+func (s *ActivityService) publishActivityInternal(item activity.Activity) {
+	if !s.admitActivityPublishInternal(item) {
 		return
 	}
-	s.publishInternal(activity.EnvironmentID, activitytypes.StreamEvent{
+	s.publishInternal(item.EnvironmentID, activity.StreamEvent{
 		Type:       "activity",
-		ActivityID: activity.ID,
-		Activity:   &activity,
+		ActivityID: item.ID,
+		Activity:   &item,
 		Timestamp:  time.Now(),
 	})
 }
@@ -1342,10 +1345,10 @@ func (s *ActivityService) publishLockInternal(activityID string) *sync.Mutex {
 	return &s.publishLocks[h.Sum32()%uint32(len(s.publishLocks))]
 }
 
-func isTerminalActivityStatusInternal(status activitytypes.Status) bool {
-	return status == activitytypes.StatusSuccess ||
-		status == activitytypes.StatusFailed ||
-		status == activitytypes.StatusCancelled
+func isTerminalActivityStatusInternal(status activity.Status) bool {
+	return status == activity.StatusSuccess ||
+		status == activity.StatusFailed ||
+		status == activity.StatusCancelled
 }
 
 // admitActivityPublishInternal orders activity events across the commit →
@@ -1357,14 +1360,14 @@ func isTerminalActivityStatusInternal(status activitytypes.Status) bool {
 // Activities never leave a terminal status, so once a terminal snapshot is
 // published, any later non-terminal snapshot for that ID is stale by
 // construction.
-func (s *ActivityService) admitActivityPublishInternal(activity activitytypes.Activity) bool {
+func (s *ActivityService) admitActivityPublishInternal(item activity.Activity) bool {
 	if s == nil {
 		return true
 	}
 	s.terminalPublishedMu.Lock()
 	defer s.terminalPublishedMu.Unlock()
-	if !isTerminalActivityStatusInternal(activity.Status) {
-		_, sealed := s.terminalPublished[activity.ID]
+	if !isTerminalActivityStatusInternal(item.Status) {
+		_, sealed := s.terminalPublished[item.ID]
 		return !sealed
 	}
 	now := time.Now()
@@ -1376,12 +1379,12 @@ func (s *ActivityService) admitActivityPublishInternal(activity activitytypes.Ac
 	if s.terminalPublished == nil {
 		s.terminalPublished = map[string]time.Time{}
 	}
-	s.terminalPublished[activity.ID] = now
+	s.terminalPublished[item.ID] = now
 	return true
 }
 
-func (s *ActivityService) publishMessageInternal(environmentID string, activityType activitytypes.Type, message activitytypes.Message) {
-	s.publishInternal(environmentID, activitytypes.StreamEvent{
+func (s *ActivityService) publishMessageInternal(environmentID string, activityType activity.Type, message activity.Message) {
+	s.publishInternal(environmentID, activity.StreamEvent{
 		Type:         "message",
 		ActivityID:   message.ActivityID,
 		ActivityType: activityType,
@@ -1390,7 +1393,7 @@ func (s *ActivityService) publishMessageInternal(environmentID string, activityT
 	})
 }
 
-func (s *ActivityService) publishInternal(environmentID string, event activitytypes.StreamEvent) {
+func (s *ActivityService) publishInternal(environmentID string, event activity.StreamEvent) {
 	if s == nil {
 		return
 	}
@@ -1414,11 +1417,11 @@ func (s *ActivityService) publishInternal(environmentID string, event activityty
 	}
 }
 
-func activityToDTOInternal(model *Activity) activitytypes.Activity {
+func activityToDTOInternal(model *Activity) activity.Activity {
 	if model == nil {
-		return activitytypes.Activity{}
+		return activity.Activity{}
 	}
-	return activitytypes.Activity{
+	return activity.Activity{
 		ID:                  model.ID,
 		EnvironmentID:       model.EnvironmentID,
 		SourceEnvironmentID: model.EnvironmentID,
@@ -1442,11 +1445,11 @@ func activityToDTOInternal(model *Activity) activitytypes.Activity {
 	}
 }
 
-func activityMessageToDTOInternal(model *ActivityMessage) activitytypes.Message {
+func activityMessageToDTOInternal(model *ActivityMessage) activity.Message {
 	if model == nil {
-		return activitytypes.Message{}
+		return activity.Message{}
 	}
-	return activitytypes.Message{
+	return activity.Message{
 		ID:         model.ID,
 		ActivityID: model.ActivityID,
 		Level:      model.Level,
@@ -1488,11 +1491,11 @@ func jsonToMapInternal(input database.JSON) map[string]any {
 	return out
 }
 
-func terminalActivityStatusesInternal() []activitytypes.Status {
-	return []activitytypes.Status{
-		activitytypes.StatusSuccess,
-		activitytypes.StatusFailed,
-		activitytypes.StatusCancelled,
+func terminalActivityStatusesInternal() []activity.Status {
+	return []activity.Status{
+		activity.StatusSuccess,
+		activity.StatusFailed,
+		activity.StatusCancelled,
 	}
 }
 
@@ -1549,12 +1552,12 @@ func deleteActivitiesByIDInternal(tx *gorm.DB, activityIDs []string) (int64, err
 	return totalDeleted, nil
 }
 
-func activityStartedByDTOInternal(model *Activity) *activitytypes.StartedBy {
+func activityStartedByDTOInternal(model *Activity) *activity.StartedBy {
 	if model.StartedByUsername == nil || strings.TrimSpace(*model.StartedByUsername) == "" {
-		return &activitytypes.StartedBy{Username: "System"}
+		return &activity.StartedBy{Username: "System"}
 	}
 
-	startedBy := &activitytypes.StartedBy{
+	startedBy := &activity.StartedBy{
 		Username: strings.TrimSpace(*model.StartedByUsername),
 	}
 	if model.StartedByUserID != nil {
@@ -1573,9 +1576,9 @@ func (s *ActivityService) FailInterruptedBackups(ctx context.Context, protectedI
 		ctx,
 	).Where(
 		"status IN ?",
-		[]activitytypes.Status{
-			activitytypes.StatusQueued,
-			activitytypes.StatusRunning,
+		[]activity.Status{
+			activity.StatusQueued,
+			activity.StatusRunning,
 		},
 	).Where(
 		"id NOT IN ?",
@@ -1597,9 +1600,242 @@ func (s *ActivityService) FailInterruptedBackups(ctx context.Context, protectedI
 		switch entry.Metadata["action"] {
 		case "create_volume_backup", "create_system_backup", "run_system_volume_backups", "scheduled_volume_backup", "scheduled_system_backup":
 			errMessage := message
-			_, err := s.CompleteActivity(ctx, entry.ID, activitytypes.StatusFailed, message, &errMessage)
+			_, err := s.CompleteActivity(ctx, entry.ID, activity.StatusFailed, message, &errMessage)
 			result = errors.Join(result, err)
 		}
 	}
 	return result
+}
+
+// SyncJobRun updates a durable job summary without taking an execution slot.
+// Only the queue owns its lifecycle, including reopening it for an explicit retry.
+func (s *ActivityService) SyncJobRun(ctx context.Context, run scheduler.Run, name string) error {
+	if err := s.checkInitInternal(); err != nil {
+		return err
+	}
+	if run.ActivityID == "" {
+		return errors.New("job activity ID is required")
+	}
+	lock := s.publishLockInternal(run.ActivityID)
+	lock.Lock()
+	defer lock.Unlock()
+	model := jobActivityInternal(run, name)
+	changed := false
+	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var existing Activity
+		err := tx.First(&existing, "id = ?", run.ActivityID).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			changed = true
+			return tx.Create(&model).Error
+		}
+		if err != nil {
+			return err
+		}
+		if existing.Type != activity.TypeJobRun {
+			return errors.New("job activity identity belongs to another operation")
+		}
+		if stamp, ok := existing.Metadata["runUpdatedAt"].(string); ok {
+			previous, parseErr := time.Parse(time.RFC3339Nano, stamp)
+			if parseErr == nil && !previous.Before(run.UpdatedAt) {
+				if existing.EnvironmentID == model.EnvironmentID {
+					return nil
+				}
+				existing.EnvironmentID = model.EnvironmentID
+				model = existing
+			}
+		}
+		changed = true
+		return tx.Table("activities").Where("id = ?", run.ActivityID).Updates(map[string]any{
+			"environment_id": model.EnvironmentID,
+			"status":         model.Status, "step": model.Step, "latest_message": model.LatestMessage,
+			"ended_at": model.EndedAt, "duration_ms": model.DurationMs, "error": model.Error,
+			"metadata": model.Metadata, "updated_at": model.UpdatedAt,
+		}).Error
+	}); err != nil {
+		return fmt.Errorf("synchronize job activity: %w", err)
+	}
+	if changed {
+		// Ordinary activities cannot reopen. Job summaries can, after an explicit
+		// retry; the publish lock and durable timestamp reject stale snapshots.
+		s.terminalPublishedMu.Lock()
+		delete(s.terminalPublished, model.ID)
+		s.terminalPublishedMu.Unlock()
+		s.publishActivityInternal(activityToDTOInternal(&model))
+	}
+	return nil
+}
+
+func jobActivityInternal(run scheduler.Run, name string) Activity {
+	status := activity.StatusQueued
+	switch run.Status {
+	case scheduler.Running:
+		status = activity.StatusRunning
+	case scheduler.Succeeded, scheduler.Skipped:
+		status = activity.StatusSuccess
+	case scheduler.Failed, scheduler.Partial, scheduler.NeedsAttention:
+		status = activity.StatusFailed
+	case scheduler.Canceled:
+		status = activity.StatusCancelled
+	case scheduler.Queued, scheduler.Waiting, scheduler.Retrying:
+	}
+	message := cmp.Or(run.Outcome.Message, name+": "+string(run.Status))
+	model := Activity{
+		ID: run.ActivityID, CreatedAt: run.CreatedAt, UpdatedAt: new(run.UpdatedAt),
+		EnvironmentID: run.EnvironmentID, BatchID: new(run.ID), Type: activity.TypeJobRun, Status: status,
+		ResourceType: new("job"), ResourceID: new(run.JobID), ResourceName: new(name),
+		StartedAt: run.CreatedAt, Step: string(run.Status), LatestMessage: message,
+		Metadata: database.JSON{
+			"jobId": run.JobID, "runId": run.ID, "environmentId": run.EnvironmentID,
+			"jobStatus": string(run.Status), "trigger": run.Trigger, "attemptCount": run.AttemptCount,
+			"runUpdatedAt": run.UpdatedAt.Format(time.RFC3339Nano), "domainActivityId": run.Outcome.ActivityID,
+		},
+	}
+	if run.RequestedBy != "" {
+		model.StartedByUserID = new(run.RequestedBy)
+		model.StartedByUsername = new(run.RequestedBy)
+	}
+	if run.Resolution != nil {
+		model.Metadata["resolution"] = run.Resolution
+		if run.Resolution.ResolvedBy != user.SystemUser.Username {
+			model.LatestMessage = "Resolved after review"
+		}
+	}
+	if isTerminalActivityStatusInternal(status) {
+		model.EndedAt = new(run.UpdatedAt)
+		model.DurationMs = new(max(int64(0), run.UpdatedAt.Sub(run.CreatedAt).Milliseconds()))
+	}
+	if status == activity.StatusFailed {
+		model.Error = new(message)
+	}
+	return model
+}
+
+// remoteActivityPageCeiling mirrors the agent's page clamp in PaginateAndSortDB.
+const remoteActivityPageCeiling = 100
+
+// normalizeRemoteActivityParamsInternal applies the agent's paging bounds so both
+// sources are cut the same way; -1 stays the explicit "show all" sentinel.
+func normalizeRemoteActivityParamsInternal(params pagination.QueryParams) pagination.QueryParams {
+	params.Start = max(params.Start, 0)
+	switch {
+	case params.Limit == -1:
+	case params.Limit <= 0:
+		params.Limit = 20
+	case params.Limit > remoteActivityPageCeiling:
+		params.Limit = remoteActivityPageCeiling
+	}
+	return params
+}
+
+// collectActivityWindowInternal reads window rows from a source in pages the
+// agent accepts, stopping early when the source runs out. -1 reads everything.
+func collectActivityWindowInternal(window int, fetchPage func(start, limit int) ([]activity.Activity, int64, error)) ([]activity.Activity, int64, error) {
+	if window == -1 {
+		return fetchPage(0, -1)
+	}
+	var rows []activity.Activity
+	var total int64
+	for len(rows) < window {
+		limit := min(remoteActivityPageCeiling, window-len(rows))
+		page, pageTotal, err := fetchPage(len(rows), limit)
+		if err != nil {
+			return nil, 0, err
+		}
+		rows = append(rows, page...)
+		total = pageTotal
+		if len(page) < limit {
+			break
+		}
+	}
+	return rows, total, nil
+}
+
+// ListRemoteActivities combines manager-owned summaries with agent-owned work
+// before slicing the page. The remote records must already match the filters
+// and be the agent's newest window; remoteTotal is the agent's filtered count.
+func (
+	s *ActivityService,
+) ListRemoteActivities(
+	ctx context.Context,
+	environmentID string,
+	remote []activity.Activity,
+	remoteTotal int64,
+	params pagination.QueryParams,
+) (
+	[]activity.Activity,
+	pagination.Response,
+	error,
+) {
+	params = normalizeRemoteActivityParamsInternal(params)
+	window := kit.Ternary(params.Limit == -1, -1, params.Start+params.Limit)
+	activities, localTotal, err := collectActivityWindowInternal(window, func(start, limit int) ([]activity.Activity, int64, error) {
+		local := params
+		local.Start, local.Limit = start, limit
+		rows, page, err := s.ListActivitiesPaginated(ctx, environmentID, local)
+		if err != nil {
+			return nil, 0, err
+		}
+		return rows, page.TotalItems, nil
+	})
+	if err != nil {
+		return nil, pagination.Response{}, err
+	}
+	for _, item := range remote {
+		item.EnvironmentID = environmentID
+		activities = append(activities, item)
+	}
+	total := remoteTotal + localTotal
+	config := pagination.Config[activity.Activity]{SortBindings: []pagination.SortBinding[activity.Activity]{{
+		Fn: func(a, b activity.Activity) int { return compareActivitiesInternal(a, b, params) },
+	}}}
+	pageParams := params
+	pageParams.Order = pagination.SortAsc
+	activities = config.OrderAndPaginate(activities, pageParams)
+	return activities, pagination.BuildResponse(total, 0, params), nil
+}
+
+func compareActivitiesInternal(a, b activity.Activity, params pagination.QueryParams) int {
+	if params.Sort == "" {
+		aActive := a.Status == activity.StatusQueued || a.Status == activity.StatusRunning
+		bActive := b.Status == activity.StatusQueued || b.Status == activity.StatusRunning
+		if aActive != bActive {
+			return kit.Ternary(aActive, -1, 1)
+		}
+		aTime, bTime := a.CreatedAt, b.CreatedAt
+		if a.EndedAt != nil {
+			aTime = *a.EndedAt
+		}
+		if b.EndedAt != nil {
+			bTime = *b.EndedAt
+		}
+		return cmp.Or(bTime.Compare(aTime), strings.Compare(b.ID, a.ID))
+	}
+
+	var result int
+	switch params.Sort {
+	case "environmentId":
+		result = strings.Compare(a.EnvironmentID, b.EnvironmentID)
+	case "type":
+		result = cmp.Compare(a.Type, b.Type)
+	case "status":
+		result = cmp.Compare(a.Status, b.Status)
+	case "resourceType":
+		result = strings.Compare(kit.FromPtr(a.ResourceType), kit.FromPtr(b.ResourceType))
+	case "resourceName":
+		result = strings.Compare(kit.FromPtr(a.ResourceName), kit.FromPtr(b.ResourceName))
+	case "startedAt":
+		result = a.StartedAt.Compare(b.StartedAt)
+	case "createdAt":
+		result = a.CreatedAt.Compare(b.CreatedAt)
+	case "updatedAt":
+		result = kit.FromPtr(a.UpdatedAt).Compare(kit.FromPtr(b.UpdatedAt))
+	case "endedAt":
+		result = kit.FromPtr(a.EndedAt).Compare(kit.FromPtr(b.EndedAt))
+	case "durationMs":
+		result = cmp.Compare(kit.FromPtr(a.DurationMs), kit.FromPtr(b.DurationMs))
+	}
+	if params.Order == pagination.SortDesc {
+		result = -result
+	}
+	return cmp.Or(result, strings.Compare(a.ID, b.ID))
 }

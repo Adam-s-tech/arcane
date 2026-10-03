@@ -1,9 +1,19 @@
 <script lang="ts" generics="TData extends Record<string, any>">
-	import type { ArcaneSvelteTable } from './table-features';
+	import type { Snippet } from 'svelte';
+
+	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+	import * as ArcaneTooltip from '#lib/components/arcane-tooltip/index.js';
+	import * as InputGroup from '#lib/components/ui/input-group/index.js';
+	import * as Popover from '#lib/components/ui/popover/index.js';
+	import { ResetIcon, SearchIcon, FilterIcon } from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { cn } from '#lib/utils.js';
+	import { debounced } from '#lib/utils/ws.js';
+
 	import DataTableFacetedFilter from './arcane-table-filter.svelte';
 	import DataTableTextFilter from './arcane-table-text-filter.svelte';
 	import DataTableViewOptions from './arcane-table-view-options.svelte';
-	import * as InputGroup from '#lib/components/ui/input-group/index.js';
+	import type { BulkAction } from './arcane-table.types.svelte';
 	import {
 		imageUpdateFilters,
 		usageFilters,
@@ -11,15 +21,7 @@
 		vulnerabilitySeverityFilters,
 		projectStatusFilters
 	} from './data.js';
-	import { debounced } from '#lib/utils/ws.js';
-	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import type { Snippet } from 'svelte';
-	import { cn } from '#lib/utils.js';
-	import { ResetIcon, SearchIcon, FilterIcon } from '#lib/icons/index.js';
-	import type { BulkAction } from './arcane-table.types.svelte';
-	import * as Popover from '#lib/components/ui/popover/index.js';
-	import * as ArcaneTooltip from '#lib/components/arcane-tooltip/index.js';
+	import type { ArcaneSvelteTable } from './table-features';
 
 	let {
 		table,

@@ -1,20 +1,16 @@
 <script lang="ts">
-	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
-	import RemoveMenuItem from '#lib/components/arcane-table/cells/remove-menu-item.svelte';
 	import { toast } from 'svelte-sonner';
-	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
-	import { tryCatch } from '#lib/utils/try-catch.js';
-	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
-	import type { GitRepository } from '#lib/types/automation.js';
+
+	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
+	import CreatedAtCell from '#lib/components/arcane-table/cells/created-at-cell.svelte';
+	import EnabledStatusCell from '#lib/components/arcane-table/cells/enabled-status-cell.svelte';
+	import RemoveMenuItem from '#lib/components/arcane-table/cells/remove-menu-item.svelte';
 	import type { ColumnSpec, BulkAction } from '#lib/components/arcane-table/index.js';
 	import { UniversalMobileCard } from '#lib/components/arcane-table/index.js';
-	import EnabledStatusCell from '#lib/components/arcane-table/cells/enabled-status-cell.svelte';
-	import CreatedAtCell from '#lib/components/arcane-table/cells/created-at-cell.svelte';
-	import { m } from '#lib/paraglide/messages.js';
-	import { gitRepositoryService } from '#lib/services/git-repository-service.js';
+	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
+	import IfPermitted from '#lib/components/if-permitted.svelte';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import {
 		EditIcon as PencilIcon,
 		TestIcon as TestTubeIcon,
@@ -23,9 +19,14 @@
 		ApiKeyIcon as KeyIcon,
 		ExternalLinkIcon as LinkIcon
 	} from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { gitRepositoryService } from '#lib/services/git-repository-service.js';
+	import type { GitRepository } from '#lib/types/automation.js';
+	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
+	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
 	import { hasPermission } from '#lib/utils/auth.js';
-	import IfPermitted from '#lib/components/if-permitted.svelte';
 	import { bulkConfirmAndRun, confirmAndRun } from '#lib/utils/bulk-actions.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	type FieldVisibility = Record<string, boolean>;
 

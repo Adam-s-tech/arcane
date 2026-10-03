@@ -1,281 +1,281 @@
 {
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "Start Development Environment",
-      "detail": "Start the Arcane development environment with hot reload",
-      "type": "shell",
-      "command": "./scripts/development/dev.sh",
-      "args": ["start"],
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      },
-      "presentation": {
-        "reveal": "silent",
-        "close": true,
-        "clear": false,
-        "echo": false,
-        "focus": false,
-        "showReuseMessage": false
-      },
-      "isBackground": true,
-      "options": {
-        "statusbar": {
-          "hide": false,
-          "label": "Start"
-        }
-      }
-    },
-    {
-      "label": "Stop Development Environment",
-      "detail": "Stop the Arcane development environment",
-      "type": "shell",
-      "command": "./scripts/development/dev.sh",
-      "args": ["stop"],
-      "group": "build",
-      "presentation": {
-        "reveal": "silent",
-        "close": true,
-        "clear": false,
-        "echo": false,
-        "focus": false,
-        "showReuseMessage": false
-      },
-      "isBackground": true,
-      "options": {
-        "statusbar": {
-          "hide": false,
-          "label": "Stop"
-        }
-      }
-    },
-    {
-      "label": "Restart Development Environment",
-      "detail": "Restart the Arcane development environment",
-      "type": "shell",
-      "command": "./scripts/development/dev.sh",
-      "args": ["restart"],
-      "group": "build",
-      "presentation": {
-        "reveal": "silent",
-        "close": true,
-        "clear": false,
-        "echo": false,
-        "focus": false,
-        "showReuseMessage": false
-      },
-      "isBackground": true,
-      "options": {
-        "statusbar": {
-          "hide": false,
-          "label": "Restart"
-        }
-      }
-    },
-    {
-      "label": "Rebuild Development Environment",
-      "detail": "Rebuild the Arcane development environment",
-      "type": "shell",
-      "command": "./scripts/development/dev.sh",
-      "args": ["rebuild"],
-      "group": "build",
-      "presentation": {
-        "reveal": "silent",
-        "close": true,
-        "clear": false,
-        "echo": false,
-        "focus": false,
-        "showReuseMessage": false
-      },
-      "isBackground": true,
-      "options": {
-        "statusbar": {
-          "hide": false,
-          "label": "Rebuild"
-        }
-      }
-    },
-    {
-      "label": "Clean Development Environment",
-      "detail": "Clean the Arcane development environment",
-      "type": "shell",
-      "command": "./scripts/development/dev.sh",
-      "args": ["clean"],
-      "group": "build",
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": true,
-        "panel": "dedicated",
-        "showReuseMessage": false,
-        "clear": true,
-        "close": true
-      },
-      "options": {
-        "statusbar": {
-          "hide": false,
-          "label": "Clean"
-        }
-      }
-    },
-    {
-      "label": "Logs Development Environment",
-      "detail": "View the logs of the Arcane development environment",
-      "type": "shell",
-      "command": "./scripts/development/dev.sh",
-      "args": ["logs", "${input:logService}"],
-      "group": "test",
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": true,
-        "panel": "dedicated",
-        "showReuseMessage": false,
-        "clear": true
-      },
-      "options": {
-        "statusbar": {
-          "hide": false,
-          "label": "Logs"
-        }
-      }
-    },
-    {
-      "label": "Show Environment Variables",
-      "detail": "Show current environment configuration from running container",
-      "type": "shell",
-      "command": "./scripts/development/dev.sh",
-      "args": ["env", "${input:envService}"],
-      "group": "test",
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": true,
-        "panel": "dedicated",
-        "showReuseMessage": false,
-        "clear": true
-      },
-      "options": {
-        "statusbar": {
-          "hide": false,
-          "label": "Env Vars"
-        }
-      }
-    },
-    {
-      "label": "Open Frontend",
-      "detail": "Open the frontend application in your default browser",
-      "type": "shell",
-      "command": "open",
-      "args": ["http://localhost:3000"],
-      "group": "test",
-      "presentation": {
-        "reveal": "never",
-        "close": true,
-        "clear": false,
-        "echo": false,
-        "focus": false,
-        "showReuseMessage": false
-      },
-      "runOptions": {
-        "runOn": "default"
-      },
-      "isBackground": true,
-      "options": {
-        "statusbar": {
-          "hide": false,
-          "label": "Open Frontend"
-        }
-      }
-    },
-    {
-      "label": "Shell into Service",
-      "detail": "Open interactive shell in a development service container",
-      "type": "shell",
-      "command": "./scripts/development/dev.sh",
-      "args": ["shell", "${input:shellService}"],
-      "group": "test",
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": true,
-        "panel": "dedicated",
-        "showReuseMessage": false,
-        "clear": true
-      },
-      "options": {
-        "statusbar": {
-          "hide": true,
-          "label": "Shell"
-        }
-      }
-    }
-  ],
-  "inputs": [
-    {
-      "id": "logService",
-      "description": "Which service logs to view",
-      "type": "pickString",
-      "options": [
-        {
-          "label": "All Services",
-          "value": ""
-        },
-        {
-          "label": "Frontend Only",
-          "value": "frontend"
-        },
-        {
-          "label": "Backend Only",
-          "value": "backend"
-        },
-        {
-          "label": "Agent Only",
-          "value": "agent"
-        }
-      ],
-      "default": ""
-    },
-    {
-      "id": "envService",
-      "description": "Which service environment to view",
-      "type": "pickString",
-      "options": [
-        {
-          "label": "Backend",
-          "value": "backend"
-        },
-        {
-          "label": "Frontend",
-          "value": "frontend"
-        },
-        {
-          "label": "Agent",
-          "value": "agent"
-        }
-      ],
-      "default": "backend"
-    },
-    {
-      "id": "shellService",
-      "description": "Which service to open shell in",
-      "type": "pickString",
-      "options": [
-        {
-          "label": "Backend Container",
-          "value": "backend"
-        },
-        {
-          "label": "Frontend Container",
-          "value": "frontend"
-        },
-        {
-          "label": "Agent Container",
-          "value": "agent"
-        }
-      ],
-      "default": "backend"
-    }
-  ]
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Start Development Environment",
+			"detail": "Start the Arcane development environment with hot reload",
+			"type": "shell",
+			"command": "./scripts/development/dev.sh",
+			"args": ["start"],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"presentation": {
+				"reveal": "silent",
+				"close": true,
+				"clear": false,
+				"echo": false,
+				"focus": false,
+				"showReuseMessage": false
+			},
+			"isBackground": true,
+			"options": {
+				"statusbar": {
+					"hide": false,
+					"label": "Start"
+				}
+			}
+		},
+		{
+			"label": "Stop Development Environment",
+			"detail": "Stop the Arcane development environment",
+			"type": "shell",
+			"command": "./scripts/development/dev.sh",
+			"args": ["stop"],
+			"group": "build",
+			"presentation": {
+				"reveal": "silent",
+				"close": true,
+				"clear": false,
+				"echo": false,
+				"focus": false,
+				"showReuseMessage": false
+			},
+			"isBackground": true,
+			"options": {
+				"statusbar": {
+					"hide": false,
+					"label": "Stop"
+				}
+			}
+		},
+		{
+			"label": "Restart Development Environment",
+			"detail": "Restart the Arcane development environment",
+			"type": "shell",
+			"command": "./scripts/development/dev.sh",
+			"args": ["restart"],
+			"group": "build",
+			"presentation": {
+				"reveal": "silent",
+				"close": true,
+				"clear": false,
+				"echo": false,
+				"focus": false,
+				"showReuseMessage": false
+			},
+			"isBackground": true,
+			"options": {
+				"statusbar": {
+					"hide": false,
+					"label": "Restart"
+				}
+			}
+		},
+		{
+			"label": "Rebuild Development Environment",
+			"detail": "Rebuild the Arcane development environment",
+			"type": "shell",
+			"command": "./scripts/development/dev.sh",
+			"args": ["rebuild"],
+			"group": "build",
+			"presentation": {
+				"reveal": "silent",
+				"close": true,
+				"clear": false,
+				"echo": false,
+				"focus": false,
+				"showReuseMessage": false
+			},
+			"isBackground": true,
+			"options": {
+				"statusbar": {
+					"hide": false,
+					"label": "Rebuild"
+				}
+			}
+		},
+		{
+			"label": "Clean Development Environment",
+			"detail": "Clean the Arcane development environment",
+			"type": "shell",
+			"command": "./scripts/development/dev.sh",
+			"args": ["clean"],
+			"group": "build",
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"focus": true,
+				"panel": "dedicated",
+				"showReuseMessage": false,
+				"clear": true,
+				"close": true
+			},
+			"options": {
+				"statusbar": {
+					"hide": false,
+					"label": "Clean"
+				}
+			}
+		},
+		{
+			"label": "Logs Development Environment",
+			"detail": "View the logs of the Arcane development environment",
+			"type": "shell",
+			"command": "./scripts/development/dev.sh",
+			"args": ["logs", "${input:logService}"],
+			"group": "test",
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"focus": true,
+				"panel": "dedicated",
+				"showReuseMessage": false,
+				"clear": true
+			},
+			"options": {
+				"statusbar": {
+					"hide": false,
+					"label": "Logs"
+				}
+			}
+		},
+		{
+			"label": "Show Environment Variables",
+			"detail": "Show current environment configuration from running container",
+			"type": "shell",
+			"command": "./scripts/development/dev.sh",
+			"args": ["env", "${input:envService}"],
+			"group": "test",
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"focus": true,
+				"panel": "dedicated",
+				"showReuseMessage": false,
+				"clear": true
+			},
+			"options": {
+				"statusbar": {
+					"hide": false,
+					"label": "Env Vars"
+				}
+			}
+		},
+		{
+			"label": "Open Frontend",
+			"detail": "Open the frontend application in your default browser",
+			"type": "shell",
+			"command": "open",
+			"args": ["http://localhost:3000"],
+			"group": "test",
+			"presentation": {
+				"reveal": "never",
+				"close": true,
+				"clear": false,
+				"echo": false,
+				"focus": false,
+				"showReuseMessage": false
+			},
+			"runOptions": {
+				"runOn": "default"
+			},
+			"isBackground": true,
+			"options": {
+				"statusbar": {
+					"hide": false,
+					"label": "Open Frontend"
+				}
+			}
+		},
+		{
+			"label": "Shell into Service",
+			"detail": "Open interactive shell in a development service container",
+			"type": "shell",
+			"command": "./scripts/development/dev.sh",
+			"args": ["shell", "${input:shellService}"],
+			"group": "test",
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"focus": true,
+				"panel": "dedicated",
+				"showReuseMessage": false,
+				"clear": true
+			},
+			"options": {
+				"statusbar": {
+					"hide": true,
+					"label": "Shell"
+				}
+			}
+		}
+	],
+	"inputs": [
+		{
+			"id": "logService",
+			"description": "Which service logs to view",
+			"type": "pickString",
+			"options": [
+				{
+					"label": "All Services",
+					"value": ""
+				},
+				{
+					"label": "Frontend Only",
+					"value": "frontend"
+				},
+				{
+					"label": "Backend Only",
+					"value": "backend"
+				},
+				{
+					"label": "Agent Only",
+					"value": "agent"
+				}
+			],
+			"default": ""
+		},
+		{
+			"id": "envService",
+			"description": "Which service environment to view",
+			"type": "pickString",
+			"options": [
+				{
+					"label": "Backend",
+					"value": "backend"
+				},
+				{
+					"label": "Frontend",
+					"value": "frontend"
+				},
+				{
+					"label": "Agent",
+					"value": "agent"
+				}
+			],
+			"default": "backend"
+		},
+		{
+			"id": "shellService",
+			"description": "Which service to open shell in",
+			"type": "pickString",
+			"options": [
+				{
+					"label": "Backend Container",
+					"value": "backend"
+				},
+				{
+					"label": "Frontend Container",
+					"value": "frontend"
+				},
+				{
+					"label": "Agent Container",
+					"value": "agent"
+				}
+			],
+			"default": "backend"
+		}
+	]
 }

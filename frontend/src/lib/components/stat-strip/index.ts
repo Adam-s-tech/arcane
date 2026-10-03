@@ -1,5 +1,5 @@
-import Root from './stat-strip.svelte';
 import Item from './stat-strip-item.svelte';
+import Root from './stat-strip.svelte';
 
 export {
 	Root,

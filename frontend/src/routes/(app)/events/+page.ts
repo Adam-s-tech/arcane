@@ -1,9 +1,10 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
-import { eventService } from '#lib/services/event-service.js';
 import { queryKeys } from '#lib/query/query-keys.js';
+import { eventService } from '#lib/services/event-service.js';
 import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
-import { resolveInitialTableRequest } from '#lib/utils/tables.js';
 import { throwPageLoadError } from '#lib/utils/api.js';
+import { resolveInitialTableRequest } from '#lib/utils/tables.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
+
 import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ parent }) => {

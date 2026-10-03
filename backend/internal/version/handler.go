@@ -4,7 +4,6 @@ import (
 	"context"
 	"strings"
 
-	"github.com/danielgtaylor/huma/v2"
 	"github.com/getarcaneapp/arcane/types/v2/version"
 )
 
@@ -12,10 +11,6 @@ import (
 type VersionHandler struct {
 	versionService *VersionService
 }
-
-// ============================================================================
-// Input/Output Types
-// ============================================================================
 
 type GetVersionInput struct {
 	Current string `query:"current" doc:"Current version to compare against"`
@@ -30,39 +25,6 @@ type GetAppVersionInput struct{}
 type GetAppVersionOutput struct {
 	Body version.Info
 }
-
-// ============================================================================
-// Registration
-// ============================================================================
-
-// RegisterVersion registers version endpoints.
-func RegisterVersion(api huma.API, versionService *VersionService) {
-	h := &VersionHandler{versionService: versionService}
-
-	huma.Register(api, huma.Operation{
-		OperationID: "getVersion",
-		Method:      "GET",
-		Path:        "/version",
-		Summary:     "Get version information",
-		Description: "Get application version information and check for updates",
-		Tags:        []string{"Version"},
-		Security:    []map[string][]string{},
-	}, h.GetVersion)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "getAppVersion",
-		Method:      "GET",
-		Path:        "/app-version",
-		Summary:     "Get app version",
-		Description: "Get the current application version",
-		Tags:        []string{"Version"},
-		Security:    []map[string][]string{},
-	}, h.GetAppVersion)
-}
-
-// ============================================================================
-// Handler Methods
-// ============================================================================
 
 // GetVersion returns version information with optional update check.
 func (h *VersionHandler) GetVersion(ctx context.Context, input *GetVersionInput) (*GetVersionOutput, error) {

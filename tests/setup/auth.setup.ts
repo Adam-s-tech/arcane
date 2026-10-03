@@ -1,7 +1,6 @@
 import { test as setup } from '../fixtures/test.fixture';
 import authUtil from '../utils/auth.util';
-
-const authFile = '.auth/login.json';
+import { authStateFile } from '../utils/report';
 
 setup('authenticate', async ({ page }) => {
 	const currentPassword = await authUtil.login(page);
@@ -10,5 +9,5 @@ setup('authenticate', async ({ page }) => {
 
 	await authUtil.changeDefaultPassword(page, currentPassword, authUtil.TEST_PASSWORD);
 
-	await page.context().storageState({ path: authFile });
+	await page.context().storageState({ path: authStateFile });
 });

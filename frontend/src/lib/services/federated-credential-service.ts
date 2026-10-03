@@ -1,7 +1,8 @@
-import BaseAPIService from './api-service';
 import type { CreateFederatedCredential, FederatedCredential, UpdateFederatedCredential } from '#lib/types/auth.js';
 import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
 import { transformPaginationParams } from '#lib/utils/tables.js';
+
+import BaseAPIService from './api-service';
 
 class FederatedCredentialAPIService extends BaseAPIService {
 	async list(options?: SearchPaginationSortRequest): Promise<Paginated<FederatedCredential>> {

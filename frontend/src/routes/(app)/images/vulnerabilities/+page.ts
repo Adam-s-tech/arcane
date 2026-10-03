@@ -1,4 +1,5 @@
 import { redirect } from '@sveltejs/kit';
+
 import type { PageLoad } from './$types';
 
 // Vulnerabilities moved to the top-level security section; this route exists so

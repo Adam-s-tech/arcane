@@ -1,15 +1,15 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
-	import * as ResponsiveDialog from '#lib/components/ui/responsive-dialog/index.js';
-	import * as InputGroup from '#lib/components/ui/input-group/index.js';
-	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
-	import { Label } from '#lib/components/ui/label/index.js';
-	import { imageService } from '#lib/services/image-service.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import type { ImageSearchResultDto } from '#lib/types/docker.js';
-	import { SearchIcon, DownloadIcon, VerifiedCheckIcon } from '#lib/icons/index.js';
 	import { toast } from 'svelte-sonner';
+
+	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+	import * as InputGroup from '#lib/components/ui/input-group/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import * as ResponsiveDialog from '#lib/components/ui/responsive-dialog/index.js';
+	import { SearchIcon, DownloadIcon, VerifiedCheckIcon } from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { imageService } from '#lib/services/image-service.js';
+	import type { ImageSearchResultDto } from '#lib/types/docker.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	type Props = {
 		open: boolean;

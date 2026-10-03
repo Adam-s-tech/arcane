@@ -1,21 +1,22 @@
 <script lang="ts">
-	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
-	import { toast } from 'svelte-sonner';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
-	import * as ArcaneTooltip from '#lib/components/arcane-tooltip/index.js';
-	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { goto } from '$app/navigation';
-	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
-	import type { Role } from '#lib/types/auth.js';
-	import { BUILT_IN_ROLE_ADMIN, BUILT_IN_ROLE_EDITOR, BUILT_IN_ROLE_DEPLOYER, BUILT_IN_ROLE_VIEWER } from '#lib/types/auth.js';
+	import { toast } from 'svelte-sonner';
+
+	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
 	import type { ColumnSpec, MobileFieldVisibility, BulkAction } from '#lib/components/arcane-table/index.js';
 	import { UniversalMobileCard } from '#lib/components/arcane-table/index.js';
+	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
+	import * as ArcaneTooltip from '#lib/components/arcane-tooltip/index.js';
+	import IfPermitted from '#lib/components/if-permitted.svelte';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import { ShieldAlertIcon, TrashIcon, EditIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { roleService } from '#lib/services/role-service.js';
-	import { ShieldAlertIcon, TrashIcon, EditIcon } from '#lib/icons/index.js';
 	import userStore from '#lib/stores/user-store.svelte.js';
-	import IfPermitted from '#lib/components/if-permitted.svelte';
+	import type { Role } from '#lib/types/auth.js';
+	import { BUILT_IN_ROLE_ADMIN, BUILT_IN_ROLE_EDITOR, BUILT_IN_ROLE_DEPLOYER, BUILT_IN_ROLE_VIEWER } from '#lib/types/auth.js';
+	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
 	import { bulkConfirmAndRun, confirmAndRun } from '#lib/utils/bulk-actions.js';
 
 	let {

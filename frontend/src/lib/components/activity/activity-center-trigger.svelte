@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { ActivityIcon } from '#lib/icons/index.js';
-	import { activityStore } from '#lib/stores/activity.store.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import { cn } from '#lib/utils.js';
+	import { activityStore } from '#lib/stores/activity.store.svelte.js';
 	import userStore, { userHasPermissionInAnyEnvironment } from '#lib/stores/user-store.svelte.js';
+	import { cn } from '#lib/utils.js';
 
 	let {
 		collapsed = false,

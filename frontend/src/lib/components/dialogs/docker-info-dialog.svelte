@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { ResponsiveDialog } from '#lib/components/ui/responsive-dialog/index.js';
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { CopyButton } from '#lib/components/ui/copy-button/index.js';
+	import { ResponsiveDialog } from '#lib/components/ui/responsive-dialog/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import { CheckIcon, CloseIcon } from '#lib/icons/index.js';
-	import type { DockerInfo } from '#lib/types/docker.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import type { DockerInfo } from '#lib/types/docker.js';
 	import { bytes, formatDateTimeShort, withOccurrenceKeys } from '#lib/utils/formatting.js';
 
 	interface Props {

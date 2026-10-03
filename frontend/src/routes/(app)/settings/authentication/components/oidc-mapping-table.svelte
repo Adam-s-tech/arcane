@@ -1,21 +1,22 @@
 <script lang="ts">
-	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
 	import { toast } from 'svelte-sonner';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+
+	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
+	import type { ColumnSpec, MobileFieldVisibility } from '#lib/components/arcane-table/index.js';
+	import { UniversalMobileCard } from '#lib/components/arcane-table/index.js';
 	import RowActionsMenu from '#lib/components/arcane-table/row-actions-menu.svelte';
 	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
-	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
-	import { tryCatch } from '#lib/utils/try-catch.js';
-	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
-	import type { OidcRoleMapping, Role } from '#lib/types/auth.js';
-	import type { Environment } from '#lib/types/environment.js';
-	import { BUILT_IN_ROLE_ADMIN, BUILT_IN_ROLE_EDITOR, BUILT_IN_ROLE_DEPLOYER, BUILT_IN_ROLE_VIEWER } from '#lib/types/auth.js';
-	import type { ColumnSpec, MobileFieldVisibility } from '#lib/components/arcane-table/index.js';
-	import { UniversalMobileCard } from '#lib/components/arcane-table/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import { ShieldAlertIcon, TrashIcon, EditIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { oidcMappingService } from '#lib/services/oidc-mapping-service.js';
-	import { ShieldAlertIcon, TrashIcon, EditIcon } from '#lib/icons/index.js';
+	import type { OidcRoleMapping, Role } from '#lib/types/auth.js';
+	import { BUILT_IN_ROLE_ADMIN, BUILT_IN_ROLE_EDITOR, BUILT_IN_ROLE_DEPLOYER, BUILT_IN_ROLE_VIEWER } from '#lib/types/auth.js';
+	import type { Environment } from '#lib/types/environment.js';
+	import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
+	import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	let {
 		mappings,

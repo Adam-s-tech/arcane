@@ -1,20 +1,31 @@
 <script lang="ts">
+	import { createQuery } from '@tanstack/svelte-query';
+	import { RadioGroup as RadioGroupPrimitive } from 'bits-ui';
 	import { untrack } from 'svelte';
-	import { ResponsiveDialog } from '#lib/components/ui/responsive-dialog/index.js';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import FormInput from '#lib/components/form/form-input.svelte';
-	import SelectWithLabel from '#lib/components/form/select-with-label.svelte';
-	import { Spinner } from '#lib/components/ui/spinner/index.js';
-	import * as Select from '#lib/components/ui/select/index.js';
-	import * as Collapsible from '#lib/components/ui/collapsible/index.js';
-	import { Label } from '#lib/components/ui/label/index.js';
-	import { Switch } from '#lib/components/ui/switch/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
+	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+	import { z } from 'zod/v4';
+
 	import FileBrowserDialog from '#lib/components/dialogs/file-browser-dialog.svelte';
 	import GitopsDialogFooter from '#lib/components/dialogs/gitops-dialog-footer.svelte';
+	import FormInput from '#lib/components/form/form-input.svelte';
+	import SelectWithLabel from '#lib/components/form/select-with-label.svelte';
+	import * as Alert from '#lib/components/ui/alert/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Collapsible from '#lib/components/ui/collapsible/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import { ResponsiveDialog } from '#lib/components/ui/responsive-dialog/index.js';
+	import * as Select from '#lib/components/ui/select/index.js';
+	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import { Switch } from '#lib/components/ui/switch/index.js';
 	import WorkspaceFileTreePanel from '#lib/components/workspace-file-tree-panel.svelte';
-	import { RadioGroup as RadioGroupPrimitive } from 'bits-ui';
-	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+	import { ArrowRightIcon, CodeIcon, FolderOpenIcon, InfoIcon } from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { queryKeys } from '#lib/query/query-keys.js';
+	import { gitRepositoryService } from '#lib/services/git-repository-service.js';
+	import { projectService } from '#lib/services/project-service.js';
+	import { projectWorkspaceService } from '#lib/services/project-workspace-service.js';
+	import { settingsService } from '#lib/services/settings-service.js';
 	import type {
 		FileTreeNode,
 		GitOpsSync,
@@ -24,23 +35,12 @@
 		GitRepository,
 		BranchInfo
 	} from '#lib/types/automation.js';
-	import type { Project } from '#lib/types/swarm.js';
 	import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
+	import type { Project } from '#lib/types/swarm.js';
 	import type { WorkspaceFileEntry } from '#lib/types/workspace.js';
-	import { gitRepositoryService } from '#lib/services/git-repository-service.js';
-	import { settingsService } from '#lib/services/settings-service.js';
-	import { projectService } from '#lib/services/project-service.js';
-	import { projectWorkspaceService } from '#lib/services/project-workspace-service.js';
 	import { hasPermission } from '#lib/utils/auth.js';
-	import type { WorkspaceDisplayEntry } from '#lib/utils/workspace-files.js';
-	import { z } from 'zod/v4';
 	import { createForm, preventDefault } from '#lib/utils/settings.svelte.js';
-
-	import { queryKeys } from '#lib/query/query-keys.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import { ArrowRightIcon, CodeIcon, FolderOpenIcon, InfoIcon } from '#lib/icons/index.js';
-	import * as Alert from '#lib/components/ui/alert/index.js';
-	import { createQuery } from '@tanstack/svelte-query';
+	import type { WorkspaceDisplayEntry } from '#lib/utils/workspace-files.js';
 
 	type GitOpsSyncFormProps = {
 		open: boolean;
@@ -497,6 +497,38 @@
 	}
 </script>
 
+{#snippet autoSyncControls(switchId: string, intervalId: string, label: string, description: string, showAutoSyncError: boolean)}
+	<div class="flex items-center justify-between gap-4 py-3">
+		<div class="min-w-0">
+			<Label for={switchId} class="mb-0">{label}</Label>
+			<p class="text-xs text-muted-foreground">{description}</p>
+			{#if showAutoSyncError && inputs.autoSync.error}
+				<p class="text-xs font-medium text-destructive">{inputs.autoSync.error}</p>
+			{/if}
+		</div>
+		<div class="flex shrink-0 items-center gap-3">
+			{#if inputs.autoSync.value}
+				<label class="flex items-center gap-1.5 text-xs text-muted-foreground" for={intervalId}>
+					{m.every()}
+					<Input
+						id={intervalId}
+						type="number"
+						min="1"
+						class="h-8 w-16 text-center"
+						bind:value={inputs.syncInterval.value}
+						aria-invalid={inputs.syncInterval.error ? 'true' : undefined}
+					/>
+					{m.minutes()}
+				</label>
+			{/if}
+			<Switch id={switchId} bind:checked={inputs.autoSync.value} />
+		</div>
+	</div>
+	{#if inputs.syncInterval.error}
+		<p class="pb-2 text-xs font-medium text-destructive">{inputs.syncInterval.error}</p>
+	{/if}
+{/snippet}
+
 {#snippet BrowseFilesButton(target: 'compose' | 'preDeployScript')}
 	<Button
 		type="button"
@@ -704,32 +736,13 @@
 					</div>
 
 					<div class="divide-y divide-border/50 border-y border-border/50">
-						<div class="flex items-center justify-between gap-4 py-3">
-							<div class="min-w-0">
-								<Label for="backupAutoSyncSwitch" class="mb-0">{m.automatic_backup()}</Label>
-								<p class="text-xs text-muted-foreground">{m.automatic_backup_description()}</p>
-							</div>
-							<div class="flex shrink-0 items-center gap-3">
-								{#if inputs.autoSync.value}
-									<label class="flex items-center gap-1.5 text-xs text-muted-foreground" for="backupSyncInterval">
-										{m.every()}
-										<Input
-											id="backupSyncInterval"
-											type="number"
-											min="1"
-											class="h-8 w-16 text-center"
-											bind:value={inputs.syncInterval.value}
-											aria-invalid={inputs.syncInterval.error ? 'true' : undefined}
-										/>
-										{m.minutes()}
-									</label>
-								{/if}
-								<Switch id="backupAutoSyncSwitch" bind:checked={inputs.autoSync.value} />
-							</div>
-						</div>
-						{#if inputs.syncInterval.error}
-							<p class="pb-2 text-xs font-medium text-destructive">{inputs.syncInterval.error}</p>
-						{/if}
+						{@render autoSyncControls(
+							'backupAutoSyncSwitch',
+							'backupSyncInterval',
+							m.automatic_backup(),
+							m.automatic_backup_description(),
+							false
+						)}
 
 						<div class="flex items-center justify-between gap-4 py-3">
 							<div class="min-w-0">
@@ -811,35 +824,13 @@
 					</div>
 
 					<div class="divide-y divide-border/50 border-y border-border/50">
-						<div class="flex items-center justify-between gap-4 py-3">
-							<div class="min-w-0">
-								<Label for="autoSyncSwitch" class="mb-0">{m.git_sync_auto_sync()}</Label>
-								<p class="text-xs text-muted-foreground">{m.common_auto_sync_description()}</p>
-								{#if inputs.autoSync.error}
-									<p class="text-xs font-medium text-destructive">{inputs.autoSync.error}</p>
-								{/if}
-							</div>
-							<div class="flex shrink-0 items-center gap-3">
-								{#if inputs.autoSync.value}
-									<label class="flex items-center gap-1.5 text-xs text-muted-foreground" for="syncInterval">
-										{m.every()}
-										<Input
-											id="syncInterval"
-											type="number"
-											min="1"
-											class="h-8 w-16 text-center"
-											bind:value={inputs.syncInterval.value}
-											aria-invalid={inputs.syncInterval.error ? 'true' : undefined}
-										/>
-										{m.minutes()}
-									</label>
-								{/if}
-								<Switch id="autoSyncSwitch" bind:checked={inputs.autoSync.value} />
-							</div>
-						</div>
-						{#if inputs.syncInterval.error}
-							<p class="pb-2 text-xs font-medium text-destructive">{inputs.syncInterval.error}</p>
-						{/if}
+						{@render autoSyncControls(
+							'autoSyncSwitch',
+							'syncInterval',
+							m.git_sync_auto_sync(),
+							m.common_auto_sync_description(),
+							true
+						)}
 
 						<div class="flex items-center justify-between gap-4 py-3">
 							<div class="min-w-0">

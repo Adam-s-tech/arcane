@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	federatedtypes "github.com/getarcaneapp/arcane/types/v2/federated"
+	"github.com/getarcaneapp/arcane/types/v2/federated"
 	"github.com/lestrrat-go/jwx/v4/jwa"
 	"github.com/lestrrat-go/jwx/v4/jws"
 	"github.com/lestrrat-go/jwx/v4/jwt"
@@ -118,7 +118,7 @@ func setupFederatedCredentialServiceTestDBInternal(t *testing.T) *database.DB {
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(
 		&settings.SettingVariable{},
-		&common.User{},
+		&user.User{},
 		&session.UserSession{},
 		&role.Role{},
 		&role.UserRoleAssignment{},
@@ -141,7 +141,7 @@ func setupFederatedCredentialServiceInternal(t *testing.T, issuer *federatedTest
 	ctx := t.Context()
 	db := setupFederatedCredentialServiceTestDBInternal(t)
 	roleSvc := role.NewRoleService(db)
-	userSvc := user.NewUserService(db, roleSvc)
+	userSvc := user.NewUserService(db, roleSvc, session.RevokeAllUserSessionsExceptInDB)
 	sessionSvc := session.NewSessionService(db)
 	settingsSvc, err := newSettingsServiceForTestInternal(t, ctx, db)
 	require.NoError(t, err)
@@ -167,7 +167,7 @@ func setupFederatedCredentialServiceInternal(t *testing.T, issuer *federatedTest
 	}
 	require.NoError(t, db.WithContext(ctx).Create(&viewerRole).Error)
 
-	serviceUser := common.User{
+	serviceUser := user.User{
 		ID:               "user-federated-service",
 		Username:         "svc-federated-demo",
 		IsServiceAccount: true,
@@ -186,7 +186,7 @@ func setupFederatedCredentialServiceInternal(t *testing.T, issuer *federatedTest
 		Audiences:       database.StringSlice{"arcane-ci"},
 		SubjectClaim:    "sub",
 		SubjectMatch:    "repo:getarcaneapp/arcane:*",
-		MatchType:       federatedtypes.MatchTypeGlob,
+		MatchType:       federated.MatchTypeGlob,
 		RoleID:          viewerRole.ID,
 		IdentityUserID:  serviceUser.ID,
 		TokenTTLSeconds: 900,
@@ -228,10 +228,10 @@ func TestFederatedCredentialServiceExchangeToken(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resp, err := service.ExchangeToken(ctx, federatedtypes.TokenExchangeRequest{
-				GrantType:        federatedtypes.TokenExchangeGrantType,
+			resp, err := service.ExchangeToken(ctx, federated.TokenExchangeRequest{
+				GrantType:        federated.TokenExchangeGrantType,
 				SubjectToken:     tt.token,
-				SubjectTokenType: federatedtypes.SubjectTokenTypeJWT,
+				SubjectTokenType: federated.SubjectTokenTypeJWT,
 				Audience:         "https://arcane.example.com",
 			})
 			if tt.wantError != nil {
@@ -244,7 +244,7 @@ func TestFederatedCredentialServiceExchangeToken(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, resp)
 			require.Equal(t, "Bearer", resp.TokenType)
-			require.Equal(t, federatedtypes.IssuedTokenTypeAccessToken, resp.IssuedTokenType)
+			require.Equal(t, federated.IssuedTokenTypeAccessToken, resp.IssuedTokenType)
 			require.Positive(t, resp.ExpiresIn)
 			require.NotEmpty(t, resp.AccessToken)
 
@@ -266,10 +266,10 @@ func TestFederatedCredentialServiceExchangeTokenRejectsIssuerWithoutCredentialIn
 	otherIssuer := newFederatedTestIssuerInternal(t)
 	service, _, _ := setupFederatedCredentialServiceInternal(t, issuer)
 
-	resp, err := service.ExchangeToken(t.Context(), federatedtypes.TokenExchangeRequest{
-		GrantType:        federatedtypes.TokenExchangeGrantType,
+	resp, err := service.ExchangeToken(t.Context(), federated.TokenExchangeRequest{
+		GrantType:        federated.TokenExchangeGrantType,
 		SubjectToken:     otherIssuer.tokenInternal(t, "repo:getarcaneapp/arcane:ref:refs/heads/main", []string{"arcane-ci"}),
-		SubjectTokenType: federatedtypes.SubjectTokenTypeJWT,
+		SubjectTokenType: federated.SubjectTokenTypeJWT,
 		Audience:         "https://arcane.example.com",
 	})
 
@@ -283,10 +283,10 @@ func TestFederatedCredentialServiceExchangeTokenDoesNotRequireGlobalFeatureFlagI
 	service, _, _ := setupFederatedCredentialServiceInternal(t, issuer)
 	service.settingsService = nil
 
-	resp, err := service.ExchangeToken(t.Context(), federatedtypes.TokenExchangeRequest{
-		GrantType:        federatedtypes.TokenExchangeGrantType,
+	resp, err := service.ExchangeToken(t.Context(), federated.TokenExchangeRequest{
+		GrantType:        federated.TokenExchangeGrantType,
 		SubjectToken:     issuer.tokenInternal(t, "repo:getarcaneapp/arcane:ref:refs/heads/main", []string{"arcane-ci"}),
-		SubjectTokenType: federatedtypes.SubjectTokenTypeJWT,
+		SubjectTokenType: federated.SubjectTokenTypeJWT,
 		Audience:         "https://arcane.example.com",
 	})
 
@@ -304,10 +304,10 @@ func TestFederatedCredentialServiceExchangeTokenRejectsExpiredCredentialInternal
 		Where("id = ?", "cred-github-actions").
 		Update("expires_at", expiredAt).Error)
 
-	resp, err := service.ExchangeToken(t.Context(), federatedtypes.TokenExchangeRequest{
-		GrantType:        federatedtypes.TokenExchangeGrantType,
+	resp, err := service.ExchangeToken(t.Context(), federated.TokenExchangeRequest{
+		GrantType:        federated.TokenExchangeGrantType,
 		SubjectToken:     issuer.tokenInternal(t, "repo:getarcaneapp/arcane:ref:refs/heads/main", []string{"arcane-ci"}),
-		SubjectTokenType: federatedtypes.SubjectTokenTypeJWT,
+		SubjectTokenType: federated.SubjectTokenTypeJWT,
 		Audience:         "https://arcane.example.com",
 	})
 
@@ -321,16 +321,16 @@ func TestFederatedCredentialServiceUpdateDisableRevokesIssuedSessionsInternal(t 
 	service, authSvc, _ := setupFederatedCredentialServiceInternal(t, issuer)
 	ctx := t.Context()
 
-	resp, err := service.ExchangeToken(ctx, federatedtypes.TokenExchangeRequest{
-		GrantType:        federatedtypes.TokenExchangeGrantType,
+	resp, err := service.ExchangeToken(ctx, federated.TokenExchangeRequest{
+		GrantType:        federated.TokenExchangeGrantType,
 		SubjectToken:     issuer.tokenInternal(t, "repo:getarcaneapp/arcane:ref:refs/heads/main", []string{"arcane-ci"}),
-		SubjectTokenType: federatedtypes.SubjectTokenTypeJWT,
+		SubjectTokenType: federated.SubjectTokenTypeJWT,
 		Audience:         "https://arcane.example.com",
 	})
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 
-	_, err = service.Update(ctx, "admin-user", "cred-github-actions", federatedtypes.UpdateFederatedCredential{
+	_, err = service.Update(ctx, "admin-user", "cred-github-actions", federated.UpdateFederatedCredential{
 		Enabled: new(false),
 	})
 	require.NoError(t, err)
@@ -345,10 +345,10 @@ func TestFederatedCredentialServiceRejectsReplayedSubjectTokenInternal(t *testin
 	service, _, _ := setupFederatedCredentialServiceInternal(t, issuer)
 	ctx := t.Context()
 	subjectToken := issuer.tokenInternal(t, "repo:getarcaneapp/arcane:ref:refs/heads/main", []string{"arcane-ci"})
-	req := federatedtypes.TokenExchangeRequest{
-		GrantType:        federatedtypes.TokenExchangeGrantType,
+	req := federated.TokenExchangeRequest{
+		GrantType:        federated.TokenExchangeGrantType,
 		SubjectToken:     subjectToken,
-		SubjectTokenType: federatedtypes.SubjectTokenTypeJWT,
+		SubjectTokenType: federated.SubjectTokenTypeJWT,
 		Audience:         "https://arcane.example.com",
 	}
 
@@ -366,12 +366,12 @@ func TestFederatedCredentialServiceCreateRejectsBareWildcardGlob(t *testing.T) {
 	issuer := newFederatedTestIssuerInternal(t)
 	service, _, _ := setupFederatedCredentialServiceInternal(t, issuer)
 
-	_, err := service.Create(t.Context(), "admin-user", federatedtypes.CreateFederatedCredential{
+	_, err := service.Create(t.Context(), "admin-user", federated.CreateFederatedCredential{
 		Name:            "Unsafe wildcard",
 		IssuerURL:       "https://token.actions.githubusercontent.com",
 		Audiences:       []string{"arcane-ci"},
 		SubjectMatch:    "*",
-		MatchType:       federatedtypes.MatchTypeGlob,
+		MatchType:       federated.MatchTypeGlob,
 		RoleID:          "role-federated-viewer",
 		TokenTTLSeconds: 900,
 	})
@@ -379,8 +379,6 @@ func TestFederatedCredentialServiceCreateRejectsBareWildcardGlob(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, err, common.ErrFederatedCredentialInvalid, "unexpected error: %v", err)
 }
-
-// Test fixtures shared by this package's tests.
 
 func newSettingsServiceForTestInternal(t testing.TB, ctx context.Context, db *database.DB) (*settings.SettingsService, error) {
 	t.Helper()

@@ -2,12 +2,13 @@ import { execFileSync } from 'child_process';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { reportDirectory } from '../utils/report';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export function captureComposeDiagnostics(composeFile: string) {
-	const directory = path.resolve(__dirname, '../test-results/compose');
+	const directory = path.join(reportDirectory, 'compose');
 	fs.mkdirSync(directory, { recursive: true });
 	for (const [name, args] of [
 		['services', ['ps', '--all', '--format', 'json']],

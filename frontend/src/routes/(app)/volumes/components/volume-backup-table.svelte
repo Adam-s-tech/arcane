@@ -1,16 +1,34 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
-	import { backupRunColumns, backupRunMobileFields } from '#lib/components/arcane-table/backup-columns.js';
-	import { m } from '#lib/paraglide/messages.js';
-	import { volumeBackupService, type VolumeBackupListResponse } from '#lib/services/volume-backup-service.js';
-	import { s3DestinationService } from '#lib/services/s3-destination-service.js';
-	import { volumeService } from '#lib/services/volume-service.js';
-	import type { BackupEntry, CreateVolumeBackupRequest, VolumeBackupPolicy } from '#lib/types/shared.js';
-	import type { S3Destination } from '#lib/types/s3-destination.js';
 	import { onMount, onDestroy } from 'svelte';
+	import { toast } from 'svelte-sonner';
+
+	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
+	import { backupRunColumns, backupRunMobileFields, backupManagementBadge } from '#lib/components/arcane-table/backup-columns.js';
+	import BackupDestinationCell from '#lib/components/arcane-table/cells/backup-destination-cell.svelte';
+	import BackupManagementCell from '#lib/components/arcane-table/cells/backup-management-cell.svelte';
+	import BackupSizeCell from '#lib/components/arcane-table/cells/backup-size-cell.svelte';
+	import BackupStatusCell from '#lib/components/arcane-table/cells/backup-status-cell.svelte';
+	import BackupTriggerCell from '#lib/components/arcane-table/cells/backup-trigger-cell.svelte';
+	import CreatedAtCell from '#lib/components/arcane-table/cells/created-at-cell.svelte';
+	import {
+		UniversalMobileCard,
+		type BulkAction,
+		type ColumnSpec,
+		type MobileFieldVisibility
+	} from '#lib/components/arcane-table/index.js';
+	import BackupFilePicker from '#lib/components/backup-file-picker.svelte';
+	import BackupPolicyCard from '#lib/components/backup-policy-card.svelte';
+	import BackupPolicyDialog from '#lib/components/backup-policy-dialog.svelte';
+	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
+	import RowActionsMenu from '#lib/components/file-browser/row-actions-menu.svelte';
+	import SelectWithLabel from '#lib/components/form/select-with-label.svelte';
+	import IfPermitted from '#lib/components/if-permitted.svelte';
+	import * as Alert from '#lib/components/ui/alert/index.js';
+	import * as ButtonGroup from '#lib/components/ui/button-group/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import { ResponsiveDialog } from '#lib/components/ui/responsive-dialog/index.js';
 	import { useBackupActivity } from '#lib/hooks/use-backup-activity.svelte.js';
-	import { activityStore } from '#lib/stores/activity.store.svelte.js';
 	import {
 		TrashIcon,
 		AddIcon,
@@ -24,48 +42,29 @@
 		UploadIcon,
 		ArrowDownIcon
 	} from '#lib/icons/index.js';
-	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
-	import * as ButtonGroup from '#lib/components/ui/button-group/index.js';
-	import { toast } from 'svelte-sonner';
-	import { bytes, formatDateTimeShort } from '#lib/utils/formatting.js';
-	import ArcaneTable from '#lib/components/arcane-table/arcane-table.svelte';
-	import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
-	import {
-		UniversalMobileCard,
-		type BulkAction,
-		type ColumnSpec,
-		type MobileFieldVisibility
-	} from '#lib/components/arcane-table/index.js';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import RowActionsMenu from '#lib/components/file-browser/row-actions-menu.svelte';
-	import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
-	import { ResponsiveDialog } from '#lib/components/ui/responsive-dialog/index.js';
-	import * as Alert from '#lib/components/ui/alert/index.js';
-	import BackupFilePicker from '#lib/components/backup-file-picker.svelte';
+	import { m } from '#lib/paraglide/messages.js';
+	import { s3DestinationService } from '#lib/services/s3-destination-service.js';
+	import { volumeBackupService, type VolumeBackupListResponse } from '#lib/services/volume-backup-service.js';
+	import { volumeService } from '#lib/services/volume-service.js';
+	import { activityStore } from '#lib/stores/activity.store.svelte.js';
 	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import { hasPermission } from '#lib/utils/auth.js';
 	import { GLOBAL_SCOPE } from '#lib/types/auth.js';
-	import IfPermitted from '#lib/components/if-permitted.svelte';
+	import type { BackupFileProvider } from '#lib/types/backup.js';
+	import type { S3Destination } from '#lib/types/s3-destination.js';
+	import type { BackupEntry, CreateVolumeBackupRequest, VolumeBackupPolicy } from '#lib/types/shared.js';
+	import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
 	import { activityToastOptions, extractActivityId } from '#lib/utils/activity-toast.js';
-	import BackupPolicyDialog from '#lib/components/backup-policy-dialog.svelte';
-	import BackupPolicyCard from '#lib/components/backup-policy-card.svelte';
-	import BackupStatusCell from '#lib/components/arcane-table/cells/backup-status-cell.svelte';
-	import BackupTriggerCell from '#lib/components/arcane-table/cells/backup-trigger-cell.svelte';
-	import BackupDestinationCell from '#lib/components/arcane-table/cells/backup-destination-cell.svelte';
-	import BackupSizeCell from '#lib/components/arcane-table/cells/backup-size-cell.svelte';
-	import CreatedAtCell from '#lib/components/arcane-table/cells/created-at-cell.svelte';
-	import BackupManagementCell from '#lib/components/arcane-table/cells/backup-management-cell.svelte';
-	import { bulkConfirmAndRun } from '#lib/utils/bulk-actions.js';
 	import { extractApiErrorMessage } from '#lib/utils/api.js';
+	import { hasPermission } from '#lib/utils/auth.js';
 	import {
 		backupDestinationDisplay,
 		backupManagementFilterOptions,
-		backupManagementLabel,
 		backupTriggerLabel,
 		s3DestinationOptions as buildS3DestinationOptions
 	} from '#lib/utils/backups.js';
-	import SelectWithLabel from '#lib/components/form/select-with-label.svelte';
-	import type { BackupFileProvider } from '#lib/types/backup.js';
+	import { bulkConfirmAndRun } from '#lib/utils/bulk-actions.js';
+	import { bytes, formatDateTimeShort } from '#lib/utils/formatting.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	let {
 		volumeName,
@@ -291,21 +290,33 @@
 		});
 	}
 
+	async function runBackupAction(
+		run: () => Promise<unknown>,
+		successMessage: () => string,
+		failureMessage: () => string,
+		afterRun?: () => void | Promise<void>
+	) {
+		const result = await tryCatch(
+			(async () => {
+				const response = await run();
+				await afterRun?.();
+				toast.success(successMessage(), activityToastOptions(extractActivityId(response)));
+				await loadData(requestOptions);
+			})()
+		);
+		if (result.error !== null) {
+			toast.error(result.error instanceof Error ? result.error.message : failureMessage());
+		}
+	}
+
 	async function handleUpload(backup: BackupEntry, s3DestinationId: string) {
 		uploadingBackupId = backup.id;
 		try {
-			const operationResult = await tryCatch(
-				(async () => {
-					const result = await volumeBackupService.uploadBackup(backup.id, s3DestinationId);
-					toast.success(m.backups_upload_s3_success(), activityToastOptions(extractActivityId(result)));
-					await loadData(requestOptions);
-				})()
+			await runBackupAction(
+				() => volumeBackupService.uploadBackup(backup.id, s3DestinationId),
+				m.backups_upload_s3_success,
+				m.backups_upload_s3_failed
 			);
-			if (operationResult.error !== null) {
-				const error = operationResult.error;
-
-				toast.error(error instanceof Error ? error.message : m.backups_upload_s3_failed());
-			}
 		} finally {
 			uploadingBackupId = null;
 		}
@@ -347,21 +358,13 @@
 			confirm: {
 				label: m.volumes_backups_restore(),
 				destructive: !!usageWarning || hasWorkspaceChanges,
-				action: async () => {
-					const operationResult = await tryCatch(
-						(async () => {
-							const result = await volumeBackupService.restoreBackup(name, backup.id);
-							await onWorkspaceRestored?.();
-							toast.success(m.volumes_backup_restore_success(), activityToastOptions(extractActivityId(result)));
-							await loadData(requestOptions);
-						})()
-					);
-					if (operationResult.error !== null) {
-						const error = operationResult.error;
-
-						toast.error(error instanceof Error ? error.message : m.common_failed());
-					}
-				}
+				action: () =>
+					runBackupAction(
+						() => volumeBackupService.restoreBackup(name, backup.id),
+						m.volumes_backup_restore_success,
+						m.common_failed,
+						() => onWorkspaceRestored?.()
+					)
 			}
 		});
 	}
@@ -604,12 +607,7 @@
 		{item}
 		icon={{ component: VolumesIcon, variant: 'blue' }}
 		title={(item) => item.id}
-		badges={[
-			(item) => ({
-				variant: 'purple',
-				text: backupManagementLabel(item.type)
-			})
-		]}
+		badges={[backupManagementBadge]}
 		fields={[
 			{
 				label: m.volume_backup_trigger(),

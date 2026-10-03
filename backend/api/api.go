@@ -34,7 +34,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/gitrepo"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/health"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/image"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/imagepatch"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/imageupdate"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/job"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/middleware"
@@ -51,7 +50,6 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/swarm"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/system"
-	"github.com/getarcaneapp/arcane/backend/v2/internal/systembackup"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/template"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/updater"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/upload"
@@ -130,6 +128,10 @@ func customSchemaNamer(t reflect.Type, hint string) string {
 		name = pkgName + name
 	} else if dockerPrefix, localOk := dockerSchemaPrefix(pkgPath, shortPkg); localOk {
 		name = dockerPrefix + name
+	}
+	// Preserve the published name after moving the volume backup response to types.
+	if pkgPath == arcaneTypesPrefix+"volume" && strings.TrimLeft(typeStr, "*") == "volume.Backup" {
+		name = "DockerVolumeVolumeBackup"
 	}
 	return qualifyGenericArcaneArgumentsInternal(pkgPath, typeStr, name)
 }
@@ -249,15 +251,12 @@ type HandlerDeps struct {
 	Container         *container.Module
 	Image             *image.Module
 	Build             *build.BuildService
-	BuildWorkspace    *build.BuildWorkspaceService
 	Volume            *volume.Module
 	S3Destination     *s3.Module
-	SystemBackup      *systembackup.Module
 	Network           *network.NetworkService
 	Port              *port.PortService
 	Swarm             *swarm.Module
 	ImageUpdate       *imageupdate.Module
-	ImagePatch        *imagepatch.Module
 	Auth              *auth.Module
 	Passkey           *passkey.PasskeyService
 	Oidc              *oidc.OidcService
@@ -265,7 +264,6 @@ type HandlerDeps struct {
 	Template          *template.Module
 	ContainerRegistry *registry.Module
 	System            *system.Module
-	SystemUpgrade     *system.SystemUpgradeService
 	Diagnostics       *diagnostics.DiagnosticsService
 	Updater           *updater.Module
 	Event             *event.Module
@@ -423,12 +421,10 @@ func registerHandlersInternal(api huma.API, deps HandlerDeps, handlerAppCtx hand
 	deps.Variable.RegisterRoutes(api, cfg)
 	deps.Image.RegisterRoutes(api, handlerAppCtx)
 	deps.Upload.RegisterRoutes(api)
-	build.RegisterBuildWorkspaces(api, deps.BuildWorkspace, deps.Upload.Service())
+	build.RegisterBuildWorkspaces(api, deps.Build, deps.Upload.Service())
 	deps.ImageUpdate.RegisterRoutes(api, handlerAppCtx)
-	deps.ImagePatch.RegisterRoutes(api, handlerAppCtx)
 	deps.Settings.RegisterRoutes(api)
 	deps.S3Destination.RegisterRoutes(api)
-	deps.SystemBackup.RegisterRoutes(api, handlerAppCtx)
 	deps.JobSchedule.RegisterRoutes(api)
 	deps.Volume.RegisterRoutes(api, handlerAppCtx)
 	deps.Container.RegisterRoutes(api, handlerAppCtx)

@@ -1,9 +1,11 @@
-import type { PageLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
+
+import { queryKeys } from '#lib/query/query-keys.js';
+import { containerService } from '#lib/services/container-service.js';
 import { environmentStore } from '#lib/stores/environment.store.svelte.js';
 import { userHasPermission } from '#lib/utils/auth.js';
-import { containerService } from '#lib/services/container-service.js';
-import { queryKeys } from '#lib/query/query-keys.js';
+
+import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ params, parent }) => {
 	const { queryClient, user } = await parent();

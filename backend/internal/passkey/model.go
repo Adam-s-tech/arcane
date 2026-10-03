@@ -3,8 +3,8 @@ package passkey
 import (
 	"time"
 
-	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/user"
 )
 
 // Passkey stores the WebAuthn credential record required to validate future
@@ -14,8 +14,8 @@ import (
 type Passkey struct {
 	database.BaseModel
 
-	UserID string       `json:"userId" gorm:"column:user_id;not null;index"`
-	User   *common.User `json:"-" gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"`
+	UserID string     `json:"userId" gorm:"column:user_id;not null;index"`
+	User   *user.User `json:"-" gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"`
 
 	RPID                    string               `json:"rpId" gorm:"column:rp_id;not null"`
 	CredentialID            []byte               `json:"-" gorm:"column:credential_id;not null"`

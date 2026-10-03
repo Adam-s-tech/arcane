@@ -1,17 +1,19 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { onDestroy } from 'svelte';
+
 	import { getAvailableMobileNavItems, getSwarmNavigationItems } from '#lib/config/navigation-config.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
+	import type { PermissionsManifest, User } from '#lib/types/auth.js';
+	import type { AppVersionInformation } from '#lib/types/settings.js';
+	import { cn } from '#lib/utils.js';
+	import { getMobileNavigation } from '#lib/utils/navigation.js';
+
+	import { MobileNavGestures } from './gestures.svelte';
 	import MobileNavItem from './mobile-nav-item.svelte';
 	import MobileNavMenuButton from './mobile-nav-menu-button.svelte';
-	import { cn } from '#lib/utils.js';
 	import MobileNavSheet from './mobile-nav-sheet.svelte';
-	import { m } from '#lib/paraglide/messages.js';
-	import { MobileNavGestures } from './gestures.svelte';
-	import type { AppVersionInformation } from '#lib/types/settings.js';
-	import type { PermissionsManifest, User } from '#lib/types/auth.js';
-	import { environmentStore } from '#lib/stores/environment.store.svelte.js';
-	import { getMobileNavigation } from '#lib/utils/navigation.js';
 
 	let {
 		user = null,

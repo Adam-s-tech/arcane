@@ -1,13 +1,14 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
+import { queryKeys } from '#lib/query/query-keys.js';
 import { containerService, type ContainerListRequestOptions } from '#lib/services/container-service.js';
 import { projectService } from '#lib/services/project-service.js';
-import { queryKeys } from '#lib/query/query-keys.js';
+import { environmentStore } from '#lib/stores/environment.store.svelte.js';
 import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
-import { resolveInitialTableRequest } from '#lib/utils/tables.js';
 import { throwPageLoadError } from '#lib/utils/api.js';
 import { ensureStandaloneContainerUpdatesFilter, ensureUpdatesFilter } from '#lib/utils/docker.js';
+import { resolveInitialTableRequest } from '#lib/utils/tables.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
+
 import type { PageLoad } from './$types';
-import { environmentStore } from '#lib/stores/environment.store.svelte.js';
 
 export const load: PageLoad = async ({ parent }) => {
 	const { queryClient } = await parent();
@@ -27,8 +28,6 @@ export const load: PageLoad = async ({ parent }) => {
 		} satisfies SearchPaginationSortRequest)
 	);
 
-	let containers;
-	let projects;
 	const operationResult = await tryCatch(
 		(async () =>
 			Promise.all([
@@ -46,14 +45,9 @@ export const load: PageLoad = async ({ parent }) => {
 		const err = operationResult.error;
 
 		throwPageLoadError(err, 'Failed to load updates');
-	} else {
-		[containers, projects] = operationResult.data;
 	}
 
 	return {
-		envId,
-		containers,
-		projects,
 		containerRequestOptions,
 		projectRequestOptions
 	};

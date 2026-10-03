@@ -14,7 +14,7 @@ import (
 	"sync"
 	"testing"
 
-	envtypes "github.com/getarcaneapp/arcane/types/v2/env"
+	"github.com/getarcaneapp/arcane/types/v2/env"
 	"github.com/libtnb/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -87,7 +87,7 @@ func TestCreateVariable_SecretEncryptedAtRestAndRedactedOnList(t *testing.T) {
 	service, db, _ := setupVariableServiceTest(t)
 	ctx := t.Context()
 
-	created, err := service.CreateVariable(ctx, envtypes.CreateGlobalVariableRequest{
+	created, err := service.CreateVariable(ctx, env.CreateGlobalVariableRequest{
 		Key:             "API_TOKEN",
 		Value:           "super-secret",
 		IsSecret:        true,
@@ -118,7 +118,7 @@ func TestUpdateVariable_OmittedSecretValuePreservesCiphertextAndRedactsResponse(
 	var before GlobalVariable
 	require.NoError(t, db.WithContext(ctx).First(&before, "id = ?", created.ID).Error)
 	renamedKey := "RENAMED_API_TOKEN"
-	updated, err := service.UpdateVariable(ctx, created.ID, envtypes.UpdateGlobalVariableRequest{Key: &renamedKey})
+	updated, err := service.UpdateVariable(ctx, created.ID, env.UpdateGlobalVariableRequest{Key: &renamedKey})
 	require.NoError(t, err)
 	require.True(t, updated.IsSecret)
 	require.Empty(t, updated.Value)
@@ -142,12 +142,12 @@ func TestUpdateVariable_SecretToPlainRequiresReplacementValue(t *testing.T) {
 	created := createMaterializedSecretVariableInternal(t, service)
 
 	plain := false
-	_, err := service.UpdateVariable(ctx, created.ID, envtypes.UpdateGlobalVariableRequest{IsSecret: &plain})
+	_, err := service.UpdateVariable(ctx, created.ID, env.UpdateGlobalVariableRequest{IsSecret: &plain})
 	require.Error(t, err)
 	require.ErrorIs(t, err, common.ErrGlobalVariableSecretValueRequired)
 
 	replacement := "public-value"
-	updated, err := service.UpdateVariable(ctx, created.ID, envtypes.UpdateGlobalVariableRequest{
+	updated, err := service.UpdateVariable(ctx, created.ID, env.UpdateGlobalVariableRequest{
 		Value:    &replacement,
 		IsSecret: &plain,
 	})
@@ -167,40 +167,40 @@ func TestResolveEffectiveVariables_EnvScopedOverridesAllEnv(t *testing.T) {
 	createVariableTestEnvironment(t, db, "env-a")
 	createVariableTestEnvironment(t, db, "env-b")
 
-	_, err := service.CreateVariable(ctx, envtypes.CreateGlobalVariableRequest{
+	_, err := service.CreateVariable(ctx, env.CreateGlobalVariableRequest{
 		Key: "REGION", Value: "default", AllEnvironments: true,
 	})
 	require.NoError(t, err)
-	_, err = service.CreateVariable(ctx, envtypes.CreateGlobalVariableRequest{
+	_, err = service.CreateVariable(ctx, env.CreateGlobalVariableRequest{
 		Key: "REGION", Value: "eu-west", EnvironmentIDs: []string{"env-a"},
 	})
 	require.NoError(t, err)
 
 	// A second variable with the same key and an overlapping scope is rejected.
-	_, err = service.CreateVariable(ctx, envtypes.CreateGlobalVariableRequest{
+	_, err = service.CreateVariable(ctx, env.CreateGlobalVariableRequest{
 		Key: "REGION", Value: "dup", EnvironmentIDs: []string{"env-a", "env-b"},
 	})
 	require.Error(t, err)
 
 	// A specific scope without environments must not widen to all environments.
-	_, err = service.CreateVariable(ctx, envtypes.CreateGlobalVariableRequest{
+	_, err = service.CreateVariable(ctx, env.CreateGlobalVariableRequest{
 		Key: "NO_SCOPE", Value: "x", AllEnvironments: false, EnvironmentIDs: []string{},
 	})
 	require.ErrorIs(t, err, common.ErrGlobalVariableScopeRequired, "expected GlobalVariableScopeRequiredError, got %v", err)
 
 	forA, err := service.resolveEffectiveVariablesInternal(ctx, "env-a")
 	require.NoError(t, err)
-	require.Equal(t, []envtypes.Variable{{Key: "REGION", Value: "eu-west"}}, forA)
+	require.Equal(t, []env.Variable{{Key: "REGION", Value: "eu-west"}}, forA)
 
 	forB, err := service.resolveEffectiveVariablesInternal(ctx, "env-b")
 	require.NoError(t, err)
-	require.Equal(t, []envtypes.Variable{{Key: "REGION", Value: "default"}}, forB)
+	require.Equal(t, []env.Variable{{Key: "REGION", Value: "default"}}, forB)
 }
 
 func TestWriteLocalEnvFile_RejectsNewlineInjectionKey(t *testing.T) {
 	service, _, projectsDir := setupVariableServiceTest(t)
 
-	err := service.WriteLocalEnvFile(t.Context(), []envtypes.Variable{
+	err := service.WriteLocalEnvFile(t.Context(), []env.Variable{
 		{Key: "BENIGN\nINJECTED", Value: "x"},
 	})
 	require.ErrorIs(t, err, common.ErrInvalidEnvKey, "expected InvalidEnvKeyError, got %v", err)
@@ -217,13 +217,13 @@ func TestWriteLocalEnvFile_PreservesExistingFileMode(t *testing.T) {
 	ctx := t.Context()
 	envPath := filepath.Join(projectsDir, ".env.global")
 
-	require.NoError(t, service.WriteLocalEnvFile(ctx, []envtypes.Variable{{Key: "A", Value: "1"}}))
+	require.NoError(t, service.WriteLocalEnvFile(ctx, []env.Variable{{Key: "A", Value: "1"}}))
 	info, err := os.Stat(envPath)
 	require.NoError(t, err)
 	require.Equal(t, utils.FilePerm, info.Mode().Perm(), "new file must use the configured default mode")
 
 	require.NoError(t, os.Chmod(envPath, 0o600))
-	require.NoError(t, service.WriteLocalEnvFile(ctx, []envtypes.Variable{{Key: "A", Value: "2"}}))
+	require.NoError(t, service.WriteLocalEnvFile(ctx, []env.Variable{{Key: "A", Value: "2"}}))
 	info, err = os.Stat(envPath)
 	require.NoError(t, err)
 	require.Equal(t, os.FileMode(0o600), info.Mode().Perm(), "rewrite must keep the existing mode")
@@ -236,7 +236,7 @@ func TestSyncEnvironment_LocalWritesEnvGlobalFile(t *testing.T) {
 	service, _, projectsDir := setupVariableServiceTest(t)
 	ctx := t.Context()
 
-	_, err := service.CreateVariable(ctx, envtypes.CreateGlobalVariableRequest{
+	_, err := service.CreateVariable(ctx, env.CreateGlobalVariableRequest{
 		Key: "DB_PASSWORD", Value: "hunter2", IsSecret: true, AllEnvironments: true,
 	})
 	require.NoError(t, err)
@@ -353,9 +353,9 @@ func TestSyncEnvironment_EdgeMaterializesSecretsThroughAgentRoute(t *testing.T) 
 	requireMaterializationRequestsInternal(t, captured, token)
 }
 
-func createMaterializedSecretVariableInternal(t *testing.T, service *VariableService) *envtypes.GlobalVariable {
+func createMaterializedSecretVariableInternal(t *testing.T, service *VariableService) *env.GlobalVariable {
 	t.Helper()
-	created, err := service.CreateVariable(t.Context(), envtypes.CreateGlobalVariableRequest{
+	created, err := service.CreateVariable(t.Context(), env.CreateGlobalVariableRequest{
 		Key:             "API_TOKEN",
 		Value:           "super-secret",
 		IsSecret:        true,
@@ -379,7 +379,7 @@ func requireMaterializationRequestsInternal(t *testing.T, requests []capturedVar
 	require.Equal(t, agentVariablesPath, requests[1].Path)
 	require.Equal(t, token, requests[1].Headers[remenv.HeaderAPIKey])
 	require.Equal(t, token, requests[1].Headers[remenv.HeaderAgentToken])
-	var materialized envtypes.Summary
+	var materialized env.Summary
 	require.NoError(t, json.Unmarshal(requests[1].Body, &materialized))
-	require.Equal(t, []envtypes.Variable{{Key: "API_TOKEN", Value: "super-secret"}}, materialized.Variables)
+	require.Equal(t, []env.Variable{{Key: "API_TOKEN", Value: "super-secret"}}, materialized.Variables)
 }

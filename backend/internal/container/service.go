@@ -3,8 +3,6 @@ package container
 import (
 	"cmp"
 	"context"
-	"encoding/json/jsontext"
-	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -19,21 +17,22 @@ import (
 	containertypes "github.com/getarcaneapp/arcane/types/v2/container"
 	"github.com/getarcaneapp/arcane/types/v2/containerregistry"
 	imagetypes "github.com/getarcaneapp/arcane/types/v2/image"
+	usertypes "github.com/getarcaneapp/arcane/types/v2/user"
+	"github.com/moby/moby/api/pkg/stdcopy"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
 	"github.com/samber/hot"
 	"go.getarcane.app/docker/compat"
-	kit "go.getarcane.app/kit/pkg"
-	containerstats "go.getarcane.app/streams/stats"
+	"go.getarcane.app/kit/pkg"
 	"go.getarcane.app/sys/cgroup"
 	"go.getarcane.app/updater"
 	"go.getarcane.app/updater/labels"
 	"go.getarcane.app/updater/pkg/utils/tagpolicy"
-	"golang.org/x/sync/singleflight"
 
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/container/children/stats"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/docker"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/event"
@@ -49,17 +48,13 @@ import (
 )
 
 type ContainerService struct {
-	dockerService         *docker.DockerClientService
-	eventService          *event.EventService
-	imageService          *image.ImageService
-	settingsService       *settings.SettingsService
-	projectService        *project.ProjectService
-	statsHistory          containerstats.Store
-	iconMetaCache         *hot.HotCache[string, projects.ArcaneComposeMetadata]
-	resourceSampleCache   *hot.HotCache[string, containertypes.ResourceSample]
-	resourceSampleFlight  singleflight.Group
-	resourceSampleTimeout time.Duration
-	resourceBatchTimeout  time.Duration
+	dockerService   *docker.DockerClientService
+	eventService    *event.EventService
+	imageService    *image.ImageService
+	settingsService *settings.SettingsService
+	projectService  *project.ProjectService
+	iconMetaCache   *hot.HotCache[string, projects.ArcaneComposeMetadata]
+	stats           *stats.Service
 }
 
 const (
@@ -92,9 +87,7 @@ func NewContainerService(
 			WithTTL(containerIconMetadataTTL).
 			WithJanitor().
 			Build(),
-		resourceSampleCache:   newResourceSampleCacheInternal(containerResourceSampleTTL),
-		resourceSampleTimeout: containerResourceCollectTimeout,
-		resourceBatchTimeout:  timeouts.DefaultDockerAPI,
+		stats: stats.New(dockerService.GetClient, dockerService.DockerHost, stats.ContainerResourceSampleTTL, 0, 0),
 	}
 }
 
@@ -158,7 +151,7 @@ func (
 	dockerClient *client.Client,
 	imageName, containerID, containerName, action string,
 	credentials []containerregistry.Credential,
-	user common.User,
+	user usertypes.Actor,
 ) error {
 	localSettings := s.settingsService.GetSettingsConfig()
 	pullCtx, pullCancel := context.WithTimeout(ctx, timeouts.GetDuration(localSettings.DockerImagePullTimeout.AsInt(), timeouts.DefaultDockerImagePull))
@@ -228,7 +221,7 @@ func (
 	dockerClient *client.Client,
 	containerID, containerName, backupName string,
 	wasRunning bool,
-	user common.User,
+	user usertypes.Actor,
 ) error {
 	s.eventService.MarkDockerExpectation("container", containerID, containerName)
 	if containerName != "" {
@@ -274,7 +267,7 @@ func (
 	dockerClient *client.Client,
 	containerID, containerName, backupName, failedStep string,
 	wasRunning bool,
-	user common.User,
+	user usertypes.Actor,
 ) {
 	s.eventService.MarkDockerExpectation("container", containerID, containerName)
 	if wasRunning {
@@ -314,7 +307,7 @@ func (
 	dockerClient *client.Client,
 	containerInfo container.InspectResponse,
 	apiVersion string,
-	user common.User,
+	user usertypes.Actor,
 ) error {
 	containerID := containerInfo.ID
 	containerName := strings.TrimPrefix(containerInfo.Name, "/")
@@ -372,7 +365,7 @@ func (
 	stopAfterCreate, wasRunning bool,
 	apiVersion string,
 	startErr error,
-	user common.User,
+	user usertypes.Actor,
 ) error {
 	containerName := strings.TrimPrefix(containerInfo.Name, "/")
 
@@ -405,7 +398,7 @@ type containerLifecycleActionInternal struct {
 	runContainerAction func(*client.Client) error
 }
 
-func (s *ContainerService) runContainerLifecycleActionInternal(ctx context.Context, containerID string, user common.User, cfg containerLifecycleActionInternal) error {
+func (s *ContainerService) runContainerLifecycleActionInternal(ctx context.Context, containerID string, user usertypes.Actor, cfg containerLifecycleActionInternal) error {
 	dockerClient, err := s.dockerService.GetClient(ctx)
 	if err != nil {
 		s.eventService.LogErrorEvent(ctx, event.EventTypeContainerError, "container", containerID, "", user.ID, user.Username, "0", err, database.JSON{"action": cfg.action})
@@ -434,7 +427,7 @@ func (s *ContainerService) runContainerLifecycleActionInternal(ctx context.Conte
 	return err
 }
 
-func (s *ContainerService) StartContainer(ctx context.Context, containerID string, user common.User) error {
+func (s *ContainerService) StartContainer(ctx context.Context, containerID string, user usertypes.Actor) error {
 	return s.runContainerLifecycleActionInternal(ctx, containerID, user, containerLifecycleActionInternal{
 		action:         "start",
 		eventType:      event.EventTypeContainerStart,
@@ -446,7 +439,7 @@ func (s *ContainerService) StartContainer(ctx context.Context, containerID strin
 	})
 }
 
-func (s *ContainerService) StopContainer(ctx context.Context, containerID string, user common.User) error {
+func (s *ContainerService) StopContainer(ctx context.Context, containerID string, user usertypes.Actor) error {
 	return s.runContainerLifecycleActionInternal(ctx, containerID, user, containerLifecycleActionInternal{
 		action:    "stop",
 		eventType: event.EventTypeContainerStop,
@@ -457,7 +450,7 @@ func (s *ContainerService) StopContainer(ctx context.Context, containerID string
 	})
 }
 
-func (s *ContainerService) RestartContainer(ctx context.Context, containerID string, user common.User) error {
+func (s *ContainerService) RestartContainer(ctx context.Context, containerID string, user usertypes.Actor) error {
 	return s.runContainerLifecycleActionInternal(ctx, containerID, user, containerLifecycleActionInternal{
 		action:    "restart",
 		eventType: event.EventTypeContainerRestart,
@@ -470,7 +463,7 @@ func (s *ContainerService) RestartContainer(ctx context.Context, containerID str
 
 // KillContainer sends a signal to the container's main process (default SIGKILL
 // when signal is empty) without removing the container.
-func (s *ContainerService) KillContainer(ctx context.Context, containerID, signal string, user common.User) error {
+func (s *ContainerService) KillContainer(ctx context.Context, containerID, signal string, user usertypes.Actor) error {
 	return s.runContainerLifecycleActionInternal(ctx, containerID, user, containerLifecycleActionInternal{
 		action:         "kill",
 		eventType:      event.EventTypeContainerKill,
@@ -484,7 +477,7 @@ func (s *ContainerService) KillContainer(ctx context.Context, containerID, signa
 }
 
 // PauseContainer suspends all processes in the container.
-func (s *ContainerService) PauseContainer(ctx context.Context, containerID string, user common.User) error {
+func (s *ContainerService) PauseContainer(ctx context.Context, containerID string, user usertypes.Actor) error {
 	return s.runContainerLifecycleActionInternal(ctx, containerID, user, containerLifecycleActionInternal{
 		action:         "pause",
 		eventType:      event.EventTypeContainerPause,
@@ -497,7 +490,7 @@ func (s *ContainerService) PauseContainer(ctx context.Context, containerID strin
 }
 
 // UnpauseContainer resumes a previously paused container.
-func (s *ContainerService) UnpauseContainer(ctx context.Context, containerID string, user common.User) error {
+func (s *ContainerService) UnpauseContainer(ctx context.Context, containerID string, user usertypes.Actor) error {
 	return s.runContainerLifecycleActionInternal(ctx, containerID, user, containerLifecycleActionInternal{
 		action:         "unpause",
 		eventType:      event.EventTypeContainerUnpause,
@@ -510,7 +503,7 @@ func (s *ContainerService) UnpauseContainer(ctx context.Context, containerID str
 }
 
 // CommitContainer creates an image from a container's current filesystem.
-func (s *ContainerService) CommitContainer(ctx context.Context, containerID string, req containertypes.CommitRequest, user common.User) (*containertypes.CommitResult, error) {
+func (s *ContainerService) CommitContainer(ctx context.Context, containerID string, req containertypes.CommitRequest, user usertypes.Actor) (*containertypes.CommitResult, error) {
 	containerID = strings.TrimSpace(containerID)
 	if containerID == "" {
 		return nil, errors.New("container ID is required")
@@ -575,7 +568,7 @@ func (
 	ctx context.Context,
 	containerInfo container.InspectResponse,
 	containerID, containerName string,
-	user common.User,
+	user usertypes.Actor,
 ) (
 	string,
 	bool,
@@ -661,7 +654,7 @@ func (
 	return newID, true, nil
 }
 
-func (s *ContainerService) RedeployContainer(ctx context.Context, containerID string, user common.User) (string, error) {
+func (s *ContainerService) RedeployContainer(ctx context.Context, containerID string, user usertypes.Actor) (string, error) {
 	dockerClient, err := s.dockerService.GetClient(ctx)
 	if err != nil {
 		s.eventService.LogErrorEvent(ctx, event.EventTypeContainerError, "container", containerID, "", user.ID, user.Username, "0", err, database.JSON{
@@ -755,7 +748,7 @@ func (
 	networkingConfig *network.NetworkingConfig,
 	apiVersion string,
 	eventType event.EventType,
-	user common.User,
+	user usertypes.Actor,
 ) (
 	string,
 	error,
@@ -1162,7 +1155,7 @@ func (s *ContainerService) GetContainerEditConfig(ctx context.Context, container
 // EditContainer applies a user-supplied config diff onto the container's
 // inspected config and recreates it. Sections not owned by the edit form are
 // preserved from the existing container.
-func (s *ContainerService) EditContainer(ctx context.Context, containerID string, req containertypes.Edit, user common.User) (string, error) {
+func (s *ContainerService) EditContainer(ctx context.Context, containerID string, req containertypes.Edit, user usertypes.Actor) (string, error) {
 	dockerClient, err := s.dockerService.GetClient(ctx)
 	if err != nil {
 		s.eventService.LogErrorEvent(ctx, event.EventTypeContainerError, "container", containerID, "", user.ID, user.Username, "0", err, database.JSON{
@@ -1341,7 +1334,7 @@ func (s *ContainerService) GetContainerNameByID(ctx context.Context, id string) 
 	return s.GetContainerNameByReference(ctx, id)
 }
 
-func (s *ContainerService) DeleteContainer(ctx context.Context, containerID string, force, removeVolumes bool, user common.User) error {
+func (s *ContainerService) DeleteContainer(ctx context.Context, containerID string, force, removeVolumes bool, user usertypes.Actor) error {
 	dockerClient, err := s.dockerService.GetClient(ctx)
 	if err != nil {
 		s.eventService.LogErrorEvent(
@@ -1443,7 +1436,7 @@ func (
 	hostConfig *container.HostConfig,
 	networkingConfig *network.NetworkingConfig,
 	containerName string,
-	user common.User,
+	user usertypes.Actor,
 	credentials []containerregistry.Credential,
 ) (
 	*container.InspectResponse,
@@ -1620,59 +1613,7 @@ func (
 }
 
 func (s *ContainerService) StreamStats(ctx context.Context, containerID string, statsChan chan<- any) error {
-	dockerClient, err := s.dockerService.GetClient(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to connect to Docker: %w", err)
-	}
-
-	stats, err := dockerClient.ContainerStats(ctx, containerID, client.ContainerStatsOptions{Stream: true})
-	if err != nil {
-		return fmt.Errorf("failed to start stats stream: %w", err)
-	}
-	defer func() { _ = stats.Body.Close() }()
-
-	decoder := jsontext.NewDecoder(stats.Body)
-	historySent := false
-
-	for {
-		if cancellationErr := ctx.Err(); cancellationErr != nil {
-			return cancellationErr
-		}
-
-		var statsData container.StatsResponse
-		if unmarshalDecodeErr := json.UnmarshalDecode(decoder, &statsData); unmarshalDecodeErr != nil {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-			if errors.Is(unmarshalDecodeErr, io.EOF) {
-				return nil
-			}
-			return fmt.Errorf("failed to decode stats: %w", unmarshalDecodeErr)
-		}
-
-		recordedAt := statsData.Read
-		if recordedAt.IsZero() {
-			recordedAt = time.Now()
-		}
-
-		payload := containerstats.StatsStreamPayload{
-			StatsResponse:        statsData,
-			CurrentHistorySample: containerstats.BuildSample(statsData),
-		}
-		payload.StatsHistory = s.statsHistory.Record(
-			containerID,
-			payload.CurrentHistorySample,
-			!historySent,
-			recordedAt,
-		)
-		historySent = true
-
-		select {
-		case statsChan <- payload:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
+	return s.stats.Stream(ctx, containerID, statsChan)
 }
 
 func (s *ContainerService) ListContainersPaginated(
@@ -1739,6 +1680,40 @@ func (s *ContainerService) ListContainersPaginated(
 	return ContainerListResult{
 		Items:      result.Items,
 		Pagination: paginationResp,
+		Counts:     counts,
+	}, nil
+}
+
+// listContainersByResourceInternal applies search and filters, collects stats
+// for the matching containers, then sorts and paginates.
+func (s *ContainerService) listContainersByResourceInternal(
+	ctx context.Context,
+	config pagination.Config[containertypes.Summary],
+	items []containertypes.Summary,
+	counts containertypes.StatusCounts,
+	params pagination.QueryParams,
+) (ContainerListResult, error) {
+	filtered := make([]containertypes.Summary, 0, len(items))
+	for _, item := range items {
+		if config.MatchesSearchAndFilters(item, params) {
+			filtered = append(filtered, item)
+		}
+	}
+
+	samples, err := s.stats.Collect(ctx, filtered)
+	if err != nil {
+		return ContainerListResult{}, err
+	}
+	for i := range filtered {
+		filtered[i].ResourceSample = samples[filtered[i].ID]
+	}
+
+	page := config.OrderAndPaginate(filtered, params)
+	s.ApplySummaryIcons(ctx, page, nil)
+
+	return ContainerListResult{
+		Items:      page,
+		Pagination: pagination.BuildResponse(int64(len(filtered)), int64(len(items)), params),
 		Counts:     counts,
 	}, nil
 }
@@ -2045,13 +2020,13 @@ func (s *ContainerService) buildContainerSortBindings() []pagination.SortBinding
 		},
 		{
 			Key:    containertypes.SortCPUUsage,
-			Fn:     containerResourceSampleSortInternal(containertypes.SortCPUUsage, false),
-			DescFn: containerResourceSampleSortInternal(containertypes.SortCPUUsage, true),
+			Fn:     stats.ContainerResourceSampleSort(containertypes.SortCPUUsage, false),
+			DescFn: stats.ContainerResourceSampleSort(containertypes.SortCPUUsage, true),
 		},
 		{
 			Key:    containertypes.SortMemoryUsage,
-			Fn:     containerResourceSampleSortInternal(containertypes.SortMemoryUsage, false),
-			DescFn: containerResourceSampleSortInternal(containertypes.SortMemoryUsage, true),
+			Fn:     stats.ContainerResourceSampleSort(containertypes.SortMemoryUsage, false),
+			DescFn: stats.ContainerResourceSampleSort(containertypes.SortMemoryUsage, true),
 		},
 	}
 }
@@ -2068,7 +2043,7 @@ func compareContainerPortsForSortInternal(a, b containertypes.Summary) int {
 
 	switch {
 	case !hasPortsA && !hasPortsB:
-		return compareContainerNamesForSortInternal(a, b)
+		return stats.CompareContainerNamesForSort(a, b)
 	case !hasPortsA:
 		return 1
 	case !hasPortsB:
@@ -2078,7 +2053,7 @@ func compareContainerPortsForSortInternal(a, b containertypes.Summary) int {
 	case portA > portB:
 		return 1
 	default:
-		return compareContainerNamesForSortInternal(a, b)
+		return stats.CompareContainerNamesForSort(a, b)
 	}
 }
 
@@ -2088,7 +2063,7 @@ func compareContainerPortsForSortDescInternal(a, b containertypes.Summary) int {
 
 	switch {
 	case !hasPortsA && !hasPortsB:
-		return compareContainerNamesForSortInternal(a, b)
+		return stats.CompareContainerNamesForSort(a, b)
 	case !hasPortsA:
 		return 1
 	case !hasPortsB:
@@ -2098,7 +2073,7 @@ func compareContainerPortsForSortDescInternal(a, b containertypes.Summary) int {
 	case portA < portB:
 		return 1
 	default:
-		return compareContainerNamesForSortInternal(a, b)
+		return stats.CompareContainerNamesForSort(a, b)
 	}
 }
 
@@ -2126,17 +2101,6 @@ func lowestContainerPortSortValueInternal(ports []containertypes.Port) (bool, in
 	default:
 		return false, 0
 	}
-}
-
-func compareContainerNamesForSortInternal(a, b containertypes.Summary) int {
-	nameA, nameB := "", ""
-	if len(a.Names) > 0 {
-		nameA = a.Names[0]
-	}
-	if len(b.Names) > 0 {
-		nameB = b.Names[0]
-	}
-	return strings.Compare(nameA, nameB)
 }
 
 func (s *ContainerService) buildContainerFilterAccessors() []pagination.FilterAccessor[containertypes.Summary] {
@@ -2229,7 +2193,8 @@ type ExecSession struct {
 }
 
 func (e *ExecSession) Stdin() io.WriteCloser { return e.hijackedResp.Conn }
-func (e *ExecSession) Stdout() io.Reader     { return e.hijackedResp.Reader }
+
+func (e *ExecSession) Stdout() io.Reader { return e.hijackedResp.Reader }
 
 // Close terminates the exec session and kills the process if still running.
 func (e *ExecSession) Close(ctx context.Context) error {
@@ -2269,4 +2234,80 @@ func (s *ContainerService) AttachExec(ctx context.Context, containerID, execID s
 		hijackedResp: execAttach.HijackedResponse,
 		dockerClient: dockerClient,
 	}, nil
+}
+
+type demuxedLogsInternal struct {
+	io.Reader
+
+	pipe *io.PipeReader
+	logs io.ReadCloser
+}
+
+func (d *demuxedLogsInternal) Close() error {
+	return errors.Join(d.logs.Close(), d.pipe.Close())
+}
+
+func (s *ContainerService) openLogsInternal(ctx context.Context, containerID string, options client.ContainerLogsOptions) (io.ReadCloser, client.ContainerInspectResult, error) {
+	dockerClient, err := s.dockerService.GetClient(ctx)
+	if err != nil {
+		return nil, client.ContainerInspectResult{}, fmt.Errorf("failed to connect to Docker: %w", err)
+	}
+
+	containerInspect, err := compat.ContainerInspectWithCompatibility(ctx, dockerClient, containerID, client.ContainerInspectOptions{})
+	if err != nil {
+		return nil, client.ContainerInspectResult{}, fmt.Errorf("failed to inspect container for logs: %w", err)
+	}
+
+	logs, err := dockerClient.ContainerLogs(ctx, containerID, options)
+	if err != nil {
+		return nil, client.ContainerInspectResult{}, fmt.Errorf("failed to get container logs: %w", err)
+	}
+	return logs, containerInspect, nil
+}
+
+func (s *ContainerService) StreamLogs(ctx context.Context, containerID string, logsChan chan<- string, follow bool, tail, since string, timestamps bool) error {
+	logs, containerInspect, err := s.openLogsInternal(ctx, containerID, client.ContainerLogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Follow:     follow,
+		Tail:       tail,
+		Since:      since,
+		Timestamps: timestamps,
+	})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = logs.Close() }()
+
+	isTTY := containerInspect.Container.Config != nil && containerInspect.Container.Config.Tty
+	return dockerutils.StreamContainerLogs(ctx, logs, logsChan, follow, isTTY)
+}
+
+// DownloadLogs returns every log line Docker retains for the container as a
+// single plain-text stream plus the attachment filename. Callers must Close it.
+func (s *ContainerService) DownloadLogs(ctx context.Context, containerID string) (io.ReadCloser, string, error) {
+	logs, containerInspect, err := s.openLogsInternal(ctx, containerID, client.ContainerLogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Tail:       "all",
+		Timestamps: true,
+	})
+	if err != nil {
+		return nil, "", err
+	}
+
+	filename := "container-" + containerInspect.Container.ID[:min(12, len(containerInspect.Container.ID))] + "-logs.log"
+	if containerInspect.Container.Config != nil && containerInspect.Container.Config.Tty {
+		return logs, filename, nil
+	}
+
+	pr, pw := io.Pipe()
+	go func() {
+		_, copyErr := stdcopy.StdCopy(pw, pw, logs)
+		if dockerutils.IsExpectedStreamEndError(copyErr) {
+			copyErr = nil
+		}
+		_ = pw.CloseWithError(copyErr)
+	}()
+	return &demuxedLogsInternal{Reader: pr, pipe: pr, logs: logs}, filename, nil
 }

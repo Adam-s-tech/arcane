@@ -1,11 +1,14 @@
+import { toast } from 'svelte-sonner';
+
 // fallow-ignore-file code-duplication -- project and global tables already delegate removal to confirmAndRemoveContainer; only state callbacks differ
 import { openConfirmDialog } from '#lib/components/confirm-dialog/index.js';
 import { m } from '#lib/paraglide/messages.js';
 import { containerService, type ContainersPaginatedResponse } from '#lib/services/container-service.js';
+import type { Activity } from '#lib/types/activity.type.js';
 import type { ContainerSummaryDto } from '#lib/types/docker.js';
-import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
-import { tryCatch } from '#lib/utils/try-catch.js';
 import { activityToastOptions, extractActivityId } from '#lib/utils/activity-toast.js';
+import { handleApiResultWithCallbacks } from '#lib/utils/api.js';
+import { hasPermission } from '#lib/utils/auth.js';
 import { bulkConfirmAndRun } from '#lib/utils/bulk-actions.js';
 import {
 	confirmAndRemoveContainer,
@@ -13,10 +16,9 @@ import {
 	runContainerLifecycleAction
 } from '#lib/utils/container-actions.js';
 import type { TableActionConfig, TableBulkActionConfig } from '#lib/utils/table-action-types.js';
-import { toast } from 'svelte-sonner';
+import { tryCatch } from '#lib/utils/try-catch.js';
+
 import { getContainerDisplayName, type ActionStatus } from './container-table.helpers';
-import type { Activity } from '#lib/types/activity.type.js';
-import { hasPermission } from '#lib/utils/auth.js';
 
 type BulkLoadingState = {
 	start: boolean;

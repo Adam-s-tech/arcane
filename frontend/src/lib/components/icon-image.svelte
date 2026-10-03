@@ -1,7 +1,8 @@
 <script lang="ts">
 	import type { Component } from 'svelte';
-	import { cn } from '#lib/utils.js';
+
 	import { ImagesIcon } from '#lib/icons/index.js';
+	import { cn } from '#lib/utils.js';
 
 	let {
 		src,

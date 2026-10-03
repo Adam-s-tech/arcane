@@ -1,6 +1,7 @@
 import { browser } from '$app/env';
-import { environmentStore, LOCAL_DOCKER_ENVIRONMENT_ID } from '#lib/stores/environment.store.svelte.js';
+
 import { clientStream } from '#lib/stores/client-stream.svelte.js';
+import { environmentStore, LOCAL_DOCKER_ENVIRONMENT_ID } from '#lib/stores/environment.store.svelte.js';
 import type { Environment } from '#lib/types/environment.js';
 
 export type StreamEnvStateBase = {

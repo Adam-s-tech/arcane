@@ -1,4 +1,3 @@
-import BaseAPIService from './api-service';
 import type {
 	ContainerRegistryCreateDto,
 	ContainerRegistryPullUsageResponse,
@@ -9,6 +8,8 @@ import type {
 import type { ContainerRegistry } from '#lib/types/docker.js';
 import type { Paginated, SearchPaginationSortRequest } from '#lib/types/shared.js';
 import { transformPaginationParams } from '#lib/utils/tables.js';
+
+import BaseAPIService from './api-service';
 
 class ContainerRegistryService extends BaseAPIService {
 	async getRegistries(options?: SearchPaginationSortRequest): Promise<Paginated<ContainerRegistry>> {

@@ -2,27 +2,33 @@ package registry
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"runtime"
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/cenkalti/backoff/v5"
-	cerrdefs "github.com/containerd/errdefs"
-	ref "github.com/distribution/reference"
+	"github.com/distribution/reference"
 	"github.com/getarcaneapp/arcane/types/v2/base"
 	"github.com/getarcaneapp/arcane/types/v2/containerregistry"
 	"github.com/google/go-containerregistry/pkg/authn"
-	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 	dockerregistry "github.com/moby/moby/api/types/registry"
 	"github.com/moby/moby/client"
 	"github.com/samber/hot"
 	"github.com/samber/mo"
 	"go.getarcane.app/kit/normalization"
-	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/kit/pkg"
 	"go.getarcane.app/sys/crypto"
 	"go.getarcane.app/updater/digest"
 	"go.getarcane.app/updater/refs"
@@ -33,8 +39,9 @@ import (
 	"github.com/getarcaneapp/arcane/backend/v2/internal/common"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/database"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/kv"
+	"github.com/getarcaneapp/arcane/backend/v2/internal/registry/children/browse"
 	"github.com/getarcaneapp/arcane/backend/v2/internal/settings"
-	utilsregistry "github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/registryauth"
+	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/registryauth"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/libarcane/timeouts"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/pagination"
 	"github.com/getarcaneapp/arcane/backend/v2/pkg/utils"
@@ -84,6 +91,7 @@ type ContainerRegistryService struct {
 	distributionHTTPClient *http.Client
 	kvService              *kv.KVService
 	settingsService        *settings.SettingsService
+	browse                 *browse.Service
 }
 
 // NewContainerRegistryService creates a registry service. kvService may be nil
@@ -106,6 +114,7 @@ func NewContainerRegistryService(
 		kvService:              kvService,
 		settingsService:        settingsService,
 	}
+	service.browse = browse.NewService(service.browseRegistryInternal, service.tagLookupContextInternal, distributionHTTPClient.Transport)
 	backgroundLoader := func(imageRefs []string) (map[string]string, error) {
 		digests := make(map[string]string, len(imageRefs))
 		var firstErr error
@@ -431,7 +440,7 @@ func (s *ContainerRegistryService) GetRegistryAuthForImage(ctx context.Context, 
 	if s == nil {
 		return "", nil
 	}
-	registryHost, err := utilsregistry.GetRegistryAddress(imageRef)
+	registryHost, err := registryauth.GetRegistryAddress(imageRef)
 	if err != nil {
 		return "", err
 	}
@@ -443,7 +452,7 @@ func (s *ContainerRegistryService) GetRegistryAuthForHost(ctx context.Context, r
 	if s == nil {
 		return "", nil
 	}
-	normalizedRegistryHost := utilsregistry.NormalizeRegistryForComparison(registryHost)
+	normalizedRegistryHost := registryauth.NormalizeRegistryForComparison(registryHost)
 	if normalizedRegistryHost == "" {
 		return "", nil
 	}
@@ -461,7 +470,7 @@ func (s *ContainerRegistryService) GetRegistryAuthForHost(ctx context.Context, r
 		return "", nil
 	}
 
-	return utilsregistry.EncodeAuthHeader(cfg.Username, cfg.Password, cfg.ServerAddress)
+	return registryauth.EncodeAuthHeader(cfg.Username, cfg.Password, cfg.ServerAddress)
 }
 
 func (s *ContainerRegistryService) GetAllRegistryAuthConfigs(ctx context.Context) (map[string]dockerregistry.AuthConfig, error) {
@@ -480,14 +489,14 @@ func (s *ContainerRegistryService) GetAllRegistryAuthConfigs(ctx context.Context
 			continue
 		}
 
-		normalizedHost := strings.TrimSpace(utilsregistry.NormalizeRegistryForComparison(reg.URL))
+		normalizedHost := strings.TrimSpace(registryauth.NormalizeRegistryForComparison(reg.URL))
 		if normalizedHost == "" {
 			continue
 		}
 
 		serverAddress := normalizedHost
 		if normalizedHost == "docker.io" {
-			serverAddress = utilsregistry.NormalizeRegistryURL(reg.URL)
+			serverAddress = registryauth.NormalizeRegistryURL(reg.URL)
 		}
 		if serverAddress == "" {
 			continue
@@ -524,7 +533,7 @@ func (s *ContainerRegistryService) GetAllRegistryAuthConfigs(ctx context.Context
 			Password:      token,
 			ServerAddress: serverAddress,
 		}
-		for _, key := range utilsregistry.LookupKeys(normalizedHost) {
+		for _, key := range registryauth.LookupKeys(normalizedHost) {
 			authConfigs[key] = authConfig
 		}
 	}
@@ -569,7 +578,7 @@ func (s *ContainerRegistryService) GetRegistryPullUsage(ctx context.Context) (co
 }
 
 func (s *ContainerRegistryService) buildRegistryPullUsageInternal(ctx context.Context, reg ContainerRegistry) containerregistry.PullUsage {
-	registryHost := utilsregistry.NormalizeRegistryForComparison(reg.URL)
+	registryHost := registryauth.NormalizeRegistryForComparison(reg.URL)
 	usage := containerregistry.PullUsage{
 		RegistryID:    reg.ID,
 		Provider:      registryProviderInternal(registryHost, reg.RegistryType),
@@ -744,16 +753,16 @@ func (s *ContainerRegistryService) setCachedRateLimitInternal(ctx context.Contex
 }
 
 func normalizePullRegistryHostInternal(imageRef string) (string, error) {
-	registryHost, err := utilsregistry.GetRegistryAddress(imageRef)
+	registryHost, err := registryauth.GetRegistryAddress(imageRef)
 	if err != nil {
 		return "", fmt.Errorf("parse image registry for %q: %w", imageRef, err)
 	}
 
-	return utilsregistry.NormalizeRegistryForComparison(registryHost), nil
+	return registryauth.NormalizeRegistryForComparison(registryHost), nil
 }
 
 func registryPullCountKeyInternal(registryHost string) string {
-	return registryPullCountKeyPrefix + utilsregistry.NormalizeRegistryForComparison(registryHost)
+	return registryPullCountKeyPrefix + registryauth.NormalizeRegistryForComparison(registryHost)
 }
 
 func registryRateLimitKeyInternal(registryID string) string {
@@ -1001,18 +1010,18 @@ func registryOperationWithCredentialsInternal[
 	error,
 ) {
 	var zero T
-	credentials, credErr := s.getMatchingRegistryCredentialsInternal(ctx, registryHost, externalCreds)
+	matchedCredentials, credErr := s.getMatchingRegistryCredentialsInternal(ctx, registryHost, externalCreds)
 
 	var lastErr error
 	var lastResult *containerregistry.DigestResult
-	for _, credential := range credentials {
+	for _, credential := range matchedCredentials {
 		lastResult = &containerregistry.DigestResult{AuthMethod: "credential", AuthUsername: credential.Username, AuthRegistry: registryHost, UsedCredential: true}
 		value, err := fetch(ctx, &credential)
 		if err == nil {
 			return value, lastResult, nil
 		}
 		lastErr = err
-		if !isUnauthorizedRegistryErrorInternal(err) {
+		if !browse.IsUnauthorizedRegistryError(err) {
 			return zero, lastResult, fmt.Errorf("%s failed with credentials: %w", operation, err)
 		}
 	}
@@ -1032,7 +1041,7 @@ func registryOperationWithCredentialsInternal[
 	if err == nil {
 		return value, result, nil
 	}
-	if credErr != nil && isUnauthorizedRegistryErrorInternal(err) {
+	if credErr != nil && browse.IsUnauthorizedRegistryError(err) {
 		return zero, result, fmt.Errorf("%s: anonymous access unauthorized; credential lookup failed: %w", operation, errors.Join(err, credErr))
 	}
 	return zero, result, fmt.Errorf("%s failed: %w", operation, err)
@@ -1065,22 +1074,22 @@ func (
 	error,
 ) {
 	if len(externalCreds) > 0 {
-		credentials := make([]resolvedRegistryCredential, 0, len(externalCreds))
+		resolvedCredentials := make([]resolvedRegistryCredential, 0, len(externalCreds))
 		for _, cred := range externalCreds {
 			if !cred.Enabled || strings.TrimSpace(cred.Username) == "" || strings.TrimSpace(cred.Token) == "" {
 				continue
 			}
-			if !utilsregistry.IsRegistryMatch(cred.URL, registryHost) {
+			if !registryauth.IsRegistryMatch(cred.URL, registryHost) {
 				continue
 			}
 
-			credentials = append(credentials, resolvedRegistryCredential{
+			resolvedCredentials = append(resolvedCredentials, resolvedRegistryCredential{
 				Username:      strings.TrimSpace(cred.Username),
 				Token:         strings.TrimSpace(cred.Token),
 				ServerAddress: normalizeRegistryServerAddressInternal(cred.URL),
 			})
 		}
-		return credentials, nil
+		return resolvedCredentials, nil
 	}
 
 	if s == nil || s.db == nil {
@@ -1095,7 +1104,7 @@ func (
 	creds := make([]resolvedRegistryCredential, 0, len(registries))
 	for i := range registries {
 		reg := &registries[i]
-		if !utilsregistry.IsRegistryMatch(reg.URL, registryHost) {
+		if !registryauth.IsRegistryMatch(reg.URL, registryHost) {
 			continue
 		}
 
@@ -1146,6 +1155,23 @@ func (s *ContainerRegistryService) credentialForRegistryInternal(ctx context.Con
 		Token:         token,
 		ServerAddress: normalizeRegistryServerAddressInternal(reg.URL),
 	}, nil
+}
+
+// browseRegistryInternal resolves a stored registry and its credential for browsing.
+func (s *ContainerRegistryService) browseRegistryInternal(ctx context.Context, id string) (containerregistry.ContainerRegistry, *containerregistry.Credential, error) {
+	reg, err := s.GetRegistryByID(ctx, id)
+	if err != nil {
+		return containerregistry.ContainerRegistry{}, nil, err
+	}
+	credential, err := s.credentialForRegistryInternal(ctx, reg)
+	if err != nil {
+		return containerregistry.ContainerRegistry{}, nil, err
+	}
+	result := containerregistry.ContainerRegistry{ID: reg.ID, URL: reg.URL, Username: reg.Username, Insecure: reg.Insecure, Enabled: reg.Enabled}
+	if credential == nil {
+		return result, nil, nil
+	}
+	return result, &containerregistry.Credential{URL: reg.URL, Username: credential.Username, Token: credential.Token, Enabled: true}, nil
 }
 
 // SyncRegistries syncs registries from a manager to this agent instance
@@ -1356,7 +1382,7 @@ func normalizeRepositoryNamesInternal(raw []string) (database.StringSlice, error
 	for _, name := range names {
 		// A repository name is only a path, so pair it with placeholder domain
 		// and tag segments to validate it against the reference grammar.
-		if _, err := ref.ParseNormalizedNamed("registry.invalid/" + name + "/placeholder:latest"); err != nil {
+		if _, err := reference.ParseNormalizedNamed("registry.invalid/" + name + "/placeholder:latest"); err != nil {
 			return nil, common.Classify(common.ErrValidation, &base.FieldError{Field: "repositoryNames", Err: fmt.Errorf("invalid repository name %q", name)})
 		}
 		result = append(result, name)
@@ -1386,54 +1412,16 @@ func normalizeImageReferenceForDistributionInternal(imageRef string) (string, st
 }
 
 func normalizeRegistryServerAddressInternal(registryURL string) string {
-	normalizedHost := strings.TrimSpace(utilsregistry.NormalizeRegistryForComparison(registryURL))
+	normalizedHost := strings.TrimSpace(registryauth.NormalizeRegistryForComparison(registryURL))
 	if normalizedHost == "" {
 		return ""
 	}
 
 	if normalizedHost == "docker.io" {
-		return utilsregistry.NormalizeRegistryURL(registryURL)
+		return registryauth.NormalizeRegistryURL(registryURL)
 	}
 
 	return normalizedHost
-}
-
-func isUnauthorizedRegistryErrorInternal(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	// Prefer structured error type check from the Docker SDK / containerd.
-	if cerrdefs.IsUnauthorized(err) || cerrdefs.IsPermissionDenied(err) {
-		return true
-	}
-	if registryErr, ok := errors.AsType[*transport.Error](err); ok {
-		return registryErr.StatusCode == http.StatusUnauthorized || registryErr.StatusCode == http.StatusForbidden
-	}
-
-	// Fallback: some Docker daemon versions return plain-text errors without
-	// a typed wrapper. These known substrings cover Docker Hub, GHCR, and
-	// other common OCI registries as of Docker Engine 27.x.
-	errLower := strings.ToLower(err.Error())
-	indicators := []string{
-		"unauthorized",
-		"authentication required",
-		"no basic auth credentials",
-		"access denied",
-		"incorrect username or password",
-		"status: 401",
-		"status 401",
-		"status: 403",
-		"status 403",
-	}
-
-	for _, indicator := range indicators {
-		if strings.Contains(errLower, indicator) {
-			return true
-		}
-	}
-
-	return false
 }
 
 func isRateLimitErrorInternal(err error) bool {
@@ -1462,7 +1450,7 @@ func IsRateLimitErrorString(msg string) bool {
 }
 
 func isDockerHubRegistryInternal(registryHost string) bool {
-	return utilsregistry.NormalizeRegistryForComparison(registryHost) == "docker.io"
+	return registryauth.NormalizeRegistryForComparison(registryHost) == "docker.io"
 }
 
 func isDistributionFallbackEligibleInternal(err error) bool {
@@ -1474,7 +1462,7 @@ func isDistributionFallbackEligibleInternal(err error) bool {
 		return true
 	}
 
-	if isUnauthorizedRegistryErrorInternal(err) {
+	if browse.IsUnauthorizedRegistryError(err) {
 		return false
 	}
 
@@ -1497,7 +1485,7 @@ func (
 ) {
 	var inspectOptions client.DistributionInspectOptions
 	if credential != nil {
-		authHeader, err := utilsregistry.EncodeAuthHeader(credential.Username, credential.Token, credential.ServerAddress)
+		authHeader, err := registryauth.EncodeAuthHeader(credential.Username, credential.Token, credential.ServerAddress)
 		if err != nil {
 			return "", fmt.Errorf("encode registry auth header for %s: %w", registryHost, err)
 		}
@@ -1532,4 +1520,199 @@ func (s *ContainerRegistryService) fetchDigestFromRegistryInternal(ctx context.C
 		distributionCredential,
 		s.distributionHTTPClient,
 	)
+}
+
+// ListImageTags discovers repository tags with the same credential precedence as
+// digest checks. External credentials replace local credentials when supplied.
+func (s *ContainerRegistryService) ListImageTags(ctx context.Context, imageRef string, externalCreds []containerregistry.Credential) ([]string, error) {
+	if refs.IsDigestPinnedReference(imageRef) || refs.IsImageIDLikeReference(imageRef) {
+		return nil, errors.New("cannot discover tags for an immutable image reference")
+	}
+	parts, err := refs.NormalizeReference(imageRef)
+	if err != nil {
+		return nil, err
+	}
+	lookupCtx, cancel := s.tagLookupContextInternal(ctx)
+	defer cancel()
+
+	tags, _, err := registryOperationWithCredentialsInternal(lookupCtx, s, parts.RegistryHost, "registry tag listing of "+parts.NormalizedRef, externalCreds,
+		func(ctx context.Context, credential *resolvedRegistryCredential) ([]string, error) {
+			var auth *authn.AuthConfig
+			if credential != nil {
+				auth = &authn.AuthConfig{Username: credential.Username, Password: credential.Token}
+			}
+			return registry.FetchTags(ctx, parts.RegistryHost, parts.Repository, auth, s.distributionHTTPClient)
+		})
+	return tags, err
+}
+
+// tagLookupContextInternal bounds tag and manifest walks by the configured registry tag timeout.
+func (s *ContainerRegistryService) tagLookupContextInternal(ctx context.Context) (context.Context, context.CancelFunc) {
+	timeoutSeconds := 0
+	if s.settingsService != nil {
+		timeoutSeconds = s.settingsService.GetSettingsConfig().RegistryTagTimeout.AsInt()
+	}
+	return context.WithTimeout(ctx, timeouts.GetDuration(timeoutSeconds, timeouts.DefaultRegistryTags))
+}
+
+const ecrTokenTTL = 12 * time.Hour
+
+type ecrTokenResult struct {
+	username string
+	password string
+}
+
+// GetOrRefreshECRToken returns a valid ECR auth token (username + password) for the given
+// registry. If the cached token (stored encrypted in the DB) is still within its 12-hour
+// validity window it is returned directly; otherwise a new token is obtained from the AWS
+// ECR API, persisted back to the DB, and returned.
+// Concurrent refreshes for the same registry are deduplicated via singleflight.
+func (s *ContainerRegistryService) GetOrRefreshECRToken(ctx context.Context, reg *ContainerRegistry) (username, password string, err error) {
+	// Fast path: return cached token if still valid.
+	if reg.ECRTokenGeneratedAt != nil && time.Since(reg.ECRTokenGeneratedAt.UTC()) < ecrTokenTTL {
+		if reg.ECRToken != "" {
+			decrypted, decErr := crypto.Decrypt(reg.ECRToken)
+			if decErr == nil && strings.TrimSpace(decrypted) != "" {
+				return "AWS", decrypted, nil
+			}
+		}
+	}
+
+	// Slow path: deduplicate concurrent refreshes for the same registry.
+	result, sErr, _ := s.ecrRefreshGroup.Do(reg.ID, func() (any, error) {
+		// Detach from the request context so a cancelled caller doesn't
+		// abort the shared refresh for all waiting goroutines.
+		refreshCtx := context.WithoutCancel(ctx)
+		return s.refreshECRTokenInternal(refreshCtx, reg)
+	})
+	if sErr != nil {
+		return "", "", sErr
+	}
+	r, ok := result.(*ecrTokenResult)
+	if !ok {
+		return "", "", errors.New("unexpected ECR token result type")
+	}
+	return r.username, r.password, nil
+}
+
+func (s *ContainerRegistryService) refreshECRTokenInternal(ctx context.Context, reg *ContainerRegistry) (*ecrTokenResult, error) {
+	// Decrypt the stored AWS secret access key.
+	secretKey, decErr := crypto.Decrypt(reg.AWSSecretAccessKey)
+	if decErr != nil {
+		return nil, fmt.Errorf("failed to decrypt AWS secret key for registry %s: %w", reg.URL, decErr)
+	}
+	secretKey = strings.TrimSpace(secretKey)
+	if secretKey == "" {
+		return nil, fmt.Errorf("AWS secret access key is empty for registry %s", reg.URL)
+	}
+
+	// Call AWS ECR GetAuthorizationToken.
+	cfg, cfgErr := config.LoadDefaultConfig(ctx,
+		config.WithRegion(reg.AWSRegion),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+			reg.AWSAccessKeyID,
+			secretKey,
+			"",
+		)),
+	)
+	if cfgErr != nil {
+		return nil, fmt.Errorf("failed to load AWS config for registry %s: %w", reg.URL, cfgErr)
+	}
+
+	ecrClient := ecr.NewFromConfig(cfg)
+	result, ecrErr := ecrClient.GetAuthorizationToken(ctx, &ecr.GetAuthorizationTokenInput{})
+	if ecrErr != nil {
+		return nil, fmt.Errorf("failed to get ECR authorization token for registry %s: %w", reg.URL, ecrErr)
+	}
+	if len(result.AuthorizationData) == 0 || result.AuthorizationData[0].AuthorizationToken == nil {
+		return nil, fmt.Errorf("ECR returned empty authorization data for registry %s", reg.URL)
+	}
+
+	// Decode base64 token → "AWS:<password>".
+	decoded, decodeErr := base64.StdEncoding.DecodeString(*result.AuthorizationData[0].AuthorizationToken)
+	if decodeErr != nil {
+		return nil, fmt.Errorf("failed to decode ECR token for registry %s: %w", reg.URL, decodeErr)
+	}
+	parts := strings.SplitN(string(decoded), ":", 2)
+	if len(parts) != 2 || parts[1] == "" {
+		return nil, fmt.Errorf("unexpected ECR token format for registry %s", reg.URL)
+	}
+	ecrPassword := parts[1]
+
+	// Persist the new token (encrypted) and generation timestamp.
+	encryptedToken, encErr := crypto.Encrypt(ecrPassword)
+	if encErr != nil {
+		return nil, fmt.Errorf("failed to encrypt ECR token for registry %s: %w", reg.URL, encErr)
+	}
+	now := time.Now().UTC()
+	reg.ECRToken = encryptedToken
+	reg.ECRTokenGeneratedAt = &now
+	if saveErr := s.db.WithContext(ctx).Model(reg).Updates(map[string]any{
+		"ecr_token":              encryptedToken,
+		"ecr_token_generated_at": now,
+	}).Error; saveErr != nil {
+		// Non-fatal: log but continue — the token is still usable for this call.
+		slog.WarnContext(ctx, "failed to persist ECR token to database", "registry", reg.URL, "error", saveErr)
+	}
+
+	return &ecrTokenResult{username: "AWS", password: ecrPassword}, nil
+}
+
+const (
+	ociImageVersionLabel = "org.opencontainers.image.version"
+	versionLabelCacheTTL = 3 * time.Hour
+)
+
+// ErrNoVersionLabel is returned when the remote image config carries no
+// org.opencontainers.image.version label.
+var ErrNoVersionLabel = errors.New("image config has no version label")
+
+// ImageVersionLabel resolves the org.opencontainers.image.version label from the
+// remote image config for a tag or digest reference, without pulling the image.
+// Anonymous access only — this is used for Arcane's own public GHCR images.
+func (s *ContainerRegistryService) ImageVersionLabel(ctx context.Context, imageRef string) (string, error) {
+	imageRef = strings.TrimSpace(imageRef)
+	if imageRef == "" {
+		return "", errors.New("empty image reference")
+	}
+
+	label, found, err := s.labelCache.GetWithLoaders(imageRef, func(_ []string) (map[string]string, error) {
+		loadCtx, cancel := context.WithTimeout(ctx, timeouts.DefaultRegistry)
+		defer cancel()
+
+		value, loadErr := fetchImageVersionLabelInternal(loadCtx, imageRef)
+		if loadErr != nil {
+			return nil, loadErr
+		}
+		return map[string]string{imageRef: value}, nil
+	})
+	if err != nil {
+		return "", err
+	}
+	if !found {
+		return "", errors.New("registry version label cache loader returned no label")
+	}
+	return label, nil
+}
+
+func fetchImageVersionLabelInternal(ctx context.Context, imageRef string) (string, error) {
+	parsedRef, err := name.ParseReference(imageRef)
+	if err != nil {
+		return "", fmt.Errorf("invalid image reference %q: %w", imageRef, err)
+	}
+
+	img, err := remote.Image(parsedRef,
+		remote.WithContext(ctx),
+		remote.WithPlatform(v1.Platform{OS: "linux", Architecture: runtime.GOARCH}))
+	if err != nil {
+		return "", fmt.Errorf("version label fetch failed for %s: %w", imageRef, err)
+	}
+	cfg, err := img.ConfigFile()
+	if err != nil {
+		return "", fmt.Errorf("version label fetch failed for %s: %w", imageRef, err)
+	}
+	if cfg == nil || strings.TrimSpace(cfg.Config.Labels[ociImageVersionLabel]) == "" {
+		return "", ErrNoVersionLabel
+	}
+	return strings.TrimSpace(cfg.Config.Labels[ociImageVersionLabel]), nil
 }

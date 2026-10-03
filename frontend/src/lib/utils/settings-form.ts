@@ -1,10 +1,11 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
 import { toast } from 'svelte-sonner';
 import { z } from 'zod/v4';
+
 import { UseSettingsForm } from '#lib/hooks/use-settings-form.svelte.js';
 import { m } from '#lib/paraglide/messages.js';
 import type { Settings } from '#lib/types/settings.js';
 import { createForm } from '#lib/utils/settings.svelte.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
 
 type SettingsPayload = Partial<Settings> & Record<string, unknown>;
 

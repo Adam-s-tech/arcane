@@ -11,11 +11,12 @@ import (
 	"strings"
 
 	networktypes "github.com/getarcaneapp/arcane/types/v2/network"
+	usertypes "github.com/getarcaneapp/arcane/types/v2/user"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
 	"go.getarcane.app/docker/compat"
-	kit "go.getarcane.app/kit/pkg"
+	"go.getarcane.app/kit/pkg"
 	"go.getarcane.app/kit/pkg/mapping"
 	"golang.org/x/sync/errgroup"
 
@@ -176,7 +177,7 @@ func (s *NetworkService) GetNetworkTopology(ctx context.Context) (*networktypes.
 	return topology, nil
 }
 
-func (s *NetworkService) CreateNetwork(ctx context.Context, name string, options client.NetworkCreateOptions, user common.User) (*network.CreateResponse, error) {
+func (s *NetworkService) CreateNetwork(ctx context.Context, name string, options client.NetworkCreateOptions, user usertypes.Actor) (*network.CreateResponse, error) {
 	dockerClient, err := s.dockerService.GetClient(ctx)
 	if err != nil {
 		s.eventService.LogErrorEvent(ctx, event.EventTypeNetworkError, "network", "", name, user.ID, user.Username, "0", err, database.JSON{"action": "create", "driver": options.Driver})
@@ -212,7 +213,7 @@ func (s *NetworkService) CreateNetwork(ctx context.Context, name string, options
 	return &out, nil
 }
 
-func (s *NetworkService) RemoveNetwork(ctx context.Context, id string, user common.User) error {
+func (s *NetworkService) RemoveNetwork(ctx context.Context, id string, user usertypes.Actor) error {
 	dockerClient, err := s.dockerService.GetClient(ctx)
 	if err != nil {
 		s.eventService.LogErrorEvent(ctx, event.EventTypeNetworkError, "network", id, "", user.ID, user.Username, "0", err, database.JSON{"action": "delete"})
@@ -240,7 +241,7 @@ func (s *NetworkService) RemoveNetwork(ctx context.Context, id string, user comm
 }
 
 // ConnectContainer connects a container to a network without recreating it.
-func (s *NetworkService) ConnectContainer(ctx context.Context, networkID string, req networktypes.ConnectContainerRequest, user common.User) error {
+func (s *NetworkService) ConnectContainer(ctx context.Context, networkID string, req networktypes.ConnectContainerRequest, user usertypes.Actor) error {
 	dockerClient, err := s.dockerService.GetClient(ctx)
 	if err != nil {
 		s.eventService.LogErrorEvent(ctx, event.EventTypeNetworkError, "network", networkID, "", user.ID, user.Username, "0", err, database.JSON{"action": "connect", "containerId": req.ContainerID})
@@ -304,7 +305,7 @@ func (s *NetworkService) ConnectContainer(ctx context.Context, networkID string,
 }
 
 // DisconnectContainer disconnects a container from a network.
-func (s *NetworkService) DisconnectContainer(ctx context.Context, networkID string, req networktypes.DisconnectContainerRequest, user common.User) error {
+func (s *NetworkService) DisconnectContainer(ctx context.Context, networkID string, req networktypes.DisconnectContainerRequest, user usertypes.Actor) error {
 	dockerClient, err := s.dockerService.GetClient(ctx)
 	if err != nil {
 		s.eventService.LogErrorEvent(ctx, event.EventTypeNetworkError, "network", networkID, "", user.ID, user.Username, "0", err, database.JSON{"action": "disconnect", "containerId": req.ContainerID})
@@ -364,7 +365,7 @@ func (s *NetworkService) PruneNetworks(ctx context.Context) (*network.PruneRepor
 		"action":          "prune",
 		"networksDeleted": len(pruneReport.NetworksDeleted),
 	}
-	if logErr := s.eventService.LogNetworkEvent(ctx, event.EventTypeNetworkDelete, "", "bulk_prune", common.SystemUser.ID, common.SystemUser.Username, "0", metadata); logErr != nil {
+	if logErr := s.eventService.LogNetworkEvent(ctx, event.EventTypeNetworkDelete, "", "bulk_prune", usertypes.SystemUser.ID, usertypes.SystemUser.Username, "0", metadata); logErr != nil {
 		slog.WarnContext(ctx, "could not log network prune action", "error", logErr)
 	}
 

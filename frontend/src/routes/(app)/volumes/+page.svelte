@@ -1,20 +1,22 @@
 <script lang="ts">
+	import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
+	import { untrack } from 'svelte';
+	import { toast } from 'svelte-sonner';
+
+	import CreateVolumeSheet from '#lib/components/sheets/create-volume-sheet.svelte';
+	import { useEnvironmentRefresh } from '#lib/hooks/use-environment-refresh.svelte.js';
 	// fallow-ignore-file code-duplication -- volume and network pages share ResourceListPageState lifecycle wiring but retain domain-specific queries and mutations
 	import { VolumesIcon, VolumeUnusedIcon } from '#lib/icons/index.js';
-	import { toast } from 'svelte-sonner';
-	import CreateVolumeSheet from '#lib/components/sheets/create-volume-sheet.svelte';
-	import type { VolumeCreateRequest, VolumeUsageCounts } from '#lib/types/docker.js';
-	import VolumeTable from './components/volume-table.svelte';
-	import { m } from '#lib/paraglide/messages.js';
-	import { volumeService } from '#lib/services/volume-service.js';
-	import { ResourceListPageState } from '#lib/utils/resource-list-page.svelte.js';
-	import { hasPermission } from '#lib/utils/auth.js';
-	import { queryKeys } from '#lib/query/query-keys.js';
-	import { untrack } from 'svelte';
-	import { useEnvironmentRefresh } from '#lib/hooks/use-environment-refresh.svelte.js';
 	import { ResourcePageLayout, type ActionButton, type StatCardConfig } from '#lib/layouts/index.js';
-	import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
+	import { m } from '#lib/paraglide/messages.js';
+	import { queryKeys } from '#lib/query/query-keys.js';
+	import { volumeService } from '#lib/services/volume-service.js';
+	import type { VolumeCreateRequest, VolumeUsageCounts } from '#lib/types/docker.js';
 	import { activityToastOptions, extractActivityId } from '#lib/utils/activity-toast.js';
+	import { hasPermission } from '#lib/utils/auth.js';
+	import { ResourceListPageState } from '#lib/utils/resource-list-page.svelte.js';
+
+	import VolumeTable from './components/volume-table.svelte';
 
 	let { data } = $props();
 	const queryClient = useQueryClient();

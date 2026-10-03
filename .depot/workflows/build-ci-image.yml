@@ -6,12 +6,12 @@ on:
   push:
     branches: [main]
     paths:
-      - ".depot/workflows/**"
-      - ".depot/actions/publish-images/action.yml"
-      - "pnpm-lock.yaml"
-      - "tests/package.json"
+      - '.depot/workflows/**'
+      - '.depot/actions/publish-images/action.yml'
+      - 'pnpm-lock.yaml'
+      - 'tests/package.json'
   schedule:
-    - cron: "17 4 * * 1"
+    - cron: '17 4 * * 1'
 
 permissions:
   contents: read

@@ -1,8 +1,10 @@
-import { tryCatch } from '#lib/utils/try-catch.js';
 import { error } from '@sveltejs/kit';
+
 import { swarmService } from '#lib/services/swarm-service.js';
 import type { SearchPaginationSortRequest } from '#lib/types/shared.js';
 import { resolveInitialTableRequest } from '#lib/utils/tables.js';
+import { tryCatch } from '#lib/utils/try-catch.js';
+
 import type { PageLoad } from './$types';
 
 type StackSourceState = 'loading' | 'available' | 'missing' | 'forbidden' | 'error';

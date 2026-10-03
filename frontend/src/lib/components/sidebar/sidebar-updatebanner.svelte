@@ -1,12 +1,13 @@
 <script lang="ts">
-	import { cn } from '#lib/utils.js';
-	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
-	import { useSidebar } from '#lib/components/ui/sidebar/index.js';
-	import type { AppVersionInformation } from '#lib/types/settings.js';
-	import { m } from '#lib/paraglide/messages.js';
 	import UpdateAllDialog from '#lib/components/dialogs/update-all-dialog.svelte';
-	import { CircleArrowUpIcon } from '#lib/icons/index.js';
+	import { useSidebar } from '#lib/components/ui/sidebar/index.js';
+	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
 	import { useUpgradeCheck } from '#lib/hooks/use-upgrade-check.svelte.js';
+	import { CircleArrowUpIcon } from '#lib/icons/index.js';
+	import { m } from '#lib/paraglide/messages.js';
+	import type { AppVersionInformation } from '#lib/types/settings.js';
+	import { cn } from '#lib/utils.js';
+
 	import UpdateAvailableBanner from './update-available-banner.svelte';
 
 	let {

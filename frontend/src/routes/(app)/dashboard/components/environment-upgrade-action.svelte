@@ -1,17 +1,15 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
-	import { toast } from 'svelte-sonner';
 	import { createQuery } from '@tanstack/svelte-query';
+
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
 	import UpdateCenterDialog from '#lib/components/dialogs/update-center-dialog.svelte';
+	import { DownloadIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { queryKeys } from '#lib/query/query-keys.js';
 	import systemUpgradeService from '#lib/services/api/system-upgrade-service.js';
-	import type { AppVersionInformation } from '#lib/types/settings.js';
 	import type { Environment } from '#lib/types/environment.js';
-	import { toastUpgradeError } from '#lib/utils/api.js';
-	import { DownloadIcon } from '#lib/icons/index.js';
+	import type { AppVersionInformation } from '#lib/types/settings.js';
+	import { applyEnvironmentUpgrade } from '#lib/utils/update-actions.js';
 
 	// open/upgrading have no $bindable fallback: they bind to per-environment
 	// record entries that start out undefined, and binding undefined to a
@@ -97,25 +95,7 @@
 	});
 
 	async function handleConfirmUpgradeInternal() {
-		const operationResult = await tryCatch(
-			(async () => {
-				const result = await systemUpgradeService.triggerUpgrade(environment.id);
-				if (!result.success) {
-					throw new Error(result.error || result.message || m.common_unknown());
-				}
-				toast.success(m.upgrade_success());
-				await onRefreshRequested?.();
-				return { upToDate: result.upToDate };
-			})()
-		);
-		if (operationResult.error !== null) {
-			const error = operationResult.error;
-
-			toastUpgradeError(error, m.upgrade_failed);
-			throw error;
-		} else {
-			return operationResult.data;
-		}
+		return applyEnvironmentUpgrade(environment.id, () => m.common_unknown(), onRefreshRequested, true);
 	}
 </script>
 

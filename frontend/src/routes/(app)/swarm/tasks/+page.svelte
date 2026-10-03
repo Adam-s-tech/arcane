@@ -1,12 +1,13 @@
 <script lang="ts">
+	import { useEnvironmentRefresh } from '#lib/hooks/use-environment-refresh.svelte.js';
 	import { JobsIcon } from '#lib/icons/index.js';
+	import { ResourcePageLayout, type StatCardConfig } from '#lib/layouts/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { swarmService } from '#lib/services/swarm-service.js';
-	import { ResourcePageLayout, type StatCardConfig } from '#lib/layouts/index.js';
-	import { useEnvironmentRefresh } from '#lib/hooks/use-environment-refresh.svelte.js';
 	import { simpleRefresh } from '#lib/utils/api.js';
-	import SwarmTasksTable from './components/tasks-table.svelte';
 	import { createRefreshActionButtons } from '#lib/utils/resource-actions.js';
+
+	import SwarmTasksTable from './components/tasks-table.svelte';
 
 	let { data } = $props();
 

@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+
 	import BackupPolicyDialog from '#lib/components/backup-policy-dialog.svelte';
 	import SelectWithLabel from '#lib/components/form/select-with-label.svelte';
+	import * as m from '#lib/paraglide/messages.js';
 	import { systemBackupService } from '#lib/services/system-backup-service.js';
 	import type { BackupPolicyUpdate } from '#lib/types/backup.js';
 	import type { S3Destination } from '#lib/types/s3-destination.js';
@@ -14,8 +16,8 @@
 		UpdateSystemVolumeBackupPolicy
 	} from '#lib/types/system-backup.js';
 	import { backupPolicyUpdateFromPolicy } from '#lib/utils/backups.js';
+
 	import SystemVolumeScopeFields from './system-volume-scope-fields.svelte';
-	import * as m from '#lib/paraglide/messages.js';
 
 	type BackupType = 'system' | 'volume';
 

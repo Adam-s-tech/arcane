@@ -1,15 +1,15 @@
 <script lang="ts">
-	import { tryCatch } from '#lib/utils/try-catch.js';
-
 	import { toast } from 'svelte-sonner';
-	import PasskeySettings from '#lib/components/auth/passkey-settings.svelte';
+
 	import { ArcaneButton } from '#lib/components/arcane-button/index.js';
+	import PasskeySettings from '#lib/components/auth/passkey-settings.svelte';
 	import TextInputWithLabel from '#lib/components/form/text-input-with-label.svelte';
 	import { LogoutIcon, ShieldAlertIcon } from '#lib/icons/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { userService } from '#lib/services/user-service.js';
 	import settingsStore from '#lib/stores/config-store.svelte.js';
 	import userStore from '#lib/stores/user-store.svelte.js';
+	import { tryCatch } from '#lib/utils/try-catch.js';
 
 	const currentUser = $derived(userStore.current);
 	const isOidcUser = $derived(Boolean(currentUser?.oidcSubjectId));
