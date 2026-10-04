@@ -1547,7 +1547,6 @@
   "environments_update_all_stage_verifying": "Verifying version",
   "environments_update_all_stage_manager_restart": "Waiting for manager restart",
   "environments_update_all_elapsed": "Elapsed {duration}",
-  "environments_update_all_progress_unavailable": "Progress unavailable",
   "environments_update_all_loading_status": "Checking update status…",
   "environments_update_all_finished_with_issues": "Finished with issues",
   "environments_update_all_reconnection_note": "Temporary disconnection is expected while restarting. Agents have up to five minutes to reconnect and confirm their version. Progress refreshes automatically.",
