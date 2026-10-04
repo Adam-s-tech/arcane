@@ -1506,7 +1506,7 @@
 						<div
 							class={cn(
 								// Negative margins cancel the border + padding so toggling the highlight never shifts layout.
-								'-my-[5px] -mr-[5px] flex items-center gap-2 rounded-xl border py-1 pr-1 pl-3 transition-colors duration-200',
+								'-my-1.25 -mr-1.25 flex items-center gap-2 rounded-xl border py-1 pr-1 pl-3 transition-colors duration-200',
 								hasChanges ? 'border-warning/30 bg-warning/10' : 'border-transparent'
 							)}
 						>

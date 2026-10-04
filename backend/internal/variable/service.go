@@ -575,7 +575,7 @@ func (s *VariableService) WriteLocalEnvFile(ctx context.Context, vars []env.Vari
 		return fmt.Errorf("failed to write global variables file: %w", writeErr)
 	}
 
-	slog.InfoContext(ctx, "Updated global variables",
+	slog.DebugContext(ctx, "Synchronized global variables file",
 		"path", envPath,
 		"count", len(vars))
 
