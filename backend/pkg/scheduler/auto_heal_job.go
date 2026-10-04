@@ -108,7 +108,7 @@ func (j *AutoHealJob) Schedule(ctx context.Context) string {
 
 	parser := scheduleutil.Parser()
 	if _, err := parser.Parse(schedule); err != nil {
-		slog.WarnContext(ctx, "Invalid cron expression for auto-heal, using default", "invalid_schedule", schedule, "error", err)
+		slog.WarnContext(ctx, "Invalid cron expression for auto-heal, using default", "invalidSchedule", schedule, "error", err)
 		return autoHealDefaultSchedule
 	}
 
@@ -203,7 +203,7 @@ func (j *AutoHealJob) selfContainerIDInternal(ctx context.Context) string {
 			return
 		}
 		j.selfID = strings.ToLower(strings.TrimSpace(id))
-		slog.InfoContext(ctx, "auto-heal: detected own container; it will never be auto-restarted", "container_id", j.selfID)
+		slog.InfoContext(ctx, "auto-heal: detected own container; it will never be auto-restarted", "containerId", j.selfID)
 	})
 	return j.selfID
 }
@@ -276,8 +276,8 @@ func (j *AutoHealJob) processCandidateInternal(
 		slog.WarnContext(
 			ctx, "auto-heal restart-loop protection: skipping container",
 			"container", containerName,
-			"max_restarts", maxRestarts,
-			"window_minutes", restartWindowMinutes,
+			"maxRestarts", maxRestarts,
+			"windowMinutes", restartWindowMinutes,
 		)
 		return target, nil
 	}
@@ -303,7 +303,7 @@ func (j *AutoHealJob) processCandidateInternal(
 
 	j.postRestartActionsInternal(ctx, containerID, containerName)
 
-	slog.InfoContext(ctx, "auto-heal restarted unhealthy container", "container", containerName, "container_id", containerID)
+	slog.InfoContext(ctx, "auto-heal restarted unhealthy container", "container", containerName, "containerId", containerID)
 	target.Status = schedulertypes.Succeeded
 	return target, nil
 }

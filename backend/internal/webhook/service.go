@@ -523,12 +523,12 @@ func (s *WebhookService) TriggerByToken(ctx context.Context, rawToken string) er
 	s.actions.Go(func() {
 		defer func() {
 			if panicErr := utils.PanicToError(recover()); panicErr != nil {
-				slog.ErrorContext(execCtx, "webhook action panicked", "webhookID", wh.ID, "webhookName", wh.Name, "actionType", actionType, "error", panicErr)
+				slog.ErrorContext(execCtx, "webhook action panicked", "webhookId", wh.ID, "webhookName", wh.Name, "actionType", actionType, "error", panicErr)
 			}
 		}()
 		if _, executeWebhookActionErr := s.executeWebhookActionInternal(execCtx, wh, actionType); executeWebhookActionErr != nil {
 			// Action failures are recorded as error events by wrapWebhookActionErrorInternal.
-			slog.ErrorContext(execCtx, "webhook action failed", "webhookID", wh.ID, "webhookName", wh.Name, "actionType", actionType, "error", executeWebhookActionErr)
+			slog.ErrorContext(execCtx, "webhook action failed", "webhookId", wh.ID, "webhookName", wh.Name, "actionType", actionType, "error", executeWebhookActionErr)
 			return
 		}
 		s.logWebhookEventInternal(execCtx, wh, actionType, event.EventSeveritySuccess, "")

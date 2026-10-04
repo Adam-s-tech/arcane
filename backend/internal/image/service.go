@@ -228,7 +228,7 @@ func (s *ImageService) RemoveImage(ctx context.Context, id string, force bool, u
 		"force":   force,
 	}
 	if logErr := s.eventService.LogImageEvent(ctx, event.EventTypeImageDelete, id, imageName, user.ID, user.Username, "0", metadata); logErr != nil {
-		slog.Warn("could not log image deletion action", "err", logErr, "image", imageName, "image_id", id)
+		slog.WarnContext(ctx, "could not log image deletion action", "err", logErr, "image", imageName, "imageId", id)
 	}
 
 	return nil
@@ -285,7 +285,7 @@ func (s *ImageService) PullImage(ctx context.Context, imageName string, progress
 	_ = logWriter.Close()
 	if streamErr != nil {
 		if errors.Is(streamErr, context.Canceled) || strings.Contains(streamErr.Error(), "context canceled") {
-			slog.Debug("image pull stream canceled", "image", imageName, "err", streamErr)
+			slog.DebugContext(ctx, "image pull stream canceled", "image", imageName, "err", streamErr)
 			s.eventService.LogErrorEvent(ctx, event.EventTypeImageError, "image", "", imageName, user.ID, user.Username, "0", streamErr, database.JSON{"action": "pull", "step": "canceled"})
 			return fmt.Errorf("image pull stream canceled for %s: %w", imageName, streamErr)
 		}
@@ -293,14 +293,14 @@ func (s *ImageService) PullImage(ctx context.Context, imageName string, progress
 		return fmt.Errorf("error reading image pull stream for %s: %w", imageName, streamErr)
 	}
 
-	slog.Debug("image pull stream completed", "image", imageName)
+	slog.DebugContext(ctx, "image pull stream completed", "image", imageName)
 
 	metadata := database.JSON{
 		"action":    "pull",
 		"imageName": imageName,
 	}
 	if logErr := s.eventService.LogImageEvent(ctx, event.EventTypeImagePull, "", imageName, user.ID, user.Username, "0", metadata); logErr != nil {
-		slog.Warn("could not log image pull action", "err", logErr, "image", imageName)
+		slog.WarnContext(ctx, "could not log image pull action", "err", logErr, "image", imageName)
 	}
 	if s.registryService != nil {
 		if recordImagePullErr := s.registryService.RecordImagePull(ctx, imageName); recordImagePullErr != nil {
@@ -370,7 +370,7 @@ func (s *ImageService) TagImage(ctx context.Context, source string, req imagetyp
 		"target":     target,
 	}
 	if logErr := s.eventService.LogImageEvent(ctx, event.EventTypeImageTag, "", source, user.ID, user.Username, "0", metadata); logErr != nil {
-		slog.Warn("could not log image tag action", "err", logErr, "image", source, "target", target)
+		slog.WarnContext(ctx, "could not log image tag action", "err", logErr, "image", source, "target", target)
 	}
 
 	return nil
@@ -507,7 +507,7 @@ func (s *ImageService) LoadImageFromReader(ctx context.Context, reader io.Reader
 		"fileName": fileName,
 	}
 	if logErr := s.eventService.LogImageEvent(ctx, event.EventTypeImageLoad, "", fileName, user.ID, user.Username, "0", metadata); logErr != nil {
-		slog.Warn("could not log image load action", "err", logErr, "file", fileName)
+		slog.WarnContext(ctx, "could not log image load action", "err", logErr, "file", fileName)
 	}
 
 	return &result, nil
@@ -640,7 +640,7 @@ func (s *ImageService) PruneImages(ctx context.Context, options system.PruneImag
 		"spaceReclaimed": pruneReport.SpaceReclaimed,
 	}
 	if logErr := s.eventService.LogImageEvent(ctx, event.EventTypeImageDelete, "", "bulk_prune", usertypes.SystemUser.ID, usertypes.SystemUser.Username, "0", metadata); logErr != nil {
-		slog.Warn("could not log image prune action", "err", logErr)
+		slog.WarnContext(ctx, "could not log image prune action", "err", logErr)
 	}
 
 	return &pruneReport, nil

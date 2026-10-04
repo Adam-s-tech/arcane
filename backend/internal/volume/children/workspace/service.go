@@ -80,7 +80,7 @@ func (s *Service) GetVolumeWorkspace(ctx context.Context, volumeName string) (*w
 
 	totalStartedAt := time.Now()
 	defer func() {
-		slog.DebugContext(ctx, "volume workspace load completed", "volume", volumeName, "total_duration", time.Since(totalStartedAt))
+		slog.DebugContext(ctx, "volume workspace load completed", "volume", volumeName, "totalDuration", time.Since(totalStartedAt))
 	}()
 
 	inspectionStartedAt := time.Now()
@@ -98,7 +98,7 @@ func (s *Service) GetVolumeWorkspace(ctx context.Context, volumeName string) (*w
 	if requireVolumeHelperACFSErr := s.deps.RequireACFS(ctx, volumeName, containerID); requireVolumeHelperACFSErr != nil {
 		return nil, requireVolumeHelperACFSErr
 	}
-	slog.DebugContext(ctx, "volume workspace helper acquired", "volume", volumeName, "container_id", containerID, "duration", time.Since(helperStartedAt))
+	slog.DebugContext(ctx, "volume workspace helper acquired", "volume", volumeName, "containerId", containerID, "duration", time.Since(helperStartedAt))
 
 	scanStartedAt := time.Now()
 	tree, err := s.readVolumeWorkspaceFromContainerInternal(ctx, containerID)
@@ -110,7 +110,7 @@ func (s *Service) GetVolumeWorkspace(ctx context.Context, volumeName string) (*w
 		"volume workspace tree scan completed",
 		"volume",
 		volumeName,
-		"file_count",
+		"fileCount",
 		len(
 			tree.Files,
 		),
@@ -493,7 +493,7 @@ func (
 ) {
 	totalStartedAt := time.Now()
 	defer func() {
-		slog.DebugContext(ctx, "volume workspace update completed", "volume", volumeName, "file_change_count", len(manifest.FileChanges), "total_duration", time.Since(totalStartedAt))
+		slog.DebugContext(ctx, "volume workspace update completed", "volume", volumeName, "fileChangeCount", len(manifest.FileChanges), "totalDuration", time.Since(totalStartedAt))
 	}()
 
 	if err := workspacepkg.ValidateUpdateManifest(manifest.FileTreeRevision, len(manifest.FileChanges), 500); err != nil {
@@ -528,7 +528,7 @@ func (
 	if requireVolumeHelperACFSErr := s.deps.RequireACFS(ctx, volumeName, containerID); requireVolumeHelperACFSErr != nil {
 		return nil, requireVolumeHelperACFSErr
 	}
-	slog.DebugContext(ctx, "volume workspace mutation helper acquired", "volume", volumeName, "container_id", containerID, "dedicated", needsBackups, "duration", time.Since(helperStartedAt))
+	slog.DebugContext(ctx, "volume workspace mutation helper acquired", "volume", volumeName, "containerId", containerID, "dedicated", needsBackups, "duration", time.Since(helperStartedAt))
 
 	revisionScanStartedAt := time.Now()
 	current, err := s.readVolumeWorkspaceFromContainerInternal(ctx, containerID)
@@ -540,7 +540,7 @@ func (
 		"volume workspace revision tree scan completed",
 		"volume",
 		volumeName,
-		"file_count",
+		"fileCount",
 		len(
 			current.Files,
 		),
@@ -565,7 +565,7 @@ func (
 	if err != nil {
 		return nil, err
 	}
-	slog.DebugContext(ctx, "volume workspace staging completed", "volume", volumeName, "staged_file_count", len(stagedFiles), "duration", time.Since(stagingStartedAt))
+	slog.DebugContext(ctx, "volume workspace staging completed", "volume", volumeName, "stagedFileCount", len(stagedFiles), "duration", time.Since(stagingStartedAt))
 
 	backupStartedAt := time.Now()
 	scope, err := volumeWorkspaceBackupScopeInternal(manifest.FileChanges)
@@ -581,7 +581,7 @@ func (
 	if err != nil {
 		return nil, err
 	}
-	slog.DebugContext(ctx, "volume workspace backup completed", "volume", volumeName, "scope_count", len(scope), "duration", time.Since(backupStartedAt))
+	slog.DebugContext(ctx, "volume workspace backup completed", "volume", volumeName, "scopeCount", len(scope), "duration", time.Since(backupStartedAt))
 
 	applyStartedAt := time.Now()
 	if applyVolumeWorkspaceChangesErr := s.applyVolumeWorkspaceChangesInternal(
@@ -596,7 +596,7 @@ func (
 	); applyVolumeWorkspaceChangesErr != nil {
 		return nil, applyVolumeWorkspaceChangesErr
 	}
-	slog.DebugContext(ctx, "volume workspace changes applied", "volume", volumeName, "file_change_count", len(manifest.FileChanges), "duration", time.Since(applyStartedAt))
+	slog.DebugContext(ctx, "volume workspace changes applied", "volume", volumeName, "fileChangeCount", len(manifest.FileChanges), "duration", time.Since(applyStartedAt))
 
 	finalScanStartedAt := time.Now()
 	tree, err := s.readVolumeWorkspaceFromContainerInternal(ctx, containerID)
@@ -608,7 +608,7 @@ func (
 		"volume workspace final tree scan completed",
 		"volume",
 		volumeName,
-		"file_count",
+		"fileCount",
 		len(
 			tree.Files,
 		),
@@ -670,7 +670,7 @@ func (s *Service) resolveVolumeWorkspaceWriteIdentityInternal(ctx context.Contex
 		if inspectErr != nil || inspect.Container.Config == nil {
 			// An uninspectable consumer could declare a conflicting user, so the identity is
 			// indeterminate; defer to the volume root's owner.
-			slog.WarnContext(ctx, "could not inspect volume consumer; using volume root owner for workspace writes", "volume", volumeName, "container_id", consumerID)
+			slog.WarnContext(ctx, "could not inspect volume consumer; using volume root owner for workspace writes", "volume", volumeName, "containerId", consumerID)
 			identity = volumeWorkspaceWriteIdentityInternal{}
 			break
 		}
@@ -692,7 +692,7 @@ func (s *Service) resolveVolumeWorkspaceWriteIdentityInternal(ctx context.Contex
 				volumeName,
 				"identity",
 				identity.execUser,
-				"conflicting_identity",
+				"conflictingIdentity",
 				parsed.execUser,
 			)
 			identity = volumeWorkspaceWriteIdentityInternal{}
@@ -700,7 +700,7 @@ func (s *Service) resolveVolumeWorkspaceWriteIdentityInternal(ctx context.Contex
 		}
 	}
 	if identity.execUser != "" {
-		slog.InfoContext(ctx, "volume workspace writes run as container user", "volume", volumeName, "identity", identity.execUser, "source_container_id", identitySource)
+		slog.InfoContext(ctx, "volume workspace writes run as container user", "volume", volumeName, "identity", identity.execUser, "sourceContainerId", identitySource)
 		return identity
 	}
 	// PUID-style images drop privileges after start, so Config.User stays empty; the owner of the

@@ -54,7 +54,7 @@ func (j *AutoPatchJob) Schedule(ctx context.Context) string {
 
 	parser := scheduleutil.Parser()
 	if _, err := parser.Parse(schedule); err != nil {
-		slog.WarnContext(ctx, "Invalid cron expression for auto-patch, using default", "invalid_schedule", schedule, "error", err)
+		slog.WarnContext(ctx, "Invalid cron expression for auto-patch, using default", "invalidSchedule", schedule, "error", err)
 		return "0 0 3 * * *"
 	}
 

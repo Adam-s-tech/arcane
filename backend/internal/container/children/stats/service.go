@@ -147,7 +147,7 @@ func (s *Service) Collect(ctx context.Context, items []containertypes.Summary) (
 				if groupCtx.Err() != nil {
 					return groupCtx.Err()
 				}
-				slog.WarnContext(groupCtx, "Failed to collect container resource sample", "container_id", id, "error", err)
+				slog.WarnContext(groupCtx, "Failed to collect container resource sample", "containerId", id, "error", err)
 				return nil
 			}
 			mu.Lock()

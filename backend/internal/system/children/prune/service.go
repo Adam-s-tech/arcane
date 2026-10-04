@@ -71,7 +71,7 @@ func (s *Service) PruneAll(ctx context.Context, environmentID string, req system
 		"images", req.Images,
 		"volumes", req.Volumes,
 		"networks", req.Networks,
-		"build_cache", req.BuildCache,
+		"buildCache", req.BuildCache,
 	)
 
 	prune := s.beginSystemPruneInternal(ctx, environmentID, req)
@@ -259,25 +259,25 @@ func (s *Service) runSystemPruneInternal(ctx context.Context, req system.PruneAl
 		"Selective prune operation completed",
 		"success",
 		result.Success,
-		"containers_pruned",
+		"containersPruned",
 		len(
 			result.ContainersPruned,
 		),
-		"images_deleted",
+		"imagesDeleted",
 		len(
 			result.ImagesDeleted,
 		),
-		"volumes_deleted",
+		"volumesDeleted",
 		len(
 			result.VolumesDeleted,
 		),
-		"networks_deleted",
+		"networksDeleted",
 		len(
 			result.NetworksDeleted,
 		),
-		"space_reclaimed",
+		"spaceReclaimed",
 		result.SpaceReclaimed,
-		"error_count",
+		"errorCount",
 		len(
 			result.Errors,
 		),
@@ -402,7 +402,7 @@ func (s *Service) pruneImagesInternal(ctx context.Context, options system.PruneI
 		return fmt.Errorf("failed to prune images: %w", err)
 	}
 
-	slog.InfoContext(ctx, "Image pruning completed", "images_deleted", len(report.Report.ImagesDeleted), "bytes_reclaimed", report.Report.SpaceReclaimed)
+	slog.InfoContext(ctx, "Image pruning completed", "imagesDeleted", len(report.Report.ImagesDeleted), "bytesReclaimed", report.Report.SpaceReclaimed)
 
 	// Collect IDs to delete from DB
 	var idsToDelete []string
@@ -451,7 +451,7 @@ func (s *Service) pruneBuildCacheInternal(ctx context.Context, options system.Pr
 		return fmt.Errorf("failed to prune build cache: %w", err)
 	}
 
-	slog.InfoContext(ctx, "build cache pruning completed", "cache_entries_deleted", len(report.Report.CachesDeleted), "bytes_reclaimed", report.Report.SpaceReclaimed)
+	slog.InfoContext(ctx, "build cache pruning completed", "cacheEntriesDeleted", len(report.Report.CachesDeleted), "bytesReclaimed", report.Report.SpaceReclaimed)
 
 	result.SpaceReclaimed += report.Report.SpaceReclaimed
 	result.BuildCacheSpaceReclaimed += report.Report.SpaceReclaimed
@@ -465,7 +465,7 @@ func (s *Service) pruneVolumesInternal(ctx context.Context, options system.Prune
 		return err
 	}
 
-	slog.InfoContext(ctx, "Volume prune completed", "volumes_deleted", len(report.VolumesDeleted), "space_reclaimed", report.SpaceReclaimed)
+	slog.InfoContext(ctx, "Volume prune completed", "volumesDeleted", len(report.VolumesDeleted), "spaceReclaimed", report.SpaceReclaimed)
 
 	result.VolumesDeleted = report.VolumesDeleted
 	result.SpaceReclaimed += report.SpaceReclaimed
@@ -492,7 +492,7 @@ func (s *Service) pruneNetworksInternal(ctx context.Context, options system.Prun
 		return fmt.Errorf("failed to prune networks: %w", err)
 	}
 
-	slog.InfoContext(ctx, "Network prune completed", "networks_deleted", len(report.Report.NetworksDeleted))
+	slog.InfoContext(ctx, "Network prune completed", "networksDeleted", len(report.Report.NetworksDeleted))
 
 	result.NetworksDeleted = report.Report.NetworksDeleted
 	return nil

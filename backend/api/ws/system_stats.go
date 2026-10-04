@@ -435,7 +435,7 @@ func (h *WebSocketHandler) SystemStats(c *echo.Context) error {
 	defer unregister()
 	defer func() {
 		if err := conn.CloseNow(); err != nil {
-			slog.Debug("Failed to close system stats websocket connection", "clientIP", clientIP, "error", err)
+			slog.DebugContext(c.Request().Context(), "Failed to close system stats websocket connection", "clientIp", clientIP, "error", err)
 		}
 	}()
 

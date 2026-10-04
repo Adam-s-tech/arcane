@@ -122,13 +122,11 @@ func NewContainerRegistryService(
 			// Per-ref timeout: a single deadline shared across the whole
 			// sequential batch left later refs with whatever the earlier ones
 			// had not already spent, so one slow registry starved the tail.
-			result, err := func() (*containerregistry.DigestResult, error) {
-				ctx, cancel := context.WithTimeout(context.Background(), timeouts.DefaultRegistry) //nolint:forbidigo // Cache revalidation runs independently of request cancellation.
-				defer cancel()
-				return service.InspectImageDigest(ctx, imageRef, nil)
-			}()
+			ctx, cancel := context.WithTimeout(context.Background(), timeouts.DefaultRegistry) //nolint:forbidigo // Cache revalidation runs independently of request cancellation.
+			result, err := service.InspectImageDigest(ctx, imageRef, nil)
+			cancel()
 			if err != nil {
-				slog.Debug("registry revalidation failed for image", "imageRef", imageRef, "error", err)
+				slog.DebugContext(ctx, "registry revalidation failed for image", "imageRef", imageRef, "error", err)
 				if firstErr == nil {
 					firstErr = err
 				}
@@ -714,7 +712,7 @@ func (s *ContainerRegistryService) getCachedRateLimitInternal(ctx context.Contex
 
 	raw, ok, err := s.kvService.Get(ctx, registryRateLimitKeyInternal(registryID))
 	if err != nil {
-		slog.WarnContext(ctx, "failed to read registry rate limit cache", "registryID", registryID, "error", err)
+		slog.WarnContext(ctx, "failed to read registry rate limit cache", "registryId", registryID, "error", err)
 		return nil, time.Time{}, false
 	}
 	if !ok {
@@ -723,7 +721,7 @@ func (s *ContainerRegistryService) getCachedRateLimitInternal(ctx context.Contex
 
 	var entry registryRateLimitCacheEntryInternal
 	if unmarshalErr := json.Unmarshal([]byte(raw), &entry); unmarshalErr != nil {
-		slog.WarnContext(ctx, "failed to parse registry rate limit cache", "registryID", registryID, "error", unmarshalErr)
+		slog.WarnContext(ctx, "failed to parse registry rate limit cache", "registryId", registryID, "error", unmarshalErr)
 		return nil, time.Time{}, false
 	}
 	if time.Since(entry.CheckedAt) > registryCacheTTL {
@@ -743,12 +741,12 @@ func (s *ContainerRegistryService) setCachedRateLimitInternal(ctx context.Contex
 		CheckedAt: checkedAt,
 	})
 	if err != nil {
-		slog.WarnContext(ctx, "failed to encode registry rate limit cache", "registryID", registryID, "error", err)
+		slog.WarnContext(ctx, "failed to encode registry rate limit cache", "registryId", registryID, "error", err)
 		return
 	}
 
 	if setErr := s.kvService.Set(ctx, registryRateLimitKeyInternal(registryID), string(payload)); setErr != nil {
-		slog.WarnContext(ctx, "failed to save registry rate limit cache", "registryID", registryID, "error", setErr)
+		slog.WarnContext(ctx, "failed to save registry rate limit cache", "registryId", registryID, "error", setErr)
 	}
 }
 

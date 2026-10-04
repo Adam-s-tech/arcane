@@ -66,7 +66,7 @@ func Bootstrap(ctx context.Context) error {
 	slog.SetDefault(slog.New(logs.NewSlogHandler(slog.Default().Handler(), ws.LogBroadcaster())))
 	database.SetGormLogger(BuildGormLogger(cfg))
 	slog.InfoContext(ctx, "Arcane is starting...", "version", config.Version)
-	slog.InfoContext(ctx, "Arcane Identity Configuration", "PUID", os.Getuid(), "PGID", os.Getgid())
+	slog.InfoContext(ctx, "Arcane Identity Configuration", "puid", os.Getuid(), "pgid", os.Getgid())
 
 	appCtx, cancelApp := context.WithCancel(ctx)
 	appCtx = utils.WithAppLifecycleContext(appCtx)
@@ -79,7 +79,7 @@ func Bootstrap(ctx context.Context) error {
 	defer func() {
 		cancelApp()
 		if closeErr := db.Close(); closeErr != nil {
-			slog.Error("Error closing database", "error", closeErr)
+			slog.ErrorContext(ctx, "Error closing database", "error", closeErr)
 		}
 	}()
 
@@ -150,9 +150,9 @@ func isWeakProductionEncryptionKeyInternal(encryptionKey, localEnvironment strin
 	return len(strings.TrimPrefix(key, "raw:")) < 32
 }
 
-func warnDeprecatedEnvVarsInternal(cfg *config.Config) {
+func warnDeprecatedEnvVarsInternal(ctx context.Context, cfg *config.Config) {
 	for _, envName := range cfg.DeprecatedEnvVarsSet() {
-		slog.Warn("Deprecated environment variable is set and no longer used; remove it from your environment", "env", envName)
+		slog.WarnContext(ctx, "Deprecated environment variable is set and no longer used; remove it from your environment", "env", envName)
 	}
 }
 
@@ -207,7 +207,7 @@ func initializeStartupState(p initializeStartupStateParams) {
 		AdminStaticAPIKey: cfg.AdminStaticAPIKey,
 	}
 
-	warnDeprecatedEnvVarsInternal(cfg)
+	warnDeprecatedEnvVarsInternal(appCtx, cfg)
 
 	startup.LoadAgentToken(appCtx, runtimeCfg, p.Settings.GetStringSetting)
 	startup.EnsureEncryptionKey(appCtx, runtimeCfg, p.Settings.EnsureEncryptionKey)
@@ -272,7 +272,7 @@ func initializeStartupState(p initializeStartupStateParams) {
 		}
 
 		effectiveAPIVersion := cmp.Or(strings.TrimSpace(dockerClient.ClientVersion()), strings.TrimSpace(version.APIVersion))
-		slog.InfoContext(ctx, "Docker API versions detected", "client_api_version", dockerClient.ClientVersion(), "server_api_version", version.APIVersion, "effective_api_version", effectiveAPIVersion)
+		slog.InfoContext(ctx, "Docker API versions detected", "clientApiVersion", dockerClient.ClientVersion(), "serverApiVersion", version.APIVersion, "effectiveApiVersion", effectiveAPIVersion)
 		return nil
 	})
 	if p.Swarm != nil {
@@ -427,7 +427,7 @@ func startEdgeTunnelClientIfConfigured(appCtx context.Context, cfg *config.Confi
 		return nil, fmt.Errorf("failed to start edge tunnel client: %w", err)
 	}
 
-	slog.InfoContext(appCtx, "Edge tunnel client started", "manager_url", cfg.ManagerApiUrl)
+	slog.InfoContext(appCtx, "Edge tunnel client started", "managerUrl", cfg.ManagerApiUrl)
 	return stop, nil
 }
 
@@ -499,6 +499,6 @@ func initializeDBAndMigrateInternal(ctx context.Context, cfg *config.Config) (*d
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
 
-	slog.Info("Database initialized successfully")
+	slog.InfoContext(ctx, "Database initialized successfully")
 	return db, nil
 }

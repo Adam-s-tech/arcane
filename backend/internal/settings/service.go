@@ -321,11 +321,11 @@ func (s *SettingsService) loadDatabaseSettingsInternal(ctx context.Context, db *
 		slog.DebugContext(
 			ctx,
 			"loadDatabaseSettingsInternal: using env path",
-			"UIConfigurationDisabled",
+			"uiConfigurationDisabled",
 			config.Load().UIConfigurationDisabled,
-			"AgentMode",
+			"agentMode",
 			config.Load().AgentMode,
-			"Environment",
+			"environment",
 			config.Load().Environment,
 		)
 		return s.loadDatabaseConfigFromEnv(ctx, db)

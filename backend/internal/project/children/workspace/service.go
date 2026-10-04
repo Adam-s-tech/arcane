@@ -36,8 +36,9 @@ func New(cfg *config.Config) *Service {
 }
 
 // Read lists the workspace files, marking GitOps-owned paths read-only.
-func (s *Service) Read(projectPath, composeFileName string, owned map[string]struct{}) (*workspacetypes.Workspace, error) {
+func (s *Service) Read(ctx context.Context, projectPath, composeFileName string, owned map[string]struct{}) (*workspacetypes.Workspace, error) {
 	files, revision, truncated, err := projects.ReadProjectWorkspace(
+		ctx,
 		projectPath,
 		s.config.ProjectWorkspaceMaxDepth,
 		s.config.ProjectScanSkipDirs,
@@ -152,7 +153,7 @@ func (s *Service) Apply(
 		SkipDirectories:  s.config.ProjectScanSkipDirs,
 		ComposeFileName:  composeFileName,
 	}
-	if applyErr := projects.ApplyProjectWorkspaceChanges(projectPath, manifest.FileChanges, uploads, opts); applyErr != nil {
+	if applyErr := projects.ApplyProjectWorkspaceChanges(ctx, projectPath, manifest.FileChanges, uploads, opts); applyErr != nil {
 		if restoreErr := projects.RestoreProjectUpdateBackup(ctx, projectPath, backup); restoreErr != nil {
 			return errors.Join(WrapProjectWorkspaceError(applyErr), fmt.Errorf("rollback project workspace: %w", restoreErr))
 		}

@@ -99,7 +99,7 @@ func TestResolveBackupStorageMountFromMountsInternal(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := resolveBackupStorageMountFromMountsInternal(tt.mounts, tt.target, tt.readOnly).Get()
+			got, ok := resolveBackupStorageMountFromMountsInternal(t.Context(), tt.mounts, tt.target, tt.readOnly).Get()
 			require.Equal(t, tt.wantResolved, ok)
 			if !tt.wantResolved {
 				return
@@ -184,7 +184,7 @@ func TestBackupMountWarningFromArcaneMountsInternal(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, tt.want, backupMountWarningFromArcaneMountsInternal(tt.mounts))
+			require.Equal(t, tt.want, backupMountWarningFromArcaneMountsInternal(t.Context(), tt.mounts))
 		})
 	}
 }

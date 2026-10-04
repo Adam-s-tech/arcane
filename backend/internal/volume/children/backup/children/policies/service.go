@@ -214,7 +214,7 @@ func (s *Service) runScheduledBackupInternal(ctx context.Context, policyID strin
 		slog.ErrorContext(ctx, "Scheduled volume backup failed", "volume", policy.VolumeName, "error", err)
 		return scheduler.Outcome{}, err
 	}
-	slog.InfoContext(ctx, "Scheduled volume backup completed", "volume", policy.VolumeName, "backup_id", entry.ID, "remote_snapshot_id", entry.RemoteSnapshotID)
+	slog.InfoContext(ctx, "Scheduled volume backup completed", "volume", policy.VolumeName, "backupId", entry.ID, "remoteSnapshotId", entry.RemoteSnapshotID)
 	if remoteDisabled {
 		return scheduler.Outcome{Status: scheduler.Partial, ActivityID: activityID, Message: backup.RemoteDisabledMessage}, nil
 	}

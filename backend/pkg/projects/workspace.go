@@ -2,6 +2,7 @@ package projects
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -45,7 +46,14 @@ type ProjectWorkspaceApplyOptions struct {
 	MaxFileSizeBytes int64
 }
 
-func ReadProjectWorkspace(projectPath string, maxDepth int, skipDirectories, composeFileName string, maxEntries int, maxFileSizeBytes int64) ([]workspacetypes.FileEntry, string, bool, error) {
+func ReadProjectWorkspace(
+	ctx context.Context,
+	projectPath string,
+	maxDepth int,
+	skipDirectories, composeFileName string,
+	maxEntries int,
+	maxFileSizeBytes int64,
+) ([]workspacetypes.FileEntry, string, bool, error) {
 	if maxDepth == ProjectWorkspaceUseScanDepth {
 		maxDepth = config.LoadProjectWorkspaceConfig().ProjectWorkspaceMaxDepth
 	}
@@ -73,6 +81,7 @@ func ReadProjectWorkspace(projectPath string, maxDepth int, skipDirectories, com
 	defer func() { _ = root.Close() }()
 
 	walker := &projectWorkspaceTreeWalkerInternal{
+		ctx:              ctx,
 		projectAbs:       projectAbs,
 		maxDepth:         maxDepth,
 		maxEntries:       maxEntries,
@@ -98,6 +107,7 @@ func ReadProjectWorkspace(projectPath string, maxDepth int, skipDirectories, com
 }
 
 type projectWorkspaceTreeWalkerInternal struct {
+	ctx              context.Context
 	projectAbs       string
 	maxDepth         int
 	maxEntries       int
@@ -119,7 +129,7 @@ func (w *projectWorkspaceTreeWalkerInternal) visit(rel string, entry fs.DirEntry
 		// on the project workspace root, or one that is not a permission/disappearance
 		// error, stays fatal so real I/O problems remain observable.
 		if rel != "." && entry != nil && entry.IsDir() && (os.IsPermission(walkErr) || os.IsNotExist(walkErr)) {
-			slog.Debug("Skipping unreadable project workspace subdirectory", "relativePath", rel, "error", walkErr)
+			slog.DebugContext(w.ctx, "Skipping unreadable project workspace subdirectory", "relativePath", rel, "error", walkErr)
 			return fs.SkipDir
 		}
 		return walkErr
@@ -154,7 +164,7 @@ func (w *projectWorkspaceTreeWalkerInternal) visit(rel string, entry fs.DirEntry
 		if !os.IsPermission(err) && !os.IsNotExist(err) {
 			return err
 		}
-		slog.Debug("Skipping unreadable project workspace entry", "relativePath", rel, "error", err)
+		slog.DebugContext(w.ctx, "Skipping unreadable project workspace entry", "relativePath", rel, "error", err)
 		return kit.Ternary(entry.IsDir(), fs.SkipDir, nil)
 	}
 
@@ -231,7 +241,7 @@ func classifyProjectWorkspaceFileInternal(filePath string, size, maxFileSizeByte
 // atomicity — ProjectService.UpdateProjectWorkspace wraps every save in
 // BackupProjectUpdateScope / RestoreProjectUpdateBackup, and project creation
 // removes the whole directory on failure.
-func ApplyProjectWorkspaceChanges(projectPath string, changes []project.WorkspaceFileChange, uploads map[int][]byte, opts ProjectWorkspaceApplyOptions) error {
+func ApplyProjectWorkspaceChanges(ctx context.Context, projectPath string, changes []project.WorkspaceFileChange, uploads map[int][]byte, opts ProjectWorkspaceApplyOptions) error {
 	if opts.MaxFileSizeBytes <= 0 {
 		opts.MaxFileSizeBytes = workspacepkg.MaxFileSizeBytes(workspacepkg.DefaultMaxFileSizeMB)
 	}
@@ -247,7 +257,7 @@ func ApplyProjectWorkspaceChanges(projectPath string, changes []project.Workspac
 	}
 
 	if opts.ExpectedRevision != "" {
-		_, currentRevision, _, err := ReadProjectWorkspace(projectPath, opts.MaxDepth, opts.SkipDirectories, opts.ComposeFileName, opts.MaxEntries, opts.MaxFileSizeBytes)
+		_, currentRevision, _, err := ReadProjectWorkspace(ctx, projectPath, opts.MaxDepth, opts.SkipDirectories, opts.ComposeFileName, opts.MaxEntries, opts.MaxFileSizeBytes)
 		if err != nil {
 			return fmt.Errorf("read project workspace revision: %w", err)
 		}

@@ -170,7 +170,9 @@ func (sub *activitySubscriber) dropOldestMessageLockedInternal() {
 		sub.queue = append(sub.queue[:i], sub.queue[i+1:]...)
 		sub.messageCount--
 		sub.missed = true
-		slog.Warn("activity subscriber message buffer full; snapshot will be sent on next heartbeat", "environmentId", sub.environmentID)
+		ctx := context.Background() //nolint:forbidigo // Subscriber buffer trimming runs outside any request context.
+		slog.WarnContext(ctx, "activity subscriber message buffer full; snapshot will be sent on next heartbeat",
+			"environmentId", sub.environmentID)
 		return
 	}
 }
@@ -451,7 +453,7 @@ func (s *ActivityService) AwaitActivitySlot(ctx context.Context, activityID, env
 	s.registerSlotReleaseInternal(activityID, release)
 
 	if _, updateErr := s.UpdateActivity(ctx, activityID, UpdateActivityRequest{Status: activity.StatusRunning}); updateErr != nil {
-		slog.Warn("failed to mark queued activity running", "activityId", activityID, "error", updateErr)
+		slog.WarnContext(ctx, "failed to mark queued activity running", "activityId", activityID, "error", updateErr)
 	}
 	return nil
 }

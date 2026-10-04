@@ -110,13 +110,13 @@ func (r *TunnelRegistry) Get(envID string) mo.Option[*AgentTunnel] {
 
 // Register adds a tunnel to the registry, closing any existing tunnel for the same env
 func (r *TunnelRegistry) Register(envID string, tunnel *AgentTunnel) {
+	ctx := context.Background() //nolint:forbidigo // Legacy registration path runs outside any request context.
 	if r == nil || tunnel == nil {
-		slog.Error("Failed to register edge agent tunnel", "environment_id", envID, "error", "tunnel is required")
+		slog.ErrorContext(ctx, "Failed to register edge agent tunnel", "environmentId", envID, "error", "tunnel is required")
 		return
 	}
-	//nolint:forbidigo // Legacy registry operation has no caller context and only mutates in-memory state.
 	previous,
-		err := r.tunnels.ApplyTyped(context.Background(),
+		err := r.tunnels.ApplyTyped(ctx,
 		"register edge tunnel",
 		func(tunnels map[string]*AgentTunnel) (*AgentTunnel,
 			bool,
@@ -130,14 +130,14 @@ func (r *TunnelRegistry) Register(envID string, tunnel *AgentTunnel) {
 			return previous, true, nil
 		})
 	if err != nil {
-		slog.Error("Failed to register edge agent tunnel", "environment_id", envID, "error", err)
+		slog.ErrorContext(ctx, "Failed to register edge agent tunnel", "environmentId", envID, "error", err)
 		return
 	}
 	if previous != nil && previous != tunnel {
-		slog.Info("Replacing existing edge tunnel")
+		slog.InfoContext(ctx, "Replacing existing edge tunnel")
 		_ = previous.CloseWithReason("")
 	}
-	slog.Info("Edge agent tunnel registered")
+	slog.InfoContext(ctx, "Edge agent tunnel registered")
 }
 
 type registerSessionResultInternal struct {
@@ -192,20 +192,21 @@ func (r *TunnelRegistry) RegisterSession(ctx context.Context, tunnel *AgentTunne
 		_ = result.previous.CloseWithReason("replaced by newer edge tunnel session")
 	}
 	metadata := tunnel.MetadataSnapshot()
-	slog.Info("Edge agent tunnel registered", "environment_id", envID, "session_id", metadata.SessionID, "security_mode", metadata.SecurityMode)
+	slog.InfoContext(ctx, "Edge agent tunnel registered", "environmentId", envID, "sessionId", metadata.SessionID, "securityMode", metadata.SecurityMode)
 	return result.accepted, result.drainPrevious, result.reason, nil
 }
 
 // Unregister removes a tunnel from the registry
 func (r *TunnelRegistry) Unregister(envID string) {
-	tunnel, removed, err := r.tunnels.Remove(context.Background(), "unregister edge tunnel", envID) //nolint:forbidigo // Legacy registry operation has no caller context and only mutates in-memory state.
+	ctx := context.Background() //nolint:forbidigo // Legacy unregistration path runs outside any request context.
+	tunnel, removed, err := r.tunnels.Remove(ctx, "unregister edge tunnel", envID)
 	if err != nil {
-		slog.Error("Failed to unregister edge agent tunnel", "environment_id", envID, "error", err)
+		slog.ErrorContext(ctx, "Failed to unregister edge agent tunnel", "environmentId", envID, "error", err)
 		return
 	}
 	if removed {
 		_ = tunnel.CloseWithReason("")
-		slog.Info("Edge agent tunnel unregistered")
+		slog.InfoContext(ctx, "Edge agent tunnel unregistered")
 	}
 }
 
@@ -233,7 +234,7 @@ func (r *TunnelRegistry) UnregisterCurrent(ctx context.Context, envID string, cu
 		return result, true, nil
 	})
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to unregister current edge agent tunnel", "environment_id", envID, "error", err)
+		slog.ErrorContext(ctx, "Failed to unregister current edge agent tunnel", "environmentId", envID, "error", err)
 		return false, false
 	}
 	if !result.removed {
@@ -242,7 +243,7 @@ func (r *TunnelRegistry) UnregisterCurrent(ctx context.Context, envID string, cu
 
 	_ = current.CloseWithReason("")
 	metadata := current.MetadataSnapshot()
-	slog.Info("Edge agent tunnel unregistered", "environment_id", envID, "session_id", metadata.SessionID)
+	slog.InfoContext(ctx, "Edge agent tunnel unregistered", "environmentId", envID, "sessionId", metadata.SessionID)
 	return true, false
 }
 
@@ -260,7 +261,7 @@ func (r *TunnelRegistry) CleanupStale(ctx context.Context, maxAge time.Duration)
 		if tunnel == nil {
 			continue
 		}
-		slog.Warn("Removing stale edge tunnel", "last_heartbeat", tunnel.GetLastHeartbeat())
+		slog.WarnContext(ctx, "Removing stale edge tunnel", "lastHeartbeat", tunnel.GetLastHeartbeat())
 		_ = tunnel.CloseWithReason("edge tunnel heartbeat expired")
 	}
 

@@ -38,7 +38,7 @@ func GetVolumeUsageData(ctx context.Context, dockerClient *client.Client) ([]vol
 	key := volumeUsageCacheKeyInternal(dockerClient)
 	stale, staleFound := volumeUsageCache.Peek(key)
 	if cached, found, _ := volumeUsageCache.Get(key); found {
-		slog.DebugContext(ctx, "returning cached volume usage data", "volume_count", len(cached), "docker_host", key)
+		slog.DebugContext(ctx, "returning cached volume usage data", "volumeCount", len(cached), "dockerHost", key)
 		return cached, nil
 	}
 
@@ -64,14 +64,14 @@ func GetVolumeUsageData(ctx context.Context, dockerClient *client.Client) ([]vol
 	select {
 	case <-ctx.Done():
 		if staleFound {
-			slog.WarnContext(ctx, "volume usage refresh timed out; returning stale cache", "error", ctx.Err(), "volume_count", len(stale), "docker_host", key)
+			slog.WarnContext(ctx, "volume usage refresh timed out; returning stale cache", "error", ctx.Err(), "volumeCount", len(stale), "dockerHost", key)
 			return stale, nil
 		}
 		return nil, ctx.Err()
 	case refreshed := <-result:
 		if refreshed.err != nil {
 			if staleFound {
-				slog.WarnContext(ctx, "volume usage refresh failed; returning stale cache", "error", refreshed.err, "volume_count", len(stale), "docker_host", key)
+				slog.WarnContext(ctx, "volume usage refresh failed; returning stale cache", "error", refreshed.err, "volumeCount", len(stale), "dockerHost", key)
 				return stale, nil
 			}
 			return nil, refreshed.err
@@ -94,19 +94,19 @@ func GetVolumeUsageDataStaleWhileRevalidate(ctx context.Context, dockerClient *c
 	cached, found := volumeUsageCache.Peek(key)
 	if fresh, freshFound, _ := volumeUsageCache.Get(key); freshFound {
 		slog.DebugContext(ctx, "volume usage cache lookup",
-			"docker_host", key,
-			"cache_state", "fresh",
-			"volume_count", len(fresh),
-			"refresh_requested", false,
+			"dockerHost", key,
+			"cacheState", "fresh",
+			"volumeCount", len(fresh),
+			"refreshRequested", false,
 		)
 		return mo.Some(fresh)
 	}
 	cacheState := kit.Ternary(found, "stale", "miss")
 	slog.DebugContext(ctx, "volume usage cache lookup",
-		"docker_host", key,
-		"cache_state", cacheState,
-		"volume_count", len(cached),
-		"refresh_requested", true,
+		"dockerHost", key,
+		"cacheState", cacheState,
+		"volumeCount", len(cached),
+		"refreshRequested", true,
 	)
 	refreshCtx, cancel := volumeUsageRefreshContextInternal(ctx)
 	go func() {
@@ -119,7 +119,7 @@ func GetVolumeUsageDataStaleWhileRevalidate(ctx context.Context, dockerClient *c
 			return map[string][]volume.Volume{key: loaded}, nil
 		})
 		if err != nil {
-			slog.WarnContext(refreshCtx, "failed to refresh volume usage cache", "error", err, "docker_host", key)
+			slog.WarnContext(refreshCtx, "failed to refresh volume usage cache", "error", err, "dockerHost", key)
 		}
 	}()
 	if !found {
@@ -167,7 +167,7 @@ func fetchVolumeUsageDataInternal(ctx context.Context, dockerClient *client.Clie
 		return nil, fmt.Errorf("failed to get disk usage: %w", err)
 	}
 
-	slog.DebugContext(ctx, "disk usage returned volumes", "volume_count", len(diskUsage.Volumes.Items))
+	slog.DebugContext(ctx, "disk usage returned volumes", "volumeCount", len(diskUsage.Volumes.Items))
 	return append([]volume.Volume{}, diskUsage.Volumes.Items...), nil
 }
 
@@ -196,7 +196,7 @@ func GetContainersUsingVolume(ctx context.Context, dockerClient *client.Client, 
 	}
 
 	containerIDs := FilterContainersUsingVolume(containerList.Items, volumeName)
-	slog.DebugContext(ctx, "found containers using volume", "volume", volumeName, "container_count", len(containerIDs))
+	slog.DebugContext(ctx, "found containers using volume", "volume", volumeName, "containerCount", len(containerIDs))
 	return containerIDs, nil
 }
 

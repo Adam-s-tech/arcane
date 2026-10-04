@@ -122,7 +122,7 @@ func buildWSConnectionInfoInternal(c *echo.Context, kind, resourceID string) sys
 func (h *WebSocketHandler) acceptWSInternal(c *echo.Context, kind, resourceID string) (*websocket.Conn, func(), bool) {
 	conn, err := wshub.Accept(c.Response(), c.Request(), h.checkWSOrigin)
 	if err != nil {
-		slog.DebugContext(c.Request().Context(), "websocket accept failed", "kind", kind, "resourceID", resourceID, "error", err)
+		slog.DebugContext(c.Request().Context(), "websocket accept failed", "kind", kind, "resourceId", resourceID, "error", err)
 		return nil, nil, false
 	}
 	connID := h.wsMetrics.RegisterConnection(buildWSConnectionInfoInternal(c, kind, resourceID))

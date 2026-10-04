@@ -103,7 +103,7 @@ func detectDockerAPIVersionInternal(ctx context.Context, host string) (string, e
 	if err != nil {
 		return "", fmt.Errorf("failed to create Docker probe client: %w", err)
 	}
-	defer closeDockerClientInternal(probeClient, "failed to close probe Docker client")
+	defer closeDockerClientInternal(ctx, probeClient, "probe")
 
 	ctx, cancel := context.WithTimeout(ctx, dockerClientNegotiationTimeout)
 	defer cancel()
@@ -115,7 +115,7 @@ func detectDockerAPIVersionInternal(ctx context.Context, host string) (string, e
 
 	apiVersion := strings.TrimSpace(pingResult.APIVersion)
 	if apiVersion == "" {
-		slog.WarnContext(ctx, "Docker ping did not report an API version, using minimum supported client API version", "api_version", client.MinAPIVersion)
+		slog.WarnContext(ctx, "Docker ping did not report an API version, using minimum supported client API version", "apiVersion", client.MinAPIVersion)
 		return client.MinAPIVersion, nil
 	}
 
@@ -134,13 +134,13 @@ func newDockerClientWithAPIVersionInternal(host, apiVersion string) (*client.Cli
 	return configuredClient, nil
 }
 
-func closeDockerClientInternal(cli *client.Client, message string) {
+func closeDockerClientInternal(ctx context.Context, cli *client.Client, purpose string) {
 	if cli == nil {
 		return
 	}
 
 	if err := cli.Close(); err != nil {
-		slog.Warn(message, "error", err)
+		slog.WarnContext(ctx, "Failed to close Docker client", "purpose", purpose, "error", err)
 	}
 }
 
@@ -164,7 +164,7 @@ func (s *DockerClientService) GetClient(ctx context.Context) (*client.Client, er
 	if s.Client != nil {
 		existingClient := s.Client
 		s.mu.Unlock()
-		closeDockerClientInternal(cli, "failed to close unused Docker client after concurrent initialization")
+		closeDockerClientInternal(ctx, cli, "unused after concurrent initialization")
 		return existingClient, nil
 	}
 
@@ -201,7 +201,7 @@ func (s *DockerClientService) RefreshClient(ctx context.Context) error {
 	if s.Client != nil && apiVersion == s.clientVersion {
 		s.clientLastProbe = time.Now()
 		s.mu.Unlock()
-		closeDockerClientInternal(cli, "failed to close unused Docker client after concurrent refresh")
+		closeDockerClientInternal(ctx, cli, "unused after concurrent refresh")
 		return nil
 	}
 
@@ -211,7 +211,7 @@ func (s *DockerClientService) RefreshClient(ctx context.Context) error {
 	s.clientLastProbe = time.Now()
 	s.mu.Unlock()
 
-	closeDockerClientInternal(oldClient, "failed to close replaced Docker client")
+	closeDockerClientInternal(ctx, oldClient, "replaced")
 
 	return nil
 }
@@ -231,7 +231,7 @@ func (s *DockerClientService) Close() {
 	s.Client = nil
 	s.mu.Unlock()
 
-	closeDockerClientInternal(oldClient, "failed to close Docker client")
+	closeDockerClientInternal(context.Background(), oldClient, "cached") //nolint:forbidigo // Shutdown close runs without a request context.
 }
 
 func (s *DockerClientService) EventBus() *bus.DockerEventBus {

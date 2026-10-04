@@ -301,17 +301,17 @@ func (s *BuildService) resolveBuildRequestInternal(
 		return req, func() error { return nil }, nil
 	}
 
-	writeBuildProgressStatusInternal(progressWriter, serviceName, "resolving remote git context "+source.RepositoryURL)
+	writeBuildProgressStatusInternal(ctx, progressWriter, serviceName, "resolving remote git context "+source.RepositoryURL)
 
 	authConfig, matchedRepository, err := s.resolveGitBuildAuthInternal(ctx, source.RepositoryURL)
 	if err != nil {
 		return types.BuildRequest{}, func() error { return nil }, err
 	}
 	if matchedRepository {
-		writeBuildProgressStatusInternal(progressWriter, serviceName, "using saved git credentials for "+source.RepositoryURL)
+		writeBuildProgressStatusInternal(ctx, progressWriter, serviceName, "using saved git credentials for "+source.RepositoryURL)
 	}
 	if gitkit.RequiresRemoteProbe(source.RepositoryURL) {
-		writeBuildProgressStatusInternal(progressWriter, serviceName, "verifying remote git repository "+source.RepositoryURL)
+		writeBuildProgressStatusInternal(ctx, progressWriter, serviceName, "verifying remote git repository "+source.RepositoryURL)
 		if probeGitContextErr := s.probeGitContextInternal(ctx, source.RepositoryURL, authConfig); probeGitContextErr != nil {
 			return types.BuildRequest{}, func() error { return nil }, fmt.Errorf("failed to verify remote git repository %q: %w", source.RepositoryURL, probeGitContextErr)
 		}
@@ -343,7 +343,7 @@ func (s *BuildService) resolveBuildRequestInternal(
 		return types.BuildRequest{}, func() error { return nil }, errors.New("resolved git build context is not a directory")
 	}
 
-	writeBuildProgressStatusInternal(progressWriter, serviceName, "using remote build context "+source.Raw)
+	writeBuildProgressStatusInternal(ctx, progressWriter, serviceName, "using remote build context "+source.Raw)
 
 	resolvedReq := req
 	resolvedReq.ContextDir = contextDir
@@ -409,7 +409,7 @@ func (s *BuildService) cleanupGitContextInternal(repoPath string) error {
 	return errors.New("git repository service not available")
 }
 
-func writeBuildProgressStatusInternal(progressWriter io.Writer, serviceName, status string) {
+func writeBuildProgressStatusInternal(ctx context.Context, progressWriter io.Writer, serviceName, status string) {
 	if progressWriter == nil || strings.TrimSpace(status) == "" {
 		return
 	}
@@ -419,7 +419,7 @@ func writeBuildProgressStatusInternal(progressWriter io.Writer, serviceName, sta
 		line = service + ": " + status
 	}
 	if _, err := io.WriteString(progressWriter, line+"\n"); err != nil {
-		slog.Debug("failed to write build progress status", "error", err)
+		slog.DebugContext(ctx, "failed to write build progress status", "error", err)
 	}
 }
 

@@ -260,7 +260,7 @@ func (t *GRPCManagerTunnelConn) Receive() (*TunnelMessage, error) {
 			if errors.Is(err, errUnknownTunnelPayload) {
 				// A newer peer sent a payload this build cannot decode yet;
 				// skip it like unknown websocket message types are skipped.
-				slog.Debug("Ignoring unknown edge tunnel payload", "error", err)
+				slog.DebugContext(t.stream.Context(), "Ignoring unknown edge tunnel payload", "error", err)
 				continue
 			}
 			return nil, err
@@ -347,7 +347,7 @@ func (t *GRPCAgentTunnelConn) Receive() (*TunnelMessage, error) {
 			if errors.Is(err, errUnknownTunnelPayload) {
 				// A newer peer sent a payload this build cannot decode yet;
 				// skip it like unknown websocket message types are skipped.
-				slog.Debug("Ignoring unknown edge tunnel payload", "error", err)
+				slog.DebugContext(t.stream.Context(), "Ignoring unknown edge tunnel payload", "error", err)
 				continue
 			}
 			return nil, err

@@ -218,7 +218,7 @@ func MountForDestination(mounts []container.MountPoint, destination, target stri
 
 // PreserveVolumeMounts returns cloned binds and mounts with every inspected
 // volume pinned to its name, so a recreate reuses it instead of a new anonymous one.
-func PreserveVolumeMounts(binds []string, mounts []mount.Mount, mountPoints []container.MountPoint) ([]string, []mount.Mount, error) {
+func PreserveVolumeMounts(ctx context.Context, binds []string, mounts []mount.Mount, mountPoints []container.MountPoint) ([]string, []mount.Mount, error) {
 	binds = slices.Clone(binds)
 	mounts = slices.Clone(mounts)
 
@@ -239,7 +239,7 @@ func PreserveVolumeMounts(binds []string, mounts []mount.Mount, mountPoints []co
 			if mounts[mountIndex].Type == mount.TypeVolume {
 				mounts[mountIndex].Source = volumeName
 			}
-			slog.Info("Preserving volume via mount", "destination", destination, "volume", volumeName)
+			slog.InfoContext(ctx, "Preserving volume via mount", "destination", destination, "volume", volumeName)
 			continue
 		}
 
@@ -255,7 +255,7 @@ func PreserveVolumeMounts(binds []string, mounts []mount.Mount, mountPoints []co
 			if !strings.Contains(binds[bindIndex], ":") {
 				binds[bindIndex] = volumeName + ":" + binds[bindIndex]
 			}
-			slog.Info("Preserving volume via bind", "destination", destination, "volume", volumeName)
+			slog.InfoContext(ctx, "Preserving volume via bind", "destination", destination, "volume", volumeName)
 			continue
 		}
 
@@ -264,7 +264,7 @@ func PreserveVolumeMounts(binds []string, mounts []mount.Mount, mountPoints []co
 			return nil, nil, fmt.Errorf("cannot build explicit mount for volume %s at %s", volumeName, destination)
 		}
 		mounts = append(mounts, *explicit)
-		slog.Info("Preserving image-declared volume", "destination", destination, "volume", volumeName)
+		slog.InfoContext(ctx, "Preserving image-declared volume", "destination", destination, "volume", volumeName)
 	}
 	return binds, mounts, nil
 }

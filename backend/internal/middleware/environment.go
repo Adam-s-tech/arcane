@@ -186,7 +186,7 @@ func (m *EnvironmentMiddleware) Handle(c *echo.Context, next echo.HandlerFunc) e
 			return proxyRecoveredEdgeTunnelErr
 		}
 
-		slog.WarnContext(c.Request().Context(), "No active edge tunnel for environment", "environment_id", envID)
+		slog.WarnContext(c.Request().Context(), "No active edge tunnel for environment", "environmentId", envID)
 		return m.abortEdgeTunnelUnavailable(c)
 	}
 
@@ -258,7 +258,7 @@ func (m *EnvironmentMiddleware) proxyPermissionDenied(c *echo.Context, ps *authz
 		perm, known := authz.UploadKindPermission(kind)
 		if !known || !ps.Allows(perm, envID) {
 			slog.DebugContext(c.Request().Context(), "Denying proxied upload session request: permission denied",
-				"method", method, "path", suffix, "kind", kind, "environment_id", envID)
+				"method", method, "path", suffix, "kind", kind, "environmentId", envID)
 			return true
 		}
 		return false
@@ -266,7 +266,7 @@ func (m *EnvironmentMiddleware) proxyPermissionDenied(c *echo.Context, ps *authz
 	perm, ok := m.matcher.Lookup(method, suffix).Get()
 	if !ok {
 		slog.WarnContext(c.Request().Context(), "Denying proxied request with no known permission mapping",
-			"method", method, "path", suffix, "environment_id", envID)
+			"method", method, "path", suffix, "environmentId", envID)
 		return true
 	}
 	if perm == "" {
@@ -278,7 +278,7 @@ func (m *EnvironmentMiddleware) proxyPermissionDenied(c *echo.Context, ps *authz
 	scopeEnvID := kit.Ternary(authz.IsEnvScoped(perm), envID, "")
 	if !ps.Allows(perm, scopeEnvID) {
 		slog.DebugContext(c.Request().Context(), "Denying proxied request: permission denied",
-			"method", method, "path", suffix, "permission", perm, "environment_id", envID)
+			"method", method, "path", suffix, "permission", perm, "environmentId", envID)
 		return true
 	}
 	var required []string
@@ -290,14 +290,14 @@ func (m *EnvironmentMiddleware) proxyPermissionDenied(c *echo.Context, ps *authz
 	}
 	if err != nil {
 		slog.DebugContext(c.Request().Context(), "Denying proxied request with invalid body",
-			"path", suffix, "environment_id", envID, "error", err)
+			"path", suffix, "environmentId", envID, "error", err)
 		return true
 	}
 	required = withContainerResourceSortPermissionsInternal(required, c.Request(), method, suffix)
 	for _, operationPermission := range required {
 		if !ps.Allows(operationPermission, envID) {
 			slog.DebugContext(c.Request().Context(), "Denying proxied request: body-derived permission denied",
-				"path", suffix, "permission", operationPermission, "environment_id", envID)
+				"path", suffix, "permission", operationPermission, "environmentId", envID)
 			return true
 		}
 	}
@@ -479,7 +479,7 @@ func (m *EnvironmentMiddleware) proxyActiveEdgeTunnelInternal(c *echo.Context, e
 		return false, nil
 	}
 
-	slog.DebugContext(c.Request().Context(), "Routing request through edge tunnel", "environment_id", envID, "path", c.Request().URL.Path)
+	slog.DebugContext(c.Request().Context(), "Routing request through edge tunnel", "environmentId", envID, "path", c.Request().URL.Path)
 	m.setProxyContextHeadersInternal(c, accessToken)
 	return true, m.proxyThroughTunnelInternal(c, tunnel, envID)
 }
@@ -492,7 +492,7 @@ func (m *EnvironmentMiddleware) proxyRecoveredEdgeTunnelInternal(c *echo.Context
 		return false, nil
 	}
 
-	slog.InfoContext(c.Request().Context(), "Recovered edge tunnel during request", "environment_id", envID)
+	slog.InfoContext(c.Request().Context(), "Recovered edge tunnel during request", "environmentId", envID)
 	m.setProxyContextHeadersInternal(c, accessToken)
 	return true, m.proxyThroughTunnelInternal(c, tunnel, envID)
 }
@@ -687,7 +687,7 @@ func (m *EnvironmentMiddleware) abortEdgeTunnelUnavailable(c *echo.Context) erro
 // proxyWebSocket handles WebSocket proxy requests.
 func (m *EnvironmentMiddleware) proxyWebSocket(c *echo.Context, target string, accessToken *string, envID string) error {
 	if isEdgeEnvironmentURLInternal(target) {
-		slog.WarnContext(c.Request().Context(), "Refusing direct websocket proxy to edge environment without active tunnel", "environment_id", envID, "target", target)
+		slog.WarnContext(c.Request().Context(), "Refusing direct websocket proxy to edge environment without active tunnel", "environmentId", envID, "target", target)
 		return m.abortEdgeTunnelUnavailable(c)
 	}
 
@@ -695,7 +695,7 @@ func (m *EnvironmentMiddleware) proxyWebSocket(c *echo.Context, target string, a
 	headers := edge.BuildWebSocketHeaders(c, accessToken)
 
 	if err := ws.ProxyHTTP(c.Response(), c.Request(), wsTarget, headers, m.checkOrigin); err != nil {
-		slog.Error("websocket proxy failed", "err", err)
+		slog.ErrorContext(c.Request().Context(), "websocket proxy failed", "err", err)
 	}
 	return nil
 }

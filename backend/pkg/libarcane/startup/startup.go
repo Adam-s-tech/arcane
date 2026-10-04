@@ -87,7 +87,7 @@ func CleanupOrphanedVolumeHelpers(ctx context.Context, cleanupFunc func(context.
 		return
 	}
 
-	slog.InfoContext(ctx, "Orphaned volume helper cleanup completed", "removed_count", removedCount)
+	slog.InfoContext(ctx, "Orphaned volume helper cleanup completed", "removedCount", removedCount)
 }
 
 func InitializeNonAgentFeatures(

@@ -258,6 +258,6 @@ func (w *writerConsumer) write(container, msg string) {
 	defer w.mu.Unlock()
 	if _, err := io.WriteString(w.out, output); err != nil && !w.writeErrLogged {
 		w.writeErrLogged = true
-		slog.Debug("project log output write failed; subsequent output may be truncated", "error", err)
+		slog.DebugContext(context.Background(), "project log output write failed; subsequent output may be truncated", "error", err) //nolint:forbidigo // Compose output writer has no request context.
 	}
 }

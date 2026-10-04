@@ -102,7 +102,7 @@ func TestGetSSHHostKeyCallback(t *testing.T) {
 	client := NewClient("")
 
 	t.Run("skip mode returns InsecureIgnoreHostKey", func(t *testing.T) {
-		callback, err := client.getSSHHostKeyCallback(SSHHostKeyVerificationSkip)
+		callback, err := client.getSSHHostKeyCallback(t.Context(), SSHHostKeyVerificationSkip)
 
 		require.NoError(t, err,
 			"unexpected error: %v", err)
@@ -122,7 +122,7 @@ func TestGetSSHHostKeyCallback(t *testing.T) {
 		knownHostsPath := filepath.Join(tmpDir, "known_hosts")
 		t.Setenv("SSH_KNOWN_HOSTS", knownHostsPath)
 
-		callback, err := client.getSSHHostKeyCallback("")
+		callback, err := client.getSSHHostKeyCallback(t.Context(), "")
 
 		require.NoError(t, err,
 			"unexpected error: %v", err)
@@ -136,7 +136,7 @@ func TestGetSSHHostKeyCallback(t *testing.T) {
 		knownHostsPath := filepath.Join(tmpDir, "known_hosts")
 		t.Setenv("SSH_KNOWN_HOSTS", knownHostsPath)
 
-		callback, err := client.getSSHHostKeyCallback(SSHHostKeyVerificationAcceptNew)
+		callback, err := client.getSSHHostKeyCallback(t.Context(), SSHHostKeyVerificationAcceptNew)
 
 		require.NoError(t, err,
 			"unexpected error: %v", err)
@@ -215,7 +215,7 @@ func TestCreateAcceptNewHostKeyCallback(t *testing.T) {
 		t.Setenv("SSH_KNOWN_HOSTS", knownHostsPath)
 
 		client := NewClient("")
-		callback, err := client.createAcceptNewHostKeyCallback()
+		callback, err := client.createAcceptNewHostKeyCallback(t.Context())
 
 		require.NoError(t, err,
 			"unexpected error: %v", err)
@@ -237,7 +237,7 @@ func TestCreateAcceptNewHostKeyCallback(t *testing.T) {
 		t.Setenv("SSH_KNOWN_HOSTS", knownHostsPath)
 
 		client := NewClient("")
-		callback, err := client.createAcceptNewHostKeyCallback()
+		callback, err := client.createAcceptNewHostKeyCallback(t.Context())
 
 		require.NoError(t, err,
 			"unexpected error: %v", err)
@@ -266,7 +266,7 @@ func TestCreateAcceptNewHostKeyCallback(t *testing.T) {
 		t.Setenv("SSH_KNOWN_HOSTS", knownHostsPath)
 
 		client := NewClient("")
-		callback, err := client.createAcceptNewHostKeyCallback()
+		callback, err := client.createAcceptNewHostKeyCallback(t.Context())
 
 		require.NoError(t, err,
 			"unexpected error: %v", err)
@@ -293,7 +293,7 @@ func TestCreateAcceptNewHostKeyCallback(t *testing.T) {
 		t.Setenv("SSH_KNOWN_HOSTS", knownHostsPath)
 
 		client := NewClient("")
-		callback, err := client.createAcceptNewHostKeyCallback()
+		callback, err := client.createAcceptNewHostKeyCallback(t.Context())
 
 		require.NoError(t, err,
 			"unexpected error: %v", err)

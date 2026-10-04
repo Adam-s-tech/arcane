@@ -79,7 +79,7 @@ func NewService(
 	if os.Getenv("DOCKER_HOST") == "" && dockerService != nil {
 		if host := strings.TrimSpace(dockerService.DockerHost()); host != "" {
 			if err := os.Setenv("DOCKER_HOST", host); err != nil {
-				slog.Warn("failed to set DOCKER_HOST for image patching", "error", err)
+				slog.WarnContext(context.Background(), "failed to set DOCKER_HOST for image patching", "error", err) //nolint:forbidigo // Service construction has no request context.
 			}
 		}
 	}

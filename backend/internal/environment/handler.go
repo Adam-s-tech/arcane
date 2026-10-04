@@ -375,7 +375,7 @@ func (h *EnvironmentHandler) createEnvironmentWithApiKeyInternal(ctx context.Con
 	// Generate API key for environment
 	apiKeyDto, err := h.apiKeyService.CreateEnvironmentApiKey(ctx, created.ID)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to create environment API key", "environmentID", created.ID, "error", err.Error())
+		slog.ErrorContext(ctx, "Failed to create environment API key", "environmentId", created.ID, "error", err.Error())
 		return nil, huma.Error500InternalServerError("Failed to create environment API key")
 	}
 
@@ -395,9 +395,9 @@ func (h *EnvironmentHandler) createEnvironmentWithApiKeyInternal(ctx context.Con
 		// environment and must survive; deleting the environment cascades it.
 		if delErr := h.apiKeyService.DeleteApiKey(ctx, apiKeyDto.ID); delErr != nil &&
 			!errors.Is(delErr, apikey.ErrApiKeyNotFound) && !errors.Is(delErr, apikey.ErrApiKeyProtected) {
-			slog.ErrorContext(ctx, "Failed to clean up unlinked environment API key", "environmentID", created.ID, "error", delErr.Error())
+			slog.ErrorContext(ctx, "Failed to clean up unlinked environment API key", "environmentId", created.ID, "error", delErr.Error())
 		}
-		slog.ErrorContext(ctx, "Failed to link API key to environment", "environmentID", created.ID, "error", err.Error())
+		slog.ErrorContext(ctx, "Failed to link API key to environment", "environmentId", created.ID, "error", err.Error())
 		return nil, huma.Error500InternalServerError("Failed to link API key")
 	}
 	created = updated
@@ -516,14 +516,14 @@ func (h *EnvironmentHandler) UpdateEnvironment(ctx context.Context, input *Updat
 
 		apiKey, err := h.environmentService.RegenerateEnvironmentApiKey(ctx, updated, localUser.ID, localUser.Username)
 		if err != nil {
-			slog.ErrorContext(ctx, "Failed to regenerate API key", "environmentID", input.ID, "error", err.Error())
+			slog.ErrorContext(ctx, "Failed to regenerate API key", "environmentId", input.ID, "error", err.Error())
 			return nil, huma.Error500InternalServerError("Failed to regenerate API key")
 		}
 
 		// Fetch updated environment
 		updated, err = h.environmentService.GetEnvironmentByID(ctx, input.ID)
 		if err != nil {
-			slog.ErrorContext(ctx, "Failed to fetch updated environment", "environmentID", input.ID, "error", err.Error())
+			slog.ErrorContext(ctx, "Failed to fetch updated environment", "environmentId", input.ID, "error", err.Error())
 			return nil, huma.Error500InternalServerError("Failed to fetch updated environment")
 		}
 
@@ -719,7 +719,7 @@ func (h *EnvironmentHandler) triggerPostUpdateTasksInternal(ctx context.Context,
 			status, err := h.environmentService.TestConnection(syncCtx, envID, nil)
 			if err != nil {
 				slog.WarnContext(syncCtx, "Failed to test connection after environment update",
-					"environment_id", envID, "environment_name", envName, "status", status, "error", err)
+					"environmentId", envID, "environmentName", envName, "status", status, "error", err)
 			}
 		}(detachedCtx, environmentID, updated.Name)
 	}
@@ -738,7 +738,7 @@ func (h *EnvironmentHandler) triggerEnvironmentResourceSyncInternal(ctx context.
 		defer cancel()
 		if err := h.environmentService.SyncRegistriesToEnvironment(syncCtx, envID); err != nil {
 			slog.WarnContext(syncCtx, "Failed to sync registries to environment",
-				"environmentID", envID,
+				"environmentId", envID,
 				"environmentName", envName,
 				"reason", syncReason,
 				"error", err.Error())
@@ -750,7 +750,7 @@ func (h *EnvironmentHandler) triggerEnvironmentResourceSyncInternal(ctx context.
 		defer cancel()
 		if err := h.environmentService.SyncS3DestinationsToEnvironment(syncCtx, envID); err != nil {
 			slog.WarnContext(syncCtx, "Failed to sync S3 destinations to environment",
-				"environmentID", envID,
+				"environmentId", envID,
 				"environmentName", envName,
 				"reason", syncReason,
 				"error", err.Error())
@@ -762,7 +762,7 @@ func (h *EnvironmentHandler) triggerEnvironmentResourceSyncInternal(ctx context.
 		defer cancel()
 		if err := h.environmentService.SyncRepositoriesToEnvironment(syncCtx, envID); err != nil {
 			slog.WarnContext(syncCtx, "Failed to sync git repositories to environment",
-				"environmentID", envID,
+				"environmentId", envID,
 				"environmentName", envName,
 				"reason", syncReason,
 				"error", err.Error())
@@ -788,7 +788,7 @@ func (h *EnvironmentHandler) PairEnvironment(ctx context.Context, input *PairEnv
 
 	env, err := h.environmentService.GetEnvironmentByID(ctx, *envID)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to get environment", "environmentID", *envID, "error", err.Error())
+		slog.ErrorContext(ctx, "Failed to get environment", "environmentId", *envID, "error", err.Error())
 		return nil, huma.Error404NotFound("Environment not found")
 	}
 
@@ -801,11 +801,11 @@ func (h *EnvironmentHandler) PairEnvironment(ctx context.Context, input *PairEnv
 	}
 	_, err = h.environmentService.UpdateEnvironment(ctx, *envID, updates, nil, nil)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to update environment status", "environmentID", *envID, "error", err.Error())
+		slog.ErrorContext(ctx, "Failed to update environment status", "environmentId", *envID, "error", err.Error())
 		return nil, huma.Error500InternalServerError("Failed to complete pairing")
 	}
 
-	slog.InfoContext(ctx, "Environment pairing completed", "environmentID", *envID, "environmentName", env.Name)
+	slog.InfoContext(ctx, "Environment pairing completed", "environmentId", *envID, "environmentName", env.Name)
 	h.triggerEnvironmentResourceSyncInternal(ctx, *envID, env.Name, "environment pairing")
 
 	return &handlerutil.Out[base.MessageResponse]{
@@ -847,7 +847,7 @@ func (h *EnvironmentHandler) GetDeploymentSnippets(ctx context.Context, input *G
 		snippets, err = h.environmentService.GenerateDeploymentSnippets(ctx, env.ID, h.cfg.GetAppURL(), env.ApiUrl, *env.AccessToken)
 	}
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to generate deployment snippets", "environmentID", input.ID, "error", err.Error())
+		slog.ErrorContext(ctx, "Failed to generate deployment snippets", "environmentId", input.ID, "error", err.Error())
 		return nil, huma.Error500InternalServerError("Failed to generate deployment snippets")
 	}
 
@@ -953,7 +953,7 @@ func (h *EnvironmentHandler) GetEnvironmentVersion(ctx context.Context, input *G
 
 	// Update environment status to online since we successfully contacted it
 	if updateErr := h.environmentService.UpdateEnvironmentHeartbeat(ctx, input.ID); updateErr != nil {
-		slog.WarnContext(ctx, "Failed to update environment heartbeat", "environment_id", input.ID, "error", updateErr)
+		slog.WarnContext(ctx, "Failed to update environment heartbeat", "environmentId", input.ID, "error", updateErr)
 		// Don't fail the request if heartbeat update fails
 	}
 
@@ -1033,18 +1033,18 @@ func (h *EnvironmentHandler) DownloadEnvironmentMTLSBundle(ctx context.Context, 
 
 		entry, createErr := zipWriter.CreateHeader(header)
 		if createErr != nil {
-			slog.ErrorContext(ctx, "Failed to create mTLS bundle entry", "environmentID", input.ID, "fileName", downloadName, "error", createErr.Error())
+			slog.ErrorContext(ctx, "Failed to create mTLS bundle entry", "environmentId", input.ID, "fileName", downloadName, "error", createErr.Error())
 			return nil, huma.Error500InternalServerError("Failed to build mTLS bundle")
 		}
 
 		if _, writeErr := entry.Write([]byte(file.Content)); writeErr != nil {
-			slog.ErrorContext(ctx, "Failed to write mTLS bundle entry", "environmentID", input.ID, "fileName", downloadName, "error", writeErr.Error())
+			slog.ErrorContext(ctx, "Failed to write mTLS bundle entry", "environmentId", input.ID, "fileName", downloadName, "error", writeErr.Error())
 			return nil, huma.Error500InternalServerError("Failed to build mTLS bundle")
 		}
 	}
 
 	if closeErr := zipWriter.Close(); closeErr != nil {
-		slog.ErrorContext(ctx, "Failed to finalize mTLS bundle", "environmentID", input.ID, "error", closeErr.Error())
+		slog.ErrorContext(ctx, "Failed to finalize mTLS bundle", "environmentId", input.ID, "error", closeErr.Error())
 		return nil, huma.Error500InternalServerError("Failed to build mTLS bundle")
 	}
 
@@ -1060,7 +1060,7 @@ func (h *EnvironmentHandler) DownloadEnvironmentMTLSBundle(ctx context.Context, 
 				slog.WarnContext(
 					humaCtx.Context(),
 					"Failed to stream edge mTLS bundle download",
-					"environmentID",
+					"environmentId",
 					input.ID,
 					"fileName",
 					fileName,
@@ -1104,7 +1104,7 @@ func (h *EnvironmentHandler) DownloadEnvironmentMTLSFile(ctx context.Context, in
 				slog.WarnContext(
 					humaCtx.Context(),
 					"Failed to stream edge mTLS asset download",
-					"environmentID",
+					"environmentId",
 					input.ID,
 					"fileName",
 					file.Name,
@@ -1165,7 +1165,7 @@ func (h *EnvironmentHandler) loadEnvironmentMTLSFilesInternal(ctx context.Contex
 		AppURL:            h.cfg.GetAppURL(),
 	})
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to generate environment mTLS assets", "environmentID", environmentID, "error", err.Error())
+		slog.ErrorContext(ctx, "Failed to generate environment mTLS assets", "environmentId", environmentID, "error", err.Error())
 		return nil, nil, huma.Error500InternalServerError("Failed to generate environment mTLS assets")
 	}
 

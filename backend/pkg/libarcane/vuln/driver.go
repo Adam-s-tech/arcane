@@ -270,7 +270,7 @@ func LogContainerStartupRequest(ctx context.Context, scope string, config *conta
 		"privileged", privileged,
 		"autoRemove", autoRemove,
 		"mounts", mounts,
-		"nanoCPUs", resources.NanoCPUs,
+		"nanoCpUs", resources.NanoCPUs,
 		"cpuset", resources.CpusetCpus,
 		"memory", resources.Memory,
 		"memorySwap", resources.MemorySwap,
@@ -325,7 +325,7 @@ func ReadStartupLogs(ctx context.Context, dockerClient *client.Client, container
 	return stdoutLog, stderrLog
 }
 
-func RemoveContainer(ctx context.Context, dockerClient *client.Client, containerID, warningMessage string) {
+func RemoveContainer(ctx context.Context, dockerClient *client.Client, containerID, purpose string) {
 	if dockerClient == nil || containerID == "" {
 		return
 	}
@@ -335,7 +335,7 @@ func RemoveContainer(ctx context.Context, dockerClient *client.Client, container
 	defer cleanupCancel()
 
 	if _, err := dockerClient.ContainerRemove(cleanupCtx, containerID, client.ContainerRemoveOptions{Force: true}); err != nil && !cerrdefs.IsNotFound(err) {
-		slog.WarnContext(cleanupCtx, warningMessage, "containerId", containerID, "error", err)
+		slog.WarnContext(cleanupCtx, "failed to remove container", "purpose", purpose, "containerId", containerID, "error", err)
 	}
 }
 

@@ -220,9 +220,9 @@ func (c *TunnelClient) connectAndServeManagedTunnelInternal(ctx context.Context)
 	if transports.grpc {
 		if preferredUntil, ok := c.preferredWebSocketUntilInternal(time.Now()).Get(); ok {
 			slog.InfoContext(ctx, "Temporarily preferring websocket edge tunnel transport after recent websocket success",
-				"preferred_until", preferredUntil,
-				"grpc_failure_streak", c.grpcFailureStreakInternal(),
-				"manager_ws_url", c.managerWebSocketURLInternal(),
+				"preferredUntil", preferredUntil,
+				"grpcFailureStreak", c.grpcFailureStreakInternal(),
+				"managerWsUrl", c.managerWebSocketURLInternal(),
 			)
 			return c.connectAndServeWebSocketInternal(ctx)
 		}
@@ -243,8 +243,8 @@ func (c *TunnelClient) connectAndServeManagedTunnelInternal(ctx context.Context)
 				managerWSURL := c.managerWebSocketURLInternal()
 				slog.WarnContext(ctx, "gRPC edge tunnel connection failed, falling back to websocket transport",
 					"error", err,
-					"manager_grpc_addr", c.managerGRPCAddr,
-					"manager_ws_url", managerWSURL,
+					"managerGrpcAddr", c.managerGRPCAddr,
+					"managerWsUrl", managerWSURL,
 				)
 				if wsErr := c.connectAndServeWebSocketInternal(ctx); wsErr != nil {
 					// Keep both transport failures in the chain for errors.Is/errors.As traversal.
@@ -500,9 +500,9 @@ func (c *TunnelClient) serveTunnelSessionInternal(ctx context.Context, conn Tunn
 
 	slog.InfoContext(ctx, "Edge tunnel connected to manager",
 		"transport", conn.Transport(),
-		"manager_addr", managerAddr,
-		"environment_id", registerMsg.EnvironmentID,
-		"session_id", registerMsg.SessionID,
+		"managerAddr", managerAddr,
+		"environmentId", registerMsg.EnvironmentID,
+		"sessionId", registerMsg.SessionID,
 	)
 	c.markTransportConnectedInternal(conn.Transport())
 
@@ -593,7 +593,7 @@ func (c *TunnelClient) messageLoop(ctx context.Context, conn TunnelConnection, w
 				}
 				slog.InfoContext(ctx, "Edge tunnel re-registered",
 					"transport", conn.Transport(),
-					"environment_id", msg.EnvironmentID,
+					"environmentId", msg.EnvironmentID,
 				)
 			case MessageTypeRegister:
 				slog.DebugContext(ctx, "Ignoring register message on agent")
@@ -615,7 +615,7 @@ func (c *TunnelClient) beginCommandRequestTransferInternal(ctx context.Context, 
 	previous, loaded := c.requestTransfers.Swap(transferID, transfer)
 	transfer.timer = time.AfterFunc(timeout, func() {
 		if c.requestTransfers.CompareAndDelete(transferID, transfer) {
-			slog.WarnContext(ctx, "Command body transfer expired", "transfer_id", transferID, "command_id", msg.ID)
+			slog.WarnContext(ctx, "Command body transfer expired", "transferId", transferID, "commandId", msg.ID)
 			c.sendCommandCompleteInternal(conn, msg.ID, http.StatusRequestTimeout, "command body transfer timed out")
 		}
 	})
@@ -635,13 +635,13 @@ func (c *TunnelClient) handleCommandRequestChunkInternal(ctx context.Context, ms
 
 	value, ok := c.requestTransfers.Load(msg.ID)
 	if !ok {
-		slog.WarnContext(ctx, "Received command body chunk for unknown transfer", "transfer_id", msg.ID)
+		slog.WarnContext(ctx, "Received command body chunk for unknown transfer", "transferId", msg.ID)
 		return
 	}
 	transfer, ok := value.(*commandRequestTransfer)
 	if !ok {
 		c.requestTransfers.Delete(msg.ID)
-		slog.WarnContext(ctx, "Discarded invalid command body transfer state", "transfer_id", msg.ID)
+		slog.WarnContext(ctx, "Discarded invalid command body transfer state", "transferId", msg.ID)
 		return
 	}
 	if msg.Sequence != transfer.nextSequence {
@@ -849,7 +849,7 @@ func (c *TunnelClient) handleWebSocketStart(ctx context.Context, conn TunnelConn
 		}
 	}
 	streamID := msg.ID
-	slog.DebugContext(ctx, "Starting WebSocket stream", "stream_id", streamID, "path", msg.Path)
+	slog.DebugContext(ctx, "Starting WebSocket stream", "streamId", streamID, "path", msg.Path)
 
 	localURL := c.buildLocalWebSocketURLInternal(msg)
 	headers := c.buildLocalWebSocketHeadersInternal(msg)
@@ -1122,7 +1122,7 @@ func (c *TunnelClient) handleWebSocketData(ctx context.Context, msg *TunnelMessa
 func (c *TunnelClient) handleStreamData(ctx context.Context, msg *TunnelMessage) {
 	streamRaw, ok := c.activeStreams.Load(msg.ID)
 	if !ok {
-		slog.DebugContext(ctx, "Received WebSocket data for unknown stream", "stream_id", msg.ID)
+		slog.DebugContext(ctx, "Received WebSocket data for unknown stream", "streamId", msg.ID)
 		return
 	}
 	stream, ok := streamRaw.(*activeWSStream)
@@ -1140,7 +1140,7 @@ func (c *TunnelClient) handleStreamData(ctx context.Context, msg *TunnelMessage)
 	default:
 		stream.mu.Unlock()
 		// Drop if channel is full (backpressure)
-		slog.DebugContext(ctx, "Dropping WebSocket data due to backpressure", "stream_id", msg.ID)
+		slog.DebugContext(ctx, "Dropping WebSocket data due to backpressure", "streamId", msg.ID)
 	}
 }
 
@@ -1159,7 +1159,7 @@ func (c *TunnelClient) handleStreamClose(ctx context.Context, msg *TunnelMessage
 		return
 	}
 	c.closeWebSocketStream(msg.ID, stream)
-	slog.DebugContext(ctx, "Closed WebSocket stream", "stream_id", msg.ID)
+	slog.DebugContext(ctx, "Closed WebSocket stream", "streamId", msg.ID)
 }
 
 // sendErrorResponse sends an error response

@@ -382,7 +382,7 @@ func (s *FederatedCredentialService) ExchangeToken(ctx context.Context, req fede
 			Model(&FederatedCredential{}).
 			Where("id = ? AND (last_used_at IS NULL OR last_used_at < ?)", credential.ID, cutoff).
 			Update("last_used_at", localNow).Error; updateLastUsedErr != nil {
-			slog.WarnContext(bgCtx, "failed to update federated credential last_used_at", "credential_id", credential.ID, "error", updateLastUsedErr)
+			slog.WarnContext(bgCtx, "failed to update federated credential last_used_at", "credentialId", credential.ID, "error", updateLastUsedErr)
 		}
 	}()
 
@@ -566,7 +566,7 @@ func (s *FederatedCredentialService) logExchangeInternal(ctx context.Context, re
 		"issuer", issuer,
 		"subject", subject,
 		"audiences", audiences,
-		"credential_id", credentialID,
+		"credentialId", credentialID,
 	)
 
 	if s.eventService == nil {

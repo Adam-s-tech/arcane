@@ -206,8 +206,8 @@ func TestNotificationService_DispatchNotification_LogsManagerDispatchForAgent(t 
 	require.Equal(t, 0, dispatchResponse.Delivered)
 	logs := logBuffer.String()
 	require.Contains(t, logs, "Manager dispatching notification on behalf of agent")
-	require.Contains(t, logs, "environment_id=env-remote")
-	require.Contains(t, logs, "environment_name=\"Remote Edge\"")
+	require.Contains(t, logs, "environmentId=env-remote")
+	require.Contains(t, logs, "environmentName=\"Remote Edge\"")
 	require.Contains(t, logs, "kind=image_update")
 }
 

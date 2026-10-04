@@ -956,14 +956,14 @@ func (s *Service) deleteArchiveBackupInternal(ctx context.Context, entry *volume
 	}
 	containerID, cleanup, err := s.createBackupTempContainerInternal(ctx, nil, "/volume", false)
 	if err != nil {
-		slog.WarnContext(ctx, "failed to create container for backup file cleanup", "backup_id", backupID, "error", err.Error())
+		slog.WarnContext(ctx, "failed to create container for backup file cleanup", "backupId", backupID, "error", err.Error())
 	} else {
 		defer cleanup()
 		filename, filenameErr := backupArchiveFilenameInternal(backupID)
 		if filenameErr != nil {
-			slog.WarnContext(ctx, "failed to sanitize backup id for file cleanup", "backup_id", backupID, "error", filenameErr.Error())
+			slog.WarnContext(ctx, "failed to sanitize backup id for file cleanup", "backupId", backupID, "error", filenameErr.Error())
 		} else if _, _, err = s.deps.Exec(ctx, containerID, "", []string{"rm", "-f", path.Join("/volume", filename)}); err != nil {
-			slog.WarnContext(ctx, "failed to delete backup file (orphan file may remain)", "backup_id", backupID, "error", err.Error())
+			slog.WarnContext(ctx, "failed to delete backup file (orphan file may remain)", "backupId", backupID, "error", err.Error())
 		}
 	}
 	s.logBackupDeleteEventInternal(ctx, volumeName, backupID, user)

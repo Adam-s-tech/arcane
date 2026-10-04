@@ -24,14 +24,14 @@ func ProxyHTTP(w http.ResponseWriter, r *http.Request, remoteWS string, header h
 
 	clientConn, err := Accept(w, r, checkOrigin)
 	if err != nil {
-		slog.Error("failed to upgrade client connection", "remoteWS", remoteWS, "err", err)
+		slog.ErrorContext(r.Context(), "failed to upgrade client connection", "remoteWs", remoteWS, "err", err)
 		return err
 	}
 	defer func() { _ = clientConn.CloseNow() }()
 	// This is a pure bridge; frame-size policing is the remote endpoint's job.
 	clientConn.SetReadLimit(-1)
 
-	slog.Debug("attempting websocket dial", "remoteWS", remoteWS, "headers", header)
+	slog.DebugContext(r.Context(), "attempting websocket dial", "remoteWs", remoteWS, "headers", header)
 	dialCtx, dialCancel := context.WithTimeout(r.Context(), 45*time.Second)
 	remoteConn, resp, err := websocket.Dial(dialCtx, remoteWS, &websocket.DialOptions{
 		HTTPHeader: header,
@@ -44,7 +44,7 @@ func ProxyHTTP(w http.ResponseWriter, r *http.Request, remoteWS string, header h
 		_ = resp.Body.Close()
 	}
 	if err != nil {
-		slog.Error("failed to dial remote websocket", "remoteWS", remoteWS, "err", err, "resp_status", func() int {
+		slog.ErrorContext(dialCtx, "failed to dial remote websocket", "remoteWs", remoteWS, "err", err, "respStatus", func() int {
 			if resp != nil {
 				return resp.StatusCode
 			}
@@ -56,7 +56,7 @@ func ProxyHTTP(w http.ResponseWriter, r *http.Request, remoteWS string, header h
 	defer func() { _ = remoteConn.CloseNow() }()
 	remoteConn.SetReadLimit(-1)
 
-	slog.Debug("websocket proxy established", "remoteWS", remoteWS)
+	slog.DebugContext(dialCtx, "websocket proxy established", "remoteWs", remoteWS)
 
 	// When either pump ends, the handler returns and the deferred CloseNow
 	// calls unblock the other pump.
@@ -71,7 +71,7 @@ func ProxyHTTP(w http.ResponseWriter, r *http.Request, remoteWS string, header h
 		for {
 			mt, msg, readErr := clientConn.Read(pumpCtx)
 			if readErr != nil {
-				relayCloseInternal(remoteConn, readErr)
+				relayCloseInternal(r.Context(), remoteConn, readErr)
 				return
 			}
 			if writeErr := remoteConn.Write(pumpCtx, mt, msg); writeErr != nil {
@@ -86,7 +86,7 @@ func ProxyHTTP(w http.ResponseWriter, r *http.Request, remoteWS string, header h
 		for {
 			mt, msg, readErr := remoteConn.Read(pumpCtx)
 			if readErr != nil {
-				relayCloseInternal(clientConn, readErr)
+				relayCloseInternal(r.Context(), clientConn, readErr)
 				return
 			}
 			if writeErr := clientConn.Write(pumpCtx, mt, msg); writeErr != nil {
@@ -101,7 +101,7 @@ func ProxyHTTP(w http.ResponseWriter, r *http.Request, remoteWS string, header h
 
 // relayCloseInternal forwards a peer's close status to the other side of the
 // bridge so the terminating reason survives the proxy hop.
-func relayCloseInternal(conn *websocket.Conn, err error) {
+func relayCloseInternal(ctx context.Context, conn *websocket.Conn, err error) {
 	var ce websocket.CloseError
 	if !errors.As(err, &ce) {
 		return
@@ -111,6 +111,6 @@ func relayCloseInternal(conn *websocket.Conn, err error) {
 		code = websocket.StatusNormalClosure
 	}
 	if closeErr := conn.Close(code, ce.Reason); closeErr != nil {
-		slog.Debug("failed to relay websocket close", "status", int(code), "err", closeErr)
+		slog.DebugContext(ctx, "failed to relay websocket close", "status", int(code), "err", closeErr)
 	}
 }

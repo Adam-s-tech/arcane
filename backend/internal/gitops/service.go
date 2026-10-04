@@ -540,10 +540,10 @@ func (s *GitOpsSyncService) GetSyncByID(ctx context.Context, environmentID, id s
 	syncRecord, err := s.getSyncByIDInternal(ctx, environmentID, id, true)
 	if err != nil {
 		if errors.Is(err, common.ErrNotFound) {
-			slog.WarnContext(ctx, "GitOps sync not found", "syncID", id, "environmentID", environmentID)
+			slog.WarnContext(ctx, "GitOps sync not found", "syncId", id, "environmentId", environmentID)
 			return nil, err
 		}
-		slog.ErrorContext(ctx, "Failed to get GitOps sync", "syncID", id, "environmentID", environmentID, "error", err)
+		slog.ErrorContext(ctx, "Failed to get GitOps sync", "syncId", id, "environmentId", environmentID, "error", err)
 		return nil, err
 	}
 	return syncRecord, nil
@@ -572,7 +572,7 @@ func (s *GitOpsSyncService) getSyncRecordByIDInternal(ctx context.Context, envir
 }
 
 func (s *GitOpsSyncService) CreateSync(ctx context.Context, environmentID string, req gitops.CreateSyncRequest, actor user.Actor) (*projectpkg.GitOpsSync, error) {
-	slog.InfoContext(ctx, "Creating GitOps sync", "environmentID", environmentID, "name", req.Name, "repositoryID", req.RepositoryID)
+	slog.InfoContext(ctx, "Creating GitOps sync", "environmentId", environmentID, "name", req.Name, "repositoryId", req.RepositoryID)
 
 	mode, err := normalizeSyncMode(req.Mode)
 	if err != nil {
@@ -587,10 +587,10 @@ func (s *GitOpsSyncService) CreateSync(ctx context.Context, environmentID string
 
 	repo, err := s.repoService.GetRepositoryByID(ctx, req.RepositoryID)
 	if err != nil {
-		slog.ErrorContext(ctx, "Repository not found for GitOps sync", "repositoryID", req.RepositoryID, "error", err)
+		slog.ErrorContext(ctx, "Repository not found for GitOps sync", "repositoryId", req.RepositoryID, "error", err)
 		return nil, fmt.Errorf("repository not found: %w", err)
 	}
-	slog.InfoContext(ctx, "Found repository for GitOps sync", "repositoryID", req.RepositoryID, "repositoryName", repo.Name)
+	slog.InfoContext(ctx, "Found repository for GitOps sync", "repositoryId", req.RepositoryID, "repositoryName", repo.Name)
 
 	// Store the project name - use sync name if project name not provided
 	projectName := cmp.Or(req.ProjectName, req.Name)
@@ -665,7 +665,7 @@ func (s *GitOpsSyncService) CreateSync(ctx context.Context, environmentID string
 	if err != nil {
 		return nil, err
 	}
-	slog.InfoContext(ctx, "GitOps sync created successfully", "syncID", syncRecord.ID, "name", syncRecord.Name)
+	slog.InfoContext(ctx, "GitOps sync created successfully", "syncId", syncRecord.ID, "name", syncRecord.Name)
 
 	if adoptedProject != nil {
 		adoptedProject.GitOpsManagedBy = &syncRecord.ID
@@ -758,7 +758,7 @@ func (s *GitOpsSyncService) insertSyncRecordInternal(ctx context.Context, syncRe
 			if isUniqueViolation(err) {
 				return common.Classify(common.ErrConflict, errors.New("project already has a Git backup; disconnect it first"))
 			}
-			slog.ErrorContext(ctx, "Failed to create GitOps sync in database", "name", req.Name, "repositoryID", req.RepositoryID, "environmentID", syncRecord.EnvironmentID, "error", err)
+			slog.ErrorContext(ctx, "Failed to create GitOps sync in database", "name", req.Name, "repositoryId", req.RepositoryID, "environmentId", syncRecord.EnvironmentID, "error", err)
 			return fmt.Errorf("failed to create sync: %w", err)
 		}
 		if adoptedProject == nil {

@@ -122,7 +122,7 @@ type AuthConfig struct {
 }
 
 // getAuthInternal returns the appropriate transport.AuthMethod.
-func (c *Client) getAuthInternal(url string, localConfig AuthConfig) (transport.AuthMethod, error) {
+func (c *Client) getAuthInternal(ctx context.Context, url string, localConfig AuthConfig) (transport.AuthMethod, error) {
 	switch localConfig.AuthType {
 	case "http":
 		if localConfig.Token != "" {
@@ -145,7 +145,7 @@ func (c *Client) getAuthInternal(url string, localConfig AuthConfig) (transport.
 			}
 
 			// Configure host key verification based on mode
-			hostKeyCallback, err := c.getSSHHostKeyCallback(localConfig.SSHHostKeyVerification)
+			hostKeyCallback, err := c.getSSHHostKeyCallback(ctx, localConfig.SSHHostKeyVerification)
 			if err != nil {
 				return nil, fmt.Errorf("failed to configure SSH host key verification: %w", err)
 			}
@@ -164,7 +164,7 @@ func (c *Client) getAuthInternal(url string, localConfig AuthConfig) (transport.
 }
 
 // getSSHHostKeyCallback returns the appropriate SSH host key callback based on verification mode
-func (c *Client) getSSHHostKeyCallback(mode string) (gossh.HostKeyCallback, error) {
+func (c *Client) getSSHHostKeyCallback(ctx context.Context, mode string) (gossh.HostKeyCallback, error) {
 	switch mode {
 	case SSHHostKeyVerificationStrict:
 		// Use known_hosts verification respecting SSH_KNOWN_HOSTS env var
@@ -174,15 +174,15 @@ func (c *Client) getSSHHostKeyCallback(mode string) (gossh.HostKeyCallback, erro
 		return gossh.InsecureIgnoreHostKey(), nil //nolint:gosec // User explicitly chose to skip verification
 	case SSHHostKeyVerificationAcceptNew, "":
 		// Default: accept and remember new host keys
-		return c.createAcceptNewHostKeyCallback()
+		return c.createAcceptNewHostKeyCallback(ctx)
 	default:
 		// Fall back to accept_new for unknown modes
-		return c.createAcceptNewHostKeyCallback()
+		return c.createAcceptNewHostKeyCallback(ctx)
 	}
 }
 
 // createAcceptNewHostKeyCallback creates a callback that accepts new host keys and saves them
-func (c *Client) createAcceptNewHostKeyCallback() (gossh.HostKeyCallback, error) {
+func (c *Client) createAcceptNewHostKeyCallback(ctx context.Context) (gossh.HostKeyCallback, error) {
 	knownHostsPath := getKnownHostsPath()
 
 	// Ensure the directory exists
@@ -200,7 +200,7 @@ func (c *Client) createAcceptNewHostKeyCallback() (gossh.HostKeyCallback, error)
 			return nil, fmt.Errorf("failed to create known_hosts file: %w", openFileErr)
 		}
 		if closeErr := file.Close(); closeErr != nil {
-			slog.Warn("Failed to close known_hosts file", "path", knownHostsPath, "error", closeErr)
+			slog.WarnContext(ctx, "Failed to close known_hosts file", "path", knownHostsPath, "error", closeErr)
 		}
 	}
 
@@ -229,7 +229,7 @@ func (c *Client) createAcceptNewHostKeyCallback() (gossh.HostKeyCallback, error)
 		if addHostKeyErr := addHostKey(knownHostsPath, hostname, key); addHostKeyErr != nil {
 			// Log the error but don't fail - still allow the connection
 			// The host key just won't be remembered for next time
-			slog.Warn("Failed to save host key", "hostname", hostname, "error", addHostKeyErr)
+			slog.WarnContext(ctx, "Failed to save host key", "hostname", hostname, "error", addHostKeyErr)
 		}
 
 		return nil
@@ -333,7 +333,7 @@ func (c *Client) Clone(ctx context.Context, url, branch string, auth AuthConfig)
 		return "", err
 	}
 
-	authMethod, err := c.getAuthInternal(url, auth)
+	authMethod, err := c.getAuthInternal(ctx, url, auth)
 	if err != nil {
 		_ = os.RemoveAll(tmpDir)
 		return "", err
@@ -457,7 +457,7 @@ func (c *Client) listRemoteReferences(ctx context.Context, url string, auth Auth
 		return nil, err
 	}
 
-	authMethod, err := c.getAuthInternal(url, auth)
+	authMethod, err := c.getAuthInternal(ctx, url, auth)
 	if err != nil {
 		return nil, err
 	}

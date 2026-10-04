@@ -139,7 +139,7 @@ func (h *WebSocketHandler) streamSnapshotsInternal(c *echo.Context, interval tim
 	defer unregister()
 	defer func() {
 		if closeNowErr := conn.CloseNow(); closeNowErr != nil {
-			slog.Debug("Failed to close diagnostics websocket connection", "error", closeNowErr)
+			slog.DebugContext(c.Request().Context(), "Failed to close diagnostics websocket connection", "error", closeNowErr)
 		}
 	}()
 
@@ -197,7 +197,7 @@ func (h *WebSocketHandler) ServerLogsStream(c *echo.Context) error {
 	defer unregister()
 	defer func() {
 		if closeNowErr := conn.CloseNow(); closeNowErr != nil {
-			slog.Debug("Failed to close server logs websocket connection", "error", closeNowErr)
+			slog.DebugContext(c.Request().Context(), "Failed to close server logs websocket connection", "error", closeNowErr)
 		}
 	}()
 

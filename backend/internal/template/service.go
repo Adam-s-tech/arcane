@@ -83,7 +83,7 @@ func NewTemplateService(ctx context.Context, db *database.DB, httpClient *http.C
 		registryFetchMeta: make(map[string]*registryFetchMeta),
 		registryErrors:    make(map[string]string),
 	}
-	service.safeHTTPClient = service.newSafeHTTPClientInternal()
+	service.safeHTTPClient = service.newSafeHTTPClientInternal(ctx)
 	revalidationCtx := context.WithoutCancel(ctx)
 	loader := func(generations []uint64) (map[uint64][]ComposeTemplate, error) {
 		loadCtx, cancel := context.WithTimeout(revalidationCtx, 2*time.Minute)
@@ -178,7 +178,7 @@ func (s *TemplateService) GetAllTemplatesPaginated(ctx context.Context, params p
 	for _, t := range templates {
 		var dtoItem tmpl.Template
 		if mapStructErr := mapping.MapStruct(&t, &dtoItem); mapStructErr != nil {
-			slog.WarnContext(ctx, "failed to map template to DTO", "error", mapStructErr, "templateID", t.ID)
+			slog.WarnContext(ctx, "failed to map template to DTO", "error", mapStructErr, "templateId", t.ID)
 			continue
 		}
 		items = append(items, dtoItem)
@@ -260,7 +260,7 @@ func (s *TemplateService) GetTemplate(ctx context.Context, id string) (*ComposeT
 	// before we return "not found" — the cache may be stale or the previous refresh
 	// silently returned empty.
 	if strings.HasPrefix(id, remoteIDPrefix+":") {
-		slog.InfoContext(ctx, "remote template not in cache, forcing registry refresh", "templateID", id, "cacheSize", len(templates))
+		slog.InfoContext(ctx, "remote template not in cache, forcing registry refresh", "templateId", id, "cacheSize", len(templates))
 		localTemplates, refreshErr := s.remoteTemplatesInternal(ctx, true)
 		if refreshErr != nil {
 			return nil, fmt.Errorf("template %q not found and registry refresh failed: %w", id, refreshErr)
@@ -836,7 +836,7 @@ func (s *TemplateService) enrichRemoteTemplateIcons(ctx context.Context, templat
 
 			composeContent, envContent, err := s.fetchRemoteTemplateFiles(groupCtx, &templates[idx])
 			if err != nil {
-				slog.WarnContext(groupCtx, "failed to fetch remote template content for icon extraction", "templateID", templates[idx].ID, "error", err)
+				slog.WarnContext(groupCtx, "failed to fetch remote template content for icon extraction", "templateId", templates[idx].ID, "error", err)
 				setTemplateIconURL(&templates[idx], nil)
 				return nil
 			}
@@ -857,10 +857,10 @@ func (s *TemplateService) fetchURL(ctx context.Context, url string) (string, err
 	return string(body), nil
 }
 
-func (s *TemplateService) newSafeHTTPClientInternal() *http.Client {
+func (s *TemplateService) newSafeHTTPClientInternal(ctx context.Context) *http.Client {
 	client, err := httpx.NewSafeOutboundHTTPClient(s.httpClient, s.lookupIP)
 	if err != nil {
-		slog.Warn("failed to configure safe HTTP client", "error", err)
+		slog.WarnContext(ctx, "failed to configure safe HTTP client", "error", err)
 		return nil
 	}
 	return client
@@ -882,7 +882,7 @@ func (s *TemplateService) newSafeRequestInternal(ctx context.Context, method, ra
 	if client == nil {
 		s.registryMu.Lock()
 		if s.safeHTTPClient == nil {
-			s.safeHTTPClient = s.newSafeHTTPClientInternal()
+			s.safeHTTPClient = s.newSafeHTTPClientInternal(ctx)
 		}
 		client = s.safeHTTPClient
 		s.registryMu.Unlock()

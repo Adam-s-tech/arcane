@@ -136,8 +136,8 @@ func (c *TunnelClient) syncPollManagedSessionInternal(ctx context.Context, sessi
 
 		slog.InfoContext(ctx, "Poll control plane requested edge tunnel",
 			"status", status,
-			"manager_grpc_addr", c.managerGRPCAddr,
-			"manager_ws_url", c.managerWebSocketURLInternal(),
+			"managerGrpcAddr", c.managerGRPCAddr,
+			"managerWsUrl", c.managerWebSocketURLInternal(),
 		)
 		return c.startPollManagedSessionInternal(ctx), nil
 	case TunnelStatusIdle:

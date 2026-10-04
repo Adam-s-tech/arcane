@@ -227,7 +227,7 @@ func (s *EnvironmentService) ResolveEnvironmentName(ctx context.Context, environ
 	env, err := s.GetEnvironmentByIDCached(ctx, environmentID)
 	if err != nil || env == nil {
 		if !errors.Is(err, context.Canceled) {
-			slog.WarnContext(ctx, "failed to resolve environment name", "environmentID", environmentID, "error", err)
+			slog.WarnContext(ctx, "failed to resolve environment name", "environmentId", environmentID, "error", err)
 		}
 		return DisplayName(environmentID, "")
 	}
@@ -628,7 +628,7 @@ func (s *EnvironmentService) GetEnabledRegistryCredentials(ctx context.Context) 
 
 		decryptedToken, err := crypto.Decrypt(reg.Token)
 		if err != nil {
-			slog.WarnContext(ctx, "Failed to decrypt registry token", "registryURL", reg.URL, "error", err.Error())
+			slog.WarnContext(ctx, "Failed to decrypt registry token", "registryUrl", reg.URL, "error", err.Error())
 			continue
 		}
 
@@ -661,17 +661,17 @@ func (s *EnvironmentService) SyncResourcesToEnvironment(ctx context.Context, env
 
 		s.ForgetSyncState(environmentID)
 		if err := s.SyncRegistriesToEnvironment(ctx, environmentID); err != nil {
-			slog.WarnContext(ctx, "Failed to sync registries", "environmentID", environmentID, "error", err.Error())
+			slog.WarnContext(ctx, "Failed to sync registries", "environmentId", environmentID, "error", err.Error())
 			failedGroups = append(failedGroups, "container registries")
 		}
 
 		if err := s.SyncS3DestinationsToEnvironment(ctx, environmentID); err != nil {
-			slog.WarnContext(ctx, "Failed to sync S3 destinations", "environmentID", environmentID, "error", err.Error())
+			slog.WarnContext(ctx, "Failed to sync S3 destinations", "environmentId", environmentID, "error", err.Error())
 			failedGroups = append(failedGroups, "S3 destinations")
 		}
 
 		if err := s.SyncRepositoriesToEnvironment(ctx, environmentID); err != nil {
-			slog.WarnContext(ctx, "Failed to sync git repositories", "environmentID", environmentID, "error", err.Error())
+			slog.WarnContext(ctx, "Failed to sync git repositories", "environmentId", environmentID, "error", err.Error())
 			failedGroups = append(failedGroups, "git repositories")
 		}
 
@@ -1110,11 +1110,11 @@ func (s *EnvironmentService) RunHealthChecksNow(ctx context.Context) error {
 func (s *EnvironmentService) runHealthCheckInternal(ctx context.Context, envID string) (scheduler.Outcome, error) {
 	lease, admitted, err := s.jobs.TryAcquire(ctx, envID)
 	if err != nil {
-		slog.ErrorContext(ctx, "environment health check admission failed", "environment_id", envID, "error", err)
+		slog.ErrorContext(ctx, "environment health check admission failed", "environmentId", envID, "error", err)
 		return scheduler.Outcome{}, err
 	}
 	if !admitted {
-		slog.WarnContext(ctx, "environment health check skipped; previous run still in progress", "environment_id", envID)
+		slog.WarnContext(ctx, "environment health check skipped; previous run still in progress", "environmentId", envID)
 		return scheduler.Outcome{Status: scheduler.Skipped}, nil
 	}
 	defer lease.Release(ctx)
@@ -1130,7 +1130,7 @@ func (s *EnvironmentService) runHealthCheckInternal(ctx context.Context, envID s
 	status, err := s.TestConnection(ctx, envID, nil)
 	switch {
 	case err != nil:
-		slog.WarnContext(ctx, "environment health check failed", "environment_id", envID, "status", status, "error", err)
+		slog.WarnContext(ctx, "environment health check failed", "environmentId", envID, "status", status, "error", err)
 		return scheduler.Outcome{Status: scheduler.Retrying}, err
 	case status != "online":
 		return scheduler.Outcome{Status: scheduler.Retrying, Message: "Environment is offline"}, errors.New("environment is offline")
@@ -1151,20 +1151,20 @@ func (s *EnvironmentService) runHealthCheckInternal(ctx context.Context, envID s
 	syncCtx, cancel := context.WithTimeout(ctx, environmentHealthCheckTimeout)
 	defer cancel()
 	if syncRegistriesToEnvironmentErr := s.SyncRegistriesToEnvironment(syncCtx, envID); syncRegistriesToEnvironmentErr != nil {
-		slog.WarnContext(syncCtx, "failed to sync registries during health check", "environment_id", envID, "error", syncRegistriesToEnvironmentErr)
+		slog.WarnContext(syncCtx, "failed to sync registries during health check", "environmentId", envID, "error", syncRegistriesToEnvironmentErr)
 		syncErrors = append(syncErrors, syncRegistriesToEnvironmentErr)
 	}
 	if syncS3DestinationsToEnvironmentErr := s.SyncS3DestinationsToEnvironment(syncCtx, envID); syncS3DestinationsToEnvironmentErr != nil {
-		slog.WarnContext(syncCtx, "failed to sync S3 destinations during health check", "environment_id", envID, "error", syncS3DestinationsToEnvironmentErr)
+		slog.WarnContext(syncCtx, "failed to sync S3 destinations during health check", "environmentId", envID, "error", syncS3DestinationsToEnvironmentErr)
 		syncErrors = append(syncErrors, syncS3DestinationsToEnvironmentErr)
 	}
 	if syncRepositoriesToEnvironmentErr := s.SyncRepositoriesToEnvironment(syncCtx, envID); syncRepositoriesToEnvironmentErr != nil {
-		slog.WarnContext(syncCtx, "failed to sync git repositories during health check", "environment_id", envID, "error", syncRepositoriesToEnvironmentErr)
+		slog.WarnContext(syncCtx, "failed to sync git repositories during health check", "environmentId", envID, "error", syncRepositoriesToEnvironmentErr)
 		syncErrors = append(syncErrors, syncRepositoriesToEnvironmentErr)
 	}
 	if s.variableSyncer != nil {
 		if syncEnvironmentErr := s.variableSyncer.SyncEnvironment(syncCtx, envID); syncEnvironmentErr != nil {
-			slog.WarnContext(syncCtx, "failed to sync global variables during health check", "environment_id", envID, "error", syncEnvironmentErr)
+			slog.WarnContext(syncCtx, "failed to sync global variables during health check", "environmentId", envID, "error", syncEnvironmentErr)
 			syncErrors = append(syncErrors, syncEnvironmentErr)
 		}
 	}
@@ -1217,7 +1217,7 @@ func (s *EnvironmentService) TestConnection(ctx context.Context, id string, cust
 		return status, err
 	}
 	if err != nil {
-		slog.WarnContext(ctx, "Environment custom URL connection test failed", "environment_id", id, "error", err)
+		slog.WarnContext(ctx, "Environment custom URL connection test failed", "environmentId", id, "error", err)
 		return "error", common.ErrEnvironmentConnectionTestFailed
 	}
 	return status, nil
@@ -1236,10 +1236,10 @@ func (s *EnvironmentService) updateEnvironmentStatusInternal(ctx context.Context
 		// the pairing signal. Don't promote on offline/error ticks though, or a transient
 		// blip during initial setup would flip the env out of pending.
 		if currentEnv.IsEdge || status != string(EnvironmentStatusOnline) {
-			slog.DebugContext(ctx, "skipping status update for pending environment", "environment_id", id)
+			slog.DebugContext(ctx, "skipping status update for pending environment", "environmentId", id)
 			return nil
 		}
-		slog.InfoContext(ctx, "promoted pending direct environment to online via reachability check", "environment_id", id)
+		slog.InfoContext(ctx, "promoted pending direct environment to online via reachability check", "environmentId", id)
 	}
 
 	now := time.Now()
@@ -1408,7 +1408,7 @@ func (s *EnvironmentService) SyncRegistriesToRemoteEnvironments(ctx context.Cont
 	for _, env := range envs {
 		if env.AccessToken == nil || *env.AccessToken == "" {
 			slog.DebugContext(ctx, "Skipping registry sync for environment without access token",
-				"environmentID", env.ID,
+				"environmentId", env.ID,
 				"environmentName", env.Name)
 			continue
 		}
@@ -1416,7 +1416,7 @@ func (s *EnvironmentService) SyncRegistriesToRemoteEnvironments(ctx context.Cont
 		if syncRegistriesToEnvironmentErr := s.SyncRegistriesToEnvironment(ctx, env.ID); syncRegistriesToEnvironmentErr != nil {
 			failedCount++
 			slog.WarnContext(ctx, "Failed to sync registries to remote environment",
-				"environmentID", env.ID,
+				"environmentId", env.ID,
 				"environmentName", env.Name,
 				"error", syncRegistriesToEnvironmentErr.Error())
 		}
@@ -1439,12 +1439,12 @@ func (s *EnvironmentService) SyncS3DestinationsToRemoteEnvironments(ctx context.
 	var failedCount int
 	for _, env := range envs {
 		if env.AccessToken == nil || strings.TrimSpace(*env.AccessToken) == "" {
-			slog.DebugContext(ctx, "Skipping S3 destination sync for environment without access token", "environmentID", env.ID, "environmentName", env.Name)
+			slog.DebugContext(ctx, "Skipping S3 destination sync for environment without access token", "environmentId", env.ID, "environmentName", env.Name)
 			continue
 		}
 		if syncS3DestinationsToEnvironmentErr := s.SyncS3DestinationsToEnvironment(ctx, env.ID); syncS3DestinationsToEnvironmentErr != nil {
 			failedCount++
-			slog.WarnContext(ctx, "Failed to sync S3 destinations to remote environment", "environmentID", env.ID, "environmentName", env.Name, "error", syncS3DestinationsToEnvironmentErr)
+			slog.WarnContext(ctx, "Failed to sync S3 destinations to remote environment", "environmentId", env.ID, "environmentName", env.Name, "error", syncS3DestinationsToEnvironmentErr)
 		}
 	}
 

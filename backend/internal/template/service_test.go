@@ -396,7 +396,7 @@ func TestGetTemplate_ForceRefreshesRemoteCacheOnMiss(t *testing.T) {
 
 	service := NewTemplateService(t.Context(), db, client, settingsSvc)
 	service.lookupIP = lookupIP
-	service.safeHTTPClient = service.newSafeHTTPClientInternal()
+	service.safeHTTPClient = service.newSafeHTTPClientInternal(t.Context())
 
 	// Cache starts empty; GetTemplate for a remote ID should force a refresh and find the template.
 	got, err := service.GetTemplate(t.Context(), "remote:reg-1:affine")

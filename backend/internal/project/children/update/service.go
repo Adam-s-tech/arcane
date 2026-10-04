@@ -311,12 +311,12 @@ func (s *Service) recoverRollbackCleanupInternal(ctx context.Context, cleanup *p
 		return fmt.Errorf("load project for rename rollback cleanup: %w", stateErr)
 	}
 	if !found {
-		slog.WarnContext(ctx, "clearing project rename rollback cleanup because project no longer exists", "projectID", cleanup.ProjectID)
+		slog.WarnContext(ctx, "clearing project rename rollback cleanup because project no longer exists", "projectId", cleanup.ProjectID)
 		return s.clearRollbackCleanupInternal(ctx, cleanup.ProjectID)
 	}
 
 	if name != cleanup.OldName || filepath.Clean(path) != filepath.Clean(cleanup.OldPath) {
-		slog.WarnContext(ctx, "clearing project rename rollback cleanup because project state changed", "projectID", cleanup.ProjectID, "projectName", name, "projectPath", path)
+		slog.WarnContext(ctx, "clearing project rename rollback cleanup because project state changed", "projectId", cleanup.ProjectID, "projectName", name, "projectPath", path)
 		return s.clearRollbackCleanupInternal(ctx, cleanup.ProjectID)
 	}
 

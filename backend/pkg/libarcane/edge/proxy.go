@@ -221,7 +221,7 @@ func ProxyHTTPRequest(c *echo.Context, tunnel *AgentTunnel, targetPath string) e
 	}
 
 	slog.DebugContext(ctx, "Proxying request through edge tunnel",
-		"environment_id", tunnel.EnvironmentID,
+		"environmentId", tunnel.EnvironmentID,
 		"method", req.Method,
 		"path", targetPath,
 		"bodyLength", len(body),
@@ -230,7 +230,7 @@ func ProxyHTTPRequest(c *echo.Context, tunnel *AgentTunnel, targetPath string) e
 	status, respHeaders, respBody, err := ProxyRequest(proxyCtx, tunnel, req.Method, targetPath, req.URL.RawQuery, headers, body)
 	if err != nil {
 		slog.ErrorContext(ctx, "Edge tunnel proxy failed",
-			"environment_id", tunnel.EnvironmentID,
+			"environmentId", tunnel.EnvironmentID,
 			"error", err,
 		)
 

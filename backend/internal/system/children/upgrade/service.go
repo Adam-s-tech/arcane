@@ -151,7 +151,7 @@ func (s *Service) TriggerUpgradeAsync(ctx context.Context, user usertypes.Actor,
 	go func() {
 		defer cancel()
 		if _, runPreparedUpgradeErr := s.runPreparedUpgradeInternal(runCtx, prepared); runPreparedUpgradeErr != nil {
-			slog.Error("Background self-upgrade failed", "error", runPreparedUpgradeErr, "targetImage", prepared.targetImage)
+			slog.ErrorContext(ctx, "Background self-upgrade failed", "error", runPreparedUpgradeErr, "targetImage", prepared.targetImage)
 		}
 	}()
 	return nil
@@ -211,7 +211,7 @@ func (s *Service) prepareUpgradeInternal(ctx context.Context, user usertypes.Act
 		"targetImage":   targetImage,
 	}
 	if logUserEventErr := s.eventService.LogUserEvent(ctx, event.EventTypeSystemUpgrade, user.ID, user.Username, metadata); logUserEventErr != nil {
-		slog.Warn("Failed to log upgrade event", "error", logUserEventErr)
+		slog.WarnContext(ctx, "Failed to log upgrade event", "error", logUserEventErr)
 	}
 
 	return &preparedUpgradeInternal{
@@ -228,9 +228,9 @@ func (s *Service) runPreparedUpgradeInternal(ctx context.Context, prepared *prep
 	// Run the upgrader from the image we are upgrading to, so the upgrade CLI
 	// is the new version.
 	upgraderImage := prepared.targetImage
-	slog.Debug("Using upgrader image", "image", upgraderImage)
+	slog.DebugContext(ctx, "Using upgrader image", "image", upgraderImage)
 
-	slog.Info("Spawning upgrade CLI command", "containerName", prepared.containerName, "upgraderImage", upgraderImage)
+	slog.InfoContext(ctx, "Spawning upgrade CLI command", "containerName", prepared.containerName, "upgraderImage", upgraderImage)
 
 	// Spawn the upgrade command in a detached container
 	// This will run independently of the current container
@@ -240,7 +240,7 @@ func (s *Service) runPreparedUpgradeInternal(ctx context.Context, prepared *prep
 	}
 
 	// Pull the upgrader image first to ensure it exists
-	slog.Info("Pulling upgrader image", "image", upgraderImage)
+	slog.InfoContext(ctx, "Pulling upgrader image", "image", upgraderImage)
 
 	localSettings := s.settingsService.GetSettingsConfig()
 	pullCtx, pullCancel := context.WithTimeout(ctx, timeouts.GetDuration(localSettings.DockerImagePullTimeout.AsInt(), timeouts.DefaultDockerImagePull))
@@ -259,16 +259,16 @@ func (s *Service) runPreparedUpgradeInternal(ctx context.Context, prepared *prep
 		return "", fmt.Errorf("failed to complete upgrader image pull: %w", renderJSONMessageStreamErr)
 	}
 	if closeErr := pullReader.Close(); closeErr != nil {
-		slog.Warn("Failed to close upgrader image pull reader", "error", closeErr)
+		slog.WarnContext(ctx, "Failed to close upgrader image pull reader", "error", closeErr)
 	}
-	slog.Info("Upgrader image pulled successfully", "image", upgraderImage)
+	slog.InfoContext(ctx, "Upgrader image pulled successfully", "image", upgraderImage)
 
 	// Try to get the /app/data mount from current container so upgrade logs persist.
 	appDataMount := dockerutils.MountForDestination(prepared.current.Mounts, libarcane.UpgradeLogDirectory, libarcane.UpgradeLogDirectory)
 	if appDataMount == nil {
-		slog.Warn("Could not detect /app/data mount; upgrader logs may not persist")
+		slog.WarnContext(ctx, "Could not detect /app/data mount; upgrader logs may not persist")
 	} else {
-		slog.Debug("Mounting /app/data into upgrader container", "type", appDataMount.Type, "source", appDataMount.Source)
+		slog.DebugContext(ctx, "Mounting /app/data into upgrader container", "type", appDataMount.Type, "source", appDataMount.Source)
 	}
 
 	// Create the upgrader container config
@@ -317,7 +317,7 @@ func (s *Service) runPreparedUpgradeInternal(ctx context.Context, prepared *prep
 
 	keepUpgraderContainer := strings.EqualFold(strings.TrimSpace(os.Getenv("ARCANE_UPGRADE_KEEP_CONTAINER")), "true")
 	if keepUpgraderContainer {
-		slog.Info("Keeping upgrader container after exit (ARCANE_UPGRADE_KEEP_CONTAINER=true)")
+		slog.InfoContext(ctx, "Keeping upgrader container after exit (ARCANE_UPGRADE_KEEP_CONTAINER=true)")
 	}
 
 	hostConfig := &container.HostConfig{
@@ -356,7 +356,7 @@ func (s *Service) runPreparedUpgradeInternal(ctx context.Context, prepared *prep
 		return "", fmt.Errorf("start upgrader container: %w", containerStartErr)
 	}
 
-	slog.Info("Upgrade container started", "upgraderId", resp.ID[:12], "upgraderName", upgraderName)
+	slog.InfoContext(ctx, "Upgrade container started", "upgraderId", resp.ID[:12], "upgraderName", upgraderName)
 
 	return resp.ID, nil
 }
@@ -375,7 +375,7 @@ func hasSELinuxLabelOptInternal(securityOpts []string) bool {
 func daemonHasSELinuxEnabledInternal(ctx context.Context, dockerClient *client.Client) bool {
 	infoResult, err := dockerClient.Info(ctx, client.InfoOptions{})
 	if err != nil {
-		slog.Debug("Failed to query daemon info for SELinux detection", "error", err)
+		slog.DebugContext(ctx, "Failed to query daemon info for SELinux detection", "error", err)
 		return false
 	}
 	return slices.Contains(infoResult.Info.SecurityOptions, "name=selinux")

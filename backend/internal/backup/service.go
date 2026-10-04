@@ -964,7 +964,7 @@ func (e *Engine) SubmitDurableRun(ctx context.Context, command backup.DurableRun
 	readErr := e.service.GetState(ctx, backupRunTypeInternal, command.RunID, &state)
 	switch {
 	case readErr == nil && sameDurableCommandInternal(state.Command, command):
-		slog.WarnContext(ctx, "backup run accepted after submit error", "runID", command.RunID, "error", err)
+		slog.WarnContext(ctx, "backup run accepted after submit error", "runId", command.RunID, "error", err)
 		return nil
 	case readErr == nil || errors.Is(readErr, actor.ErrStateNotFound):
 		e.mu.Lock()
@@ -973,7 +973,7 @@ func (e *Engine) SubmitDurableRun(ctx context.Context, command backup.DurableRun
 		return err
 	default:
 		// Keep admission parked until reconciliation can read the intent back.
-		slog.WarnContext(ctx, "backup run outcome unresolved", "runID", command.RunID, "error", err, "readError", readErr)
+		slog.WarnContext(ctx, "backup run outcome unresolved", "runId", command.RunID, "error", err, "readError", readErr)
 		e.mu.Lock()
 		e.unresolved[command.RunID] = command
 		e.mu.Unlock()
@@ -1016,7 +1016,7 @@ func (a *backupRunActorInternal) Invoke(ctx context.Context, _ string, data acto
 	}
 	// The intent is persisted, so ReconcileDispatches repairs a failed dispatch.
 	if _, _, dispatchErr := a.service.Dispatch(ctx, backupRunTypeInternal, a.id, "execute", nil, actor.WithIdempotencyKey(a.id)); dispatchErr != nil {
-		slog.WarnContext(ctx, "dispatch accepted backup run", "runID", a.id, "error", dispatchErr)
+		slog.WarnContext(ctx, "dispatch accepted backup run", "runId", a.id, "error", dispatchErr)
 	}
 	return nil, nil
 }

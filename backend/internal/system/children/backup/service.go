@@ -522,7 +522,7 @@ func (s *Service) executeBackupInternal(ctx context.Context, prepared *preparedS
 		}
 		cleanupCtx := context.WithoutCancel(ctx)
 		if forgetErr := s.engine.ForgetSnapshots(cleanupCtx, dockerClient, localRepository, recoveryKey, []string{stagedSnapshot.ID}); forgetErr != nil {
-			slog.WarnContext(cleanupCtx, "failed to remove staged system recovery snapshot", "snapshot_id", stagedSnapshot.ID, "error", forgetErr)
+			slog.WarnContext(cleanupCtx, "failed to remove staged system recovery snapshot", "snapshotId", stagedSnapshot.ID, "error", forgetErr)
 		}
 	}()
 	if localEnabled {

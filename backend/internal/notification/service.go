@@ -94,8 +94,8 @@ type NotificationTarget struct {
 func logManagerDispatchNotificationInternal(ctx context.Context, target NotificationTarget, kind notification.DispatchKind) {
 	slog.InfoContext(ctx,
 		"Manager dispatching notification on behalf of agent",
-		"environment_id", target.EnvironmentID,
-		"environment_name", target.EnvironmentName,
+		"environmentId", target.EnvironmentID,
+		"environmentName", target.EnvironmentName,
 		"kind", string(kind),
 	)
 }

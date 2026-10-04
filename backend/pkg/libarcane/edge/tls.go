@@ -332,7 +332,7 @@ func EnsureAgentMTLSAssets(ctx context.Context, cfg *Config) error {
 			setAgentMTLSAssetPathsInternal(cfg, assetsDir)
 			return nil
 		}
-		slog.WarnContext(ctx, "Existing edge mTLS assets need renewal; enrolling new assets", "reason", reason, "cert_path", certPath)
+		slog.WarnContext(ctx, "Existing edge mTLS assets need renewal; enrolling new assets", "reason", reason, "certPath", certPath)
 	}
 
 	if enrollAgentMTLSAssetsErr := enrollAgentMTLSAssetsInternal(ctx, cfg, assetsDir, certPath, keyPath); enrollAgentMTLSAssetsErr != nil {
@@ -413,6 +413,7 @@ func enrollAgentMTLSAssetsInternal(ctx context.Context, cfg *Config, assetsDir, 
 }
 
 func buildManagerClientTLSConfigInternal(cfg *Config) (*tls.Config, error) {
+	ctx := context.Background() //nolint:forbidigo // TLS configuration is built at startup without a request context.
 	if cfg == nil || !managerUsesTLSInternal(cfg) {
 		return nil, nil
 	}
@@ -441,7 +442,7 @@ func buildManagerClientTLSConfigInternal(cfg *Config) (*tls.Config, error) {
 		if needsEnrollment {
 			err := fmt.Errorf("edge mTLS client certificate is unusable: %s", reason)
 			if mode == EdgeMTLSModeOptional {
-				slog.Warn("Ignoring unusable optional edge mTLS client certificate; falling back to token auth", "cert_path", certPath, "error", err.Error())
+				slog.WarnContext(ctx, "Ignoring unusable optional edge mTLS client certificate; falling back to token auth", "certPath", certPath, "error", err.Error())
 				return tlsConfig, nil
 			}
 			return nil, err
@@ -449,7 +450,7 @@ func buildManagerClientTLSConfigInternal(cfg *Config) (*tls.Config, error) {
 		cert, err := tls.LoadX509KeyPair(certPath, keyPath)
 		if err != nil {
 			if mode == EdgeMTLSModeOptional {
-				slog.Warn("Failed to load optional edge mTLS client certificate; falling back to token auth", "cert_path", certPath, "error", err.Error())
+				slog.WarnContext(ctx, "Failed to load optional edge mTLS client certificate; falling back to token auth", "certPath", certPath, "error", err.Error())
 				return tlsConfig, nil
 			}
 			return nil, fmt.Errorf("failed to load edge mTLS client certificate: %w", err)
@@ -532,7 +533,9 @@ func loadCertPoolInternal(caFile string) (*x509.CertPool, error) {
 func loadSystemOrCustomCertPoolInternal(caFile string) (*x509.CertPool, error) {
 	pool, err := x509.SystemCertPool()
 	if err != nil || pool == nil {
-		slog.Warn("Failed to load system certificate pool; falling back to configured edge mTLS CA only", "error", err)
+		ctx := context.Background() //nolint:forbidigo // TLS configuration is built at startup without a request context.
+		slog.WarnContext(ctx, "Failed to load system certificate pool; falling back to configured edge mTLS CA only",
+			"error", err)
 		pool = x509.NewCertPool()
 	}
 
@@ -775,7 +778,7 @@ func ensureManagerCAInternal(ctx context.Context, assetsDir string) (string, str
 		return "", "", false, writeCAKeyFileErr
 	}
 
-	slog.Info("generated edge mTLS CA", "cert_path", caCertPath)
+	slog.InfoContext(ctx, "generated edge mTLS CA", "certPath", caCertPath)
 	return caCertPath, caKeyPath, true, nil
 }
 

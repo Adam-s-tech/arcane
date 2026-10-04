@@ -361,7 +361,7 @@ func stageCommitFilesInternal(ctx context.Context, checkout *WriteCheckout, work
 // pushBranchInternal pushes the checkout branch without force and verifies the
 // remote now points at commit.
 func (c *Client) pushBranchInternal(ctx context.Context, checkout *WriteCheckout, commit string, auth AuthConfig) error {
-	authMethod, err := c.getAuthInternal(checkout.url, auth)
+	authMethod, err := c.getAuthInternal(ctx, checkout.url, auth)
 	if err != nil {
 		return err
 	}

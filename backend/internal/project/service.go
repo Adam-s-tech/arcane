@@ -212,7 +212,7 @@ func (s *ProjectService) CreateGitOpsManagedProject(ctx context.Context, gitOpsS
 	project.GitOpsManagedBy = &gitOpsSync.ID
 	s.composeNames.putInternal(projects.NormalizeProjectName(project.Name), project.ID)
 	if err := s.reconcileComposeTagsForProjectInternal(ctx, project); err != nil {
-		slog.WarnContext(ctx, "failed to reconcile Compose project tags during GitOps project creation", "projectID", project.ID, "error", err)
+		slog.WarnContext(ctx, "failed to reconcile Compose project tags during GitOps project creation", "projectId", project.ID, "error", err)
 	}
 	logEvent := true
 	if len(logEventOptions) > 0 {
@@ -409,7 +409,7 @@ func (s *ProjectService) logProjectEventInternal(ctx context.Context, eventType 
 		return
 	}
 	if logErr := s.eventService.LogProjectEvent(ctx, eventType, projectID, projectName, user.ID, user.Username, "0", metadata); logErr != nil {
-		slog.ErrorContext(ctx, action, "error", logErr)
+		slog.ErrorContext(ctx, "could not log project event", "action", action, "error", logErr)
 	}
 }
 
@@ -511,7 +511,7 @@ func (s *ProjectService) EnsureProjectPathUnderRoot(ctx context.Context, proj *P
 	}
 	candidate := filepath.Join(projectsDirectory, dirName)
 
-	slog.WarnContext(ctx, "Normalizing project path to projects root", "projectID", proj.ID, "oldPath", proj.Path, "newPath", candidate, "root", projectsDirectory)
+	slog.WarnContext(ctx, "Normalizing project path to projects root", "projectId", proj.ID, "oldPath", proj.Path, "newPath", candidate, "root", projectsDirectory)
 	proj.Path = filepath.Clean(candidate)
 
 	if persist {
@@ -621,7 +621,7 @@ func (s *ProjectService) resolveProjectComposeFileUncachedInternal(ctx context.C
 		if dirErr != nil {
 			// The .env.global layer is skipped for an empty projects directory;
 			// keep resolution working but surface the misconfiguration.
-			slog.WarnContext(ctx, "failed to resolve projects directory for compose selection", "projectID", proj.ID, "error", dirErr)
+			slog.WarnContext(ctx, "failed to resolve projects directory for compose selection", "projectId", proj.ID, "error", dirErr)
 		}
 	}
 	if files, selErr := projects.ComposeFileEnvSelection(ctx, projectsDirectory, proj.Path); selErr != nil {
@@ -777,10 +777,10 @@ func (s *ProjectService) refreshComposeProjectNameInternal(ctx context.Context, 
 	meta, err := s.loadComposeMetadataForSyncInternal(ctx, proj.Path, dirName)
 	if err != nil {
 		if errors.Is(err, common.ErrProjectEnvUnreadable) {
-			slog.DebugContext(ctx, "skipped compose project name refresh; project env is unreadable", "projectID", proj.ID, "path", proj.Path, "error", err)
+			slog.DebugContext(ctx, "skipped compose project name refresh; project env is unreadable", "projectId", proj.ID, "path", proj.Path, "error", err)
 			return
 		}
-		slog.WarnContext(ctx, "failed to refresh compose project name", "projectID", proj.ID, "path", proj.Path, "error", err)
+		slog.WarnContext(ctx, "failed to refresh compose project name", "projectId", proj.ID, "path", proj.Path, "error", err)
 		return
 	}
 
@@ -801,7 +801,7 @@ func (s *ProjectService) refreshComposeProjectNameInternal(ctx context.Context, 
 		Model(&Project{}).
 		Where("id = ?", proj.ID).
 		Updates(updates).Error; persistComposeNameErr != nil {
-		slog.WarnContext(ctx, "failed to persist refreshed compose project name", "projectID", proj.ID, "error", persistComposeNameErr)
+		slog.WarnContext(ctx, "failed to persist refreshed compose project name", "projectId", proj.ID, "error", persistComposeNameErr)
 		return
 	}
 
@@ -901,8 +901,8 @@ func (s *LifecycleService) executePreDeployInternal(ctx context.Context, project
 	timeout := s.hooks.Timeout(ctx, syncRecord.PreDeployTimeoutSec)
 
 	slog.InfoContext(ctx, "running pre-deploy lifecycle hook",
-		"projectID", project.ID,
-		"syncID", syncRecord.ID,
+		"projectId", project.ID,
+		"syncId", syncRecord.ID,
 		"scriptPath", scriptPath,
 		"runnerImage", runnerImage,
 		"timeoutSec", int(timeout/time.Second),
@@ -951,7 +951,7 @@ func (s *LifecycleService) persistLastRunInternal(ctx context.Context, syncID, s
 			"pre_deploy_last_run_output": output,
 		}).Error
 	if err != nil {
-		slog.WarnContext(ctx, "failed to persist lifecycle last-run state", "syncID", syncID, "error", err)
+		slog.WarnContext(ctx, "failed to persist lifecycle last-run state", "syncId", syncID, "error", err)
 	}
 }
 
@@ -1000,7 +1000,7 @@ func (s *LifecycleService) emitLifecycleEventInternal(
 		Metadata:      metadata,
 	})
 	if err != nil {
-		slog.WarnContext(ctx, "failed to emit lifecycle.execute event", "syncID", syncRecord.ID, "error", err)
+		slog.WarnContext(ctx, "failed to emit lifecycle.execute event", "syncId", syncRecord.ID, "error", err)
 	}
 }
 
@@ -1118,7 +1118,7 @@ func (s *ProjectService) updateProjectServicesInternal(ctx context.Context, proj
 	}
 	dependents, stoppedDependents := s.deployment.NamespaceDependents(ctx, compProj, servicesToUpdate)
 	if len(dependents)+len(stoppedDependents) > 0 {
-		slog.InfoContext(ctx, "recreating namespace dependents with updated services", "projectID", projectID, "services", servicesToUpdate, "dependents", dependents, "stoppedDependents", stoppedDependents)
+		slog.InfoContext(ctx, "recreating namespace dependents with updated services", "projectId", projectID, "services", servicesToUpdate, "dependents", dependents, "stoppedDependents", stoppedDependents)
 		if compProj, _, err = s.loadComposeProjectForProjectInternal(ctx, projectFromDb, prepare, slices.Concat(servicesToUpdate, dependents, stoppedDependents)...); err != nil {
 			return fmt.Errorf("failed to load compose project with dependents: %w", err)
 		}
@@ -1134,7 +1134,7 @@ func (s *ProjectService) updateProjectServicesInternal(ctx context.Context, proj
 	credentials, err := s.ResolveRegistryCredentials(ctx)
 	if err != nil {
 		if statusErr := s.updateProjectStatusInternal(ctx, projectID, previousStatus); statusErr != nil {
-			slog.ErrorContext(ctx, "UpdateProjectServices: failed to restore project status after credential lookup failure", "projectID", projectID, "error", statusErr)
+			slog.ErrorContext(ctx, "UpdateProjectServices: failed to restore project status after credential lookup failure", "projectId", projectID, "error", statusErr)
 		}
 		return fmt.Errorf("resolve registry credentials: %w", err)
 	}
@@ -1146,7 +1146,7 @@ func (s *ProjectService) updateProjectServicesInternal(ctx context.Context, proj
 		AuthConfigs: s.composeRegistryAuthConfigsInternal(ctx), WaitTimeout: timeouts.GetDuration(s.settingsService.GetSettingsConfig().DeployWaitTimeout.AsInt(), timeouts.DefaultDeployWait),
 		RestoreBeforeMutation: func(ctx context.Context) {
 			if statusErr := s.updateProjectStatusInternal(ctx, projectID, previousStatus); statusErr != nil {
-				slog.ErrorContext(ctx, "failed to restore project status before service update", "projectID", projectID, "error", statusErr)
+				slog.ErrorContext(ctx, "failed to restore project status before service update", "projectId", projectID, "error", statusErr)
 			}
 		},
 		Recover: func(ctx context.Context) { s.restoreProjectStatusAfterFailedDeployInternal(ctx, projectID) },
@@ -1299,7 +1299,7 @@ func (s *ProjectService) DeployProject(ctx context.Context, projectID string, us
 
 	err = s.updateProjectStatusandCountsInternal(ctx, projectID, ProjectStatusRunning)
 	if err != nil {
-		slog.Error("failed to update project status and counts after deploy", "projectID", projectID, "error", err)
+		slog.ErrorContext(ctx, "failed to update project status and counts after deploy", "projectId", projectID, "error", err)
 	}
 	return err
 }
@@ -1406,7 +1406,7 @@ func (
 		RunningCount: 0,
 	}
 
-	if applyProjectWorkspaceChangesErr := projects.ApplyProjectWorkspaceChanges(projectPath, manifest.FileChanges, uploads, projects.ProjectWorkspaceApplyOptions{
+	if applyProjectWorkspaceChangesErr := projects.ApplyProjectWorkspaceChanges(ctx, projectPath, manifest.FileChanges, uploads, projects.ProjectWorkspaceApplyOptions{
 		MaxDepth:         s.config.ProjectWorkspaceMaxDepth,
 		MaxEntries:       s.config.ProjectWorkspaceMaxEntries,
 		MaxFileSizeBytes: workspacepkg.MaxFileSizeBytes(s.config.ProjectWorkspaceMaxFileSizeMB),
@@ -1486,10 +1486,10 @@ func (
 
 func (s *ProjectService) DestroyProject(ctx context.Context, projectID string, removeFiles, removeVolumes bool, user usertypes.Actor) error {
 	slog.DebugContext(ctx, "DestroyProject service called",
-		"projectID", projectID,
+		"projectId", projectID,
 		"removeFiles", removeFiles,
 		"removeVolumes", removeVolumes,
-		"userID", user.ID,
+		"userId", user.ID,
 		"username", user.Username)
 
 	proj, err := s.GetProjectFromDatabaseByID(ctx, projectID)
@@ -1671,13 +1671,13 @@ func (s *ProjectService) restoreProjectStatusAfterFailedDeployInternal(ctx conte
 		if updateErr == nil {
 			return
 		}
-		slog.WarnContext(ctx, "failed to restore project status after deploy failure", "projectID", projectID, "error", updateErr)
+		slog.WarnContext(ctx, "failed to restore project status after deploy failure", "projectId", projectID, "error", updateErr)
 	} else {
-		slog.WarnContext(ctx, "failed to inspect project services after deploy failure", "projectID", projectID, "error", err)
+		slog.WarnContext(ctx, "failed to inspect project services after deploy failure", "projectId", projectID, "error", err)
 	}
 
 	if updateErr := s.updateProjectStatusInternal(ctx, projectID, ProjectStatusStopped); updateErr != nil {
-		slog.WarnContext(ctx, "failed to set stopped status after deploy failure", "projectID", projectID, "error", updateErr)
+		slog.WarnContext(ctx, "failed to set stopped status after deploy failure", "projectId", projectID, "error", updateErr)
 	}
 }
 
@@ -1723,7 +1723,7 @@ func (s *ProjectService) RestartProject(ctx context.Context, projectID string, s
 func (s *ProjectService) updateProjectStatusandCountsInternal(ctx context.Context, projectID string, status ProjectStatus) error {
 	services, err := s.projectServicesInternal(ctx, projectID)
 	if err != nil {
-		slog.Error("loading project services failed during status update", "projectID", projectID, "error", err)
+		slog.ErrorContext(ctx, "loading project services failed during status update", "projectId", projectID, "error", err)
 		return s.updateProjectStatusInternal(ctx, projectID, status)
 	}
 
@@ -1765,7 +1765,7 @@ func (s *ProjectService) GetProjectContent(ctx context.Context, projectID string
 	case errors.Is(composeErr, common.ErrProjectEnvUnreadable):
 		projectsDirectory, dirErr := s.GetProjectsDirectory(ctx)
 		if dirErr != nil {
-			slog.DebugContext(ctx, "failed to resolve projects directory for compose identification", "projectID", proj.ID, "error", dirErr)
+			slog.DebugContext(ctx, "failed to resolve projects directory for compose identification", "projectId", proj.ID, "error", dirErr)
 		}
 		composePath, composeErr = projects.DetectComposeFile(ctx, projectsDirectory, proj.Path)
 		if composeErr != nil && (!errors.Is(composeErr, common.ErrProjectEnvUnreadable) || composePath == "") {
@@ -1805,7 +1805,7 @@ func (s *ProjectService) GetProjectDetails(ctx context.Context, projectID string
 	if projectsDirErr != nil {
 		// Relative paths and the .env.global selection layer degrade without a
 		// projects directory; keep the details response intact but log it.
-		slog.WarnContext(ctx, "failed to resolve projects directory for project details", "projectID", projectID, "error", projectsDirErr)
+		slog.WarnContext(ctx, "failed to resolve projects directory for project details", "projectId", projectID, "error", projectsDirErr)
 	}
 
 	var resp projecttypes.Details
@@ -1843,7 +1843,7 @@ func (s *ProjectService) GetProjectDetails(ctx context.Context, projectID string
 	composeSelection, selErr := projects.ComposeFileEnvSelection(ctx, projectsDir, proj.Path)
 	if selErr != nil {
 		selLogLevel := kit.Ternary(errors.Is(selErr, common.ErrProjectEnvUnreadable), slog.LevelDebug, slog.LevelWarn)
-		slog.Log(ctx, selLogLevel, "failed to resolve COMPOSE_FILE selection for project details", "projectID", proj.ID, "path", proj.Path, "error", selErr)
+		slog.Log(ctx, selLogLevel, "failed to resolve COMPOSE_FILE selection for project details", "projectId", proj.ID, "path", proj.Path, "error", selErr)
 		composeSelection = nil
 	}
 	resp.ComposeFiles = projectdetails.ComposeSelectionRelativePaths(proj.Path, composeSelection)
@@ -1915,7 +1915,7 @@ func (s *ProjectService) enrichProjectUpdateInfoInternal(ctx context.Context, re
 	if len(imageRefs) > 0 && s.imageService != nil {
 		lookupResult, err := s.imageService.GetUpdateInfoByImageRefs(ctx, imageRefs)
 		if err != nil {
-			slog.WarnContext(ctx, "failed to fetch project update info", "projectID", resp.ID, "projectName", resp.Name, "error", err)
+			slog.WarnContext(ctx, "failed to fetch project update info", "projectId", resp.ID, "projectName", resp.Name, "error", err)
 		} else {
 			updateInfoByRef = lookupResult
 		}
@@ -2041,7 +2041,7 @@ func (
 ) {
 	composeProject, err := s.getCachedComposeProjectInternal(ctx, &proj, env)
 	if err != nil {
-		slog.WarnContext(ctx, "failed to resolve project services for update summary", "projectID", proj.ID, "projectName", proj.Name, "error", err)
+		slog.WarnContext(ctx, "failed to resolve project services for update summary", "projectId", proj.ID, "projectName", proj.Name, "error", err)
 		refs := projects.ParseImageRefsJSON(proj.ImageRefsJSON)
 		return slices.DeleteFunc(refs, func(ref string) bool { return hiddenRuntimeRefs[ref] }), nil
 	}
@@ -2224,11 +2224,11 @@ func (s *ProjectService) enrichComposeDetailsInternal(ctx context.Context, proj 
 		// name it for the UI and skip every enrichment that needs interpolation.
 		projectsDirectory, dirErr := s.GetProjectsDirectory(ctx)
 		if dirErr != nil {
-			slog.DebugContext(ctx, "failed to resolve projects directory for compose identification", "projectID", proj.ID, "error", dirErr)
+			slog.DebugContext(ctx, "failed to resolve projects directory for compose identification", "projectId", proj.ID, "error", dirErr)
 		}
 		identified, detectErr := projects.DetectComposeFile(ctx, projectsDirectory, proj.Path)
 		if detectErr != nil && (!errors.Is(detectErr, common.ErrProjectEnvUnreadable) || identified == "") {
-			slog.WarnContext(ctx, "failed to identify project compose file", "projectID", proj.ID, "error", detectErr)
+			slog.WarnContext(ctx, "failed to identify project compose file", "projectId", proj.ID, "error", detectErr)
 			return
 		}
 		if identified != "" {
@@ -2374,7 +2374,7 @@ func (s *ProjectService) ListProjects(ctx context.Context, params pagination.Que
 	s.enrichProjectsWithUpdateInfoInternal(ctx, projectsArray, result, true, env)
 
 	slog.DebugContext(ctx, "Completed ListProjects request",
-		"result_count", len(result))
+		"resultCount", len(result))
 
 	return result, paginationResp, nil
 }
@@ -2628,7 +2628,7 @@ func (s *ProjectService) ProjectMetadata(ctx context.Context, p Project, env *pr
 		return meta
 	}
 	if setErr := s.metaCache.Set(p.ID, fingerprint, p.Path, env.projectsDirectory, composeFile, meta.ComposeFiles, meta.EnvFiles, meta); setErr != nil {
-		slog.DebugContext(ctx, "failed to cache Compose metadata", "projectID", p.ID, "error", setErr)
+		slog.DebugContext(ctx, "failed to cache Compose metadata", "projectId", p.ID, "error", setErr)
 	}
 
 	return meta
@@ -2660,11 +2660,11 @@ func (s *ProjectService) refreshProjectImageRefsInternal(ctx context.Context, pr
 				"image_refs_json":       "",
 				"build_image_refs_json": nil,
 			}).Error; dbErr != nil {
-			slog.WarnContext(ctx, "failed to clear stale project image refs", "projectID", proj.ID, "error", dbErr)
+			slog.WarnContext(ctx, "failed to clear stale project image refs", "projectId", proj.ID, "error", dbErr)
 		}
 		proj.ImageRefsJSON = ""
 		proj.BuildImageRefsJSON = nil
-		slog.WarnContext(ctx, "failed to refresh project image refs", "projectID", proj.ID, "projectName", proj.Name, "error", err)
+		slog.WarnContext(ctx, "failed to refresh project image refs", "projectId", proj.ID, "projectName", proj.Name, "error", err)
 		return
 	}
 	imageRefsJSON := projects.MarshalImageRefsJSON(refs)
@@ -2676,7 +2676,7 @@ func (s *ProjectService) refreshProjectImageRefsInternal(ctx context.Context, pr
 			"image_refs_json":       imageRefsJSON,
 			"build_image_refs_json": buildImageRefsJSON,
 		}).Error; persistImageRefsErr != nil {
-		slog.WarnContext(ctx, "failed to persist project image refs", "projectID", proj.ID, "error", persistImageRefsErr)
+		slog.WarnContext(ctx, "failed to persist project image refs", "projectId", proj.ID, "error", persistImageRefsErr)
 		return
 	}
 	proj.ImageRefsJSON = imageRefsJSON
@@ -2697,7 +2697,7 @@ func (s *ProjectService) HandleProjectFilesChanged(ctx context.Context, paths []
 		s.invalidateProjectCachesInternal(affected[i].ID)
 		s.refreshProjectImageRefsInternal(ctx, &affected[i])
 		if reconcileComposeTagsForProjectErr := s.reconcileComposeTagsForProjectInternal(ctx, &affected[i]); reconcileComposeTagsForProjectErr != nil {
-			slog.WarnContext(ctx, "failed to reconcile Compose project tags after file change", "projectID", affected[i].ID, "error", reconcileComposeTagsForProjectErr)
+			slog.WarnContext(ctx, "failed to reconcile Compose project tags after file change", "projectId", affected[i].ID, "error", reconcileComposeTagsForProjectErr)
 		}
 	}
 }
@@ -2840,7 +2840,7 @@ func (s *ProjectService) upsertProjectForDir(ctx context.Context, dirName, dirPa
 	if serviceCountErr == nil && existing.ServiceCount != composeMetadata.ServiceCount {
 		updates["service_count"] = composeMetadata.ServiceCount
 	} else if serviceCountErr != nil {
-		slog.Log(ctx, serviceCountLogLevel, "failed to refresh compose service count during project sync", "projectID", existing.ID, "path", dirPath, "error", serviceCountErr)
+		slog.Log(ctx, serviceCountLogLevel, "failed to refresh compose service count during project sync", "projectId", existing.ID, "path", dirPath, "error", serviceCountErr)
 	}
 	if serviceCountErr == nil && mo.PointerToOption(existing.ComposeProjectName) != mo.PointerToOption(composeMetadata.ComposeProjectName) {
 		updates["compose_project_name"] = composeMetadata.ComposeProjectName
@@ -2986,7 +2986,7 @@ func (s *ProjectService) evaluateProjectComposeFileInternal(ctx context.Context,
 	// keep the record and warn instead.
 	if !errors.Is(err, common.ErrComposeFileNotFound) {
 		slog.WarnContext(ctx, "project directory present but compose file unresolved during cleanup; keeping DB record",
-			"projectID", p.ID, "path", p.Path, "error", err)
+			"projectId", p.ID, "path", p.Path, "error", err)
 		return mo.None[projectCleanupDecision]()
 	}
 
@@ -3010,7 +3010,7 @@ func (s *ProjectService) deleteProjectDuringCleanupInternal(ctx context.Context,
 		return
 	}
 
-	slog.WarnContext(ctx, reason, logAttrs...)
+	slog.WarnContext(ctx, "deleted project during filesystem cleanup", append(logAttrs, "reason", reason)...)
 }
 
 // ApplyGitSyncEnvToDirectory applies the same managed three-file environment
@@ -3054,7 +3054,7 @@ func (s *ProjectService) UpdateProject(ctx context.Context, projectID string, na
 		if renameRequested {
 			return nil, recoverProjectRenameJournalForProjectErr
 		}
-		slog.WarnContext(ctx, "project rename journal recovery failed before non-rename update; continuing", "projectID", projectID, "error", recoverProjectRenameJournalForProjectErr)
+		slog.WarnContext(ctx, "project rename journal recovery failed before non-rename update; continuing", "projectId", projectID, "error", recoverProjectRenameJournalForProjectErr)
 	} else {
 		proj, projectsDirectory, recoverProjectRenameJournalForProjectErr = s.getProjectForUpdate(ctx, projectID)
 		if recoverProjectRenameJournalForProjectErr != nil {
@@ -3119,7 +3119,7 @@ func (s *ProjectService) UpdateProject(ctx context.Context, projectID string, na
 		s.FilesChanged.Publish(proj.ID)
 	}
 
-	slog.InfoContext(ctx, "project updated", "projectID", proj.ID, "name", proj.Name)
+	slog.InfoContext(ctx, "project updated", "projectId", proj.ID, "name", proj.Name)
 	return &proj, nil
 }
 
@@ -3268,10 +3268,10 @@ func (s *ProjectService) refreshProjectAfterContentUpdateInternal(ctx context.Co
 	s.refreshComposeProjectNameInternal(ctx, proj)
 	s.refreshProjectImageRefsInternal(ctx, proj)
 	if err := s.reconcileComposeTagsForProjectInternal(ctx, proj); err != nil {
-		slog.WarnContext(ctx, "failed to reconcile Compose project tags after project update", "projectID", proj.ID, "error", err)
+		slog.WarnContext(ctx, "failed to reconcile Compose project tags after project update", "projectId", proj.ID, "error", err)
 	}
 	if err := s.updateProjectStatusandCountsInternal(ctx, proj.ID, proj.Status); err != nil {
-		slog.WarnContext(ctx, "failed to update service counts after compose edit", "projectID", proj.ID, "error", err)
+		slog.WarnContext(ctx, "failed to update service counts after compose edit", "projectId", proj.ID, "error", err)
 	}
 }
 
@@ -3343,12 +3343,12 @@ func (
 	s.refreshComposeProjectNameInternal(ctx, &proj)
 	s.refreshProjectImageRefsInternal(ctx, &proj)
 	if reconcileComposeTagsForProjectErr := s.reconcileComposeTagsForProjectInternal(ctx, &proj); reconcileComposeTagsForProjectErr != nil {
-		slog.WarnContext(ctx, "failed to reconcile Compose project tags after git sync", "projectID", proj.ID, "error", reconcileComposeTagsForProjectErr)
+		slog.WarnContext(ctx, "failed to reconcile Compose project tags after git sync", "projectId", proj.ID, "error", reconcileComposeTagsForProjectErr)
 	}
 
 	// Recalculate service counts and status after compose file sync
 	if updateProjectStatusandCountsErr := s.updateProjectStatusandCountsInternal(ctx, proj.ID, proj.Status); updateProjectStatusandCountsErr != nil {
-		slog.WarnContext(ctx, "failed to update service counts after git sync", "projectID", proj.ID, "error", updateProjectStatusandCountsErr)
+		slog.WarnContext(ctx, "failed to update service counts after git sync", "projectId", proj.ID, "error", updateProjectStatusandCountsErr)
 	}
 
 	after := s.readGitSyncProjectContentInternal(ctx, proj.ID)
@@ -3361,7 +3361,7 @@ func (
 func (s *ProjectService) readGitSyncProjectContentInternal(ctx context.Context, projectID string) gitSyncProjectContentInternal {
 	compose, env, override, err := s.GetProjectContent(ctx, projectID)
 	if err != nil {
-		slog.WarnContext(ctx, "failed to read project content for git sync change detection; treating as changed", "projectID", projectID, "error", err)
+		slog.WarnContext(ctx, "failed to read project content for git sync change detection; treating as changed", "projectId", projectID, "error", err)
 		return gitSyncProjectContentInternal{unreadable: true}
 	}
 	return gitSyncProjectContentInternal{compose: compose, env: env, override: override}
@@ -3624,7 +3624,7 @@ func (s *ProjectService) ensureProjectStoppedForRenameInternal(ctx context.Conte
 
 	services, err := s.projectServicesInternal(ctx, proj.ID)
 	if err != nil {
-		slog.WarnContext(ctx, "failed to resolve project status before rename", "projectID", proj.ID, "error", err)
+		slog.WarnContext(ctx, "failed to resolve project status before rename", "projectId", proj.ID, "error", err)
 		return fmt.Errorf("project must be stopped before renaming (current status: %s): failed to verify live status: %w", proj.Status, err)
 	}
 
@@ -3746,7 +3746,7 @@ func (s *ProjectService) GetProjectWorkspace(ctx context.Context, projectID stri
 	if ownedErr != nil {
 		ownedPaths = nil
 	}
-	return s.workspace.Read(proj.Path, s.workspaceComposeFileNameInternal(ctx, proj), ownedPaths)
+	return s.workspace.Read(ctx, proj.Path, s.workspaceComposeFileNameInternal(ctx, proj), ownedPaths)
 }
 
 func (s *ProjectService) GetProjectWorkspaceFile(ctx context.Context, projectID, relativePath string) (*workspacetypes.FileContent, error) {

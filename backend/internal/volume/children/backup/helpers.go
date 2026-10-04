@@ -54,7 +54,7 @@ type backupStorageMountInternal struct {
 	requiresEnsure bool
 }
 
-func resolveBackupStorageMountFromMountsInternal(mounts []container.MountPoint, target string, readOnly bool) mo.Option[backupStorageMountInternal] {
+func resolveBackupStorageMountFromMountsInternal(ctx context.Context, mounts []container.MountPoint, target string, readOnly bool) mo.Option[backupStorageMountInternal] {
 	mirroredMount := docker.MountForDestination(mounts, "/backups", target)
 	if mirroredMount == nil {
 		return mo.None[backupStorageMountInternal]()
@@ -62,7 +62,7 @@ func resolveBackupStorageMountFromMountsInternal(mounts []container.MountPoint, 
 	// MountForDestination only returns non-nil for bind and named volume mounts.
 
 	if !readOnly && mirroredMount.ReadOnly {
-		slog.Warn("volume service: requested writable backup mount but source is read-only; writes may fail")
+		slog.WarnContext(ctx, "volume service: requested writable backup mount but source is read-only; writes may fail")
 	}
 	mirroredMount.ReadOnly = readOnly
 
@@ -77,7 +77,7 @@ func (s *Service) resolveBackupStorageMountInternal(ctx context.Context, dockerC
 		inspect, err := libarcane.InspectCurrentArcaneContainer(ctx, dockerClient)
 		if err != nil {
 			slog.WarnContext(ctx, "volume service: failed to inspect arcane container for backup mount resolution, falling back to named volume", "error", err.Error())
-		} else if resolved, ok := resolveBackupStorageMountFromMountsInternal(inspect.Mounts, target, readOnly).Get(); ok {
+		} else if resolved, ok := resolveBackupStorageMountFromMountsInternal(ctx, inspect.Mounts, target, readOnly).Get(); ok {
 			return resolved
 		}
 	}
@@ -108,8 +108,8 @@ func backupMountWarningForStorageInternal(storage backupStorageMountInternal) st
 	return kit.Ternary(storage.mode == backupStorageModeArcaneMount, "", backupMountMissingWarning)
 }
 
-func backupMountWarningFromArcaneMountsInternal(mounts []container.MountPoint) string {
-	backupStorage, ok := resolveBackupStorageMountFromMountsInternal(mounts, "/backups", true).Get()
+func backupMountWarningFromArcaneMountsInternal(ctx context.Context, mounts []container.MountPoint) string {
+	backupStorage, ok := resolveBackupStorageMountFromMountsInternal(ctx, mounts, "/backups", true).Get()
 	if ok {
 		return backupMountWarningForStorageInternal(backupStorage)
 	}
@@ -137,7 +137,7 @@ func (s *Service) backupMountWarningInternal(ctx context.Context) string {
 		return ""
 	}
 
-	return backupMountWarningFromArcaneMountsInternal(inspect.Mounts)
+	return backupMountWarningFromArcaneMountsInternal(ctx, inspect.Mounts)
 }
 
 // StorageMount resolves the backup repository mount shared with system-backup and workspace operations.
@@ -150,7 +150,7 @@ func (s *Service) StorageMount(ctx context.Context, dockerClient *client.Client,
 }
 
 func (s *Service) ensureBackupVolumeInternal(ctx context.Context) error {
-	slog.DebugContext(ctx, "volume service: ensure backup volume", "backup_volume", s.deps.BackupVolumeName)
+	slog.DebugContext(ctx, "volume service: ensure backup volume", "backupVolume", s.deps.BackupVolumeName)
 	dockerClient, err := s.deps.Docker.GetClient(ctx)
 	if err != nil {
 		return err
@@ -263,7 +263,7 @@ func (s *Service) startContainersAfterBackupInternal(ctx context.Context, docker
 				}
 				if current.State == container.StateRunning || current.State == container.StateRestarting {
 					if current.ID != stopped.ID {
-						slog.InfoContext(ctx, "volume service: container was replaced during backup and is already running", "previous_container", stopped.ID, "current_container", current.ID)
+						slog.InfoContext(ctx, "volume service: container was replaced during backup and is already running", "previousContainer", stopped.ID, "currentContainer", current.ID)
 					}
 					continue
 				}
@@ -273,7 +273,7 @@ func (s *Service) startContainersAfterBackupInternal(ctx context.Context, docker
 					continue
 				}
 				if current.ID != stopped.ID {
-					slog.InfoContext(ctx, "volume service: restarted replacement container after backup", "previous_container", stopped.ID, "current_container", current.ID)
+					slog.InfoContext(ctx, "volume service: restarted replacement container after backup", "previousContainer", stopped.ID, "currentContainer", current.ID)
 				}
 			}
 			remaining = nextRemaining
@@ -483,7 +483,7 @@ func (s *Service) createBackupTempContainerWithMountInternal(ctx context.Context
 }
 
 func (s *Service) createBackupTempContainerInternal(ctx context.Context, dockerClient *client.Client, target string, readOnly bool) (string, func(), error) {
-	slog.DebugContext(ctx, "volume service: create backup temp container", "target", target, "read_only", readOnly)
+	slog.DebugContext(ctx, "volume service: create backup temp container", "target", target, "readOnly", readOnly)
 	var err error
 	if dockerClient == nil {
 		dockerClient, err = s.deps.Docker.GetClient(ctx)

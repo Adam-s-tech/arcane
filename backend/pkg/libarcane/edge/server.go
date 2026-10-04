@@ -169,7 +169,7 @@ func (s *TunnelServer) HandleConnect(c *echo.Context) error {
 		return nil
 	}
 	if requireRequestCertificateIdentityErr := s.requireRequestCertificateIdentityInternal(req, envID); requireRequestCertificateIdentityErr != nil {
-		slog.WarnContext(ctx, "Rejected websocket edge tunnel with mismatched client certificate", "environment_id", envID, "error", requireRequestCertificateIdentityErr)
+		slog.WarnContext(ctx, "Rejected websocket edge tunnel with mismatched client certificate", "environmentId", envID, "error", requireRequestCertificateIdentityErr)
 		_ = tunnelConn.Send(&TunnelMessage{Type: MessageTypeRegisterResponse, Accepted: false, Error: "client certificate does not match environment"})
 		_ = tunnelConn.Close()
 		return nil
@@ -209,7 +209,7 @@ func (s *TunnelServer) HandleMTLSEnroll(c *echo.Context) error {
 	if s.nameResolver != nil {
 		resolvedName, resolveErr := s.nameResolver(ctx, envID)
 		if resolveErr != nil {
-			slog.WarnContext(ctx, "Failed to resolve environment name for edge mTLS enrollment", "environment_id", envID, "error", resolveErr)
+			slog.WarnContext(ctx, "Failed to resolve environment name for edge mTLS enrollment", "environmentId", envID, "error", resolveErr)
 		} else {
 			envName = resolvedName
 		}
@@ -218,25 +218,25 @@ func (s *TunnelServer) HandleMTLSEnroll(c *echo.Context) error {
 	now := time.Now()
 	previouslyEnrolled, enrollmentLimited, err := managerMTLSEnrollmentStateInternal(s.cfg, envID, now)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to read edge mTLS enrollment state", "environment_id", envID, "error", err)
+		slog.ErrorContext(ctx, "Failed to read edge mTLS enrollment state", "environmentId", envID, "error", err)
 		return c.JSON(http.StatusInternalServerError, map[string]any{"error": "failed to read edge mTLS enrollment state"})
 	}
 	if enrollmentLimited {
 		cachedAssets, cacheErr := GenerateManagerClientMTLSAssetsWithContext(ctx, s.cfg, envID, envName)
 		if cacheErr == nil && cachedAssets != nil {
-			slog.InfoContext(ctx, "Served cached edge mTLS enrollment during cooldown", "environment_id", envID, "remote_addr", c.RealIP())
+			slog.InfoContext(ctx, "Served cached edge mTLS enrollment during cooldown", "environmentId", envID, "remoteAddr", c.RealIP())
 			return c.JSON(http.StatusOK, enrollMTLSResponse{Files: cachedAssets.Files})
 		}
 		if cacheErr != nil {
-			slog.WarnContext(ctx, "Failed to re-serve cached edge mTLS enrollment during cooldown", "environment_id", envID, "error", cacheErr)
+			slog.WarnContext(ctx, "Failed to re-serve cached edge mTLS enrollment during cooldown", "environmentId", envID, "error", cacheErr)
 		}
-		slog.WarnContext(ctx, "Rejected repeated edge mTLS enrollment during cooldown", "environment_id", envID, "remote_addr", c.RealIP())
+		slog.WarnContext(ctx, "Rejected repeated edge mTLS enrollment during cooldown", "environmentId", envID, "remoteAddr", c.RealIP())
 		return c.JSON(http.StatusTooManyRequests, map[string]any{"error": "edge mTLS enrollment was recently completed; retry later"})
 	}
 
 	assets, err := GenerateManagerClientMTLSAssetsWithContext(ctx, s.cfg, envID, envName)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to generate edge mTLS enrollment assets", "environment_id", envID, "error", err)
+		slog.ErrorContext(ctx, "Failed to generate edge mTLS enrollment assets", "environmentId", envID, "error", err)
 		return c.JSON(http.StatusInternalServerError, map[string]any{"error": "failed to generate edge mTLS assets"})
 	}
 	if assets == nil {
@@ -244,13 +244,13 @@ func (s *TunnelServer) HandleMTLSEnroll(c *echo.Context) error {
 	}
 	assets.Reenrolled = previouslyEnrolled
 	if recordManagerMTLSEnrollmentErr := recordManagerMTLSEnrollmentInternal(s.cfg, envID, now); recordManagerMTLSEnrollmentErr != nil {
-		slog.ErrorContext(ctx, "Failed to record edge mTLS enrollment state", "environment_id", envID, "error", recordManagerMTLSEnrollmentErr)
+		slog.ErrorContext(ctx, "Failed to record edge mTLS enrollment state", "environmentId", envID, "error", recordManagerMTLSEnrollmentErr)
 		return c.JSON(http.StatusInternalServerError, map[string]any{"error": "failed to record edge mTLS enrollment state"})
 	}
 	if assets.Reenrolled {
-		slog.WarnContext(ctx, "Edge mTLS certificate assets re-enrolled", "environment_id", envID, "remote_addr", c.RealIP(), "cert_issued", assets.CertIssued)
+		slog.WarnContext(ctx, "Edge mTLS certificate assets re-enrolled", "environmentId", envID, "remoteAddr", c.RealIP(), "certIssued", assets.CertIssued)
 	} else {
-		slog.InfoContext(ctx, "Edge mTLS certificate assets enrolled", "environment_id", envID, "remote_addr", c.RealIP(), "cert_issued", assets.CertIssued)
+		slog.InfoContext(ctx, "Edge mTLS certificate assets enrolled", "environmentId", envID, "remoteAddr", c.RealIP(), "certIssued", assets.CertIssued)
 	}
 
 	if s.enrollmentCallback != nil {
@@ -383,8 +383,8 @@ func (s *TunnelServer) manageConnectedTunnel(ctx, callbackCtx context.Context, t
 	accepted, drainPrevious, rejectReason, err := s.registry.RegisterSession(callbackCtx, tunnel, TunnelStaleTimeout)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to register edge agent session",
-			"environment_id", tunnel.EnvironmentID,
-			"agent_instance_id", tunnel.AgentInstance,
+			"environmentId", tunnel.EnvironmentID,
+			"agentInstanceId", tunnel.AgentInstance,
 			"error", err,
 		)
 		_ = tunnel.CloseWithReason("edge agent session registration unavailable")
@@ -392,8 +392,8 @@ func (s *TunnelServer) manageConnectedTunnel(ctx, callbackCtx context.Context, t
 	}
 	if !accepted {
 		slog.WarnContext(ctx, "Rejected duplicate edge agent session",
-			"environment_id", tunnel.EnvironmentID,
-			"agent_instance_id", tunnel.AgentInstance,
+			"environmentId", tunnel.EnvironmentID,
+			"agentInstanceId", tunnel.AgentInstance,
 			"reason", rejectReason,
 		)
 		_ = tunnel.Conn.Send(&TunnelMessage{
@@ -407,9 +407,9 @@ func (s *TunnelServer) manageConnectedTunnel(ctx, callbackCtx context.Context, t
 	}
 
 	slog.InfoContext(ctx, "Edge agent connected",
-		"environment_id", tunnel.EnvironmentID,
-		"session_id", tunnel.SessionID,
-		"security_mode", tunnel.SecurityMode,
+		"environmentId", tunnel.EnvironmentID,
+		"sessionId", tunnel.SessionID,
+		"securityMode", tunnel.SecurityMode,
 	)
 
 	// Echo the agent's capabilities and append the manager's own so the agent
@@ -425,7 +425,7 @@ func (s *TunnelServer) manageConnectedTunnel(ctx, callbackCtx context.Context, t
 		Capabilities:  capabilities,
 		DrainPrevious: drainPrevious,
 	}); sendErr != nil {
-		slog.WarnContext(ctx, "Failed to send register response", "environment_id", tunnel.EnvironmentID, "error", sendErr)
+		slog.WarnContext(ctx, "Failed to send register response", "environmentId", tunnel.EnvironmentID, "error", sendErr)
 		_ = tunnel.CloseWithReason("")
 		removed, active := s.registry.UnregisterCurrent(callbackCtx, tunnel.EnvironmentID, tunnel)
 		if removed && !active {
@@ -441,7 +441,7 @@ func (s *TunnelServer) manageConnectedTunnel(ctx, callbackCtx context.Context, t
 		if !removed {
 			return
 		}
-		slog.InfoContext(ctx, "Edge agent disconnected", "environment_id", tunnel.EnvironmentID, "session_id", tunnel.SessionID)
+		slog.InfoContext(ctx, "Edge agent disconnected", "environmentId", tunnel.EnvironmentID, "sessionId", tunnel.SessionID)
 		if !active {
 			s.updateConnectionStatusInternal(callbackCtx, tunnel, false)
 		}
@@ -468,7 +468,7 @@ func (s *TunnelServer) messageLoop(ctx context.Context, tunnel *AgentTunnel) {
 			msg, err := tunnel.Conn.Receive()
 			if err != nil {
 				if !tunnel.Conn.IsExpectedReceiveError(err) {
-					slog.WarnContext(ctx, "Error receiving from edge tunnel", "environment_id", tunnel.EnvironmentID, "error", err)
+					slog.WarnContext(ctx, "Error receiving from edge tunnel", "environmentId", tunnel.EnvironmentID, "error", err)
 				}
 				return
 			}
@@ -491,11 +491,11 @@ func (s *TunnelServer) handleTunnelMessage(ctx context.Context, tunnel *AgentTun
 	case MessageTypeStreamData, MessageTypeStreamEnd, MessageTypeWebSocketData, MessageTypeWebSocketClose, MessageTypeStreamClose:
 		s.deliverStream(ctx, tunnel, msg, deliveryTimer)
 	case MessageTypeRequest, MessageTypeHeartbeatAck, MessageTypeWebSocketStart, MessageTypeRegisterResponse, MessageTypeCommandRequest, MessageTypeStreamOpen, MessageTypeCancelRequest:
-		slog.DebugContext(ctx, "Ignoring message type from agent", "type", msg.Type, "environment_id", tunnel.EnvironmentID)
+		slog.DebugContext(ctx, "Ignoring message type from agent", "type", msg.Type, "environmentId", tunnel.EnvironmentID)
 	case MessageTypeRegister:
-		slog.DebugContext(ctx, "Ignoring duplicate register message from agent", "environment_id", tunnel.EnvironmentID)
+		slog.DebugContext(ctx, "Ignoring duplicate register message from agent", "environmentId", tunnel.EnvironmentID)
 	default:
-		slog.WarnContext(ctx, "Unknown message type from agent", "type", msg.Type, "environment_id", tunnel.EnvironmentID)
+		slog.WarnContext(ctx, "Unknown message type from agent", "type", msg.Type, "environmentId", tunnel.EnvironmentID)
 	}
 }
 
@@ -565,7 +565,7 @@ func (s *TunnelServer) deliverStream(ctx context.Context, tunnel *AgentTunnel, m
 
 func (s *TunnelServer) handleEvent(ctx context.Context, tunnel *AgentTunnel, msg *TunnelMessage) {
 	if msg.Event == nil {
-		slog.WarnContext(ctx, "Received event message without payload", "environment_id", tunnel.EnvironmentID)
+		slog.WarnContext(ctx, "Received event message without payload", "environmentId", tunnel.EnvironmentID)
 		return
 	}
 	if s.eventCallback == nil {
@@ -577,7 +577,7 @@ func (s *TunnelServer) handleEvent(ctx context.Context, tunnel *AgentTunnel, msg
 		eventCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 		defer cancel()
 		if err := s.eventCallback(eventCtx, tunnel.EnvironmentID, eventCopy); err != nil {
-			slog.WarnContext(eventCtx, "Failed to process edge event", "environment_id", tunnel.EnvironmentID, "type", eventCopy.Type, "error", err)
+			slog.WarnContext(eventCtx, "Failed to process edge event", "environmentId", tunnel.EnvironmentID, "type", eventCopy.Type, "error", err)
 		}
 	}()
 }

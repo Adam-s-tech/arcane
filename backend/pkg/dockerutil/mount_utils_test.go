@@ -222,7 +222,7 @@ func TestPreserveVolumeMounts(t *testing.T) {
 			origBinds := append([]string(nil), tt.binds...)
 			origMounts := append([]mounttypes.Mount(nil), tt.mounts...)
 
-			binds, mounts, err := PreserveVolumeMounts(tt.binds, tt.mounts, tt.points)
+			binds, mounts, err := PreserveVolumeMounts(t.Context(), tt.binds, tt.mounts, tt.points)
 			if tt.wantErr {
 				require.Error(t, err)
 				return

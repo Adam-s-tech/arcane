@@ -80,7 +80,7 @@ func (h *Handler) rejectIfAgentModeInternal() error {
 func (h *Handler) CheckUpgradeAvailable(ctx context.Context, input *CheckUpgradeInput) (*CheckUpgradeOutput, error) {
 	canUpgrade, err := h.service.CanUpgrade(ctx)
 	if err != nil {
-		slog.Debug("System upgrade check failed", "error", err)
+		slog.DebugContext(ctx, "System upgrade check failed", "error", err)
 		return &CheckUpgradeOutput{
 			Body: UpgradeCheckResultData{
 				CanUpgrade: false,
@@ -106,7 +106,7 @@ func (h *Handler) TriggerUpgrade(ctx context.Context, input *TriggerUpgradeInput
 		return nil, err
 	}
 
-	slog.Info("System upgrade triggered", "user", user.Username, "userId", user.ID)
+	slog.InfoContext(ctx, "System upgrade triggered", "user", user.Username, "userId", user.ID)
 
 	// Resolved before triggering, while the version check still describes the running
 	// container: the upgrade itself may replace it.
@@ -119,7 +119,7 @@ func (h *Handler) TriggerUpgrade(ctx context.Context, input *TriggerUpgradeInput
 
 	err = h.service.TriggerUpgradeAsync(utils.ActivityRuntimeContext(ctx, h.appCtx), *user, targetVersion)
 	if err != nil {
-		slog.Error("System upgrade failed", "error", err, "user", user.Username)
+		slog.ErrorContext(ctx, "System upgrade failed", "error", err, "user", user.Username)
 
 		if errors.Is(err, common.ErrUpgradeInProgress) {
 			return nil, huma.Error409Conflict("Failed to initiate upgrade: " + err.Error())
@@ -157,7 +157,7 @@ func (h *Handler) TriggerUpdateAll(ctx context.Context, input *TriggerUpdateAllI
 		return nil, err
 	}
 
-	slog.Info("Update-all environments triggered", "user", user.Username, "userId", user.ID)
+	slog.InfoContext(ctx, "Update-all environments triggered", "user", user.Username, "userId", user.ID)
 
 	// Use a runtime context so the agents phase can outlive the request when the
 	// manager is already up to date.

@@ -136,7 +136,7 @@ func parseArcaneComposeMetadataFromFileInternal(ctx context.Context, composeFile
 		return meta, fmt.Errorf("load compose metadata: %w", err)
 	}
 
-	meta = extractArcaneComposeMetadata(project)
+	meta = extractArcaneComposeMetadata(ctx, project)
 	if project != nil {
 		meta.ComposeFiles = slices.Clone(project.ComposeFiles)
 	}
@@ -161,20 +161,20 @@ func parseArcaneComposeMetadataFromFileInternal(ctx context.Context, composeFile
 		if parseArcaneComposeMetadataFromFileErr != nil {
 			return meta, fmt.Errorf("load included Compose metadata %s: %w", resolvedPath, parseArcaneComposeMetadataFromFileErr)
 		}
-		mergeArcaneComposeMetadata(&meta, includedMeta)
+		mergeArcaneComposeMetadata(ctx, &meta, includedMeta)
 	}
 
 	return meta, nil
 }
 
-func extractArcaneComposeMetadata(project *composetypes.Project) ArcaneComposeMetadata {
+func extractArcaneComposeMetadata(ctx context.Context, project *composetypes.Project) ArcaneComposeMetadata {
 	meta := emptyArcaneComposeMetadataInternal()
 	if project == nil {
 		return meta
 	}
 
 	if arcaneBlock, ok := project.Extensions[arcaneBlockKey]; ok {
-		meta.ProjectIcon, meta.ProjectURLS, meta.ProjectTags, meta.ProjectTagsAuthoritative = parseArcaneBlockInternal(arcaneBlock)
+		meta.ProjectIcon, meta.ProjectURLS, meta.ProjectTags, meta.ProjectTagsAuthoritative = parseArcaneBlockInternal(ctx, arcaneBlock)
 	}
 
 	for name, svc := range project.Services {
@@ -184,7 +184,7 @@ func extractArcaneComposeMetadata(project *composetypes.Project) ArcaneComposeMe
 		}
 		if iconSet.IsEmpty() {
 			if arcaneBlock, ok := svc.Extensions[arcaneBlockKey]; ok {
-				iconSet, _, _, _ = parseArcaneBlockInternal(arcaneBlock)
+				iconSet, _, _, _ = parseArcaneBlockInternal(ctx, arcaneBlock)
 			}
 		}
 		if !iconSet.IsEmpty() {
@@ -195,7 +195,7 @@ func extractArcaneComposeMetadata(project *composetypes.Project) ArcaneComposeMe
 	return meta
 }
 
-func parseArcaneBlockInternal(block any) (IconSet, []string, []projecttypes.TagOption, bool) {
+func parseArcaneBlockInternal(ctx context.Context, block any) (IconSet, []string, []projecttypes.TagOption, bool) {
 	arcaneBlock, ok := kit.AsStringMap(block)
 	if !ok {
 		return IconSet{}, nil, nil, false
@@ -209,15 +209,15 @@ func parseArcaneBlockInternal(block any) (IconSet, []string, []projecttypes.TagO
 		Dark:  cmp.Or(kit.Collect(arcaneBlock[arcaneIconDarkKey], kit.ToString)...),
 	}
 	urls := kit.Unique(kit.TrimNonEmpty(kit.Collect(arcaneBlock[arcaneURLsKey], kit.ToString)))
-	tags, tagsAuthoritative := parseComposeTagsInternal(arcaneBlock[arcaneTagsKey])
+	tags, tagsAuthoritative := parseComposeTagsInternal(ctx, arcaneBlock[arcaneTagsKey])
 	return icon, urls, tags, tagsAuthoritative
 }
 
-func parseComposeTagsInternal(value any) ([]projecttypes.TagOption, bool) {
+func parseComposeTagsInternal(ctx context.Context, value any) ([]projecttypes.TagOption, bool) {
 	values, ok := value.([]any)
 	if !ok {
 		if value != nil {
-			slog.Warn("skipping invalid x-arcane tags; expected a list of name/color objects")
+			slog.WarnContext(ctx, "skipping invalid x-arcane tags; expected a list of name/color objects")
 			return nil, false
 		}
 		return nil, true
@@ -229,26 +229,26 @@ func parseComposeTagsInternal(value any) ([]projecttypes.TagOption, bool) {
 	for index, value := range values {
 		definition, localOk := kit.AsStringMap(value)
 		if !localOk {
-			slog.Warn("skipping invalid x-arcane tag; expected a name/color object", "index", index)
+			slog.WarnContext(ctx, "skipping invalid x-arcane tag; expected a name/color object", "index", index)
 			authoritative = false
 			continue
 		}
 		nameValue := kit.ToString(definition["name"])
 		colorValue := kit.ToString(definition["color"])
 		if nameValue == "" || colorValue == "" {
-			slog.Warn("skipping invalid x-arcane tag; name and color are required", "index", index)
+			slog.WarnContext(ctx, "skipping invalid x-arcane tag; name and color are required", "index", index)
 			authoritative = false
 			continue
 		}
 		name, err := NormalizeProjectTag(nameValue)
 		if err != nil {
-			slog.Warn("skipping invalid x-arcane tag", "index", index, "error", err)
+			slog.WarnContext(ctx, "skipping invalid x-arcane tag", "index", index, "error", err)
 			authoritative = false
 			continue
 		}
 		color, err := NormalizeProjectTagColor(projecttypes.TagColor(colorValue))
 		if err != nil {
-			slog.Warn("skipping invalid x-arcane tag color", "index", index, "tag", name, "error", err)
+			slog.WarnContext(ctx, "skipping invalid x-arcane tag color", "index", index, "tag", name, "error", err)
 			authoritative = false
 			continue
 		}
@@ -256,7 +256,7 @@ func parseComposeTagsInternal(value any) ([]projecttypes.TagOption, bool) {
 			continue
 		}
 		if len(tags) >= ProjectTagsPerSourceLimit {
-			slog.Warn("skipping x-arcane tags over per-project limit", "limit", ProjectTagsPerSourceLimit)
+			slog.WarnContext(ctx, "skipping x-arcane tags over per-project limit", "limit", ProjectTagsPerSourceLimit)
 			authoritative = false
 			break
 		}
@@ -266,7 +266,7 @@ func parseComposeTagsInternal(value any) ([]projecttypes.TagOption, bool) {
 	return tags, authoritative
 }
 
-func mergeComposeTagsInternal(target, source []projecttypes.TagOption) []projecttypes.TagOption {
+func mergeComposeTagsInternal(ctx context.Context, target, source []projecttypes.TagOption) []projecttypes.TagOption {
 	merged := make([]projecttypes.TagOption, 0, min(len(target)+len(source), ProjectTagsPerSourceLimit))
 	seen := make(map[string]struct{}, len(target)+len(source))
 	for _, tag := range append(target, source...) {
@@ -274,7 +274,7 @@ func mergeComposeTagsInternal(target, source []projecttypes.TagOption) []project
 			continue
 		}
 		if len(merged) >= ProjectTagsPerSourceLimit {
-			slog.Warn("skipping included x-arcane tags over per-project limit", "limit", ProjectTagsPerSourceLimit)
+			slog.WarnContext(ctx, "skipping included x-arcane tags over per-project limit", "limit", ProjectTagsPerSourceLimit)
 			break
 		}
 		seen[tag.Name] = struct{}{}
@@ -283,7 +283,7 @@ func mergeComposeTagsInternal(target, source []projecttypes.TagOption) []project
 	return merged
 }
 
-func mergeArcaneComposeMetadata(target *ArcaneComposeMetadata, source ArcaneComposeMetadata) {
+func mergeArcaneComposeMetadata(ctx context.Context, target *ArcaneComposeMetadata, source ArcaneComposeMetadata) {
 	if target == nil {
 		return
 	}
@@ -291,7 +291,7 @@ func mergeArcaneComposeMetadata(target *ArcaneComposeMetadata, source ArcaneComp
 	target.ProjectIcon = mergeIconSetFieldsInternal(target.ProjectIcon, source.ProjectIcon)
 
 	target.ProjectURLS = kit.Unique(kit.TrimNonEmpty(append(target.ProjectURLS, source.ProjectURLS...)))
-	target.ProjectTags = mergeComposeTagsInternal(target.ProjectTags, source.ProjectTags)
+	target.ProjectTags = mergeComposeTagsInternal(ctx, target.ProjectTags, source.ProjectTags)
 	target.ProjectTagsAuthoritative = target.ProjectTagsAuthoritative && source.ProjectTagsAuthoritative
 	target.ComposeFiles = append(target.ComposeFiles, source.ComposeFiles...)
 	target.EnvFiles = append(target.EnvFiles, source.EnvFiles...)

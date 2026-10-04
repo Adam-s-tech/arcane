@@ -84,7 +84,6 @@ func NewVolumeService(
 	cfg *config.Config,
 	recoveryKeys *backup.RecoveryKeyStore,
 ) *VolumeService {
-	slog.Debug("volume service: new")
 	backupVolumeName := ""
 	encryptionKey := ""
 	workspaceMaxDepth := 50
@@ -375,7 +374,7 @@ func (s *VolumeService) GetVolumeByName(ctx context.Context, name string) (*volu
 		for _, uv := range usageVolumes {
 			if uv.Name == vol.Name && uv.UsageData != nil {
 				vol.UsageData = uv.UsageData
-				slog.DebugContext(ctx, "attached volume usage data", "volume", vol.Name, "size_bytes", uv.UsageData.Size, "ref_count", uv.UsageData.RefCount)
+				slog.DebugContext(ctx, "attached volume usage data", "volume", vol.Name, "sizeBytes", uv.UsageData.Size, "refCount", uv.UsageData.RefCount)
 				break
 			}
 		}
@@ -874,7 +873,7 @@ func (s *VolumeService) ListVolumesPaginated(ctx context.Context, params paginat
 		params.Start,
 		"limit",
 		params.Limit,
-		"include_internal",
+		"includeInternal",
 		includeInternal,
 	)
 	dockerClient, err := s.dockerService.GetClient(ctx)
@@ -962,21 +961,21 @@ func (s *VolumeService) ListVolumesPaginated(ctx context.Context, params paginat
 	paginationResp := pagination.BuildResponse(result.TotalCount, result.TotalAvailable, effectiveParams)
 	slog.DebugContext(
 		ctx, "volume service: listed volumes",
-		"docker_host", dockerClient.DaemonHost(),
-		"requested_sort", params.Sort,
-		"requested_order", params.Order,
-		"effective_sort", effectiveParams.Sort,
-		"effective_order", effectiveParams.Order,
-		"usage_cache_snapshot", usageCacheSnapshot,
-		"docker_volumes", len(volResult.volumes),
-		"usage_volumes", len(usageVolumes),
-		"included_volumes", len(items),
-		"matched_volumes", result.TotalCount,
-		"returned_volumes", len(result.Items),
-		"container_volume_count", len(volumeContainerMap),
-		"filter_count", len(params.Filters),
-		"current_page", paginationResp.CurrentPage,
-		"total_pages", paginationResp.TotalPages,
+		"dockerHost", dockerClient.DaemonHost(),
+		"requestedSort", params.Sort,
+		"requestedOrder", params.Order,
+		"effectiveSort", effectiveParams.Sort,
+		"effectiveOrder", effectiveParams.Order,
+		"usageCacheSnapshot", usageCacheSnapshot,
+		"dockerVolumes", len(volResult.volumes),
+		"usageVolumes", len(usageVolumes),
+		"includedVolumes", len(items),
+		"matchedVolumes", result.TotalCount,
+		"returnedVolumes", len(result.Items),
+		"containerVolumeCount", len(volumeContainerMap),
+		"filterCount", len(params.Filters),
+		"currentPage", paginationResp.CurrentPage,
+		"totalPages", paginationResp.TotalPages,
 		"duration", time.Since(startedAt),
 	)
 

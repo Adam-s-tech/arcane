@@ -223,7 +223,7 @@ func (s *OidcService) ValidateMobileRedirectURI(ctx context.Context, uri string)
 func (s *OidcService) GenerateAuthURL(ctx context.Context, redirectTo, origin, mobileRedirectURI string) (string, string, error) {
 	oidcConfig, err := s.getEffectiveConfigInternal(ctx)
 	if err != nil {
-		slog.Error("GenerateAuthURL: failed to get OIDC config", "error", err)
+		slog.ErrorContext(ctx, "GenerateAuthURL: failed to get OIDC config", "error", err)
 		return "", "", err
 	}
 
@@ -232,7 +232,7 @@ func (s *OidcService) GenerateAuthURL(ctx context.Context, redirectTo, origin, m
 		var discoverProviderErr error
 		provider, discoverProviderErr = s.getOrDiscoverProviderInternal(ctx, oidcConfig)
 		if discoverProviderErr != nil {
-			slog.Error("GenerateAuthURL: provider discovery failed", "issuer", oidcConfig.IssuerURL, "error", discoverProviderErr)
+			slog.ErrorContext(ctx, "GenerateAuthURL: provider discovery failed", "issuer", oidcConfig.IssuerURL, "error", discoverProviderErr)
 			return "", "", fmt.Errorf("failed to discover provider: %w", discoverProviderErr)
 		}
 	}
@@ -243,7 +243,7 @@ func (s *OidcService) GenerateAuthURL(ctx context.Context, redirectTo, origin, m
 
 	oauth2Config, err := s.getOauth2ConfigInternal(oidcConfig, provider, origin, mobileRedirectURI)
 	if err != nil {
-		slog.Error("GenerateAuthURL: invalid OIDC endpoints", "error", err)
+		slog.ErrorContext(ctx, "GenerateAuthURL: invalid OIDC endpoints", "error", err)
 		return "", "", err
 	}
 
@@ -262,12 +262,12 @@ func (s *OidcService) GenerateAuthURL(ctx context.Context, redirectTo, origin, m
 
 	stateJSON, err := json.Marshal(stateData)
 	if err != nil {
-		slog.Error("GenerateAuthURL: failed to marshal state", "error", err)
+		slog.ErrorContext(ctx, "GenerateAuthURL: failed to marshal state", "error", err)
 		return "", "", fmt.Errorf("failed to encode state: %w", err)
 	}
 	encodedState := base64.URLEncoding.EncodeToString(stateJSON)
 
-	slog.Debug("GenerateAuthURL: generated authorization URL", "issuer", oidcConfig.IssuerURL, "scopes", oauth2Config.Scopes)
+	slog.DebugContext(ctx, "GenerateAuthURL: generated authorization URL", "issuer", oidcConfig.IssuerURL, "scopes", oauth2Config.Scopes)
 	return authURL, encodedState, nil
 }
 
@@ -339,11 +339,11 @@ func (s *OidcService) exchangeTokenInternal(ctx context.Context, cfg *settings.O
 	providerCtx := oidc.ClientContext(ctx, s.getHttpClientInternal(cfg.SkipTlsVerify))
 	token, err := oauth2Config.Exchange(providerCtx, code, oauth2.VerifierOption(verifier))
 	if err != nil {
-		slog.Error("exchangeTokenInternal: token exchange failed", "token_endpoint", oauth2Config.Endpoint.TokenURL, "error", err)
+		slog.ErrorContext(ctx, "exchangeTokenInternal: token exchange failed", "tokenEndpoint", oauth2Config.Endpoint.TokenURL, "error", err)
 		return nil, fmt.Errorf("failed to exchange authorization code: %w", err)
 	}
 
-	slog.Debug("exchangeTokenInternal: token exchange successful", "has_access_token", token.AccessToken != "", "has_refresh_token", token.RefreshToken != "")
+	slog.DebugContext(ctx, "exchangeTokenInternal: token exchange successful", "hasAccessToken", token.AccessToken != "", "hasRefreshToken", token.RefreshToken != "")
 	return token, nil
 }
 
@@ -353,9 +353,9 @@ func (s *OidcService) fetchClaimsInternal(ctx context.Context, cfg *settings.Oid
 
 	if idToken != nil {
 		if err := idToken.Claims(&claims); err != nil {
-			slog.Warn("fetchClaimsInternal: failed to extract claims from ID token", "error", err)
+			slog.WarnContext(ctx, "fetchClaimsInternal: failed to extract claims from ID token", "error", err)
 		} else {
-			slog.Debug("fetchClaimsInternal: extracted claims from ID token")
+			slog.DebugContext(ctx, "fetchClaimsInternal: extracted claims from ID token")
 		}
 	}
 
@@ -364,31 +364,31 @@ func (s *OidcService) fetchClaimsInternal(ctx context.Context, cfg *settings.Oid
 	case provider != nil:
 		userInfo, err := provider.UserInfo(providerCtx, oauth2.StaticTokenSource(token))
 		if err != nil {
-			slog.Debug("fetchClaimsInternal: userinfo endpoint call failed", "error", err)
+			slog.DebugContext(ctx, "fetchClaimsInternal: userinfo endpoint call failed", "error", err)
 			if claims != nil {
 				return claims, nil
 			}
 			return nil, fmt.Errorf("failed to fetch userinfo: %w", err)
 		}
 		if claimsErr := userInfo.Claims(&userInfoClaims); claimsErr != nil {
-			slog.Warn("fetchClaimsInternal: failed to decode userinfo claims", "error", claimsErr)
+			slog.WarnContext(ctx, "fetchClaimsInternal: failed to decode userinfo claims", "error", claimsErr)
 			if claims != nil {
 				return claims, nil
 			}
 			return nil, fmt.Errorf("failed to decode userinfo claims: %w", claimsErr)
 		}
-		slog.Debug("fetchClaimsInternal: fetched userinfo claims successfully")
+		slog.DebugContext(ctx, "fetchClaimsInternal: fetched userinfo claims successfully")
 	case cfg.UserinfoEndpoint != "":
 		manualClaims, err := s.fetchUserInfoClaimsInternal(providerCtx, cfg, token)
 		if err != nil {
-			slog.Debug("fetchClaimsInternal: userinfo endpoint call failed", "error", err)
+			slog.DebugContext(ctx, "fetchClaimsInternal: userinfo endpoint call failed", "error", err)
 			if claims != nil {
 				return claims, nil
 			}
 			return nil, fmt.Errorf("failed to fetch userinfo: %w", err)
 		}
 		userInfoClaims = manualClaims
-		slog.Debug("fetchClaimsInternal: fetched userinfo claims successfully")
+		slog.DebugContext(ctx, "fetchClaimsInternal: fetched userinfo claims successfully")
 	case claims != nil:
 		return claims, nil
 	default:
@@ -444,16 +444,16 @@ func (s *OidcService) fetchUserInfoClaimsInternal(ctx context.Context, cfg *sett
 }
 
 func (s *OidcService) HandleCallback(ctx context.Context, code, state, storedState, origin, mobileRedirectURI string) (*authtypes.OidcUserInfo, *authtypes.OidcTokenResponse, error) {
-	slog.Debug("HandleCallback: processing callback", "code_present", code != "", "state_present", state != "")
+	slog.DebugContext(ctx, "HandleCallback: processing callback", "codePresent", code != "", "statePresent", state != "")
 
-	stateData, err := s.validateStateInternal(state, storedState)
+	stateData, err := s.validateStateInternal(ctx, state, storedState)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	cfg, err := s.getEffectiveConfigInternal(ctx)
 	if err != nil {
-		slog.Error("HandleCallback: failed to get OIDC config", "error", err)
+		slog.ErrorContext(ctx, "HandleCallback: failed to get OIDC config", "error", err)
 		return nil, nil, err
 	}
 
@@ -478,20 +478,20 @@ func (s *OidcService) HandleCallback(ctx context.Context, code, state, storedSta
 	return s.buildUserInfoInternal(ctx, provider, cfg, token, idToken, rawIDToken)
 }
 
-func (s *OidcService) validateStateInternal(state, storedState string) (*OidcState, error) {
-	stateData, err := s.decodeStateInternal(storedState)
+func (s *OidcService) validateStateInternal(ctx context.Context, state, storedState string) (*OidcState, error) {
+	stateData, err := s.decodeStateInternal(ctx, storedState)
 	if err != nil {
-		slog.Error("HandleCallback: failed to decode stored state", "error", err)
+		slog.ErrorContext(ctx, "HandleCallback: failed to decode stored state", "error", err)
 		return nil, fmt.Errorf("invalid state parameter: %w", err)
 	}
 
 	if state != stateData.State {
-		slog.Error("HandleCallback: state mismatch", "received_len", len(state), "expected_len", len(stateData.State))
+		slog.ErrorContext(ctx, "HandleCallback: state mismatch", "receivedLen", len(state), "expectedLen", len(stateData.State))
 		return nil, errors.New("state parameter mismatch")
 	}
 
 	if time.Since(stateData.CreatedAt) > 10*time.Minute {
-		slog.Error("HandleCallback: state expired", "age", time.Since(stateData.CreatedAt))
+		slog.ErrorContext(ctx, "HandleCallback: state expired", "age", time.Since(stateData.CreatedAt))
 		return nil, errors.New("authentication state has expired")
 	}
 	return stateData, nil
@@ -506,7 +506,7 @@ func (s *OidcService) verifyIDTokenInternal(ctx context.Context, provider *oidc.
 	}
 
 	if rawIDToken == "" {
-		slog.Warn("HandleCallback: no ID token in response (non-compliant OIDC response)")
+		slog.WarnContext(ctx, "HandleCallback: no ID token in response (non-compliant OIDC response)")
 		return nil, "", nil
 	}
 
@@ -541,7 +541,7 @@ func (s *OidcService) verifyIDTokenInternal(ctx context.Context, provider *oidc.
 
 	idToken, err := verifier.Verify(providerCtx, rawIDToken)
 	if err != nil {
-		slog.Error("HandleCallback: ID token verification failed", "error", err)
+		slog.ErrorContext(ctx, "HandleCallback: ID token verification failed", "error", err)
 		return nil, "", fmt.Errorf("failed to verify ID token: %w", err)
 	}
 
@@ -550,16 +550,16 @@ func (s *OidcService) verifyIDTokenInternal(ctx context.Context, provider *oidc.
 			Nonce string `json:"nonce"`
 		}
 		if claimsErr := idToken.Claims(&claims); claimsErr != nil {
-			slog.Error("HandleCallback: failed to extract nonce from ID token", "error", claimsErr)
+			slog.ErrorContext(ctx, "HandleCallback: failed to extract nonce from ID token", "error", claimsErr)
 			return nil, "", fmt.Errorf("failed to verify nonce: %w", claimsErr)
 		}
 		if claims.Nonce != nonce {
-			slog.Error("HandleCallback: nonce mismatch", "expected", nonce, "got", claims.Nonce)
+			slog.ErrorContext(ctx, "HandleCallback: nonce mismatch", "expected", nonce, "got", claims.Nonce)
 			return nil, "", errors.New("nonce verification failed")
 		}
 	}
 
-	slog.Debug("HandleCallback: ID token verified successfully", "subject", idToken.Subject, "issuer", idToken.Issuer)
+	slog.DebugContext(ctx, "HandleCallback: ID token verified successfully", "subject", idToken.Subject, "issuer", idToken.Issuer)
 	return idToken, rawIDToken, nil
 }
 
@@ -579,13 +579,13 @@ func (
 ) {
 	claims, err := s.fetchClaimsInternal(ctx, cfg, provider, token, idToken)
 	if err != nil {
-		slog.Error("HandleCallback: failed to fetch claims", "error", err)
+		slog.ErrorContext(ctx, "HandleCallback: failed to fetch claims", "error", err)
 		return nil, nil, fmt.Errorf("failed to fetch user claims: %w", err)
 	}
 
 	subject := jwtclaims.GetStringClaim(claims, "sub")
 	if subject == "" {
-		slog.Error("HandleCallback: missing required 'sub' claim")
+		slog.ErrorContext(ctx, "HandleCallback: missing required 'sub' claim")
 		return nil, nil, errors.New("missing required 'sub' claim in user info")
 	}
 
@@ -616,20 +616,20 @@ func (
 		tokenResp.ExpiresIn = expiresIn
 	}
 
-	slog.Info("HandleCallback: authentication successful", "subject", userInfoDto.Subject, "email", userInfoDto.Email)
+	slog.InfoContext(ctx, "HandleCallback: authentication successful", "subject", userInfoDto.Subject, "email", userInfoDto.Email)
 	return &userInfoDto, tokenResp, nil
 }
 
-func (s *OidcService) decodeStateInternal(encodedState string) (*OidcState, error) {
+func (s *OidcService) decodeStateInternal(ctx context.Context, encodedState string) (*OidcState, error) {
 	stateJSON, err := base64.URLEncoding.DecodeString(encodedState)
 	if err != nil {
-		slog.Error("decodeStateInternal: failed to decode base64 state", "error", err)
+		slog.ErrorContext(ctx, "decodeStateInternal: failed to decode base64 state", "error", err)
 		return nil, err
 	}
 
 	var stateData OidcState
 	if unmarshalErr := json.Unmarshal(stateJSON, &stateData); unmarshalErr != nil {
-		slog.Error("decodeStateInternal: failed to unmarshal state JSON", "error", unmarshalErr)
+		slog.ErrorContext(ctx, "decodeStateInternal: failed to unmarshal state JSON", "error", unmarshalErr)
 		return nil, unmarshalErr
 	}
 
@@ -640,13 +640,13 @@ func (s *OidcService) decodeStateInternal(encodedState string) (*OidcState, erro
 func (s *OidcService) InitiateDeviceAuth(ctx context.Context) (*authtypes.OidcDeviceAuthResponse, error) {
 	cfg, err := s.getEffectiveConfigInternal(ctx)
 	if err != nil {
-		slog.Error("InitiateDeviceAuth: failed to get OIDC config", "error", err)
+		slog.ErrorContext(ctx, "InitiateDeviceAuth: failed to get OIDC config", "error", err)
 		return nil, err
 	}
 
 	deviceEndpoint, err := s.getDeviceAuthorizationEndpointInternal(ctx, cfg)
 	if err != nil {
-		slog.Error("InitiateDeviceAuth: failed to get device endpoint", "error", err)
+		slog.ErrorContext(ctx, "InitiateDeviceAuth: failed to get device endpoint", "error", err)
 		return nil, err
 	}
 
@@ -701,7 +701,7 @@ func (s *OidcService) InitiateDeviceAuth(ctx context.Context) (*authtypes.OidcDe
 		response.Interval = 5
 	}
 
-	slog.Debug("InitiateDeviceAuth: device authorization initiated", "user_code", response.UserCode, "expires_in", response.ExpiresIn)
+	slog.DebugContext(ctx, "InitiateDeviceAuth: device authorization initiated", "userCode", response.UserCode, "expiresIn", response.ExpiresIn)
 	return response, nil
 }
 
@@ -744,7 +744,7 @@ func (s *OidcService) makeDeviceAuthRequestInternal(ctx context.Context, endpoin
 	client := s.getHttpClientInternal(skipTls)
 	resp, err := client.Do(req)
 	if err != nil {
-		slog.Error("makeDeviceAuthRequestInternal: request failed", "error", err)
+		slog.ErrorContext(ctx, "makeDeviceAuthRequestInternal: request failed", "error", err)
 		return nil, fmt.Errorf("device authorization request failed: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -771,7 +771,7 @@ func (s *OidcService) makeDeviceAuthRequestInternal(ctx context.Context, endpoin
 func (s *OidcService) ExchangeDeviceToken(ctx context.Context, deviceCode string) (*authtypes.OidcUserInfo, *authtypes.OidcTokenResponse, error) {
 	cfg, err := s.getEffectiveConfigInternal(ctx)
 	if err != nil {
-		slog.Error("ExchangeDeviceToken: failed to get OIDC config", "error", err)
+		slog.ErrorContext(ctx, "ExchangeDeviceToken: failed to get OIDC config", "error", err)
 		return nil, nil, err
 	}
 
@@ -853,7 +853,7 @@ func (s *OidcService) makeTokenRequestInternal(ctx context.Context, endpoint str
 	client := s.getHttpClientInternal(skipTls)
 	resp, err := client.Do(req)
 	if err != nil {
-		slog.Error("makeTokenRequestInternal: request failed", "error", err)
+		slog.ErrorContext(ctx, "makeTokenRequestInternal: request failed", "error", err)
 		return nil, fmt.Errorf("token request failed: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()

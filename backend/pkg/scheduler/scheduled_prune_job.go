@@ -43,7 +43,7 @@ func (j *ScheduledPruneJob) Schedule(ctx context.Context) string {
 
 	parser := scheduleutil.Parser()
 	if _, err := parser.Parse(schedule); err != nil {
-		slog.WarnContext(ctx, "Invalid cron expression for scheduled-prune, using default", "invalid_schedule", schedule, "error", err)
+		slog.WarnContext(ctx, "Invalid cron expression for scheduled-prune, using default", "invalidSchedule", schedule, "error", err)
 		return "0 0 0 * * *"
 	}
 
@@ -69,7 +69,7 @@ func (j *ScheduledPruneJob) Run(ctx context.Context) (schedulertypes.Outcome, er
 		"images", req.Images,
 		"volumes", req.Volumes,
 		"networks", req.Networks,
-		"build_cache", req.BuildCache,
+		"buildCache", req.BuildCache,
 	)
 
 	result, started, err := j.systemService.PruneScheduled(ctx, "0", req)
@@ -84,11 +84,11 @@ func (j *ScheduledPruneJob) Run(ctx context.Context) (schedulertypes.Outcome, er
 
 	slog.InfoContext(ctx, "scheduled prune run completed",
 		"success", result.Success,
-		"space_reclaimed_bytes", result.SpaceReclaimed,
-		"containers_pruned", len(result.ContainersPruned),
-		"images_deleted", len(result.ImagesDeleted),
-		"volumes_deleted", len(result.VolumesDeleted),
-		"networks_deleted", len(result.NetworksDeleted),
+		"spaceReclaimedBytes", result.SpaceReclaimed,
+		"containersPruned", len(result.ContainersPruned),
+		"imagesDeleted", len(result.ImagesDeleted),
+		"volumesDeleted", len(result.VolumesDeleted),
+		"networksDeleted", len(result.NetworksDeleted),
 		"errors", len(result.Errors),
 	)
 	if len(result.Errors) > 0 {

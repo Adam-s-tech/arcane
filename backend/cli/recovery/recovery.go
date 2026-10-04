@@ -112,7 +112,7 @@ func runRestoreInternal(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("%w; the pre-restore system backup was restored", runStagesErr)
 	}
 	if !request.ProjectsIncluded {
-		slog.Warn("the restored system backup did not include the projects directory; the current projects directory was left untouched")
+		slog.WarnContext(ctx, "the restored system backup did not include the projects directory; the current projects directory was left untouched")
 	}
 	manifestData, err := os.ReadFile("/app/data/.arcane-recovery.json")
 	if err != nil {
@@ -279,7 +279,7 @@ func runStagesInternal(ctx context.Context, dockerClient *client.Client, request
 		mounts = append(mounts, stage.Target.Mounts...)
 		command := []string{"restore", "--delete", stage.SnapshotID + ":" + stage.SourcePath, stage.Target.Path}
 		if _, err := rusticruntime.Run(ctx, dockerClient, request.RecoveryKey, command, stage.Repository.Environment, mounts, container.NetworkMode(request.NetworkMode)); err != nil {
-			slog.Error("Rustic system restore stage failed", "source", stage.SourcePath, "error", err)
+			slog.ErrorContext(ctx, "Rustic system restore stage failed", "source", stage.SourcePath, "error", err)
 			return fmt.Errorf("restore %s: %w", stage.SourcePath, err)
 		}
 	}

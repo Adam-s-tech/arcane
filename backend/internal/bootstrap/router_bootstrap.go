@@ -189,7 +189,7 @@ func newRouter(p RouterParams) (*echo.Echo, *edge.TunnelServer) {
 
 	trustedProxyNets := parseTrustedProxyCIDRsInternal(cfg.TrustedProxies)
 	if cfg.TrustedProxies != "" && len(trustedProxyNets) == 0 {
-		slog.Warn("TRUSTED_PROXIES set but no valid CIDRs found; falling back to direct IP extraction")
+		slog.WarnContext(ctx, "TRUSTED_PROXIES set but no valid CIDRs found; falling back to direct IP extraction")
 	}
 	if len(trustedProxyNets) == 0 {
 		e.IPExtractor = echo.ExtractIPDirect()
@@ -317,9 +317,9 @@ func newRouter(p RouterParams) (*echo.Echo, *edge.TunnelServer) {
 	//nolint:staticcheck,nolintlint // SA4023 only under exclude_frontend: the stub always returns ErrFrontendNotIncluded
 	if err := frontend.RegisterFrontend(e); err != nil {
 		if errors.Is(err, frontend.ErrFrontendNotIncluded) {
-			slog.Debug("Frontend not included in this build; skipping frontend registration")
+			slog.DebugContext(ctx, "Frontend not included in this build; skipping frontend registration")
 		} else {
-			slog.Error("Failed to register frontend", "error", err)
+			slog.ErrorContext(ctx, "Failed to register frontend", "error", err)
 		}
 	}
 
@@ -340,7 +340,7 @@ func parseTrustedProxyCIDRsInternal(raw string) []*net.IPNet {
 		}
 		_, ipnet, err := net.ParseCIDR(cidr)
 		if err != nil {
-			slog.Warn("invalid TRUSTED_PROXIES CIDR, ignoring", "cidr", cidr, "error", err)
+			slog.WarnContext(context.Background(), "invalid TRUSTED_PROXIES CIDR, ignoring", "cidr", cidr, "error", err) //nolint:forbidigo // Startup configuration parsing has no request context.
 			continue
 		}
 		nets = append(nets, ipnet)

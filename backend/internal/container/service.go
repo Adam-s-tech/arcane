@@ -2200,7 +2200,7 @@ func (e *ExecSession) Stdout() io.Reader { return e.hijackedResp.Reader }
 func (e *ExecSession) Close(ctx context.Context) error {
 	var closeErr error
 	e.closeOnce.Do(func() {
-		slog.Debug("Closing exec session", "execID", e.execID, "containerID", e.containerID)
+		slog.DebugContext(ctx, "Closing exec session", "execId", e.execID, "containerId", e.containerID)
 
 		// Send EOF (Ctrl-D) then exit to terminate the shell gracefully.
 		_, _ = e.hijackedResp.Conn.Write([]byte{0x04})

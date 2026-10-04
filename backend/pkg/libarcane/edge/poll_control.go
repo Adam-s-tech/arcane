@@ -244,8 +244,8 @@ func (s *TunnelServer) HandlePoll(c *echo.Context) error {
 	}
 	if source != HeaderAgentToken {
 		slog.DebugContext(ctx, "Edge poll request authenticated via fallback header",
-			"source_header", source,
-			"token_length", len(token),
+			"sourceHeader", source,
+			"tokenLength", len(token),
 		)
 	}
 
@@ -253,14 +253,14 @@ func (s *TunnelServer) HandlePoll(c *echo.Context) error {
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to resolve agent token for edge poll",
 			"error", err,
-			"source_header", source,
-			"token_length", len(token),
-			"token_fingerprint", remenv.RedactedTokenFingerprint(token),
+			"sourceHeader", source,
+			"tokenLength", len(token),
+			"tokenFingerprint", remenv.RedactedTokenFingerprint(token),
 		)
 		return c.JSON(http.StatusUnauthorized, map[string]any{"error": "invalid agent token"})
 	}
 	if requireRequestCertificateIdentityErr := s.requireRequestCertificateIdentityInternal(req, envID); requireRequestCertificateIdentityErr != nil {
-		slog.WarnContext(ctx, "Rejected edge poll request with mismatched client certificate", "environment_id", envID, "error", requireRequestCertificateIdentityErr)
+		slog.WarnContext(ctx, "Rejected edge poll request with mismatched client certificate", "environmentId", envID, "error", requireRequestCertificateIdentityErr)
 		return c.JSON(http.StatusUnauthorized, map[string]any{"error": requireRequestCertificateIdentityErr.Error()})
 	}
 

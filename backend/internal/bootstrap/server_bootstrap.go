@@ -83,7 +83,7 @@ func NewHTTPServer(lc fx.Lifecycle, p HTTPServerParams) (*http.Server, error) {
 			}
 			srv.Addr = listener.Addr().String()
 
-			slog.InfoContext(ctx, "Starting HTTP server", "addr", listenAddr, "listen", p.Config.Listen, "port", p.Config.Port, "tls_enabled", useTLS)
+			slog.InfoContext(ctx, "Starting HTTP server", "addr", listenAddr, "listen", p.Config.Listen, "port", p.Config.Port, "tlsEnabled", useTLS)
 			go func() {
 				defer func() { _ = listener.Close() }()
 				var serveErr error

@@ -473,7 +473,7 @@ func (s *Service) ActiveUpdateActivityIDs(ctx context.Context) ([]string, error)
 		for _, entry := range page.States {
 			// States are keyed by activity ID, so an undecodable entry is still protected.
 			if _, decodeErr := decodeSingleStateInternal(entry); decodeErr != nil {
-				s.logger().WarnContext(ctx, "decode container update state", "activityID", entry.ActorID, "error", decodeErr)
+				s.logger().WarnContext(ctx, "decode container update state", "activityId", entry.ActorID, "error", decodeErr)
 			}
 			ids = append(ids, entry.ActorID)
 		}

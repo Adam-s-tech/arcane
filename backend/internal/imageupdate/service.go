@@ -915,7 +915,7 @@ func (s *ImageUpdateService) CheckImageUpdateByID(ctx context.Context, imageID s
 			"error":   err.Error(),
 		}
 		if logErr := s.eventService.LogImageEvent(ctx, event.EventTypeImageScan, imageID, "", user.SystemUser.ID, user.SystemUser.Username, "0", metadata); logErr != nil {
-			slog.WarnContext(ctx, "Failed to log image update check by ID error event", "imageID", imageID, "error", logErr.Error())
+			slog.WarnContext(ctx, "Failed to log image update check by ID error event", "imageId", imageID, "error", logErr.Error())
 		}
 		return nil, fmt.Errorf("failed to get image reference: %w", err)
 	}
@@ -925,7 +925,7 @@ func (s *ImageUpdateService) CheckImageUpdateByID(ctx context.Context, imageID s
 	}
 	if len(result.ContainerUpdates) == 0 {
 		if saveErr := s.saveUpdateResultByIDInternal(ctx, imageID, result, s.parseImageReference(imageRef)); saveErr != nil {
-			slog.WarnContext(ctx, "Failed to save update result by ID", "imageID", imageID, "error", saveErr.Error())
+			slog.WarnContext(ctx, "Failed to save update result by ID", "imageId", imageID, "error", saveErr.Error())
 		}
 	}
 	return result, nil
@@ -949,7 +949,7 @@ func (s *ImageUpdateService) saveUpdateResultWithSnapshotInternal(ctx context.Co
 			"error", err.Error(),
 			"repository", repository,
 			"tag", parts.Tag,
-			"syntheticID", syntheticID)
+			"syntheticId", syntheticID)
 		// Persist registry results even when the local image no longer exists. This keeps
 		// project/image update status available for pruned images using a ref-scoped record.
 		return s.savePreparedUpdateResultInternal(ctx, syntheticID, repository, parts.Tag, result)
@@ -1100,8 +1100,8 @@ func savePreparedUpdateResultWithTxInternal(tx *gorm.DB, imageID, repo, tag stri
 		strings.TrimSpace(result.Error) != "" &&
 		registry.IsRateLimitErrorString(result.Error) &&
 		strings.TrimSpace(mo.PointerToOption(existingRecord.LastError).OrEmpty()) == "" {
-		slog.Debug("Preserving previous image update result; check hit a registry rate limit",
-			"imageID", imageID, "repository", repo, "tag", tag, "error", result.Error)
+		slog.DebugContext(tx.Statement.Context, "Preserving previous image update result; check hit a registry rate limit",
+			"imageId", imageID, "repository", repo, "tag", tag, "error", result.Error)
 		return nil
 	}
 
@@ -1487,7 +1487,7 @@ func (s *ImageUpdateService) resolveBatchCredentialsInternal(ctx context.Context
 
 		token, decryptErr := crypto.Decrypt(reg.Token)
 		if decryptErr != nil {
-			slog.DebugContext(ctx, "failed to decrypt registry token for batch check", "registryURL", reg.URL, "error", decryptErr.Error())
+			slog.DebugContext(ctx, "failed to decrypt registry token for batch check", "registryUrl", reg.URL, "error", decryptErr.Error())
 			continue
 		}
 		token = strings.TrimSpace(token)

@@ -118,9 +118,9 @@ func registerEdgeTunnelRoutes(
 	apiGroup.POST("/tunnel/mtls/enroll", server.HandleMTLSEnroll, middleware.PerIPRateLimit(10, 3), middleware.PerAgentTokenRateLimit(10, 3))
 	apiGroup.GET("/tunnel/connect", server.HandleConnect, middleware.PerIPRateLimit(60, 30), middleware.PerAgentTokenRateLimit(10, 3))
 	slog.InfoContext(ctx, "Configured edge tunnel server",
-		"poll_enabled", true,
-		"grpc_enabled", !cfg.AgentMode,
-		"websocket_enabled", true,
+		"pollEnabled", true,
+		"grpcEnabled", !cfg.AgentMode,
+		"websocketEnabled", true,
 	)
 	return server
 }
@@ -160,15 +160,15 @@ func handleEdgeStatusChange(ctx context.Context, environmentService *environment
 	envName := envID
 	env, getErr := environmentService.GetEnvironmentByID(ctx, envID)
 	if getErr != nil {
-		slog.WarnContext(ctx, "Failed to load environment before edge status update", "environment_id", envID, "error", getErr)
+		slog.WarnContext(ctx, "Failed to load environment before edge status update", "environmentId", envID, "error", getErr)
 	} else if env != nil && env.Name != "" {
 		envName = env.Name
 	}
 
 	if err := environmentService.UpdateEnvironmentConnectionState(ctx, envID, connected); err != nil {
-		slog.WarnContext(ctx, "Failed to update environment status on edge connect/disconnect", "environment_id", envID, "connected", connected, "error", err)
+		slog.WarnContext(ctx, "Failed to update environment status on edge connect/disconnect", "environmentId", envID, "connected", connected, "error", err)
 	} else {
-		slog.InfoContext(ctx, "Updated edge environment connection state", "environment_id", envID, "connected", connected)
+		slog.InfoContext(ctx, "Updated edge environment connection state", "environmentId", envID, "connected", connected)
 	}
 
 	// Only log an event on an actual state transition; poll-mode tunnels can
@@ -179,7 +179,7 @@ func handleEdgeStatusChange(ctx context.Context, environmentService *environment
 			(!connected && env.Status == string(environment.EnvironmentStatusOffline)))
 	if !alreadyInState {
 		if err := createEdgeConnectionEvent(ctx, eventService, envID, envName, connected); err != nil {
-			slog.WarnContext(ctx, "Failed to create edge connection event", "environment_id", envID, "connected", connected, "error", err)
+			slog.WarnContext(ctx, "Failed to create edge connection event", "environmentId", envID, "connected", connected, "error", err)
 		}
 	}
 

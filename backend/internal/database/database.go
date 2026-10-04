@@ -97,7 +97,7 @@ func Initialize(ctx context.Context, databaseURL string, options MigrationOption
 	}
 
 	if migrateDatabaseErr := migrateDatabaseInternal(ctx, sqlDB, dbProvider, options); migrateDatabaseErr != nil {
-		slog.Error("Failed to run migrations", "error", migrateDatabaseErr)
+		slog.ErrorContext(ctx, "Failed to run migrations", "error", migrateDatabaseErr)
 		return nil, fmt.Errorf("failed to run migrations: %w", migrateDatabaseErr)
 	}
 
@@ -158,7 +158,7 @@ func connectDatabaseInternal(ctx context.Context, databaseURL string) (*DB, erro
 			return &DB{db}, nil
 		}
 
-		slog.Info("Failed to initialize database", "attempt", i)
+		slog.InfoContext(ctx, "Failed to initialize database", "attempt", i)
 		if i < 3 {
 			select {
 			case <-time.After(3 * time.Second):
@@ -195,7 +195,7 @@ func migrateDatabaseToVersionInternal(ctx context.Context, db *sql.DB, dbProvide
 		return fmt.Errorf("failed to determine current migration version for %s: %w", dbProvider, err)
 	}
 
-	slog.Info("Resolved database migration state", "provider", dbProvider, "currentVersion", currentVersion, "requiredVersion", requiredVersion)
+	slog.InfoContext(ctx, "Resolved database migration state", "provider", dbProvider, "currentVersion", currentVersion, "requiredVersion", requiredVersion)
 
 	if currentVersion > requiredVersion {
 		if !options.AllowDowngrade {
@@ -228,12 +228,12 @@ func migrateDatabaseToVersionInternal(ctx context.Context, db *sql.DB, dbProvide
 			return fmt.Errorf("failed to downgrade database from version %d to %d for %s using embedded Goose migrations: %w", currentVersion, requiredVersion, dbProvider, downToErr)
 		}
 
-		slog.Info("Database downgrade completed successfully", "provider", dbProvider, "fromVersion", currentVersion, "toVersion", requiredVersion)
+		slog.InfoContext(ctx, "Database downgrade completed successfully", "provider", dbProvider, "fromVersion", currentVersion, "toVersion", requiredVersion)
 		return nil
 	}
 
 	if currentVersion == requiredVersion {
-		slog.Info("Database schema is up to date", "provider", dbProvider, "migrationVersion", currentVersion)
+		slog.InfoContext(ctx, "Database schema is up to date", "provider", dbProvider, "migrationVersion", currentVersion)
 		return nil
 	}
 
@@ -241,7 +241,7 @@ func migrateDatabaseToVersionInternal(ctx context.Context, db *sql.DB, dbProvide
 		return fmt.Errorf("failed to apply embedded Goose migrations for %s: %w", dbProvider, upToErr)
 	}
 
-	slog.Info("Database migrations completed successfully", "provider", dbProvider, "targetVersion", requiredVersion)
+	slog.InfoContext(ctx, "Database migrations completed successfully", "provider", dbProvider, "targetVersion", requiredVersion)
 	return nil
 }
 
@@ -314,7 +314,7 @@ func adoptLegacyMigrationStateInternal(ctx context.Context, db *sql.DB, dbProvid
 		if clearLegacyMigrationDirtyErr := clearLegacyMigrationDirtyInternal(ctx, db, dbProvider, legacyState.version); clearLegacyMigrationDirtyErr != nil {
 			return clearLegacyMigrationDirtyErr
 		}
-		slog.Warn("Cleared dirty legacy migration state because ALLOW_DOWNGRADE=true", "provider", dbProvider, "version", legacyState.version)
+		slog.WarnContext(ctx, "Cleared dirty legacy migration state because ALLOW_DOWNGRADE=true", "provider", dbProvider, "version", legacyState.version)
 	}
 
 	hasGooseState, err := gooseVersionTableHasAppliedMigrationsInternal(ctx, db, dbProvider)
@@ -371,7 +371,7 @@ func adoptLegacyMigrationStateInternal(ctx context.Context, db *sql.DB, dbProvid
 		return fmt.Errorf("failed to commit legacy migration adoption for %s: %w", dbProvider, commitErr)
 	}
 
-	slog.Info("Adopted legacy migration state into Goose", "provider", dbProvider, "legacyVersion", legacyState.version)
+	slog.InfoContext(ctx, "Adopted legacy migration state into Goose", "provider", dbProvider, "legacyVersion", legacyState.version)
 	return nil
 }
 

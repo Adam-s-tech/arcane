@@ -262,7 +262,7 @@ func PersistGitSyncEnvFiles(ctx context.Context, projectPath, projectsDirectory 
 			return projects.WriteManagedEnvFile(ctx, projectsDirectory, projectPath, projects.EffectiveEnvFileName, update.state.EffectiveUnreadable, effectiveContent)
 		}
 		if update.state.EffectiveUnreadable {
-			slog.Warn("skipping permission-locked .env file; leaving it untouched", "projectPath", projectPath)
+			slog.WarnContext(ctx, "skipping permission-locked .env file; leaving it untouched", "projectPath", projectPath)
 			return nil
 		}
 		return projects.EnsureEnvFile(ctx, projectsDirectory, projectPath)

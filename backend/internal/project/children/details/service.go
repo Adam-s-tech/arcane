@@ -101,7 +101,7 @@ func (s *Service) ComposeServices(
 
 	containers, err := projects.ComposePs(ctx, s.dockerService.DockerHost(), composeProject, nil, true)
 	if err != nil {
-		slog.Error("compose ps error", "projectName", composeProject.Name, "error", err)
+		slog.ErrorContext(ctx, "compose ps error", "projectName", composeProject.Name, "error", err)
 		return nil, fmt.Errorf("failed to get compose services status: %w", err)
 	}
 	imageIDs := s.runtimeImageIDsByContainerInternal(ctx, composeProject.Name)

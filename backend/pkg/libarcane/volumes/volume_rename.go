@@ -422,7 +422,7 @@ func createProjectVolumeCopyHolderContainerInternal(ctx context.Context,
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 		defer cancel()
 		if _, containerRemoveErr := dockerClient.ContainerRemove(cleanupCtx, resp.ID, volumehelper.RemoveOptions()); containerRemoveErr != nil && !cerrdefs.IsNotFound(containerRemoveErr) {
-			slog.WarnContext(cleanupCtx, "failed to remove volume copy holder", "containerID", resp.ID, "error", containerRemoveErr)
+			slog.WarnContext(cleanupCtx, "failed to remove volume copy holder", "containerId", resp.ID, "error", containerRemoveErr)
 		}
 	}
 

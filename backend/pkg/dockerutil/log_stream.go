@@ -54,7 +54,7 @@ func StreamMultiplexedLogs(ctx context.Context, logs io.Reader, logsChan chan<- 
 		defer func() { _ = stderrWriter.Close() }()
 		_, err := stdcopy.StdCopy(stdoutWriter, stderrWriter, logs)
 		if err != nil && !errors.Is(err, io.EOF) && ctx.Err() == nil {
-			slog.Error("error demultiplexing logs", "error", err)
+			slog.ErrorContext(ctx, "error demultiplexing logs", "error", err)
 		}
 	}()
 

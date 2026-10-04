@@ -635,10 +635,10 @@ func (h *ProjectHandler) DestroyProject(ctx context.Context, input *DestroyProje
 		slog.DebugContext(ctx, "DestroyProject handler received body",
 			"removeFiles", removeFiles,
 			"removeVolumes", removeVolumes,
-			"projectID", input.ProjectID)
+			"projectId", input.ProjectID)
 	} else {
 		slog.DebugContext(ctx, "DestroyProject handler received nil body",
-			"projectID", input.ProjectID)
+			"projectId", input.ProjectID)
 	}
 
 	runtimeCtx := utils.ActivityRuntimeContext(ctx, h.appCtx)

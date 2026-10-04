@@ -110,7 +110,7 @@ func RemoveLifecycleContainer(ctx context.Context, dockerClient *client.Client, 
 	cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtx, timeouts.GetDuration(apiTimeoutSec, timeouts.DefaultDockerAPI))
 	defer cleanupCancel()
 	if _, err := dockerClient.ContainerRemove(cleanupCtx, containerID, client.ContainerRemoveOptions{Force: true}); err != nil && !errdefs.IsNotFound(err) {
-		slog.WarnContext(cleanupCtx, "failed to remove lifecycle container", "containerID", containerID, "error", err)
+		slog.WarnContext(cleanupCtx, "failed to remove lifecycle container", "containerId", containerID, "error", err)
 	}
 }
 

@@ -1397,7 +1397,7 @@ func (s *UpdaterService) collectUsedImagesFromContainersInternal(ctx context.Con
 
 		imageRef := strings.TrimSpace(summary.Image)
 		if imageRef != "" && !refs.IsImageIDLikeReference(imageRef) {
-			addNormalizedImageUpdateRefInternal(ctx, out, imageRef, "collectUsedImagesFromContainers: skipping invalid image reference", "containerId", summary.ID)
+			addNormalizedImageUpdateRefInternal(ctx, out, imageRef, "collectUsedImagesFromContainers", "containerId", summary.ID)
 			continue
 		}
 
@@ -1435,7 +1435,7 @@ func (s *UpdaterService) collectUsedImagesFromComposeContainersInternal(ctx cont
 		if imageRef == "" || refs.IsImageIDLikeReference(imageRef) {
 			continue
 		}
-		addNormalizedImageUpdateRefInternal(ctx, out, imageRef, "collectUsedImagesFromComposeContainers: skipping invalid image reference", "containerId", summary.ID)
+		addNormalizedImageUpdateRefInternal(ctx, out, imageRef, "collectUsedImagesFromComposeContainers", "containerId", summary.ID)
 	}
 }
 
@@ -1448,13 +1448,13 @@ func (s *UpdaterService) normalizedTagsForContainerInternal(ctx context.Context,
 				if strings.TrimSpace(tag) == "" || tag == "<none>:<none>" {
 					continue
 				}
-				addNormalizedImageUpdateRefInternal(ctx, seen, tag, "normalizedTagsForContainer: skipping invalid repo tag", "imageId", inspect.Image)
+				addNormalizedImageUpdateRefInternal(ctx, seen, tag, "normalizedTagsForContainer repo tag", "imageId", inspect.Image)
 			}
 		}
 	}
 
 	if inspect.Config != nil && inspect.Config.Image != "" {
-		addNormalizedImageUpdateRefInternal(ctx, seen, inspect.Config.Image, "normalizedTagsForContainer: skipping invalid config image reference", "imageId", inspect.Image)
+		addNormalizedImageUpdateRefInternal(ctx, seen, inspect.Config.Image, "normalizedTagsForContainer config image", "imageId", inspect.Image)
 	}
 
 	out := slices.Collect(maps.Keys(seen))
@@ -1522,7 +1522,7 @@ func activeComposeProjectNameSetInternal(items []projectpkg.Project) map[string]
 	return active
 }
 
-func addNormalizedImageUpdateRefInternal(ctx context.Context, out map[string]struct{}, imageRef, logMessage string, attrs ...any) {
+func addNormalizedImageUpdateRefInternal(ctx context.Context, out map[string]struct{}, imageRef, source string, attrs ...any) {
 	normalizedRef := refs.NormalizeImageUpdateRef(imageRef)
 	if normalizedRef != "" {
 		out[normalizedRef] = struct{}{}
@@ -1530,12 +1530,8 @@ func addNormalizedImageUpdateRefInternal(ctx context.Context, out map[string]str
 	}
 
 	args := slices.Clone(attrs)
-	args = append(args, "imageRef", imageRef)
-	if ctx != nil {
-		slog.DebugContext(ctx, logMessage, args...)
-		return
-	}
-	slog.Debug(logMessage, args...)
+	args = append(args, "source", source, "imageRef", imageRef)
+	slog.DebugContext(ctx, "skipping invalid image reference", args...)
 }
 
 func (s *UpdaterService) tagFrozenPullInternal(ctx context.Context, pulledRef, imageRef string) error {
