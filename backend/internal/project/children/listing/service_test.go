@@ -136,7 +136,7 @@ func TestMapProjectToDto_SetsRedeployDisabledFromRuntimeServices(t *testing.T) {
 			wantService: true,
 		},
 		{
-			name:               "Arcane agent container stays redeployable",
+			name:               "current Arcane agent container disables project redeploy",
 			containerID:        "agent1234567890",
 			currentContainerID: "agent1234567890",
 			labels: map[string]string{
@@ -145,6 +145,8 @@ func TestMapProjectToDto_SetsRedeployDisabledFromRuntimeServices(t *testing.T) {
 				labels.LabelArcane:           "true",
 				labels.LabelArcaneAgent:      "true",
 			},
+			wantProject: true,
+			wantService: true,
 		},
 		{
 			name:               "non Arcane container stays redeployable",
