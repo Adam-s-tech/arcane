@@ -602,7 +602,7 @@
 		const normalizedProject = withLoadedProjectIncludeContent(details);
 		if (!normalizedProject) return;
 		const savedProjectWorkspaceContents =
-			options.preserveProjectWorkspaceContents === true ? { ...projectWorkspaceContents } : {};
+			options.preserveProjectWorkspaceContents === true ? { ...projectWorkspaceContents } : { ...loadedProjectWorkspaceContents };
 
 		inputs.name.value = normalizedProject.name || '';
 		inputs.composeContent.value = normalizedProject.composeContent || '';
@@ -720,20 +720,22 @@
 
 	afterNavigate(initializeProjectPreferences);
 
-	async function handleSaveChanges() {
-		if (!project || !hasChanges) return;
+	// Resolves true once the project has no unsaved changes left.
+	async function handleSaveChanges(): Promise<boolean> {
+		if (!project) return false;
+		if (!hasChanges) return true;
 		if (project.isArchived) {
 			toast.error(m.projects_archive_edit_blocked());
-			return;
+			return false;
 		}
 		if (hasAnyErrors) {
 			toast.error(m.templates_validation_error());
-			return;
+			return false;
 		}
 
 		const formValues = form.data();
 		const validated = isGitOpsManaged ? formValues : form.validate();
-		if (!validated) return;
+		if (!validated) return false;
 
 		const { composeContent, envContent, overrideContent } = validated;
 		const namePayload = isGitOpsManaged ? undefined : effectiveName;
@@ -804,7 +806,9 @@
 
 				const message = error instanceof Error ? error.message : m.common_save_failed();
 				toast.error(workspaceCommitted ? m.projects_workspace_saved_configuration_failed({ error: message }) : message);
+				return false;
 			}
+			return true;
 		} finally {
 			isLoading.saving = false;
 		}
@@ -1474,7 +1478,7 @@
 			{@render gitSourceNotice()}
 			{@render composeFilesNotice()}
 			{#if lastPrefsProjectId === project.id}
-				<div class="mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
+				<div class="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
 					<div class="flex items-center gap-2">
 						<label
 							for="layout-mode-toggle"
@@ -1499,8 +1503,14 @@
 					</div>
 
 					{#if canUpdateProject}
-						<div class="flex items-center gap-2">
-							<span class={cn('text-xs', hasChanges ? 'text-warning' : 'text-success')}>
+						<div
+							class={cn(
+								// Negative margins cancel the border + padding so toggling the highlight never shifts layout.
+								'-my-[5px] -mr-[5px] flex items-center gap-2 rounded-xl border py-1 pr-1 pl-3 transition-colors duration-200',
+								hasChanges ? 'border-warning/30 bg-warning/10' : 'border-transparent'
+							)}
+						>
+							<span class={cn('text-xs', hasChanges ? 'font-medium text-warning' : 'text-success')}>
 								{hasChanges ? m.common_unsaved_changes() : m.common_all_changes_saved()}
 							</span>
 							{#if hasChanges}
@@ -1516,6 +1526,7 @@
 							{/if}
 							<ArcaneButton
 								action="save"
+								tone={hasChanges ? 'outline-warning' : undefined}
 								size="sm"
 								class="min-w-20"
 								disabled={!canSave}
@@ -2240,6 +2251,8 @@
 				}}
 				onRefresh={() => refreshProjectDetails()}
 				extraActions={projectExtraActions}
+				hasUnsavedChanges={hasChanges}
+				onSaveChanges={handleSaveChanges}
 			/>
 		{/snippet}
 
