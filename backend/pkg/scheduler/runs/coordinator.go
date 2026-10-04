@@ -287,6 +287,8 @@ func (q *Coordinator) dispatchInternal(ctx context.Context) {
 	defer close(q.done)
 
 	initialRetention := true
+	// Flush every coordinator once while enabled to restore schedule alarms; later passes only cover unfinished work.
+	fullRepair := true
 	nextRetention := time.Now()
 	for ctx.Err() == nil {
 		q.retryActivitySyncInternal(ctx)
@@ -301,9 +303,14 @@ func (q *Coordinator) dispatchInternal(ctx context.Context) {
 			nextRetention = time.Now().Add(time.Hour)
 		}
 		nextWake := time.Now().Add(15 * time.Second)
-		if err := q.repairInternal(ctx); err != nil && ctx.Err() == nil {
-			slog.ErrorContext(ctx, "Job queue dispatch failed", "error", err)
+		enabled := q.enabled.Load()
+		if err := q.repairInternal(ctx, fullRepair); err != nil {
+			if ctx.Err() == nil {
+				slog.ErrorContext(ctx, "Job queue dispatch failed", "error", err)
+			}
 			nextWake = time.Now().Add(5 * time.Second)
+		} else if enabled {
+			fullRepair = false
 		}
 		if nextRetention.Before(nextWake) {
 			nextWake = nextRetention

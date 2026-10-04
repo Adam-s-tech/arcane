@@ -22,7 +22,8 @@ import (
 	"github.com/quic-go/quic-go/http3"
 )
 
-const tablePrefixInternal = "arcane_francis"
+// TablePrefix namespaces the Francis tables inside the Arcane database.
+const TablePrefix = "arcane_francis"
 
 // Runtime starts one durable actor host and publishes its service after readiness.
 // Services must wait for Ready before using Service, including during startup retries.
@@ -69,7 +70,7 @@ func New(databaseURL, encryptionKey, instanceID, port string, options ...local.H
 		},
 	}
 	runtime.options = append(runtime.options, local.WithLogger(slog.New(&actorLogHandlerInternal{
-		Handler: slog.Default().With("scope", "actor-host").Handler(),
+		Handler: slog.Default().With("scope", "francis.arcane.internal").Handler(),
 		names:   &runtime.actorNames,
 	})))
 	if encryptionKey != "" && instanceID != "" {

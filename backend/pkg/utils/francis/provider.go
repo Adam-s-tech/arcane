@@ -28,9 +28,9 @@ func providerOptionInternal(databaseURL string) (local.HostOption, error) {
 		if err != nil {
 			return nil, err
 		}
-		return local.WithSQLiteProvider(sqlite.SQLiteProviderOptions{ConnectionString: dsn, TablePrefix: tablePrefixInternal}), nil
+		return local.WithSQLiteProvider(sqlite.SQLiteProviderOptions{ConnectionString: dsn, TablePrefix: TablePrefix}), nil
 	case strings.HasPrefix(databaseURL, "postgres"):
-		return local.WithPostgresProvider(postgres.PostgresProviderOptions{ConnectionString: databaseURL, TablePrefix: tablePrefixInternal}), nil
+		return local.WithPostgresProvider(postgres.PostgresProviderOptions{ConnectionString: databaseURL, TablePrefix: TablePrefix}), nil
 	default:
 		return nil, errors.New("unsupported actor database URL")
 	}
@@ -53,9 +53,9 @@ func ClearRestoredHosts(ctx context.Context, databaseURL string) (err error) {
 		if dsnErr != nil {
 			return dsnErr
 		}
-		provider, err = sqlite.NewSQLiteProvider(slog.Default(), sqlite.SQLiteProviderOptions{ConnectionString: dsn, TablePrefix: tablePrefixInternal}, cfg)
+		provider, err = sqlite.NewSQLiteProvider(slog.Default(), sqlite.SQLiteProviderOptions{ConnectionString: dsn, TablePrefix: TablePrefix}, cfg)
 	case strings.HasPrefix(databaseURL, "postgres"):
-		provider, err = postgres.NewPostgresProvider(slog.Default(), postgres.PostgresProviderOptions{ConnectionString: databaseURL, TablePrefix: tablePrefixInternal}, cfg)
+		provider, err = postgres.NewPostgresProvider(slog.Default(), postgres.PostgresProviderOptions{ConnectionString: databaseURL, TablePrefix: TablePrefix}, cfg)
 	default:
 		return errors.New("unsupported restored actor database URL")
 	}
