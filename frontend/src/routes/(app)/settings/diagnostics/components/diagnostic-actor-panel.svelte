@@ -101,20 +101,24 @@
 												/>
 											{/if}
 										</Table.Cell>
-										<Table.Cell class="font-mono text-xs">{t.actorType}</Table.Cell>
-										<Table.Cell class="tabular-nums">
-											{t.activeActors}{#if t.concurrencyLimit > 0}<span class="text-muted-foreground">
-													/ {m.common_limit()} {t.concurrencyLimit}</span
-												>{/if}
+										<Table.Cell><span class="font-mono text-xs">{t.actorType}</span></Table.Cell>
+										<Table.Cell>
+											<span class="tabular-nums">
+												{t.activeActors}{#if t.concurrencyLimit > 0}<span class="text-muted-foreground">
+														/ {m.common_limit()} {t.concurrencyLimit}</span
+													>{/if}
+											</span>
 										</Table.Cell>
-										<Table.Cell class="tabular-nums">{t.storedStates}</Table.Cell>
-										<Table.Cell class="tabular-nums">{t.pendingAlarms}</Table.Cell>
-										<Table.Cell class="tabular-nums">{t.pendingJobs}</Table.Cell>
-										<Table.Cell class="tabular-nums">{t.leasedAlarms}</Table.Cell>
-										<Table.Cell class="tabular-nums">{t.completedJobs}</Table.Cell>
-										<Table.Cell class={cn('tabular-nums', t.deadJobs > 0 && 'text-destructive')}>{t.deadJobs}</Table.Cell>
-										<Table.Cell class="text-xs text-muted-foreground tabular-nums">
-											{t.nextAlarmAt ? formatTime(t.nextAlarmAt) : '—'}
+										{#each [t.storedStates, t.pendingAlarms, t.pendingJobs, t.leasedAlarms, t.completedJobs] as value, i (i)}
+											<Table.Cell><span class="tabular-nums">{value}</span></Table.Cell>
+										{/each}
+										<Table.Cell>
+											<span class={cn('tabular-nums', t.deadJobs > 0 && 'text-destructive')}>{t.deadJobs}</span>
+										</Table.Cell>
+										<Table.Cell>
+											<span class="text-xs text-muted-foreground tabular-nums">
+												{t.nextAlarmAt ? formatTime(t.nextAlarmAt) : '—'}
+											</span>
 										</Table.Cell>
 									</Table.Row>
 									{#if open}
