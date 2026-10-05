@@ -421,9 +421,6 @@
 			'[&_td]:bg-transparent! [&_thead]:bg-transparent! [&_tr]:border-border/40! [&_tr]:bg-transparent! [&_tr]:hover:bg-transparent! [&_tr:hover_td]:bg-transparent! [&_tr[data-state=selected]]:bg-transparent! [&_tr[data-state=selected]_td]:bg-transparent!'
 	)}
 >
-	{#if !unstyled}
-		<div aria-hidden="true" class="sticky top-0 z-(--arcane-z-sticky) -mb-10 h-10 backdrop-blur-sm"></div>
-	{/if}
 	<Table.Root bind:ref={tableElement} class={columnWidths ? 'table-fixed' : undefined}>
 		{@render tableHeader()}
 		<Table.Body bind:ref={bodyElement}>
